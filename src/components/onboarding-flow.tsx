@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { schoolOnboardingSetupSections, type SchoolOnboardingSetupField } from "@/lib/onboarding-setup";
+import type { SchoolDataSetupPath, SchoolDataSourceSystem } from "@/lib/school-data-setup";
 import { cn } from "@/lib/utils";
 
 const steps = [
@@ -37,9 +37,9 @@ const steps = [
     fields: ["centerCount", "state"],
   },
   {
-    title: "School setup",
+    title: "Starting data",
     icon: ClipboardList,
-    fields: schoolOnboardingSetupSections.map((section) => section.field),
+    fields: ["dataSetupPath"],
   },
   {
     title: "Payouts",
@@ -71,8 +71,11 @@ type FormState = {
   softwarePlan: string;
   addOnBundle: string;
   merchantFeeStrategy: string;
+  dataSetupPath: SchoolDataSetupPath | "";
+  dataSourceSystem: SchoolDataSourceSystem | "";
+  noCurrentFamiliesExpected: boolean;
   notes: string;
-} & Record<SchoolOnboardingSetupField, string>;
+};
 
 type WorkspaceSetup = {
   existingWorkspace?: boolean;
@@ -90,6 +93,7 @@ type WorkspaceSetup = {
   centerId?: string;
   centerName?: string;
   schoolSetupStatus?: string;
+  dataSetupPath?: string;
   userId?: string;
   loginUrl?: string;
   embedCode?: string;
@@ -108,10 +112,6 @@ type WorkspaceSetup = {
   };
 };
 
-const initialSetupFields = Object.fromEntries(
-  schoolOnboardingSetupSections.map((section) => [section.field, ""]),
-) as Record<SchoolOnboardingSetupField, string>;
-
 const initialForm: FormState = {
   brandName: "",
   workEmail: "",
@@ -125,12 +125,20 @@ const initialForm: FormState = {
   softwarePlan: "",
   addOnBundle: "",
   merchantFeeStrategy: "",
+  dataSetupPath: "",
+  dataSourceSystem: "",
+  noCurrentFamiliesExpected: false,
   notes: "",
-  ...initialSetupFields,
 };
 
-function hasValue(value: string) {
-  return value.trim().length > 0;
+function hasValue(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function sourceLabelForReview(value: SchoolDataSourceSystem | "") {
+  if (value === "procare") return "ProCare export package";
+  if (value === "other") return "Another system or spreadsheet";
+  return "Missing";
 }
 
 export function OnboardingFlow() {
@@ -143,17 +151,21 @@ export function OnboardingFlow() {
   const [form, setForm] = useState<FormState>(initialForm);
   const [isPending, startTransition] = useTransition();
 
-  const completedFields = useMemo(
-    () => Object.entries(form).filter(([key, value]) => key !== "notes" && hasValue(value)).length,
-    [form],
-  );
-  const requiredTotal = Object.keys(initialForm).filter((key) => key !== "notes").length;
-  const progress = Math.round((completedFields / requiredTotal) * 100);
   const currentStep = steps[activeStep];
-  const canContinue = currentStep.fields.every((field) => hasValue(form[field as keyof FormState]));
-  const completedSteps = steps.map((step) =>
-    step.fields.length > 0 && step.fields.every((field) => hasValue(form[field as keyof FormState])),
-  );
+  const stepIsComplete = (step: (typeof steps)[number]): boolean => {
+    if (step.title === "Starting data") {
+      return Boolean(form.dataSetupPath)
+        && (form.dataSetupPath === "start_clean" || Boolean(form.dataSourceSystem));
+    }
+    if (step.title === "Review") {
+      return steps.slice(0, -1).every((candidate) => stepIsComplete(candidate));
+    }
+    return step.fields.length > 0 && step.fields.every((field) => hasValue(form[field as keyof FormState]));
+  };
+  const completedSteps = steps.map((step) => stepIsComplete(step));
+  const completedRequiredSteps = completedSteps.slice(0, -1).filter(Boolean).length;
+  const progress = Math.round((completedRequiredSteps / (steps.length - 1)) * 100);
+  const canContinue = stepIsComplete(currentStep);
   const controlId = (field: keyof FormState) => `${controlPrefix}-${field}`;
   const draftEmbedCode = useMemo(() => {
     const appBaseUrl = typeof window !== "undefined" ? window.location.origin : "https://thebeesuite.io";
@@ -182,6 +194,12 @@ export function OnboardingFlow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          dataSetup: {
+            path: form.dataSetupPath,
+            sourceSystem: form.dataSourceSystem,
+            noCurrentFamiliesExpected: form.noCurrentFamiliesExpected,
+            notes: form.notes,
+          },
           pageUrl: typeof window !== "undefined" ? window.location.href : "",
         }),
       });
@@ -305,7 +323,8 @@ export function OnboardingFlow() {
                     ["Account", workspace?.tenantName || form.brandName || "The BEE Suite"],
                     ["First school", workspace?.centerName || "School profile"],
                     ["Centers requested", form.centerCount],
-                    ["School setup", workspace?.schoolSetupStatus || `${schoolOnboardingSetupSections.length} sections captured`],
+                    ["Data starting point", form.dataSetupPath === "import_existing" ? "Move existing records" : "Clean workspace"],
+                    ["School setup", workspace?.schoolSetupStatus || "Continue in workspace"],
                     ["Payout owner", form.payoutAdminName],
                     ["Software plan", form.softwarePlan],
                     ["Priority", form.priority],
@@ -345,11 +364,11 @@ export function OnboardingFlow() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor={controlId("brandName")}>Brand name</Label>
-                      <Input id={controlId("brandName")} value={form.brandName} onChange={(event) => update("brandName", event.target.value)} placeholder="Your childcare brand" required />
+                      <Input id={controlId("brandName")} name="brandName" autoComplete="organization" value={form.brandName} onChange={(event) => update("brandName", event.target.value)} placeholder="Your childcare brand…" required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={controlId("workEmail")}>Work email</Label>
-                      <Input id={controlId("workEmail")} value={form.workEmail} onChange={(event) => update("workEmail", event.target.value)} placeholder="owner@example.com" type="email" required />
+                      <Input id={controlId("workEmail")} name="workEmail" autoComplete="email" spellCheck={false} value={form.workEmail} onChange={(event) => update("workEmail", event.target.value)} placeholder="owner@example.com" type="email" required />
                     </div>
                   </div>
                 ) : null}
@@ -358,29 +377,98 @@ export function OnboardingFlow() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor={controlId("centerCount")}>Number of centers</Label>
-                      <Input id={controlId("centerCount")} value={form.centerCount} onChange={(event) => update("centerCount", event.target.value)} placeholder="12" inputMode="numeric" required />
+                      <Input id={controlId("centerCount")} name="centerCount" autoComplete="off" value={form.centerCount} onChange={(event) => update("centerCount", event.target.value)} placeholder="12" inputMode="numeric" required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={controlId("state")}>Primary state or region</Label>
-                      <Input id={controlId("state")} value={form.state} onChange={(event) => update("state", event.target.value)} placeholder="Florida" required />
+                      <Input id={controlId("state")} name="state" autoComplete="address-level1" value={form.state} onChange={(event) => update("state", event.target.value)} placeholder="Florida…" required />
                     </div>
                   </div>
                 ) : null}
 
                 {activeStep === 2 ? (
-                  <div className="grid gap-4">
-                    {schoolOnboardingSetupSections.map((section) => (
-                      <div key={section.field} className="space-y-2">
-                        <Label htmlFor={controlId(section.field)}>{section.label}</Label>
-                        <Textarea
-                          id={controlId(section.field)}
-                          value={form[section.field]}
-                          onChange={(event) => update(section.field as SchoolOnboardingSetupField, event.target.value)}
-                          placeholder={section.placeholder}
-                          required
-                        />
+                  <div className="grid gap-5">
+                    <div>
+                      <h3 className="text-pretty text-lg font-semibold">How will the first school begin?</h3>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">This only chooses the right setup path. Family records are added or imported after secure workspace access is ready.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {[
+                        {
+                          value: "import_existing" as const,
+                          title: "Move Existing Records",
+                          detail: "Use guarded preview, duplicate matching, corrections, and school confirmation before importing.",
+                        },
+                        {
+                          value: "start_clean" as const,
+                          title: "Start Clean",
+                          detail: "Set up the school first, then add families and children directly as enrollment begins.",
+                        },
+                      ].map((option) => {
+                        const selected = form.dataSetupPath === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => {
+                              update("dataSetupPath", option.value);
+                              if (option.value === "start_clean") update("dataSourceSystem", "");
+                              if (option.value === "import_existing") update("noCurrentFamiliesExpected", false);
+                            }}
+                            className={cn(
+                              "min-h-32 rounded-xl border p-4 text-left transition-[border-color,background-color,color] motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950",
+                              selected ? "border-amber-500 bg-amber-50" : "bg-white hover:border-amber-400 hover:bg-amber-50/50",
+                            )}
+                          >
+                            <span className="flex items-center justify-between gap-3 font-semibold">
+                              {option.title}
+                              {selected ? <CheckCircle2 aria-hidden="true" className="size-5 text-emerald-700" /> : null}
+                            </span>
+                            <span className="mt-2 block text-sm leading-5 text-slate-600">{option.detail}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {form.dataSetupPath === "import_existing" ? (
+                      <div className="space-y-2">
+                        <Label htmlFor={controlId("dataSourceSystem")}>Previous source</Label>
+                        <Select value={form.dataSourceSystem} onValueChange={(value) => update("dataSourceSystem", (value ?? "") as SchoolDataSourceSystem | "")}>
+                          <SelectTrigger id={controlId("dataSourceSystem")}><SelectValue placeholder="Choose the previous system…" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="procare">ProCare export package</SelectItem>
+                            <SelectItem value="other">Another system or spreadsheet</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs leading-5 text-slate-600">
+                          {form.dataSourceSystem === "other"
+                            ? "The setup team prepares a reviewed mapping before any upload. Do not email family exports or credentials."
+                            : "Use the complete, unchanged school package. The guarded importer previews mappings and duplicate matches before writing records."}
+                        </p>
                       </div>
-                    ))}
+                    ) : null}
+                    {form.dataSetupPath === "start_clean" ? (
+                      <label className="flex min-h-11 items-start gap-3 rounded-xl border bg-slate-50 p-4 text-sm">
+                        <input
+                          type="checkbox"
+                          name="noCurrentFamiliesExpected"
+                          checked={form.noCurrentFamiliesExpected}
+                          onChange={(event) => update("noCurrentFamiliesExpected", event.target.checked)}
+                          className="mt-0.5 size-5 shrink-0 accent-amber-500"
+                        />
+                        <span><span className="block font-medium">No current families or children are expected yet</span><span className="mt-1 block text-xs leading-5 text-slate-600">The workspace will stay empty until real enrollment begins; no sample or placeholder families are created.</span></span>
+                      </label>
+                    ) : null}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+                        <div className="font-semibold text-emerald-950">BEE setup team prepares</div>
+                        <p className="mt-1 text-xs leading-5 text-emerald-900/75">Business profile, configuration, forms, billing rules, integrations, templates, and technical checks from approved business information.</p>
+                      </div>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+                        <div className="font-semibold text-amber-950">School confirms</div>
+                        <p className="mt-1 text-xs leading-5 text-amber-900/75">Family and child facts, source exceptions, payout bank details on the secure provider page, invitation scope, and final launch approval.</p>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
 
@@ -429,11 +517,11 @@ export function OnboardingFlow() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={controlId("payoutAdminName")}>Payout setup owner</Label>
-                      <Input id={controlId("payoutAdminName")} value={form.payoutAdminName} onChange={(event) => update("payoutAdminName", event.target.value)} placeholder="Finance owner or franchise admin" required />
+                      <Input id={controlId("payoutAdminName")} name="payoutAdminName" autoComplete="name" value={form.payoutAdminName} onChange={(event) => update("payoutAdminName", event.target.value)} placeholder="Finance owner or franchise admin…" required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={controlId("payoutAdminEmail")}>Payout setup email</Label>
-                      <Input id={controlId("payoutAdminEmail")} value={form.payoutAdminEmail} onChange={(event) => update("payoutAdminEmail", event.target.value)} placeholder="finance@example.com" type="email" required />
+                      <Input id={controlId("payoutAdminEmail")} name="payoutAdminEmail" autoComplete="email" spellCheck={false} value={form.payoutAdminEmail} onChange={(event) => update("payoutAdminEmail", event.target.value)} placeholder="finance@example.com" type="email" required />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor={controlId("payoutReadiness")}>Payout account readiness</Label>
@@ -486,7 +574,8 @@ export function OnboardingFlow() {
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor={controlId("notes")}>Launch notes</Label>
-                      <Textarea id={controlId("notes")} value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Tell us about current systems, imports, or launch constraints." />
+                      <Textarea id={controlId("notes")} name="notes" autoComplete="off" value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Tell us about current systems, imports, or launch constraints…" />
+                      <p className="text-xs leading-5 text-slate-600">Do not include family or child details, passwords, bank information, or verification codes.</p>
                     </div>
                   </div>
                 ) : null}
@@ -505,12 +594,8 @@ export function OnboardingFlow() {
                         ["Add-ons", form.addOnBundle || "Missing"],
                         ["Merchant fees", form.merchantFeeStrategy || "Missing"],
                         ["Payout readiness", form.payoutReadiness || "Missing"],
-                        ["Classroom setup", form.classroomSetup ? "Provided" : "Missing"],
-                        ["Tuition/rates", form.tuitionRateSetup ? "Provided" : "Missing"],
-                        ["Subsidy rules", form.subsidyRules ? "Provided" : "Missing"],
-                        ["Balance rules", form.balanceRules ? "Provided" : "Missing"],
-                        ["Invoice rules", form.invoiceRules ? "Provided" : "Missing"],
-                        ["Licensing setup", form.licensingSetup ? "Provided" : "Missing"],
+                        ["Data starting point", form.dataSetupPath === "import_existing" ? "Move existing records" : form.dataSetupPath === "start_clean" ? "Clean workspace" : "Missing"],
+                        ["Previous source", form.dataSetupPath === "import_existing" ? sourceLabelForReview(form.dataSourceSystem) : "None"],
                         ["Timeline", form.timeline || "Missing"],
                         ["Priority", form.priority || "Missing"],
                       ].map(([label, value]) => (
@@ -534,7 +619,7 @@ export function OnboardingFlow() {
 
                 <div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center">
                   <Button type="button" disabled={!canContinue || isPending} onClick={nextStep} aria-busy={isPending}>
-                    {isPending ? "Submitting..." : activeStep === steps.length - 1 ? "Finish intake" : "Continue"}
+                    {isPending ? "Submitting…" : activeStep === steps.length - 1 ? "Finish intake" : "Continue"}
                     <ArrowRight data-icon="inline-end" />
                   </Button>
                   {activeStep > 0 ? (

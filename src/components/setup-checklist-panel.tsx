@@ -40,7 +40,9 @@ export function SetupChecklistPanel({
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const automaticIds = useMemo(() => new Set(automaticCompletedIds), [automaticCompletedIds]);
-  const completedCount = tasks.filter((task) => completedIds.has(task.id) || automaticIds.has(task.id)).length;
+  const completedCount = tasks.filter((task) => (
+    automaticIds.has(task.id) || (!task.requiresVerifiedEvidence && completedIds.has(task.id))
+  )).length;
   const progress = tasks.length ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   const completedList = useMemo(() => Array.from(completedIds), [completedIds]);
@@ -72,6 +74,7 @@ export function SetupChecklistPanel({
   }
 
   function toggle(taskId: string) {
+    if (tasks.find((task) => task.id === taskId)?.requiresVerifiedEvidence) return;
     if (automaticIds.has(taskId)) return;
     const next = new Set(completedIds);
     if (next.has(taskId)) {
@@ -119,7 +122,8 @@ export function SetupChecklistPanel({
     >
         {tasks.map((task, index) => {
           const automatic = automaticIds.has(task.id);
-          const done = completedIds.has(task.id) || automatic;
+          const evidenceRequired = Boolean(task.requiresVerifiedEvidence);
+          const done = automatic || (!evidenceRequired && completedIds.has(task.id));
           return (
             <div
               key={task.id}
@@ -136,15 +140,15 @@ export function SetupChecklistPanel({
                   done ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:border-primary",
                 )}
                 aria-pressed={done}
-                aria-label={automatic ? `Completed automatically: ${task.title}` : `${done ? "Mark incomplete" : "Mark complete"}: ${task.title}`}
-                disabled={automatic || isPending}
+                aria-label={automatic ? `Verified automatically: ${task.title}` : evidenceRequired ? `Verified evidence required: ${task.title}` : `${done ? "Mark incomplete" : "Mark complete"}: ${task.title}`}
+                disabled={automatic || evidenceRequired || isPending}
               >
                 {done ? <CheckCircle2 className="size-4" /> : index + 1}
               </button>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className={cn("text-sm font-medium", done && "text-primary")}>{task.title}</div>
-                  {automatic ? <Badge variant="secondary">Auto</Badge> : done ? <Badge variant="default">Done</Badge> : null}
+                  {automatic ? <Badge variant="secondary">Verified</Badge> : evidenceRequired ? <Badge variant="outline">Evidence required</Badge> : done ? <Badge variant="default">Done</Badge> : null}
                 </div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">{task.description}</p>
                 {task.href ? (

@@ -8,6 +8,13 @@ import {
   type SchoolOnboardingSetupInput,
 } from "@/lib/onboarding-setup";
 import { prisma } from "@/lib/prisma";
+import {
+  assessSchoolDataSetup,
+  normalizeSchoolDataSetupInput,
+  readSchoolDataSetup,
+  type SchoolDataSetup,
+} from "@/lib/school-data-setup";
+import { loadSchoolDataReviewEvidence } from "@/lib/school-data-setup-server";
 import { isValidEinInput, normalizeEin, schoolEinCustomFields } from "@/lib/school-tax-id";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -66,6 +73,18 @@ async function POSTHandler(request: NextRequest) {
 
   const sectionsProvided = hasOwn(body, "sections");
   const setup = sectionsProvided ? normalizeSchoolOnboardingSetup(cleanSections(body?.sections)) : null;
+  const dataSetupProvided = hasOwn(body, "dataSetup");
+  const dataSetupInput = dataSetupProvided ? normalizeSchoolDataSetupInput(body?.dataSetup) : null;
+  const confirmDataReview = body?.confirmDataReview === true;
+  if (dataSetupProvided && !dataSetupInput?.path) {
+    return NextResponse.json({ ok: false, error: "Choose how this school is starting before saving." }, { status: 400 });
+  }
+  if (dataSetupInput?.path === "import_existing" && !dataSetupInput.sourceSystem) {
+    return NextResponse.json({ ok: false, error: "Choose the previous source system before saving the import path." }, { status: 400 });
+  }
+  if (confirmDataReview && !dataSetupProvided) {
+    return NextResponse.json({ ok: false, error: "Save the school data starting point before confirming its review." }, { status: 400 });
+  }
   const savedAt = new Date().toISOString();
   const schoolEinProvided = hasOwn(body, "schoolEin");
   if (schoolEinProvided && !isValidEinInput(body?.schoolEin)) {
@@ -74,6 +93,8 @@ async function POSTHandler(request: NextRequest) {
 
   let savedCenterId: string | null = null;
   let savedCustomFields: Record<string, unknown> | null = null;
+  let dataReviewConfirmed = false;
+  let dataReviewConfirmationStale = false;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const center = await prisma.center.findFirst({
       where: {
@@ -105,6 +126,45 @@ async function POSTHandler(request: NextRequest) {
         savedByUserId: user.id,
       });
     }
+    if (dataSetupInput?.path) {
+      const existingDataSetup = readSchoolDataSetup(customFields);
+      const selectionChanged = existingDataSetup.path !== dataSetupInput.path
+        || existingDataSetup.sourceSystem !== dataSetupInput.sourceSystem
+        || existingDataSetup.noCurrentFamiliesExpected !== dataSetupInput.noCurrentFamiliesExpected;
+      let reviewConfirmation = selectionChanged ? null : existingDataSetup.reviewConfirmation;
+      const nextDataSetup: SchoolDataSetup = {
+        version: 1,
+        ...dataSetupInput,
+        selectedAt: selectionChanged || !existingDataSetup.selectedAt ? savedAt : existingDataSetup.selectedAt,
+        selectedByUserId: selectionChanged || !existingDataSetup.selectedByUserId ? user.id : existingDataSetup.selectedByUserId,
+        selectedByEmail: selectionChanged || !existingDataSetup.selectedByEmail ? user.email : existingDataSetup.selectedByEmail,
+        reviewConfirmation,
+      };
+      if (confirmDataReview) {
+        const evidence = await loadSchoolDataReviewEvidence({ centerId: center.id, tenantId: user.tenantId });
+        const currentAssessment = assessSchoolDataSetup({ ...nextDataSetup, reviewConfirmation: null }, evidence);
+        if (!currentAssessment.canConfirm) {
+          return NextResponse.json({
+            ok: false,
+            error: currentAssessment.blockedReason || "Finish the current school data review before confirming it.",
+          }, { status: 409 });
+        }
+        reviewConfirmation = {
+          revision: currentAssessment.revision,
+          path: dataSetupInput.path,
+          confirmedAt: savedAt,
+          confirmedByUserId: user.id,
+          confirmedByEmail: user.email,
+          latestImportBatchId: evidence.latestImportBatch?.id ?? null,
+          familyCount: evidence.familyCount,
+          childCount: evidence.childCount,
+          guardianCount: evidence.guardianCount,
+        };
+        nextDataSetup.reviewConfirmation = reviewConfirmation;
+        dataReviewConfirmed = true;
+      }
+      customFields.schoolDataSetup = nextDataSetup;
+    }
 
     const update = await prisma.center.updateMany({
       where: { id: center.id, updatedAt: center.updatedAt },
@@ -124,6 +184,15 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
+  if (dataReviewConfirmed) {
+    const postSaveEvidence = await loadSchoolDataReviewEvidence({ centerId: savedCenterId, tenantId: user.tenantId });
+    const postSaveAssessment = assessSchoolDataSetup(readSchoolDataSetup(savedCustomFields), postSaveEvidence);
+    if (!postSaveAssessment.confirmationCurrent) {
+      dataReviewConfirmed = false;
+      dataReviewConfirmationStale = true;
+    }
+  }
+
   await writeAuditLog(user, {
     action: "school_setup.director_input.saved",
     resource: "Center",
@@ -135,15 +204,28 @@ async function POSTHandler(request: NextRequest) {
       missingSections: setup?.missingSections ?? [],
       sectionsUpdated: sectionsProvided,
       schoolEinUpdated: schoolEinProvided,
+      dataSetupUpdated: dataSetupProvided,
+      dataSetupPath: dataSetupInput?.path ?? null,
+      dataReviewConfirmed,
+      dataReviewConfirmationStale,
       savedAt,
     },
   });
+
+  if (dataReviewConfirmationStale) {
+    return NextResponse.json({
+      ok: false,
+      error: "School data changed while the confirmation was being saved. Review the refreshed evidence and confirm again.",
+      dataSetup: readSchoolDataSetup(savedCustomFields),
+    }, { status: 409 });
+  }
 
   return NextResponse.json({
     ok: true,
     centerId: savedCenterId,
     setup,
     sections: setup ? responseSections(setup) : undefined,
+    dataSetup: readSchoolDataSetup(savedCustomFields),
     schoolEin: normalizeEin(savedCustomFields.schoolEin),
     savedAt,
   });

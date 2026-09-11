@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { EditableDisplayField } from "@/components/ui/editable-display-field";
+import { SchoolDataSetupPanel, type SchoolDataSetupPanelData } from "@/components/school-data-setup-panel";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { CollapsibleCard } from "@/components/workspace-preferences";
 import { directorLaunchChecklistTasks, type SetupChecklistTask } from "@/lib/setup-checklists";
@@ -58,6 +59,7 @@ export type SchoolSetupCommandCenterData = {
     value: string;
     detail: string;
   }>;
+  dataSetup: SchoolDataSetupPanelData;
   sections: SchoolSetupCommandSection[];
   externalNeeds: string[];
   directorChecklistCompletedIds: string[];
@@ -70,7 +72,7 @@ const emptySections: SchoolSetupCommandSection[] = [];
 function statusLabel(status: SchoolSetupStatus) {
   if (status === "complete") return "Ready";
   if (status === "in_progress") return "In progress";
-  return "Needs input";
+  return "Needs setup";
 }
 
 function setupDisplayLabel(value: string) {
@@ -169,8 +171,8 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">School setup</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Review the records and decisions needed to finish setup for {data.centerLabel}.
-              Printed payment and ledger records use the saved school EIN.
+              BEE prepares the business configuration it can complete for {data.centerLabel}, then routes the
+              smallest possible set of school-only reviews and approvals here. Printed payment and ledger records use the saved school EIN.
             </p>
           </div>
           <div className="rounded-lg border bg-background/60 p-3 text-sm">
@@ -194,7 +196,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
             <div className="mt-1 text-2xl font-semibold">{data.completedSections}/{data.totalSections}</div>
           </div>
           <div className="rounded-lg border bg-background/50 p-3">
-            <div className="text-xs text-muted-foreground">Needs input</div>
+            <div className="text-xs text-muted-foreground">Needs setup</div>
             <div className="mt-1 text-2xl font-semibold">{data.blockingSections}</div>
           </div>
           <div className="rounded-lg border bg-background/50 p-3">
@@ -204,10 +206,12 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
         </div>
       </section>
 
+      <SchoolDataSetupPanel key={data.dataSetup.assessment.revision} data={data.dataSetup} />
+
       <SetupChecklistPanel
         checklistKey="director_launch"
         title="School setup checklist"
-        description="Mark each task complete as your school finishes setup."
+        description="Verified items complete automatically. Only mark steps that require the school’s confirmation."
         tasks={data.directorChecklistTasks ?? directorLaunchChecklistTasks}
         initialCompletedIds={data.directorChecklistCompletedIds}
         automaticCompletedIds={data.directorChecklistAutomaticCompletedIds}
@@ -233,7 +237,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
               className="glass-panel"
               contentClassName="grid gap-3"
               title={group}
-              description="Complete these records and decisions before using the related school features."
+              description="BEE prepares available setup records; the school confirms only the facts and decisions that require its authority."
             >
                 {sections.filter((section) => section.group === group).map((section) => {
                   const status = displayedStatus(section);
@@ -296,7 +300,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                     <div key={metric} className="rounded-lg border bg-background/50 p-3 text-sm">{metric}</div>
                   ))}
                 </div>
-                <EditableDisplayField id="setup-notes" label="Director notes" multiline value={values[activeSection.field] ?? ""} onChange={(value) => updateValue(activeSection.field, value)} placeholder={activeSection.placeholder} emptyLabel="Add director notes" />
+                <EditableDisplayField id="setup-notes" label="Setup team / school handoff notes" multiline value={values[activeSection.field] ?? ""} onChange={(value) => updateValue(activeSection.field, value)} placeholder={activeSection.placeholder} emptyLabel="Add a handoff note" />
                 <div className="rounded-lg border bg-background/50 p-3">
                   <div className="text-sm font-medium">Required actions</div>
                   <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
@@ -306,7 +310,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button onClick={saveSetup} disabled={isPending || !data.centerId || !hasUnsavedChanges}>
                     {isPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}
-                    Save setup input
+                    Save setup note
                   </Button>
                   <Button variant="outline" nativeButton={false} render={<Link href={activeSection.href} />}>
                     <ExternalLink data-icon="inline-start" />
@@ -327,8 +331,8 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
           <CollapsibleCard
             id="school-setup-external-needs"
             className="glass-panel"
-            title="Information still needed"
-            description="Provide these details to finish school setup."
+            title="Setup team inputs & follow-ups"
+            description="Use approved business information for these items. Family/child data, payout bank details, invitations, and activation remain separate school-controlled steps."
           >
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {data.externalNeeds.map((need) => <li key={need}>{need}</li>)}

@@ -33,6 +33,7 @@ test("school onboarding setup normalizes director-provided setup sections", () =
   assert.equal(setup.sections.licensingConfiguration.href, "/forms?view=compliance");
   assert.equal(setup.sections.integrations.href, "/billing-settings?view=integrations");
   assert.equal(setup.sections.parentPortal.href, "/family-detail#family-guardians");
+  assert.equal(setup.sections.familyImport.href, "/billing-settings?view=setup#school-data-setup");
 });
 
 test("school onboarding setup is ready when all school-specific sections are present", () => {
@@ -93,6 +94,9 @@ test("school dashboard setup steps use current consolidated routes", () => {
   assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "attendance-kiosk")?.href, "/classroom-dashboard?view=attendance");
   assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "compliance-incidents")?.href, "/forms?view=compliance");
   assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "parent-portal")?.href, "/family-detail#family-guardians");
+  assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "procare-import")?.href, "/billing-settings?view=setup#school-data-setup");
+  assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "procare-import")?.requiresVerifiedEvidence, true);
+  assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "payout-bank-account")?.requiresVerifiedEvidence, true);
 });
 
 test("teacher setup links stay within teacher-accessible workspaces", () => {

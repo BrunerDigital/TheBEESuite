@@ -26,9 +26,13 @@ async function PATCHHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Checklist key is not valid." }, { status: 400 });
   }
 
-  const allowedTaskIds = new Set(setupChecklistTasksForKey(key).map((task) => task.id));
+  const checklistTasks = setupChecklistTasksForKey(key);
+  const allowedTaskIds = new Set(checklistTasks.map((task) => task.id));
+  const allowedManualTaskIds = new Set(checklistTasks
+    .filter((task) => !task.requiresVerifiedEvidence)
+    .map((task) => task.id));
   const completedIds = Array.isArray(body?.completedIds)
-    ? Array.from(new Set(body.completedIds.filter((value): value is string => typeof value === "string" && allowedTaskIds.has(value))))
+    ? Array.from(new Set(body.completedIds.filter((value): value is string => typeof value === "string" && allowedManualTaskIds.has(value))))
     : [];
 
   const savedAt = new Date().toISOString();

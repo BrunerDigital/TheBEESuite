@@ -10,6 +10,7 @@ import {
   type SchoolOnboardingSetupInput,
 } from "@/lib/onboarding-setup";
 import { prisma } from "@/lib/prisma";
+import { normalizeSchoolDataSetupInput } from "@/lib/school-data-setup";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { getCenterInquiryEmbedCode } from "@/lib/inquiry-embed";
 import {
@@ -35,6 +36,7 @@ type OnboardingPayload = {
   softwarePlan?: unknown;
   addOnBundle?: unknown;
   merchantFeeStrategy?: unknown;
+  dataSetup?: unknown;
   notes?: unknown;
   pageUrl?: unknown;
 } & Partial<Record<SchoolOnboardingSetupField, unknown>>;
@@ -109,6 +111,7 @@ function normalizePayload(input: OnboardingPayload) {
     softwarePlan: clean(input.softwarePlan),
     addOnBundle: clean(input.addOnBundle),
     merchantFeeStrategy: clean(input.merchantFeeStrategy),
+    dataSetup: normalizeSchoolDataSetupInput(input.dataSetup),
     schoolSetup: normalizeSchoolOnboardingSetup(schoolSetupInput),
     notes: clean(input.notes),
     pageUrl: clean(input.pageUrl),
@@ -130,10 +133,9 @@ function validate(payload: NormalizedPayload) {
   if (!payload.softwarePlan) errors.softwarePlan = "Software plan model is required.";
   if (!payload.addOnBundle) errors.addOnBundle = "Add-on bundle is required.";
   if (!payload.merchantFeeStrategy) errors.merchantFeeStrategy = "Merchant fee strategy is required.";
-  for (const section of schoolOnboardingSetupSections) {
-    if (!payload.schoolSetup.sections[section.storageKey].completed) {
-      errors[section.field] = `${section.label} is required.`;
-    }
+  if (!payload.dataSetup.path) errors.dataSetupPath = "Choose whether this school is moving existing records or starting clean.";
+  if (payload.dataSetup.path === "import_existing" && !payload.dataSetup.sourceSystem) {
+    errors.dataSourceSystem = "Choose the previous source system.";
   }
   return errors;
 }
@@ -180,6 +182,9 @@ async function sendOnboardingEmail(
     `Software plan: ${payload.softwarePlan}`,
     `Add-on bundle: ${payload.addOnBundle}`,
     `Merchant fee strategy: ${payload.merchantFeeStrategy}`,
+    `School data starting point: ${payload.dataSetup.path || "Not selected"}`,
+    `Previous source: ${payload.dataSetup.sourceSystem || "None"}`,
+    `No current families expected yet: ${payload.dataSetup.noCurrentFamiliesExpected ? "Yes" : "No"}`,
     `School setup status: ${payload.schoolSetup.status}`,
     ...schoolOnboardingSetupSections.map((section) => {
       const setupSection = payload.schoolSetup.sections[section.storageKey];
@@ -351,6 +356,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
           requestedCenterCount: requestedCenters,
           model: requestedCenters > 1 ? "owner_group_multi_location" : "owner_group_single_center",
           schoolSetupStatus: payload.schoolSetup.status,
+          schoolDataSetupPath: payload.dataSetup.path,
         },
       },
       select: { id: true, name: true, slug: true, ownerType: true },
@@ -392,6 +398,14 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
             capturedAt: submittedAt,
             capturedByEmail: payload.workEmail,
             expectedOwner: "school_director",
+          },
+          schoolDataSetup: {
+            version: 1,
+            ...payload.dataSetup,
+            selectedAt: submittedAt,
+            selectedByUserId: null,
+            selectedByEmail: payload.workEmail,
+            reviewConfirmation: null,
           },
           submittedPageUrl: payload.pageUrl,
         },
@@ -600,6 +614,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
     centerId: workspace.center.id,
     centerName: workspace.center.name,
     schoolSetupStatus: payload.schoolSetup.status,
+    dataSetupPath: payload.dataSetup.path,
     userId: workspace.user.id,
     loginUrl,
     embedCode: getCenterInquiryEmbedCode({

@@ -159,3 +159,30 @@ test("ignored sources and weak exception evidence keep a fleet batch unverified"
   assert.ok(report.blockers.some((blocker) => blocker.includes("ignored")));
   assert.ok(report.blockers.some((blocker) => blocker.includes("lack complete")));
 });
+
+test("fully evidenced exclusions advance to director review without hiding the exception", () => {
+  const sourceCoverage = assessProcareFleetSourceCoverage([completeRecord], { sourceInventory: [] });
+  const reconciliation = buildProcareReconciliationReport({
+    batchId: "batch-3",
+    batchStatus: "completed_with_errors",
+    importedRows: 1,
+    errorRows: 1,
+    disposedRows: 1,
+    unresolvedRows: 0,
+    source: { families: 1, children: 1, guardians: 1, emergencyContacts: 0, authorizedPickups: 0, staff: 0, classrooms: 1, balanceCents: 12500, creditsCents: 0, openInvoicesCents: 12500 },
+    target: { families: 1, children: 1, guardians: 1, emergencyContacts: 0, authorizedPickups: 0, staff: 0, classrooms: 1, balanceCents: 12500, creditsCents: 0, openInvoicesCents: 12500 },
+  });
+  const report = buildProcareFleetVerificationReport({
+    batchId: "batch-3",
+    centerId: "center-1",
+    sourceSha256: "source-hash",
+    batchStatus: "completed_with_errors",
+    sourceInventoryConfirmed: true,
+    sourceCoverage,
+    reconciliation,
+    exceptionsWithoutEvidence: 0,
+  });
+
+  assert.equal(report.status, "READY_FOR_DIRECTOR_REVIEW");
+  assert.match(report.reviewItems.join(" "), /director confirmation/i);
+});

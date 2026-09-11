@@ -224,6 +224,12 @@ import { canAccessModule, canAccessResolvedModuleRoute } from "@/lib/rbac";
 import { assetKind, canManageAssetHub, CORPORATE_ASSET_TYPE, readAssetMetadata } from "@/lib/asset-hub";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
+import {
+  assessSchoolDataSetup,
+  emptySchoolDataReviewEvidence,
+  readSchoolDataSetup,
+} from "@/lib/school-data-setup";
+import { loadSchoolDataReviewEvidence } from "@/lib/school-data-setup-server";
 import { stripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
 import { terminalStoreEnabled, terminalStoreReturnState } from "@/lib/feature-availability";
@@ -480,7 +486,7 @@ function setupActionLabel(field: string) {
     classroomSetup: "Open classrooms",
     programSetup: "Open calendar",
     staffSetup: "Open teachers",
-    familyImportSetup: "Open families",
+    familyImportSetup: "Open data starting point",
     tuitionRateSetup: "Open billing settings",
     subsidyRules: "Open billing",
     balanceRules: "Open invoices",
@@ -1060,10 +1066,39 @@ async function renderLivePage(
       setup: normalizeSchoolOnboardingSetup({}),
       capturedAt: null,
     };
+    const [schoolDataEvidence, setupCounts] = await Promise.all([
+      selectedCenter
+        ? loadSchoolDataReviewEvidence({ centerId: selectedCenter.id, tenantId: user.tenantId })
+        : Promise.resolve(emptySchoolDataReviewEvidence()),
+      selectedCenter ? Promise.all([
+        prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } }, userId: { not: null } } }),
+        prisma.staffProfile.count({ where: { centerId: selectedCenter.id, user: { isActive: true } } }),
+        prisma.staffSchedule.count({ where: { centerId: selectedCenter.id, staff: { user: { isActive: true } } } }),
+        prisma.tuitionPlan.count({ where: { centerId: selectedCenter.id } }),
+        prisma.product.count(),
+        prisma.billingAccount.count({ where: { family: { centerId: selectedCenter.id } } }),
+        prisma.invoice.count({ where: { billingAccount: { family: { centerId: selectedCenter.id } } } }),
+        prisma.document.count({
+          where: {
+            OR: [
+              { family: { centerId: selectedCenter.id } },
+              { child: { family: { centerId: selectedCenter.id } } },
+            ],
+          },
+        }),
+        prisma.form.count({ where: { status: "active" } }),
+        prisma.fteReport.count({ where: { centerId: selectedCenter.id } }),
+        prisma.integration.count({ where: { tenantId: user.tenantId } }),
+        prisma.integration.count({
+          where: {
+            tenantId: user.tenantId,
+            status: { in: ["verified", "connected", "ready_to_install", "platform_managed"] },
+          },
+        }),
+        prisma.messageTemplate.count({ where: { centerId: selectedCenter.id } }),
+      ]) : Promise.resolve(Array(13).fill(0) as number[]),
+    ]);
     const [
-      familyCount,
-      childCount,
-      guardianCount,
       guardianLoginCount,
       staffCount,
       staffScheduleCount,
@@ -1076,39 +1111,16 @@ async function renderLivePage(
       fteReportCount,
       integrationCount,
       readyIntegrationCount,
-      procareImportCount,
       messageTemplateCount,
-    ] = selectedCenter ? await Promise.all([
-      prisma.family.count({ where: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } } }),
-      prisma.child.count({ where: { ...currentlyEnrolledChildWhere(), family: { centerId: selectedCenter.id } } }),
-      prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } } } }),
-      prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } }, userId: { not: null } } }),
-      prisma.staffProfile.count({ where: { centerId: selectedCenter.id, user: { isActive: true } } }),
-      prisma.staffSchedule.count({ where: { centerId: selectedCenter.id, staff: { user: { isActive: true } } } }),
-      prisma.tuitionPlan.count(),
-      prisma.product.count(),
-      prisma.billingAccount.count({ where: { family: { centerId: selectedCenter.id } } }),
-      prisma.invoice.count({ where: { billingAccount: { family: { centerId: selectedCenter.id } } } }),
-      prisma.document.count({
-        where: {
-          OR: [
-            { family: { centerId: selectedCenter.id } },
-            { child: { family: { centerId: selectedCenter.id } } },
-          ],
-        },
-      }),
-      prisma.form.count({ where: { status: "active" } }),
-      prisma.fteReport.count({ where: { centerId: selectedCenter.id } }),
-      prisma.integration.count({ where: { tenantId: user.tenantId } }),
-      prisma.integration.count({
-        where: {
-          tenantId: user.tenantId,
-          status: { in: ["verified", "connected", "ready_to_install", "platform_managed"] },
-        },
-      }),
-      prisma.procareImportBatch.count({ where: { centerId: selectedCenter.id } }),
-      prisma.messageTemplate.count({ where: { centerId: selectedCenter.id } }),
-    ]) : Array(17).fill(0) as number[];
+    ] = setupCounts;
+    const {
+      familyCount,
+      childCount,
+      guardianCount,
+      importBatchCount: procareImportCount,
+    } = schoolDataEvidence;
+    const schoolDataSetup = selectedCenter ? readSchoolDataSetup(selectedCenter.customFields) : readSchoolDataSetup({});
+    const schoolDataAssessment = assessSchoolDataSetup(schoolDataSetup, schoolDataEvidence);
 
     const licensingConfiguration = selectedCenter
       ? readCenterLicensingConfiguration(selectedCenter.customFields, {
@@ -1158,15 +1170,15 @@ async function renderLivePage(
         requiredActions: ["Add teachers and staff, assign classrooms, confirm schedules, background checks, credentials, and time clock rules."],
       },
       familyImportSetup: {
-        recordReady: familyCount > 0 && childCount > 0 && guardianCount > 0,
-        evidence: `${familyCount} families · ${childCount} children · ${guardianCount} guardians · ${procareImportCount} data imports`,
+        recordReady: schoolDataAssessment.confirmationCurrent,
+        evidence: `${familyCount} families · ${childCount} children · ${guardianCount} guardians · ${procareImportCount} data imports · ${schoolDataAssessment.label}`,
         metrics: [`Families: ${familyCount}`, `Children: ${childCount}`, `Guardians: ${guardianCount}`],
-        requiredActions: ["Import the approved source exports and review family, guardian, child, emergency contact, allergy, schedule, and classroom mappings."],
+        requiredActions: [schoolDataAssessment.detail],
       },
       tuitionRateSetup: {
-        recordReady: tuitionPlanCount > 0 || productCount > 0,
-        evidence: `${tuitionPlanCount} tuition plans · ${productCount} billing products`,
-        metrics: [`Tuition plans: ${tuitionPlanCount}`, `Products/fees: ${productCount}`],
+        recordReady: tuitionPlanCount > 0,
+        evidence: `${tuitionPlanCount} school-specific tuition plans · ${productCount} shared billing products available`,
+        metrics: [`School tuition plans: ${tuitionPlanCount}`, `Shared products/fees: ${productCount}`],
         requiredActions: ["Load tuition by age/program/cadence, registration fees, deposits, sibling discounts, late fees, and other charges."],
       },
       subsidyRules: {
@@ -1279,9 +1291,9 @@ async function renderLivePage(
       teacherStaffCount: staffCount,
       importedFamilyCount: familyCount,
       importedChildCount: childCount,
+      schoolDataReady: schoolDataAssessment.confirmationCurrent,
       documentCount,
       tuitionPlanCount,
-      productCount,
       billingAccountCount,
       invoiceCount,
       guardianLoginCount,
@@ -1295,18 +1307,18 @@ async function renderLivePage(
     });
     const externalNeeds = [
       selectedCenter && readSchoolEin(selectedCenter.customFields) ? null : "School EIN for customer payment receipts and ledger printouts.",
-      procareImportCount ? null : "Approved source data files for each school: families, children, guardians, classrooms, balances, and staff.",
-      tuitionPlanCount || productCount ? null : "Final tuition and fee sheet by program, age group, cadence, discounts, deposits, and late fees.",
+      schoolDataAssessment.confirmationCurrent ? null : schoolDataAssessment.blockedReason ?? "Final school-scoped family and child data review.",
+      tuitionPlanCount ? null : "Final tuition and fee sheet by program, age group, cadence, discounts, deposits, and late fees.",
       staffCount ? null : "Current staff roster with emails, titles, classroom assignments, schedules, certifications, and background-check status.",
       guardianLoginCount ? null : "Approved parent/guardian invite list and any missing parent email addresses.",
-      readyIntegrationCount ? null : "External account credentials or admin access for payment processing, SendGrid/email domain, Twilio/SMS, Google Sheets/Calendar, storage, and signature provider setup.",
+      readyIntegrationCount ? null : "Approved provider admin access or OAuth authorization for payment processing, email/SMS, Google services, storage, and signatures. Never place passwords or bank details in setup notes.",
       formCount && documentCount ? null : "Final registration packet, policy acknowledgements, medical/allergy forms, media releases, and staff onboarding forms.",
       manualComplete("launchSmokeTest") ? null : "Target go-live date and the person who will sign off after the role-by-role school smoke test.",
     ].filter((item): item is string => Boolean(item));
     const data: SchoolSetupCommandCenterData = {
       centerId: selectedCenter?.id ?? null,
       centerLabel: selectedCenter ? formatCenterName(selectedCenter) : "No visible school",
-      setupStatus: blockingSections ? "needs_director_input" : "ready_for_review",
+      setupStatus: blockingSections ? "needs_setup" : "ready_for_review",
       progress,
       completedSections,
       totalSections: sections.length,
@@ -1321,6 +1333,13 @@ async function renderLivePage(
         { label: "Documents", value: String(documentCount), detail: `${formCount} active forms` },
         { label: "Integrations", value: `${readyIntegrationCount}/${integrationCount}`, detail: "Ready setup records" },
       ],
+      dataSetup: {
+        centerId: selectedCenter?.id ?? null,
+        centerLabel: selectedCenter ? formatCenterName(selectedCenter) : "No visible school",
+        setup: schoolDataSetup,
+        evidence: schoolDataEvidence,
+        assessment: schoolDataAssessment,
+      },
       sections,
       externalNeeds,
       directorChecklistCompletedIds: readCompletedSetupChecklistIds(setupChecklistUser?.customFields, "director_launch"),

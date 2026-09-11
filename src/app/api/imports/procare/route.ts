@@ -40,6 +40,8 @@ import {
   procareImportReviewFingerprint,
   procareSourceSha256,
 } from "@/lib/procare-import-review";
+import { schoolDataImportVerificationRevision } from "@/lib/school-data-setup";
+import { loadSchoolDataFingerprint } from "@/lib/school-data-setup-server";
 import { buildProcareReconciliationReport, procareRetentionReviewDue } from "@/lib/procare-migration-controls";
 import {
   assessProcareFleetSourceCoverage,
@@ -1949,6 +1951,7 @@ async function GETHandler(request: NextRequest) {
         row.status === "disposed"
         && (!row.resolutionCategory || !row.resolutionReason || !row.resolutionEvidenceReference || !row.resolvedBy || !row.resolvedAt)
       )).length;
+      const targetDataFingerprint = await loadSchoolDataFingerprint({ centerId: batch.centerId });
       const fleetReport = buildProcareFleetVerificationReport({
         batchId: batch.id,
         centerId: batch.centerId,
@@ -1956,6 +1959,7 @@ async function GETHandler(request: NextRequest) {
         sourceFilename: batch.filename,
         importedAt: batch.createdAt.toISOString(),
         sourceSha256: report.sourceSha256,
+        targetDataFingerprint,
         batchStatus: batch.status,
         sourceInventoryConfirmed: summary.sourceInventoryConfirmed === true,
         sourceCoverage,
@@ -1967,7 +1971,26 @@ async function GETHandler(request: NextRequest) {
         action: "procare.import.fleet_verification_exported",
         resource: "ProcareImportBatch",
         resourceId: batch.id,
-        metadata: { status: fleetReport.status, blockerCount: fleetReport.blockers.length, sourceSha256: fleetReport.sourceSha256 },
+        metadata: {
+          status: fleetReport.status,
+          blockerCount: fleetReport.blockers.length,
+          sourceSha256: fleetReport.sourceSha256,
+          targetDataFingerprint: fleetReport.targetDataFingerprint,
+          reviewFingerprint: typeof summary.reviewFingerprint === "string" ? summary.reviewFingerprint : null,
+          verificationRevision: schoolDataImportVerificationRevision({
+            id: batch.id,
+            filename: batch.filename,
+            status: batch.status,
+            createdAt: batch.createdAt.toISOString(),
+            totalRows: batch.rows.length,
+            importedRows: report.importedRows,
+            unresolvedRows: report.unresolvedRows,
+            disposedRows: report.disposedRows,
+            errorRows: report.errorRows,
+            sourceSha256: report.sourceSha256,
+            reviewFingerprint: typeof summary.reviewFingerprint === "string" ? summary.reviewFingerprint : null,
+          }),
+        },
       });
       return NextResponse.json({
         ok: true,

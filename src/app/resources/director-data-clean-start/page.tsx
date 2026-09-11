@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "Director School Data Clean-Start Guide | The BEE Suite",
   description:
-    "A director-friendly checklist and FAQ for verifying school, family, child, safety, tuition, and balance data before launch.",
+    "A director-friendly checklist for verifying imported or clean-start school, family, child, safety, tuition, and balance data before launch.",
   alternates: { canonical: "/resources/director-data-clean-start" },
 };
 
@@ -18,10 +18,10 @@ const steps = [
     title: "Confirm you are reviewing the right school",
     actions: [
       "Sign in through the Director workspace and confirm the school name shown on the page.",
-      "Open the review packet for your school and confirm it says READY_FOR_DIRECTOR_REVIEW.",
-      "Confirm the school name and export date match the records you intend to review.",
+      "Open School setup and confirm the saved starting point says Move Existing Records or Start With a Clean Workspace.",
+      "For an import, confirm the school packet says READY_FOR_DIRECTOR_REVIEW and matches the source date. For a clean start, confirm no prior roster is expected and use only real enrollment records.",
     ],
-    stop: "Stop if you see another school's records, the packet is not ready, or the school or export date does not match.",
+    stop: "Stop if you see another school's records, the saved path is wrong, or an import packet is not ready or does not match.",
   },
   {
     title: "Review the current roster",
@@ -55,7 +55,7 @@ const steps = [
     actions: [
       "Confirm each current child has the correct classroom or age group.",
       "Confirm scheduled days and any full-time or part-time designation shown in the source.",
-      "Record schedule details that cannot be proven from the export instead of filling them in from memory.",
+      "Record schedule details that cannot be proven from the source or enrollment record instead of filling them in from memory.",
     ],
     stop: "Do not assume five days or a classroom when the source is incomplete or ambiguous.",
   },
@@ -63,7 +63,7 @@ const steps = [
     title: "Check tuition and opening balances",
     actions: [
       "Confirm each child's tuition amount, billing schedule, description, and effective date.",
-      "Confirm each family's opening balance has an as-of date and supporting source.",
+      "For an import, confirm each opening balance has an as-of date and supporting source. For a clean start, confirm there is no opening balance unless a real dated charge or credit supports it.",
       "Keep parent responsibility separate from agency or subsidy responsibility.",
       "Compare current-only totals with current-only totals and all-record totals with all-record totals.",
     ],
@@ -90,10 +90,11 @@ const steps = [
 ];
 
 const faqs = [
+  ["What if this is a brand-new school with nothing to import?", "Choose Start With a Clean Workspace in School setup. Add only real enrollment records, or explicitly confirm that no current families are expected yet. Do not create placeholder people or an empty import."],
   ["Am I expected to fix the export files?", "No. Directors verify what is right or wrong and provide the source evidence. Do not edit import files or guess which record should win."],
   ["What does READY_FOR_DIRECTOR_REVIEW mean?", "It means the technical review packet is ready for your school-level verification. It does not mean the data is approved or that the school is cleared to launch."],
   ["What if a field is blank?", "Mark it MISSING SOURCE or NEEDS CORRECTION as appropriate. A blank field is not proof that the school has no allergy, pickup restriction, balance, schedule, or other item."],
-  ["What if the BEE Suite and ProCare do not match?", "Record the exact difference and identify the dated source that should be used. Keep the item unresolved until it is corrected and checked again."],
+  ["What if the BEE Suite and the previous system do not match?", "Record the exact difference and identify the dated source that should be used. Keep the item unresolved until it is corrected and checked again."],
   ["Should I create a duplicate when a family or guardian looks wrong?", "No. Stop and report the existing record. Duplicates can split children, balances, invitations, and payment history."],
   ["How many families should I spot-check?", "At least 10 current families, chosen across classrooms and billing situations. If the school has fewer than 10 current families, review all of them."],
   ["Do I include agency or subsidy money in the parent's balance?", "No. Parent responsibility and agency or subsidy responsibility must stay separate."],
@@ -118,9 +119,9 @@ export default function DirectorDataCleanStartPage() {
           <div className="py-12 sm:py-16">
             <Badge className="bg-amber-300 text-slate-950"><ClipboardCheck data-icon="inline-start" />Directors and assistant directors</Badge>
             <h1 className="mt-5 max-w-4xl text-4xl font-semibold leading-tight sm:text-5xl">School Data Clean-Start Guide</h1>
-            <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300">Use this checklist to verify your school data before launch. You are responsible for identifying what is correct, missing, or needs correction—not repairing import files or guessing.</p>
+            <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300">Use this checklist for either a reviewed import or a clean workspace. You confirm what is correct, missing, or needs correction; you are not expected to repair source files, create placeholder records, or guess.</p>
             <div className="mt-7 rounded-lg border border-amber-300/30 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
-              Keep ProCare or the school&apos;s previous system as the source of record until written cutover approval is complete.
+              Imported school: keep the previous system as the source of record until written cutover approval. Clean-start school: enter only real school and enrollment facts and confirm an intentionally empty roster when applicable.
             </div>
           </div>
         </div>
@@ -137,8 +138,8 @@ export default function DirectorDataCleanStartPage() {
           <section id="before-you-begin" className="scroll-mt-6 py-10">
             <h2 className="text-2xl font-semibold">Before you begin</h2>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border border-white/10 bg-white/[0.055] p-5"><h3 className="font-semibold text-amber-200">Have these ready</h3><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300"><li>Your current BEE Suite director access</li><li>The current school roster and source exports</li><li>The school review packet marked READY_FOR_DIRECTOR_REVIEW</li><li>A place to record corrections, owners, and recheck results</li></ul></div>
-              <div className="rounded-lg border border-red-300/20 bg-red-400/10 p-5"><h3 className="flex items-center gap-2 font-semibold text-red-200"><ShieldAlert className="size-5" />Stop and escalate</h3><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300"><li>Another school&apos;s information is visible</li><li>A child, guardian, or relationship is ambiguous</li><li>Safety, custody, tuition, or balance evidence conflicts</li><li>The source or as-of date is missing</li></ul></div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.055] p-5"><h3 className="font-semibold text-amber-200">Have these ready</h3><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300"><li>Your current BEE Suite director access</li><li>The saved data starting point for the correct school</li><li>For an import: the current source package and packet marked READY_FOR_DIRECTOR_REVIEW</li><li>For a clean start: the actual enrollment roster, or confirmation that no current families are expected</li><li>A place to record corrections, owners, and recheck results</li></ul></div>
+              <div className="rounded-lg border border-red-300/20 bg-red-400/10 p-5"><h3 className="flex items-center gap-2 font-semibold text-red-200"><ShieldAlert className="size-5" />Stop and escalate</h3><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300"><li>Another school&apos;s information is visible</li><li>A child, guardian, or relationship is ambiguous</li><li>Safety, custody, tuition, or balance evidence conflicts</li><li>An imported record&apos;s source or as-of date is missing</li></ul></div>
             </div>
             <figure className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-[#f7f4ed]"><Image src="/brand/the-bee-suite/explainers/current/school-launch-gates.png" alt="Independent school data, access, attendance, billing, payment, and cutover gates" width={1600} height={1000} className="h-auto w-full" priority /></figure>
           </section>
@@ -158,7 +159,7 @@ export default function DirectorDataCleanStartPage() {
 
           <section className="my-10 rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-6">
             <h2 className="flex items-center gap-2 text-xl font-semibold text-emerald-100"><CheckCircle2 className="size-5" />Final director sign-off</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-200">Sign off only when every school-data item is verified or has a documented resolution. This sign-off does not activate invitations, access, kiosk/PIN, attendance, billing, payments, messaging, or ProCare cutover.</p>
+            <p className="mt-3 text-sm leading-6 text-slate-200">Sign off only when every school-data item is verified or has a documented resolution—or when a new school has explicitly confirmed that no current families are expected yet. This sign-off does not activate invitations, access, kiosk/PIN, attendance, billing, payments, messaging, or ProCare cutover. A cutover from any other prior system is equally separate.</p>
           </section>
         </div>
       </section>

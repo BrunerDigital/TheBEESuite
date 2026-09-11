@@ -7,6 +7,7 @@ export type DirectorLaunchAutoCompletionInput = {
   teacherStaffCount?: number;
   importedFamilyCount?: number;
   importedChildCount?: number;
+  schoolDataReady?: boolean;
   documentCount?: number;
   tuitionPlanCount?: number;
   productCount?: number;
@@ -44,7 +45,12 @@ export function deriveDirectorLaunchAutoCompletedIds(input: DirectorLaunchAutoCo
   add("login-school-profile", Boolean(input.schoolProfileReady) || positive(input.centerCount));
   add("classrooms-ratios", positive(input.classroomCount));
   add("teachers-staff", positive(input.teacherStaffCount));
-  add("procare-import", positive(input.importedFamilyCount) && positive(input.importedChildCount));
+  add(
+    "procare-import",
+    input.schoolDataReady === undefined
+      ? positive(input.importedFamilyCount) && positive(input.importedChildCount)
+      : input.schoolDataReady,
+  );
   add("required-documents", positive(input.documentCount));
   add("tuition-billing-rules", positive(input.tuitionPlanCount) || positive(input.productCount) || positive(input.billingAccountCount) || positive(input.invoiceCount));
   add("payout-bank-account", Boolean(input.payoutReady));

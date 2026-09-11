@@ -2024,6 +2024,7 @@ function ParentPortalWorkspaceView({
             </div>
             <div
               className={`grid divide-y divide-border/70 ${family.children.length > 1 ? "lg:grid-cols-2 lg:divide-y-0" : ""}`}
+              role="group"
               aria-label="Children’s status today"
             >
               {family.children.map((child) => {

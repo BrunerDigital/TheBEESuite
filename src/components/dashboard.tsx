@@ -1328,7 +1328,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           <CardContent>
             <div className={cn("break-words font-semibold tabular-nums", valueClassName)}>{kpi.value}</div>
             <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
-            <span className={cn("mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary", honeycomb && "sr-only")}>
+            <span className={cn("mt-3 inline-flex items-center gap-1 text-xs font-medium text-foreground", honeycomb && "sr-only")}>
               Open view
               <ArrowUpRight className="size-3" />
             </span>
@@ -1358,7 +1358,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         <Link href="/data-readiness" className="honeycomb-kpi-link group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Open ${isExecutiveDashboard ? "the migration data workbook" : "school migration setup"} with ${live.dataReadiness.actionable} actionable tasks`}>
           <Card className="honeycomb-kpi-card h-full transition-colors group-hover:border-primary/40 group-hover:bg-muted/30">
             <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2"><CardDescription>{isExecutiveDashboard ? "Migration data workbook" : "School migration setup"}</CardDescription><ShieldCheck className="text-sky-500" /></CardHeader>
-            <CardContent><div className="text-3xl font-semibold">{live.dataReadiness.actionable}</div><p className="mt-1 text-xs text-muted-foreground">{live.dataReadiness.blocked} blocked · {live.dataReadiness.failed} failed · {live.dataReadiness.completionPercent}% resolved</p><span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">{isExecutiveDashboard ? "Open workbook" : "Continue setup"} <ArrowUpRight className="size-3" /></span></CardContent>
+            <CardContent><div className="text-3xl font-semibold">{live.dataReadiness.actionable}</div><p className="mt-1 text-xs text-muted-foreground">{live.dataReadiness.blocked} blocked · {live.dataReadiness.failed} failed · {live.dataReadiness.completionPercent}% resolved</p><span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-foreground">{isExecutiveDashboard ? "Open workbook" : "Continue setup"} <ArrowUpRight className="size-3" /></span></CardContent>
           </Card>
         </Link>
       ),
@@ -1621,7 +1621,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         <div className="flex min-w-0 flex-col gap-5">
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-primary">{asOfLabel}</p>
+              <p className="text-sm font-medium text-muted-foreground">{asOfLabel}</p>
               <h1 className="mt-2 max-w-3xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
                 {dashboardTitle}
               </h1>
@@ -1663,7 +1663,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     No current exceptions are visible in this workspace.
                   </div>
                 )}
-                {actionQueue.length > 3 ? <Link href="/notifications" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline">View all {actionQueue.length} items</Link> : null}
+                {actionQueue.length > 3 ? <Link href="/notifications" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-4 hover:decoration-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">View all {actionQueue.length} items</Link> : null}
               </CardContent>
             </Card>
             <Card>
@@ -1671,7 +1671,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 <h2 className="text-lg font-semibold" id="dashboard-primary-actions">Primary actions</h2>
                 <CardDescription>The most common destinations for your role.</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2" aria-labelledby="dashboard-primary-actions">
+              <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2" role="group" aria-labelledby="dashboard-primary-actions">
                 {primaryActionItems.map((item, index) => (
                   <DashboardPrimaryActionLink
                     key={item.slug}
@@ -2010,7 +2010,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                                 <Badge>{stage.count}</Badge>
                               </div>
                               <p className="mt-2 text-xs text-muted-foreground">Projected value {stage.value}</p>
-                              <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary opacity-0 transition group-hover:opacity-100">
+                              <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-foreground opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
                                 Open matching leads
                                 <ArrowUpRight className="size-3" />
                               </span>
@@ -2093,7 +2093,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                               href={actionQueueHref(item)}
                               className="group flex items-start gap-3 rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                              <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+                              <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/15 text-foreground">
                                 {index + 1}
                               </span>
                               <p className="min-w-0 flex-1 text-sm leading-5">{notificationText(item)}</p>

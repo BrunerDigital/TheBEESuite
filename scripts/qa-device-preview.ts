@@ -252,7 +252,7 @@ try {
       const metrics = await pageMetrics(page);
       const screenshot = resolve(outputDirectory, `${viewport.id}__${route.id}.png`);
       await mkdir(dirname(screenshot), { recursive: true });
-      await page.screenshot({ path: screenshot, fullPage: true });
+      await page.screenshot({ path: screenshot, fullPage: true, caret: "initial" });
       const passed = Boolean(response && response.status() === 200)
         && metrics.meaningfulText > 0
         && metrics.horizontalOverflowPx === 0

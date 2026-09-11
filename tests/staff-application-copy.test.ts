@@ -26,7 +26,8 @@ test("staff and administrative surfaces do not expose implementation or prototyp
 });
 
 test("shared navigation names the destination and accessible action", () => {
-  assert.match(shell, /label: "Notifications", href: "\/notifications"/);
+  // The concise phone label must still name the real notifications destination.
+  assert.equal((shell.match(/label: "Alerts", href: "\/notifications", slug: "notifications"/g) ?? []).length, 2);
   assert.match(shell, /parentNavigationLabel : "Primary navigation"/);
   assert.match(shell, /aria-label="Search The BEE Suite"/);
   assert.match(shell, /aria-label="Open quick navigation"/);

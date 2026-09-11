@@ -453,7 +453,8 @@
   }
 
   .teacher-mobile-workspace nav[aria-label="Teacher task shortcuts"] > div:last-child {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+    /* Two phone columns, at most three wider columns; enlarged text may use one. */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(7rem, calc((100% - 1rem) / 3))), 1fr));
   }
 
   .teacher-mobile-workspace [data-slot="card-header"] > div:first-child {

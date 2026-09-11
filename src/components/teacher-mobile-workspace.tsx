@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, MapPin, Moon, Palette, Plus, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
+import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, MapPin, Minus, Moon, Palette, Plus, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -890,34 +890,22 @@ export function TeacherMobileWorkspace({
 
   return (
     <div
-      className="teacher-mobile-workspace mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-4 [&_button]:min-h-11 [&_button]:min-w-11"
+      className="teacher-mobile-workspace mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-3 sm:gap-4 [&_button]:min-h-11 [&_button]:min-w-11"
       aria-busy={isPending}
     >
       {appReviewMode ? (
-        <Alert>
-          <ShieldAlert aria-hidden="true" />
-          <AlertTitle>Shared review profile is protected</AlertTitle>
-          <AlertDescription>
+        <details className="group rounded-xl border bg-card px-3 text-sm" data-teacher-review-notice>
+          <summary className="flex min-h-11 min-w-0 cursor-pointer list-none items-center gap-2 py-2 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">Shared review profile is protected</span>
+            <Plus className="size-4 shrink-0 group-open:hidden" aria-hidden="true" />
+            <Minus className="hidden size-4 shrink-0 group-open:block" aria-hidden="true" />
+          </summary>
+          <p className="border-t py-3 leading-6 text-muted-foreground">
             The reviewer can use the assigned synthetic classroom tools, but cannot change the shared profile, create a staff kiosk code, or clock time.
-          </AlertDescription>
-        </Alert>
+          </p>
+        </details>
       ) : null}
-
-      <section className="rounded-xl border bg-card p-4 sm:p-5">
-        <Badge className="mb-2">
-          <ClipboardCheck data-icon="inline-start" />
-          Classroom tools
-        </Badge>
-        <h1 className="text-2xl font-semibold tracking-tight">Today in your classroom</h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Hi {teacherName}. {teacherProfile?.centerName ?? "Your classroom"}
-        </p>
-        <dl className="mt-4 grid grid-cols-3 gap-2 border-t pt-3 text-sm">
-          <div><dt className="text-xs text-muted-foreground">In your roster</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{roster.length}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">At school</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{roster.filter((child) => attendanceFor(child).latestLogType === "check_in" || attendanceFor(child).status === "present").length}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">Reports sent</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{roster.filter((child) => dailyReportFor(child).status === "sent").length}</dd></div>
-        </dl>
-      </section>
 
       {status ? (
         <Alert role="status" aria-live="polite">
@@ -959,25 +947,39 @@ export function TeacherMobileWorkspace({
             </Button>
           ) : null}
         </AlertDescription>
-      </Alert> : <p className="flex items-center gap-2 px-1 text-xs text-muted-foreground"><CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />Online · ready for classroom updates</p>}
+      </Alert> : null}
 
-      <nav aria-label="Teacher task shortcuts" className="-mx-1 rounded-xl border bg-background p-2 shadow-sm">
-        <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Do now</div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {[
-            ["Check attendance", "#teacher-attendance"],
-            ["Write daily report", "#teacher-daily-report"],
-            ["Share photo", "#teacher-photo"],
-            ["Report incident", "#teacher-incident"],
-            ["View roster", "#teacher-roster"],
-            ["Edit profile", "#teacher-profile-setup"],
-          ].map(([label, href]) => (
-            <a key={href} href={href} className={cn(buttonVariants({ size: "sm", variant: "outline" }), "h-auto min-h-11 w-full justify-start whitespace-normal py-2 text-left leading-5")}>
-              {label}
-            </a>
-          ))}
+      <section className="rounded-xl border bg-card p-3 sm:p-5" data-teacher-home-overview aria-labelledby="teacher-home-heading">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <p className="min-w-0">Hi {teacherName}</p>
+          {isOnline && !offlineQueue.length ? (
+            <p className="flex items-center gap-1.5"><CheckCircle2 className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />Online<span className="sr-only"> · ready for classroom updates</span></p>
+          ) : null}
         </div>
-      </nav>
+        <h1 id="teacher-home-heading" className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">Today in your classroom</h1>
+        <dl className="my-3 grid grid-cols-3 gap-2 border-y py-2 text-sm">
+          <div><dt className="text-xs text-muted-foreground">In your roster</dt><dd className="text-lg font-semibold tabular-nums">{roster.length}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">At school</dt><dd className="text-lg font-semibold tabular-nums">{roster.filter((child) => attendanceFor(child).latestLogType === "check_in" || attendanceFor(child).status === "present").length}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">Reports sent</dt><dd className="text-lg font-semibold tabular-nums">{roster.filter((child) => dailyReportFor(child).status === "sent").length}</dd></div>
+        </dl>
+        <nav aria-label="Teacher task shortcuts">
+          <div className="mb-2 text-xs font-medium text-muted-foreground">Do now</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {[
+              ["Check attendance", "#teacher-attendance"],
+              ["Write daily report", "#teacher-daily-report"],
+              ["Share photo", "#teacher-photo"],
+              ["Report incident", "#teacher-incident"],
+              ["View roster", "#teacher-roster"],
+              ["Edit profile", "#teacher-profile-setup"],
+            ].map(([label, href]) => (
+              <a key={href} href={href} className={cn(buttonVariants({ size: "sm", variant: "outline" }), "h-auto min-h-11 w-full justify-start whitespace-normal px-2 py-2 text-left text-sm leading-5")}>
+                {label}
+              </a>
+            ))}
+          </div>
+        </nav>
+      </section>
 
       {kioskAccess ? (
         <CollapsibleCard

@@ -44,6 +44,8 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
   },
   server: {
+    // Keep the full application origin for subsequent portal navigation. Each
+    // appStartPath also has a bundled launch directory required by Capacitor iOS.
     url: `https://${productionHost}`,
     appStartPath: app.appStartPath,
     cleartext: false,

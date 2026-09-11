@@ -49,7 +49,7 @@
   }
 
   .bee-app-frame[data-role="PARENT_GUARDIAN"] [data-parent-home-actions="true"] > div {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr));
   }
 
   .bee-app-frame[data-role="PARENT_GUARDIAN"] #today > div:first-child {
@@ -61,6 +61,18 @@
   }
 
   @media (max-width: 639px) {
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-workspace {
+      gap: 0.75rem;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-workspace[data-parent-portal-view="home"] {
+      gap: 0.5rem;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-heading:not([data-parent-heading-view="home"]) {
+      padding: 0.75rem;
+    }
+
     /* Icons need a stable hit area; they must not consume the header at text zoom. */
     .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .app-header button {
       width: 44px;
@@ -81,7 +93,7 @@
       border-radius: 0;
       background: transparent;
       box-shadow: none;
-      padding: 0.25rem 0.25rem 0.5rem;
+      padding: 0.25rem;
     }
   }
 }

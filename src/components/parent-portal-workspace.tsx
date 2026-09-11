@@ -1870,7 +1870,7 @@ function ParentPortalWorkspaceView({
       >
         <div className="relative z-[1] flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-balance font-heading text-[1.75rem] font-semibold leading-tight tracking-tight sm:text-4xl">
+            <h1 className="text-balance font-heading text-2xl font-semibold leading-tight tracking-tight sm:text-4xl">
               {activeView === "home" ? homeGreeting : activeViewCopy.title}
             </h1>
             {activeView === "home" ? (
@@ -2003,7 +2003,7 @@ function ParentPortalWorkspaceView({
             aria-labelledby="parent-today-heading"
             data-parent-home-primary="true"
           >
-            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-2 sm:px-6 sm:py-3">
+            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 sm:px-6 sm:py-3">
               <div className="min-w-0">
                 <h2 id="parent-today-heading" className="text-base font-semibold text-pretty">
                   Today at school
@@ -2040,15 +2040,15 @@ function ParentPortalWorkspaceView({
                 return (
                   <article
                     key={child.id}
-                    className="min-w-0 px-4 pt-4 sm:px-6 sm:pt-5"
+                    className="min-w-0 px-3 pt-3 sm:px-6 sm:pt-5"
                   >
                     <div className="flex min-w-0 items-start gap-3">
                       {child.profilePhotoUrl ? (
-                        <span className="relative size-11 shrink-0 overflow-hidden rounded-full border bg-muted">
+                        <span className="relative size-9 shrink-0 overflow-hidden rounded-full border bg-muted sm:size-11">
                           <Image src={child.profilePhotoUrl} alt="" fill sizes="44px" unoptimized className="object-cover" />
                         </span>
                       ) : (
-                        <span className={`grid size-11 shrink-0 place-items-center rounded-full ${childPresent ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-primary"}`}>
+                        <span className={`grid size-9 shrink-0 place-items-center rounded-full sm:size-11 ${childPresent ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-primary"}`}>
                           {childPresent ? (
                             <CheckCircle2 className="size-5" aria-hidden="true" />
                           ) : (
@@ -2057,26 +2057,24 @@ function ParentPortalWorkspaceView({
                         </span>
                       )}
                       <div className="min-w-0 flex-1">
-                        <h3 className="break-words text-lg font-semibold leading-6">
+                        <h3 className="break-words text-base font-semibold leading-5 sm:text-lg sm:leading-6">
                           {child.preferredName || child.fullName}
                         </h3>
-                        <p className="mt-0.5 break-words text-sm leading-5 text-muted-foreground">
-                          {child.classroom?.name || "Classroom not assigned"}
-                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5">
+                          <span className="break-words text-muted-foreground">{child.classroom?.name || "Classroom not assigned"}</span>
+                          <Badge className="px-2 py-0.5 text-xs leading-5" variant={todayStatusVariant(child.today?.status)}>
+                            {child.today?.label || "Not marked today"}
+                          </Badge>
+                          {child.today?.latestEventAt ? (
+                            <span className="text-xs tabular-nums text-muted-foreground">
+                              {formatTime(child.today.latestEventAt)}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                      <Badge className="px-2 py-0.5 text-xs leading-5" variant={todayStatusVariant(child.today?.status)}>
-                        {child.today?.label || "Not marked today"}
-                      </Badge>
-                      {child.today?.latestEventAt ? (
-                        <span className="text-xs tabular-nums text-muted-foreground">
-                          {formatTime(child.today.latestEventAt)}
-                        </span>
-                      ) : null}
-                    </div>
-                    <details className="group mt-3 border-t text-sm">
-                      <summary className="flex min-h-11 min-w-0 flex-wrap cursor-pointer list-none select-none items-center justify-between gap-3 py-3 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <details className="group mt-2 border-t text-sm">
+                      <summary className="flex min-h-11 min-w-0 flex-wrap cursor-pointer list-none select-none items-center justify-between gap-3 py-2 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                         <span className="min-w-0 flex-1 group-open:hidden">View day details</span>
                         <span className="hidden min-w-0 flex-1 group-open:inline">Hide day details</span>
                         <Plus className="size-4 shrink-0 group-open:hidden" aria-hidden="true" />
@@ -2140,12 +2138,12 @@ function ParentPortalWorkspaceView({
           <section aria-labelledby="parent-quick-actions-heading" data-parent-home-actions="true">
             <div className="flex items-end justify-between gap-3">
               <div>
-                <h2 id="parent-quick-actions-heading" className="text-base font-semibold">
+                <h2 id="parent-quick-actions-heading" className="sr-only text-base font-semibold sm:not-sr-only">
                   Quick actions
                 </h2>
               </div>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3 xl:grid-cols-4">
               {(
                 [
                   [
@@ -2156,12 +2154,14 @@ function ParentPortalWorkspaceView({
                     "School Check-In",
                     "Family PIN and QR code",
                     KeyRound,
+                    "School Check-In",
                   ],
                   [
                     workspaceHref("messages", { familyId: family.id }),
                     "Message the School",
                     "Ask a question or send a note",
                     MessageSquare,
+                    "Message School",
                   ],
                   [
                     workspaceHref("updates", { familyId: family.id }),
@@ -2170,25 +2170,28 @@ function ParentPortalWorkspaceView({
                       ? `${latestReport.child.fullName} · ${formatDate(latestReport.date)}`
                       : "See shared classroom moments",
                     Camera,
+                    "Photos & Reports",
                   ],
                   [
                     workspaceHref("payments", { familyId: family.id }),
                     "View Payments",
                     "Balance, invoices, and payment methods",
                     CreditCard,
+                    "View Payments",
                   ],
                 ] as const
-              ).map(([href, label, detail, Icon]) => (
+              ).map(([href, label, detail, Icon, mobileLabel]) => (
                 <ParentPortalDocumentLink
                   key={href}
                   href={href}
-                  className="group relative flex min-h-[4.5rem] items-center gap-2 rounded-2xl border bg-card p-3 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] active:bg-primary/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-24 sm:gap-3 sm:p-4"
+                  className="group relative flex min-h-14 items-center gap-2 rounded-xl border bg-card px-2.5 py-2 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] active:bg-primary/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-24 sm:gap-3 sm:rounded-2xl sm:p-4"
                 >
-                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Icon className="size-5" aria-hidden="true" />
+                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary sm:size-9 sm:rounded-xl">
+                    <Icon className="size-4 sm:size-5" aria-hidden="true" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-balance text-sm font-semibold leading-5">{label}</span>
+                    <span className="block text-sm font-semibold leading-5 sm:hidden">{mobileLabel}</span>
+                    <span className="hidden text-balance text-sm font-semibold leading-5 sm:block">{label}</span>
                     <span className="mt-1 hidden text-xs leading-5 text-muted-foreground sm:block">
                       {detail}
                     </span>
@@ -2204,8 +2207,8 @@ function ParentPortalWorkspaceView({
             aria-labelledby="parent-home-attention-heading"
             data-parent-home-priority="true"
           >
-            <div className={`flex items-center gap-3 px-4 py-4 sm:px-6 ${homeAttentionCount ? "border-b" : ""}`}>
-              <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${homeAttentionCount ? "bg-amber-400/15 text-amber-800 dark:text-amber-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>
+            <div className={`flex items-center gap-3 px-3 py-3 sm:px-6 sm:py-4 ${homeAttentionCount ? "border-b" : ""}`}>
+              <span className={`grid size-8 shrink-0 place-items-center rounded-xl sm:size-10 ${homeAttentionCount ? "bg-amber-400/15 text-amber-800 dark:text-amber-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>
                 {homeAttentionCount ? (
                   <AlertCircle className="size-5" aria-hidden="true" />
                 ) : (
@@ -2213,7 +2216,7 @@ function ParentPortalWorkspaceView({
                 )}
               </span>
               <div className="min-w-0 flex-1">
-                <h2 id="parent-home-attention-heading" className="text-lg font-semibold">
+                <h2 id="parent-home-attention-heading" className="text-base font-semibold sm:text-lg">
                   {homeAttentionCount ? "Needs your attention" : "You’re all caught up"}
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">

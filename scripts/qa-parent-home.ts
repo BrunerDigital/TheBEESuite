@@ -19,8 +19,8 @@ const results: Array<Record<string, unknown>> = [];
 
 try {
   await mkdir(output, { recursive: true });
-  for (const width of [360, 390, 430]) {
-    const context = await browser.newContext({ viewport: { width, height: 844 }, reducedMotion: "reduce", serviceWorkers: "block" });
+  for (const width of [320, 360, 390, 430]) {
+    const context = await browser.newContext({ viewport: { width, height: width === 320 ? 568 : 844 }, reducedMotion: "reduce", serviceWorkers: "block" });
     const page = await context.newPage();
     const unsafeRequests: string[] = [];
     await page.route("**/*", async (route) => {
@@ -52,8 +52,8 @@ try {
 
     for (const [label, screen, section] of [
       ["School Check-In", "family", "check-in"],
-      ["Message the School", "messages", null],
-      ["Photos & Daily Reports", "updates", null],
+      ["Message School", "messages", null],
+      ["Photos & Reports", "updates", null],
       ["View Payments", "payments", null],
     ] as const) {
       await page.goto(homeUrl, { waitUntil: "networkidle" });

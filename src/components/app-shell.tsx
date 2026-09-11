@@ -926,7 +926,7 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
   const parentFacing = isParentFacingUser(currentUser);
   const parentGuardian = currentUser.role === "PARENT_GUARDIAN";
   if (previewMode && !parentFacing) {
-    return <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="border shadow-none" />;
+    return <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="app-header-avatar border shadow-none" />;
   }
   const familyId = parentFacing ? searchParams.get("familyId") : null;
   const accountDestination = (section: "profile" | "notifications") => parentPortalWorkspaceHref({
@@ -945,7 +945,7 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
           name={displayName}
           src={currentUser.profilePhotoUrl}
           size="md"
-          className="border-0 shadow-none"
+          className="app-header-avatar border-0 shadow-none"
           preferInitialsForDefault={parentFacing}
         />
       </DropdownMenuTrigger>
@@ -1099,7 +1099,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
   return (
     <nav
       aria-label={parentFacing ? parentNavigationLabel : "Primary navigation"}
-      className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
+      className="app-bottom-navigation fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
     >
       <div className={cn(
         "mx-auto grid max-w-md items-stretch gap-1",
@@ -1150,7 +1150,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
             )}
           >
             <MoreHorizontal className="size-4" aria-hidden="true" />
-            <span>More</span>
+            <span className="max-w-full break-words text-center leading-tight">More</span>
           </SheetTrigger>
           <SheetContent side="bottom" className="max-h-[82dvh] overflow-hidden overscroll-contain rounded-t-3xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <SheetTitle className="shrink-0 text-left">More</SheetTitle>
@@ -1439,7 +1439,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
       </aside> : null}
       <div className={cn("min-w-0", !workspacePending && "lg:pl-20 xl:pl-72")}>
         <header ref={appHeaderRef} className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-          <div className="flex min-h-16 min-w-0 items-center gap-2 px-3 sm:px-4 lg:px-6">
+          <div className="app-header-toolbar flex min-h-16 min-w-0 items-center gap-2 px-3 sm:px-4 lg:px-6">
             {parentFacing ? (
               <BrandLogo
                 href={parentPortalShellHref("home", previewMode, previewHrefBase, pathname, activeParentFamilyId)}
@@ -1547,7 +1547,12 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 ) : null}
               </div>
             </div> : null}
-            <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+            <div className="app-header-actions ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+              {previewMode && !parentFacing ? (
+                <Button variant="outline" size="icon" aria-label="Search The BEE Suite (preview)" className="lg:hidden" disabled>
+                  <Search aria-hidden="true" />
+                </Button>
+              ) : null}
               {showActiveWorkspaceTools ? <Dialog open={mobileSearchOpen} onOpenChange={(open) => {
                 setMobileSearchOpen(open);
                 setActiveSearchIndex(-1);
@@ -1653,6 +1658,11 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 </div>
               ) : null}
               {showNotificationTools ? <NotificationDropdown key={`${currentUser?.id ?? currentUser?.email}:${currentUser?.role}`} currentUser={currentUser} /> : null}
+              {previewMode && currentUser ? (
+                <Button variant="outline" size="icon" aria-label="Notifications (preview)" disabled>
+                  <Bell aria-hidden="true" />
+                </Button>
+              ) : null}
               <Button variant="outline" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>
                 <Moon className="dark:hidden" />
                 <Sun className="hidden dark:block" />

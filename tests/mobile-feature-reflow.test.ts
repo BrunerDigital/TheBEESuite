@@ -5,6 +5,30 @@ import test from "node:test";
 const parent = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
 const quality = readFileSync("src/app/product-ui.css", "utf8");
 
+test("expanded parent day details preserve label and icon space at 200 percent text", () => {
+  assert.match(parent, /className="min-w-0 flex-1 group-open:hidden">View day details/);
+  assert.match(parent, /className="hidden min-w-0 flex-1 group-open:inline">Hide day details/);
+  assert.match(parent, /Plus className="size-4 shrink-0 group-open:hidden"/);
+  assert.match(parent, /Minus className="hidden size-4 shrink-0 group-open:block"/);
+  assert.doesNotMatch(parent, /group-open:rotate-45/);
+  assert.match(parent, /className="hidden min-w-0 flex-1 group-open:inline">Hide full announcement/);
+  assert.match(readFileSync("scripts/qa-mobile-features.ts", "utf8"), /screen === "home" \? "view=parent&screen=home&scenario=single-review"/);
+});
+
+test("the full authenticated toolbar fits small phones with 44px icon targets", () => {
+  assert.match(quality, /\.app-header button\[data-size\^="icon"\]\s*\{[^}]*width: 44px;[^}]*min-width: 44px;[^}]*height: 44px;[^}]*min-height: 44px/);
+  const shell = readFileSync("src/components/app-shell.tsx", "utf8");
+  assert.match(shell, /aria-label="Search The BEE Suite \(preview\)" className="lg:hidden" disabled/);
+  assert.match(shell, /aria-label="Notifications \(preview\)" disabled/);
+  assert.match(readFileSync("scripts/qa-mobile-features.ts", "utf8"), /:is\(main,\.app-header\) :is\(button/);
+});
+
+test("enlarged bottom navigation reflows into readable touch-sized rows", () => {
+  assert.match(quality, /\.app-bottom-navigation > div\s*\{[^}]*repeat\(auto-fit, minmax\(min\(100%, 3\.4rem\), 1fr\)\)/);
+  assert.match(quality, /\.app-bottom-navigation > div > :is\(a, button\)\s*\{[^}]*min-height: 48px/);
+  assert.match(readFileSync("scripts/qa-mobile-features.ts", "utf8"), /\.app-bottom-navigation :is\(a,button\)/);
+});
+
 test("mobile feature buttons wrap without resizing icon-only controls", () => {
   assert.match(readFileSync("src/components/ui/button.tsx", "utf8"), /data-size=\{size\}/);
   assert.match(quality, /\[data-slot="button"\]:not\(\[data-size\^="icon"\]\)\s*\{[^}]*max-width: 100%;[^}]*height: auto;[^}]*white-space: normal/);

@@ -35,6 +35,7 @@
     "test:smoke": "tsx scripts/playwright-smoke.ts",
     "qa:ui-preview": "tsx scripts/qa-device-preview.ts",
     "qa:home-accessibility": "tsx scripts/qa-home-accessibility.ts",
+    "qa:home-focus": "tsx scripts/qa-home-focus.ts",
     "qa:responsive": "tsx scripts/qa-responsive.ts",
     "qa:parent-login": "tsx scripts/qa-synthetic-parent-login.ts",
     "qa:role-accounts": "tsx -r tsconfig-paths/register scripts/ensure-synthetic-role-qa.ts",

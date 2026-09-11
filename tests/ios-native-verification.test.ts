@@ -88,10 +88,10 @@ test("native verification preserves existing simulators and does not overstate e
   }
 });
 
-test("fresh simulator migration has a bounded initialization window and starts before compilation", () => {
+test("fresh simulator migration is bounded and does not compete with asset compilation", () => {
   assert.ok(SIMULATOR_BOOT_TIMEOUT_MS >= 10 * 60 * 1000 && SIMULATOR_BOOT_TIMEOUT_MS <= 15 * 60 * 1000);
   const script = readFileSync("scripts/verify-ios-native.mjs", "utf8");
-  assert.ok(script.indexOf('["simctl", "boot", createdDevice]') < script.indexOf('for (const sdk of ["iphoneos", "iphonesimulator"])'));
+  assert.ok(script.indexOf('["simctl", "boot", createdDevice]') > script.indexOf('for (const sdk of ["iphoneos", "iphonesimulator"])'));
   assert.match(script, /timeout: SIMULATOR_BOOT_TIMEOUT_MS/);
   assert.equal(VERIFICATION_TIMEOUT_MS, 45 * 60 * 1000);
   assert.match(script, /timeout: Math\.min\(timeout, remaining\)/);

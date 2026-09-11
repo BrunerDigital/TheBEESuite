@@ -110,10 +110,10 @@ export async function verifyNative(role) {
 
     const template = selectSimulatorTemplate(JSON.parse(run("xcrun", ["simctl", "list", "devices", "available", "--json"])));
     report.simulator = { name: template.name, runtime: template.runtime };
-    // Warm a newly created simulator while compiling; never reuse a user's device.
+    // Never reuse a user's device. Keep first boot separate from actool compilation:
+    // both use CoreSimulator services and can contend on small hosted runners.
     createdDevice = run("xcrun", ["simctl", "create", `BEE verification ${role} ${Date.now()}`, template.deviceType, template.runtime]);
     assert.match(createdDevice, /^[A-F0-9-]{36}$/i, "Unexpected created simulator identifier");
-    run("xcrun", ["simctl", "boot", createdDevice]);
 
     for (const sdk of ["iphoneos", "iphonesimulator"]) {
       console.log(`Building ${role} Release for ${sdk} without signing`);
@@ -135,6 +135,7 @@ export async function verifyNative(role) {
       check(`${sdk} Release compiled; bundle, privacy manifest, HTTPS and offline resources verified`);
     }
 
+    run("xcrun", ["simctl", "boot", createdDevice]);
     run("xcrun", ["simctl", "bootstatus", createdDevice, "-b"], { log: "simulator-boot.log", timeout: SIMULATOR_BOOT_TIMEOUT_MS });
     const simulatorApp = path.join(buildRoot, "iphonesimulator", "Build", "Products", "Release-iphonesimulator", "App.app");
     run("xcrun", ["simctl", "install", createdDevice, simulatorApp]);

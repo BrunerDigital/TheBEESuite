@@ -2003,7 +2003,7 @@ function ParentPortalWorkspaceView({
             aria-labelledby="parent-today-heading"
             data-parent-home-primary="true"
           >
-            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-0.5 sm:px-6 sm:py-3">
+            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 sm:px-6 sm:py-3">
               <div className="min-w-0">
                 <h2 id="parent-today-heading" className="text-base font-semibold text-pretty">
                   Today at school
@@ -2138,12 +2138,12 @@ function ParentPortalWorkspaceView({
           <section aria-labelledby="parent-quick-actions-heading" data-parent-home-actions="true">
             <div className="flex items-end justify-between gap-3">
               <div>
-                <h2 id="parent-quick-actions-heading" className="text-base font-semibold">
+                <h2 id="parent-quick-actions-heading" className="sr-only text-base font-semibold sm:not-sr-only">
                   Quick actions
                 </h2>
               </div>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3 xl:grid-cols-4">
               {(
                 [
                   [

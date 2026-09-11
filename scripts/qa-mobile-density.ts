@@ -22,7 +22,7 @@ async function main() {
   await mkdir(output, { recursive: true });
   try {
     for (const width of [320, 390, 768]) for (const zoom of [1, 2]) {
-      for (const scenario of ["single-review", "quiet-home", "absent-home", "long-content", "multiple", "teacher", "teacher-review"]) {
+      for (const scenario of ["single-review", "school-context", "quiet-home", "absent-home", "long-content", "multiple", "teacher", "teacher-review"]) {
         const height = width === 320 ? 568 : width === 390 ? 844 : 1024;
         const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce", serviceWorkers: "block" });
         await context.addInitScript(() => localStorage.setItem("bee-suite-theme", "light"));
@@ -58,7 +58,7 @@ async function main() {
           assert.equal(metrics.scrollWidth, width, `${scenario} page overflow`);
           assert.equal(metrics.actions.length, teacher ? 6 : 4);
           for (const action of metrics.actions) assert.ok(action.height >= 44, "Every action retains a 44px touch target");
-          if (zoom === 1 && width <= 390 && ["single-review", "teacher"].includes(scenario)) {
+          if (zoom === 1 && width <= 390 && ["single-review", "school-context", "teacher"].includes(scenario)) {
             assert.ok(metrics.actions.every((action) => action.visible), "Every primary action fits above navigation at default phone text size");
           }
           if (zoom === 1 && width === 390 && scenario === "teacher-review") assert.ok(metrics.actions.every((action) => action.visible), "Review notice does not push shortcuts off a standard phone");
@@ -86,7 +86,7 @@ async function main() {
         } finally { await context.close(); }
       }
     }
-    assert.equal(results.length, 42);
+    assert.equal(results.length, 48);
     await writeFile(resolve(output, "density-results.json"), JSON.stringify({ engine, checkedAt: new Date().toISOString(), results }, null, 2));
     console.log(JSON.stringify({ engine, cases: results.length, normalPhone: results.filter((r) => r.width < 768 && r.zoom === 1 && ["teacher", "single-review"].includes(r.scenario)).map((r) => ({ scenario: r.scenario, width: r.width, visibleActions: r.actions.filter((a) => a.visible).length, lastActionBottom: r.actions.at(-1)?.bottom, scrollHeight: r.scrollHeight })) }));
   } finally { await browser.close(); }

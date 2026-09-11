@@ -15,7 +15,7 @@ Consolidate the two home screens and mobile heading spacing using existing compo
 
 No database, identity, billing, messaging, provider, entitlement, signing, or store changes are part of this UI pass. Browser WebKit testing is not physical iOS or Xcode evidence.
 
-## Implemented and locally verified
+## Initial density pass (PR #347)
 
 Parent child identity, classroom and attendance now share a wrapping summary. Compact headings, spacing, icons and mobile-only action labels keep all four destinations visible. Full daily details, sibling records, report links and payment/incident/document alerts remain available.
 
@@ -48,3 +48,11 @@ The fake-data, four-page printable comparison is generated under `output/pdf/BEE
 ## Release record
 
 The associated protected PR records the final build/CI result, tested commit, merge commit, exact Vercel Ready deployment, aliases, health/log review and approved fake-account changed-flow results. A merged PR or public health response alone is not authenticated workflow verification. Native Apple submission gates remain separate from this web UI release.
+
+## Authenticated production-fit follow-up
+
+PR #347 reached production as `1196d3d84fd22551259a14ae2ca86e9201c83141` on `dpl_2sHUQUs9Atntmj2jUwyqw9JTLmFu`. Both main CI and the production build passed. Health was connected and public/legal routes passed, but the first authenticated 320px check found longer school/classroom labels adding 44px compared with the short fixture: the last action ended at 537px behind navigation starting at 503px. No API writes or client/server errors occurred. That first release was not treated as fully verified.
+
+The follow-up uses a clean isolated branch from that exact `origin/main`. It keeps school, classroom and attendance labels fully visible, removes the redundant visual "Quick actions" heading on phones (retaining its accessible section name), and tightens only home spacing. Larger-screen headings and all four labeled action links remain. No control, font size or authorization rule is reduced to achieve the fit.
+
+The new `school-context` fixture intentionally wraps both school and classroom context and is subject to the same above-navigation assertion as the short home. Density QA now requires 48 cases per browser, not 42. Final release evidence will include the authenticated recheck of this case and all changed shortcut destinations.

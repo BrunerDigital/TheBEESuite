@@ -55,11 +55,12 @@ const previewPortfolioWorkspace: WorkspaceState = {
 function ParentPreview({ screen, familySection, scenario }: { screen: string | undefined; familySection: string | undefined; scenario?: string }) {
   const activeView = normalizeParentPortalView(screen);
   const singleChildReview = scenario === "single-review";
+  const schoolContext = scenario === "school-context";
   const quietHome = scenario === "quiet-home";
   const longContent = scenario === "long-content";
   const featureStress = scenario === "feature-stress";
   const absentHome = scenario === "absent-home";
-  const oneChild = singleChildReview || quietHome || longContent || absentHome;
+  const oneChild = singleChildReview || schoolContext || quietHome || longContent || absentHome;
   const family = {
     ...executiveParentPortalDemo.family,
     guardians: oneChild
@@ -72,6 +73,7 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
       : executiveParentPortalDemo.family.children
     ).map((child, index) => ({
       ...child,
+      ...(schoolContext ? { classroom: { ...child.classroom, name: "Afterschool Hive" } } : {}),
       ...(longContent ? {
         preferredName: "Alexandria Isabella Montgomery-Rivera",
         fullName: "Alexandria Isabella Montgomery-Rivera",
@@ -101,7 +103,7 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
       activeView={activeView}
       familySection={familySection}
       family={family}
-      centerName={longContent ? "Sunshine Academy of Early Learning and Family Discovery · North Campus" : "Sunshine Academy"}
+      centerName={longContent ? "Sunshine Academy of Early Learning and Family Discovery · North Campus" : schoolContext ? "Sunshine Academy - Little Harbor · Port Orange, FL" : "Sunshine Academy"}
       {...(featureStress ? {
         classroomTeachers: [{ id: "preview-teacher", name: "Ms. Alexandra Montgomery-Rivera", classroomNames: ["Early Explorers and Discoverers Afternoon Classroom"] }],
         documents: Array.from({ length: 12 }, (_, index) => ({
@@ -289,7 +291,7 @@ function ShellPreview({ role, screen, familySection, scenario }: { role: Exclude
     );
   }
   if (role === "parent") {
-    const reviewScenario = ["single-review", "quiet-home", "long-content", "absent-home"].includes(scenario ?? "");
+    const reviewScenario = ["single-review", "school-context", "quiet-home", "long-content", "absent-home"].includes(scenario ?? "");
     return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: reviewScenario ? "App Review Parent" : "Jordan Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Sunshine Academy", href: "/parent-portal" } }}><ParentPreview screen={screen} familySection={familySection} scenario={scenario} /></AppShell>;
   }
   if (role === "teacher") {

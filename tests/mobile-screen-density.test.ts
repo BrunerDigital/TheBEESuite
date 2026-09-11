@@ -41,5 +41,14 @@ test("density QA requires visible actions, keyboard navigation, text zoom, and n
   assert.match(qa, /metrics\.actions\.every\(\(action\) => action\.visible\)/);
   assert.match(qa, /for \(const zoom of \[1, 2\]\)/);
   assert.match(qa, /element\.contains\(document\.activeElement\)/);
-  assert.match(qa, /assert\.equal\(results\.length, 42\)/);
+  assert.match(qa, /assert\.equal\(results\.length, 48\)/);
+});
+
+test("compact phone homes allow a wrapping school and classroom context without hiding it", () => {
+  const parent = read("src/components/parent-portal-workspace.tsx");
+  assert.match(parent, /id="parent-quick-actions-heading" className="sr-only text-base font-semibold sm:not-sr-only"/);
+  assert.match(parent, /aria-labelledby="parent-quick-actions-heading" data-parent-home-actions="true"/);
+  assert.match(parent, /\{centerName \?\? family\.name\}/);
+  assert.match(read("src/app/device-preview/page.tsx"), /schoolContext \? \{ classroom: \{ \.\.\.child\.classroom, name: "Afterschool Hive"/);
+  assert.match(read("scripts/qa-mobile-density.ts"), /\["single-review", "school-context", "teacher"\]\.includes\(scenario\)/);
 });

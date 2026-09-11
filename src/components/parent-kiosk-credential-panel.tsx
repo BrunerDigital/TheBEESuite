@@ -132,7 +132,7 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
                   <Label htmlFor={`parent-kiosk-pin-${credential.guardianId}`}>
                     4-Digit Family PIN for {credential.guardianName}
                   </Label>
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <Input
                       id={`parent-kiosk-pin-${credential.guardianId}`}
                       name={`familyPin-${credential.guardianId}`}

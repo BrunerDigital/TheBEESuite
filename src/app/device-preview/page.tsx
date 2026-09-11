@@ -57,6 +57,7 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
   const singleChildReview = scenario === "single-review";
   const quietHome = scenario === "quiet-home";
   const longContent = scenario === "long-content";
+  const featureStress = scenario === "feature-stress";
   const absentHome = scenario === "absent-home";
   const oneChild = singleChildReview || quietHome || longContent || absentHome;
   const family = {
@@ -101,6 +102,23 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
       familySection={familySection}
       family={family}
       centerName={longContent ? "Sunshine Academy of Early Learning and Family Discovery · North Campus" : "Sunshine Academy"}
+      {...(featureStress ? {
+        classroomTeachers: [{ id: "preview-teacher", name: "Ms. Alexandra Montgomery-Rivera", classroomNames: ["Early Explorers and Discoverers Afternoon Classroom"] }],
+        documents: Array.from({ length: 12 }, (_, index) => ({
+          id: `preview-document-${index + 1}`,
+          name: index === 0 ? "Family handbook and extended-day classroom permission acknowledgment" : `School document ${index + 1}`,
+          type: "enrollment",
+          status: index === 2 ? "APPROVED" : "PENDING",
+          expiresAt: null,
+          storageKey: index === 0 ? "internal_signature_pending" : null,
+        })),
+        dailyReports: executiveParentPortalDemo.dailyReports.map((report) => ({
+          ...report,
+          teacherNote: "Today’s classroom note includes an unusually long reference: " + "ClassroomLearningReference".repeat(10),
+          mood: "Happy, energetic, and excited about learning with friends",
+        })),
+      } : {})}
+      {...(scenario === "empty" ? { documents: [], dailyReports: [], media: [] } : {})}
       {...(quietHome ? {
         billingAccount: { ...executiveParentPortalDemo.billingAccount, balanceCents: 0 },
         invoices: [],
@@ -129,7 +147,7 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
         qrToken: "preview-family-qr-token",
         kioskPath: "/check-in/preview-center/family",
       }]}
-      messages={executiveParentPortalDemo.messages.map((message, index) => ({
+      messages={scenario === "empty" ? [] : executiveParentPortalDemo.messages.map((message, index) => ({
         ...message,
         isFromFamily: index % 2 === 1,
         canReport: index % 2 === 0,

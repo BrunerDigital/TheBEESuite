@@ -1,5 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
-import { Info } from "lucide-react";
+import { Popover } from "@base-ui/react/popover";
+import { Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type InfoTipProps = {
@@ -16,31 +19,37 @@ export function InfoTip({
   label = "More information",
   className,
   contentClassName,
+  side = "bottom",
   align = "end",
 }: InfoTipProps) {
   return (
-    <details className="group relative inline-flex">
-      <summary
+    <Popover.Root>
+      <Popover.Trigger
+        data-info-tip-trigger
         aria-label={label}
-        title={label}
         className={cn(
-          "inline-grid size-6 cursor-pointer list-none place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden",
+          "inline-grid min-h-11 min-w-11 shrink-0 cursor-pointer touch-manipulation place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none",
           className,
         )}
       >
-        <Info className="size-3.5" />
-      </summary>
-      <div
-        role="note"
-        className={cn(
-          "absolute top-[calc(100%+0.35rem)] z-50 w-72 rounded-lg border bg-popover p-3 text-left text-xs leading-5 text-popover-foreground shadow-2xl shadow-black/20 ring-1 ring-foreground/10",
-          align === "start" ? "left-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "right-0",
-          contentClassName,
-        )}
-      >
-        <div className="mb-1 font-medium text-foreground">{label}</div>
-        <div className="text-muted-foreground">{children}</div>
-      </div>
-    </details>
+        <Info className="size-4" aria-hidden="true" />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner side={side} align={align} sideOffset={6} collisionPadding={12} collisionAvoidance={{ side: "shift", align: "shift" }} className="z-50">
+          <Popover.Popup data-slot="popover-content" data-info-tip-content className={cn(
+            "max-h-(--available-height) w-72 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-lg border bg-popover p-3 text-left text-xs leading-5 text-popover-foreground shadow-md outline-none [overflow-wrap:anywhere]",
+            contentClassName,
+          )}>
+            <div className="mb-1 flex items-start gap-2">
+              <Popover.Title className="min-w-0 flex-1 font-medium text-foreground">{label}</Popover.Title>
+              <Popover.Close aria-label="Close information" className="grid min-h-11 min-w-11 shrink-0 touch-manipulation place-items-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <X className="size-4" aria-hidden="true" />
+              </Popover.Close>
+            </div>
+            <div className="text-muted-foreground">{children}</div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

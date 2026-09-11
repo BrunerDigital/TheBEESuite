@@ -119,8 +119,8 @@ test("parent portal presents messaging as one responsive school conversation", (
   assert.match(parentPortal, /htmlFor="portal-message-attachments"/);
   assert.match(parentPortal, /aria-label="Attach photos or files"/);
   assert.match(parentPortal, /style=\{\{ width: 1, height: 1,/);
-  assert.match(conversationStyles, /height: max\(18rem, calc\(100dvh/);
-  assert.match(conversationStyles, /position: sticky/);
+  assert.match(conversationStyles, /\.parentTimeline\s*\{[^}]*height: clamp\(12rem, calc\(100dvh[^}]*min-height: 12rem;[^}]*flex: none/);
+  assert.match(conversationStyles, /\.parentComposer\s*\{\s*position: relative/);
   assert.match(conversationStyles, /min-height: 2\.75rem/);
   assert.match(conversationStyles, /field-sizing: content/);
   assert.doesNotMatch(parentPortal, /id="recent-messages"/);

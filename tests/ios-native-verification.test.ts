@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { assertPackagedConfiguration, nativeTarget, selectSimulatorTemplate, unsignedBuildArguments, SIMULATOR_BOOT_TIMEOUT_MS } from "../scripts/verify-ios-native.mjs";
+import { assertPackagedConfiguration, nativeTarget, selectSimulatorTemplate, unsignedBuildArguments, SIMULATOR_BOOT_TIMEOUT_MS, VERIFICATION_TIMEOUT_MS, launchProcessId, loginScreenVisible } from "../scripts/verify-ios-native.mjs";
 
 test("native verifier restricts roles and aligns projects with production routes", () => {
   assert.equal(nativeTarget("parent").project, "ios/App/App.xcodeproj");
@@ -93,4 +93,26 @@ test("fresh simulator migration has a bounded initialization window and starts b
   const script = readFileSync("scripts/verify-ios-native.mjs", "utf8");
   assert.ok(script.indexOf('["simctl", "boot", createdDevice]') < script.indexOf('for (const sdk of ["iphoneos", "iphonesimulator"])'));
   assert.match(script, /timeout: SIMULATOR_BOOT_TIMEOUT_MS/);
+  assert.equal(VERIFICATION_TIMEOUT_MS, 45 * 60 * 1000);
+  assert.match(script, /timeout: Math\.min\(timeout, remaining\)/);
+  assert.match(readFileSync(".github/workflows/ios-native-verify.yml", "utf8"), /timeout-minutes: 60/);
+});
+
+test("native liveness uses only the exact process returned for the selected bundle", () => {
+  const target = nativeTarget("parent");
+  assert.equal(launchProcessId(` ${target.bundleId}: 812\n`, target), "812");
+  for (const value of ["com.other.app: 812", `${target.bundleId}: 0`, `${target.bundleId}: 12; echo unsafe`, ""]) {
+    assert.throws(() => launchProcessId(value, target));
+  }
+  const script = readFileSync("scripts/verify-ios-native.mjs", "utf8");
+  assert.match(script, /"kill", "-0", pid/);
+  assert.ok(script.indexOf('"screenshot", screenshot') < script.indexOf('"kill", "-0", pid'));
+});
+
+test("native screen evidence must identify the right public role, not just a running process", () => {
+  assert.equal(loginScreenVisible("Parent and guardian\nsign-in", nativeTarget("parent")), true);
+  assert.equal(loginScreenVisible("Teacher sign–in", nativeTarget("teacher")), true);
+  assert.equal(loginScreenVisible("Teacher sign-in", nativeTarget("parent")), false);
+  assert.equal(loginScreenVisible("Safari Home Screen", nativeTarget("teacher")), false);
+  assert.equal(loginScreenVisible("You are offline", nativeTarget("parent")), false);
 });

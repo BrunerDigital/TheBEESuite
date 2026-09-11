@@ -7,6 +7,19 @@ import { pathToFileURL } from "node:url";
 
 // A fresh iOS 26 simulator performs OS data migration before SpringBoard is ready.
 export const SIMULATOR_BOOT_TIMEOUT_MS = 12 * 60 * 1000;
+export const VERIFICATION_TIMEOUT_MS = 45 * 60 * 1000;
+
+export function launchProcessId(output, target) {
+  const line = output.split("\n").find((value) => value.trim().startsWith(`${target.bundleId}:`))?.trim();
+  const pid = line?.slice(target.bundleId.length + 1).trim();
+  assert.match(pid ?? "", /^[1-9]\d*$/, "Launcher must return the selected bundle's process ID");
+  return pid;
+}
+
+export function loginScreenVisible(text, target) {
+  const normalized = text.toLowerCase().replace(/[\s\u2010-\u2015-]+/g, " ");
+  return normalized.includes(target.role === "teacher" ? "teacher sign in" : "parent and guardian sign in");
+}
 
 export function nativeTarget(role) {
   assert.ok(["parent", "teacher"].includes(role), "Role must be parent or teacher");
@@ -53,6 +66,7 @@ export function assertPackagedConfiguration(config, target) {
 export async function verifyNative(role) {
   const target = nativeTarget(role);
   assert.equal(process.platform, "darwin", "Native verification requires macOS/Xcode. Use the iOS native verification GitHub workflow from Windows.");
+  const deadline = Date.now() + VERIFICATION_TIMEOUT_MS;
   const outputRoot = path.resolve("output/audit/ios-native");
   mkdirSync(outputRoot, { recursive: true });
   const buildRoot = mkdtempSync(path.join(outputRoot, `${role}-`));
@@ -63,13 +77,15 @@ export async function verifyNative(role) {
     authenticatedFlowsTested: false, physicalDeviceTested: false, screenshotsAreStoreReady: false };
   const save = () => writeFileSync(path.join(evidencePath, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   function run(command, args, { log, timeout = 120000 } = {}) {
+    const remaining = deadline - Date.now();
+    assert.ok(remaining > 0, "Shared 45-minute native verification deadline reached; preserving cleanup and evidence time");
     report.activeCommand = [command, ...args].join(" ");
     save();
     console.log(`RUN ${role}: ${command} ${args.slice(0, 3).join(" ")}`);
     const fd = log ? openSync(path.join(evidencePath, log), "w") : null;
     let result;
     try {
-      result = spawnSync(command, args, { encoding: "utf8", timeout, maxBuffer: 16 * 1024 * 1024,
+      result = spawnSync(command, args, { encoding: "utf8", timeout: Math.min(timeout, remaining), maxBuffer: 16 * 1024 * 1024,
         stdio: fd === null ? "pipe" : ["ignore", fd, fd] });
     } finally { if (fd !== null) closeSync(fd); }
     assert.ifError(result.error && new Error(`${report.activeCommand}: ${result.error.message}`));
@@ -125,12 +141,23 @@ export async function verifyNative(role) {
     check("Unsigned Release installed on isolated iPhone simulator");
     for (const launch of ["cold", "relaunch"]) {
       const result = run("xcrun", ["simctl", "launch", "--terminate-running-process", createdDevice, target.bundleId]);
-      assert.ok(result.includes(target.bundleId), "App launch did not report selected bundle");
-      await setTimeout(10000);
-      const processes = run("xcrun", ["simctl", "spawn", createdDevice, "launchctl", "list"]);
-      assert.ok(processes.split("\n").some((line) => line.includes(target.bundleId) && /^\d+\s/.test(line)), "App must still be running after launch");
-      run("xcrun", ["simctl", "io", createdDevice, "screenshot", path.join(evidencePath, `${launch}-public-launch.png`)]);
-      check(`${launch} launch stays running; unauthenticated screenshot captured (visual review required)`);
+      const pid = launchProcessId(result, target);
+      report.launchedProcess = { launch, pid };
+      let loginVisible = false;
+      for (let attempt = 1; attempt <= 6 && !loginVisible; attempt++) {
+        await setTimeout(10000);
+        const screenshot = path.join(evidencePath, `${launch}-public-launch.png`);
+        // Capture failure evidence before the liveness assertion, including a real crash/home screen.
+        run("xcrun", ["simctl", "io", createdDevice, "screenshot", screenshot]);
+        // launchctl list can omit UIKit services in a different bootstrap domain. Signal 0
+        // checks the launcher's actual process without sending a signal or changing state.
+        run("xcrun", ["simctl", "spawn", createdDevice, "kill", "-0", pid]);
+        const recognized = JSON.parse(run("swift", ["scripts/recognize-ios-screen.swift", screenshot]));
+        loginVisible = loginScreenVisible(recognized.text, target);
+        writeFileSync(path.join(evidencePath, `${launch}-screen-check.json`), `${JSON.stringify({ attempt, pid, loginVisible, text: recognized.text }, null, 2)}\n`);
+      }
+      assert.ok(loginVisible, "Native screenshot must show the correct role-specific sign-in screen");
+      check(`${launch} launch process alive and native sign-in heading recognized; screenshot captured`);
     }
     report.status = "passed";
   } catch (error) {

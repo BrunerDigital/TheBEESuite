@@ -27,6 +27,8 @@ First-run evidence with Xcode 26.6/iOS 26.5 proved all four unsigned compilation
 
 GitHub retains `report.json`, build/sync logs and public launch screenshots for 14 days. Download artifacts from the exact successful run and visually inspect both screenshots per app. Do not upload reviewer credentials, auth state, real-family screenshots, entire app containers, private keys or full workspaces as artifacts. A passing process-survival check is not proof that authentication or every UI workflow worked.
 
+Launch verification checks the exact PID returned by `simctl launch` using non-mutating signal 0, then uses Apple's Vision text recognition to require the matching public sign-in heading in the native screenshot. Failure screenshots are saved before liveness checks. The verifier has one shared 45-minute deadline; the 60-minute Actions job reserves time for setup, isolated-simulator cleanup and artifact upload rather than adding independent command timeouts indefinitely.
+
 Record the Git SHA, workflow run URL, Xcode/SDK/runtime, compile results and screenshot review in the protected PR closeout. Until that evidence exists, compilation and simulator launch remain **unverified**. CI never archives, signs, uploads, invites testers or submits either app.
 
 ## Remaining human-only critical path

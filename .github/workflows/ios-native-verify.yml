@@ -39,7 +39,7 @@ jobs:
   native:
     name: Unsigned ${{ matrix.role }} iOS
     runs-on: macos-26
-    timeout-minutes: 40
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

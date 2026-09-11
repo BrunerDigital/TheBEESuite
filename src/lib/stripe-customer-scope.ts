@@ -44,6 +44,7 @@ export function stripeCustomerCustomFieldPatch(
   const custom = fields(existingCustomFields);
   const existingCustomerId = clean(custom.stripeCustomerId);
   const accountId = clean(connectedAccountId);
+  const existingConnectedAccountId = clean(custom.stripeCustomerConnectedAccountId);
 
   if (accountId) {
     return {
@@ -56,10 +57,10 @@ export function stripeCustomerCustomFieldPatch(
       stripeCustomerScope: "connected",
       stripeCustomerIdsByConnectedAccount: {
         ...stringFields(custom.stripeCustomerIdsByConnectedAccount),
-        [accountId]: customerId,
-        ...(clean(custom.stripeCustomerConnectedAccountId) && existingCustomerId
-          ? { [clean(custom.stripeCustomerConnectedAccountId)!]: existingCustomerId }
+        ...(existingConnectedAccountId && existingConnectedAccountId !== accountId && existingCustomerId
+          ? { [existingConnectedAccountId]: existingCustomerId }
           : {}),
+        [accountId]: customerId,
       },
     } satisfies Prisma.InputJsonObject;
   }

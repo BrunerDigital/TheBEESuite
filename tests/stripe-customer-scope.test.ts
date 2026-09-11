@@ -14,3 +14,17 @@ test("connected customer mapping preserves the retained source customer during a
   assert.equal(stripeCustomerIdForAccount(patched, source), "cus_source");
   assert.equal(stripeCustomerIdForAccount(patched, target), "cus_target");
 });
+
+test("connected customer mapping replaces a superseded customer within the same account", () => {
+  const account = "acct_current";
+  const existing = {
+    stripeCustomerId: "cus_superseded",
+    stripeConnectedCustomerId: "cus_superseded",
+    stripeCustomerConnectedAccountId: account,
+    stripeCustomerIdsByConnectedAccount: { [account]: "cus_superseded" },
+  };
+  const patched = { ...existing, ...stripeCustomerCustomFieldPatch(existing, "cus_copied", account) };
+  assert.equal(patched.stripeCustomerId, "cus_copied");
+  assert.equal(patched.stripeConnectedCustomerId, "cus_copied");
+  assert.equal(stripeCustomerIdForAccount(patched, account), "cus_copied");
+});

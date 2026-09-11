@@ -72,8 +72,8 @@ export function unsignedBuildArguments(target, sdk, buildRoot) {
 
 export function assertPackagedConfiguration(config, target) {
   assert.equal(config.appId, target.bundleId, "Packaged role must match the selected app");
-  assert.equal(config.server?.url, "https://thebeesuite.io");
-  assert.equal(config.server?.appStartPath, target.launchPath);
+  assert.equal(config.server?.url, `https://thebeesuite.io${target.launchPath}`);
+  assert.equal(config.server?.appStartPath, undefined, "Remote role routes must not become nonexistent local launch resources");
   assert.equal(config.server?.cleartext, false);
   assert.equal(config.server?.errorPath, "offline.html");
   assert.equal(config.server?.allowNavigation, undefined);

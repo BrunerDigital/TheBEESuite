@@ -48,10 +48,12 @@ test("simulator selection orders multi-digit versions numerically", () => {
 test("compiled bundle must preserve role, HTTPS, offline recovery and disabled inspection", () => {
   for (const role of ["parent", "teacher"]) {
     const target = nativeTarget(role);
-    const config = { appId: target.bundleId, server: { url: "https://thebeesuite.io", appStartPath: target.launchPath,
+    const config = { appId: target.bundleId, server: { url: `https://thebeesuite.io${target.launchPath}`,
       cleartext: false, errorPath: "offline.html" }, ios: { webContentsDebuggingEnabled: false } };
     assert.doesNotThrow(() => assertPackagedConfiguration(config, target));
     for (const server of [{ ...config.server, url: "http://localhost:3000" }, { ...config.server, appStartPath: "/dashboard" },
+      { ...config.server, appStartPath: target.launchPath }, { ...config.server, url: "https://thebeesuite.io" },
+      { ...config.server, url: `https://thebeesuite.io${role === "parent" ? "/teachers" : "/parents"}` },
       { ...config.server, cleartext: true }, { ...config.server, allowNavigation: ["*"] }, { ...config.server, errorPath: undefined }]) {
       assert.throws(() => assertPackagedConfiguration({ ...config, server }, target));
     }
@@ -109,7 +111,7 @@ test("native liveness uses only the exact process returned for the selected bund
   assert.doesNotMatch(script, /"spawn", createdDevice, "kill"/);
   assert.ok(script.indexOf('"screenshot", screenshot') < script.indexOf('assertProcessAlive(pid);'));
   let calls = 0;
-  assertProcessAlive("812", (pid, signal) => { assert.equal(pid, 812); assert.equal(signal, 0); calls++; });
+  assertProcessAlive("812", (pid, signal) => { assert.equal(pid, 812); assert.equal(signal, 0); calls++; return true; });
   assert.equal(calls, 1);
   for (const invalid of ["0", "-1", "all", "812; exit", "99999999999999999"]) {
     assert.throws(() => assertProcessAlive(invalid, () => assert.fail("Invalid PID must not be probed")));
@@ -120,7 +122,7 @@ test("native liveness uses only the exact process returned for the selected bund
 test("native crash evidence must match both the exact launch PID and app bundle", () => {
   const target = nativeTarget("parent");
   const report = { pid: 812, bundleInfo: { CFBundleIdentifier: target.bundleId }, exception: { type: "EXC_CRASH" } };
-  const ips = (body) => `${JSON.stringify({ app_name: "App" })}\n${JSON.stringify(body)}`;
+  const ips = (body: unknown) => `${JSON.stringify({ app_name: "App" })}\n${JSON.stringify(body)}`;
   assert.deepEqual(matchingCrashReport(ips(report), "812", target), report);
   assert.equal(matchingCrashReport(ips(report), "813", target), null);
   assert.equal(matchingCrashReport(ips(report), "812", nativeTarget("teacher")), null);

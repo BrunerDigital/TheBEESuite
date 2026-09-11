@@ -8,7 +8,7 @@ const apps = {
     appId: "com.brunerdigital.thebeesuite.parent",
     appName: "BEE Suite Parent Portal",
     webDir: "native/parent-shell",
-    appStartPath: "/parents",
+    launchPath: "/parents",
     iosPath: "ios",
     backgroundColor: "#05070a",
   },
@@ -16,7 +16,7 @@ const apps = {
     appId: "com.brunerdigital.thebeesuite.teacher",
     appName: "BEE Suite Teacher Portal",
     webDir: "native/teacher-shell",
-    appStartPath: "/teachers",
+    launchPath: "/teachers",
     iosPath: "ios-teacher",
     backgroundColor: "#151515",
   },
@@ -24,7 +24,7 @@ const apps = {
   appId: string;
   appName: string;
   webDir: string;
-  appStartPath: string;
+  launchPath: string;
   iosPath: string;
   backgroundColor: string;
 }>;
@@ -44,8 +44,9 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
   },
   server: {
-    url: `https://${productionHost}`,
-    appStartPath: app.appStartPath,
+    // Capacitor also checks appStartPath against bundled files before loading a
+    // remote URL. These Next.js routes are remote, not files in the native shell.
+    url: `https://${productionHost}${app.launchPath}`,
     cleartext: false,
     errorPath: "offline.html",
   },

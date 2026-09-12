@@ -24,6 +24,7 @@ test("director migration setup exposes the complete guided Procare review path",
 
 test("school setup offers guarded import and clean-start paths with final confirmation", () => {
   const source = fs.readFileSync(path.join(root, "src/components/school-data-setup-panel.tsx"), "utf8");
+  const unsavedChangesGuard = fs.readFileSync(path.join(root, "src/components/use-unsaved-changes-guard.ts"), "utf8");
   const route = fs.readFileSync(path.join(root, "src/app/api/school-setup/route.ts"), "utf8");
   const readinessServer = fs.readFileSync(path.join(root, "src/lib/data-readiness-server.ts"), "utf8");
   const fingerprintServer = fs.readFileSync(path.join(root, "src/lib/school-data-setup-server.ts"), "utf8");
@@ -42,6 +43,10 @@ test("school setup offers guarded import and clean-start paths with final confir
   assert.match(source, /disabled=\{!data\.centerId \|\| !attested \|\| isPending\}/);
   assert.doesNotMatch(source, /disabled=\{!attested \|\| hasUnsavedChanges \|\| isPending\}/);
   assert.match(source, /does not activate invitations, billing, payments, kiosk access, or cutover/i);
+  assert.match(unsavedChangesGuard, /activeUnsavedChangeGuards = new Map<symbol, string>/);
+  assert.equal(unsavedChangesGuard.match(/document\.addEventListener\("click"/g)?.length, 1);
+  assert.match(unsavedChangesGuard, /activeUnsavedChangeGuards\.size === 0/);
+  assert.match(unsavedChangesGuard, /This page has unsaved changes/);
   assert.match(route, /loadSchoolDataReviewEvidence/);
   assert.match(route, /status: 409/);
   assert.match(route, /dataReviewConfirmed/);

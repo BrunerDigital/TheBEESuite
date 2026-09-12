@@ -158,10 +158,17 @@ async function main() {
 
     for (const [zone, expectedDays] of [["America/New_York", 1], ["Asia/Tokyo", 2]] as const) {
       await openFixture(`${base}/?view=updates&tz=${encodeURIComponent(zone)}`);
-      await page.getByRole("combobox", { name: "Choose update day" }).click();
-      await page.getByRole("option").first().waitFor();
-      assert.equal(await page.getByRole("option").count(), expectedDays, "Update days follow the selected family's school, not the AppShell default");
-      await page.keyboard.press("Escape");
+      const date = page.getByLabel("Choose update day", { exact: true });
+      await date.waitFor();
+      assert.equal(await date.inputValue(), expectedDays === 1 ? "2026-09-11" : "2026-09-12");
+      assert.equal(await page.locator("[data-update-id]").count(), expectedDays === 1 ? 2 : 1, "Rendered reports follow the selected family's school, not the AppShell default");
+      if (expectedDays === 2) {
+        await page.getByRole("button", { name: "Earlier", exact: true }).click();
+        assert.equal(await date.inputValue(), "2026-09-11");
+        assert.equal(await page.locator("[data-update-id]").count(), 1);
+        await page.getByRole("button", { name: "Later", exact: true }).click();
+        assert.equal(await date.inputValue(), "2026-09-12");
+      } else assert.equal(await page.getByRole("button", { name: "Earlier", exact: true }).count(), 0);
     }
     await openFixture(`${base}/?view=home`);
     const earlier = page.locator("[data-earlier-announcements]");

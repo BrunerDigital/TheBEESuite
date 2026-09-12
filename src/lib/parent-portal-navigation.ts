@@ -1,3 +1,5 @@
+import { isParentUpdateDay } from "./parent-updates-history";
+
 export const PARENT_PORTAL_VIEWS = ["home", "updates", "messages", "payments", "family"] as const;
 export const PARENT_PORTAL_FAMILY_SECTIONS = [
   "children",
@@ -19,6 +21,7 @@ export type ParentPortalWorkspaceHrefOptions = {
   hash?: string | null;
   documentsPage?: number;
   documentId?: string | null;
+  updateDay?: string | null;
 };
 
 const parentPortalViewSet = new Set<string>(PARENT_PORTAL_VIEWS);
@@ -69,6 +72,7 @@ export function parentPortalWorkspaceHref({
   hash,
   documentsPage,
   documentId,
+  updateDay,
 }: ParentPortalWorkspaceHrefOptions): string {
   const previewMode = Boolean(previewHrefBase);
   const baseHref = previewHrefBase || "/parent-portal";
@@ -82,6 +86,7 @@ export function parentPortalWorkspaceHref({
       familyId,
       documentsPage: view === "family" && section === "documents" && documentsPage && Number.isSafeInteger(documentsPage) && documentsPage > 1 ? String(documentsPage) : null,
       documentId: view === "family" && section === "documents" ? documentId ?? null : null,
+      updateDay: view === "updates" && isParentUpdateDay(updateDay) ? updateDay : null,
     },
     hash,
   );

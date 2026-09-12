@@ -1,5 +1,15 @@
 # Teacher individual-task child context — September 12, 2026
 
+## Released and verified — September 12, 20:55 UTC
+
+Protected PR [#368](https://github.com/BrunerDigital/TheBEESuite/pull/368) merged candidate `ac2560378ab6a60904729f45f846c15b1488d7d6` to main `8ee717d5df8b66a0d0dfec7c3925d57717b44fc3` at 20:40:58 UTC. Required CI `34717494265` and CodeQL `34717493113` passed; no unresolved review threads, bypass or force push. Final local production gate passed all 2,169 tests; 34 focused tests and 34 browser cases per engine passed.
+
+Exact production deployment `dpl_9FQkjXB12hyBHrHBzy3MgNXtns23` became Ready at 20:43:20.144 UTC, with all five canonical aliases: `thebeesuite.io`, `www.thebeesuite.io`, `the-bee-suite-beta.vercel.app`, `the-bee-suite-brunerdigital.vercel.app`, `the-bee-suite-git-main-brunerdigital.vercel.app`. Health/database connected at 20:49:52.974 UTC. Build errors and scoped post-ready error/fatal/5xx counts were empty after authenticated verification.
+
+Fresh reserved fake-family and teacher-roster proof preceded the live run. The corrected checker passed at 20:54:58.699 UTC: 20 route cases, 52 parent-fit checks, existing parent/teacher navigation, messaging, document and profile checks, 12 report-target layouts, and 16 individual-selector/shared-context checks. Both fake-account logins, 62 matched heartbeats, six empty-body billing-denial probes, two read-only status probes and three read-only message-history probes were allowed. Zero product writes, blocked requests, HTTP errors or client exceptions. No photo was uploaded and no incident, location, report, identity or billing record was changed.
+
+The initial checker incorrectly expected a home shortcut to Child location, which is an existing expandable panel instead. Its two successful picker cases and timeout are preserved under `output/playwright/app-review-production-after-teacher-individual-targets-initial-checker-failure/`. The checker now opens that panel with its actual keyboard disclosure; request authorization and scope preflight are unchanged. Its 32 offline safety tests pass. Final evidence: `output/playwright/app-review-production-after-teacher-individual-targets/results.json`, `output/wave15-production-verification-rerun.log`. These are browser checks, not signed native/device evidence.
+
 ## Current truth before edits
 
 Branch `work/teacher-individual-targets-20260912` begins from reviewed PR #367 candidate `b454a271bae8ad62b31f8cacecaaa9dac1cb3e8e`. Reconcile its protected main merge before this wave's final gates. The primary checkout, unrelated PR #311, running server, earlier stashes and production data remain untouched.

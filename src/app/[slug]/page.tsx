@@ -180,6 +180,9 @@ import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, messageMerg
 import { signMessageAttachmentsFromMetadata } from "@/lib/message-attachments";
 import { parentMessageFamilyWhere, parentMessageOrder, parentMessagePageRows, parentMessageSelect, parentMessageViews } from "@/lib/parent-message-query";
 import { PARENT_MESSAGE_PAGE_SIZE } from "@/lib/parent-message-history";
+import { isParentUpdateDay } from "@/lib/parent-updates-history";
+import { logOperationalError } from "@/lib/request-response-logging";
+import { parentPhotoViews, parentUpdatesView, readParentUpdatesContext, readParentUpdatesHome, readParentUpdatesRows } from "@/lib/parent-updates-query";
 import { parentMessageCenterId } from "@/lib/parent-message-recipients";
 import { buildMessageReplyPath } from "@/lib/message-reply-routing";
 import { staffMessagingHref } from "@/lib/messaging-navigation";
@@ -260,7 +263,7 @@ import {
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
 import { createAssetHubSignedUrl, createChildMediaSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
-import { centerServiceDayWindow, latestLogMap, readCenterLocationTimeZone } from "@/lib/attendance-state";
+import { centerServiceDayWindow, latestLogMap, readCenterLocationTimeZone, serviceDayWindowInTimeZone } from "@/lib/attendance-state";
 import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { estimatedHourlyGrossPayCents, readStaffCompensation } from "@/lib/staff-compensation";
@@ -2504,7 +2507,26 @@ async function renderLivePage(
     const parentPortalCenter = resolvedParentCenterId
       ? centers.find((center) => center.id === resolvedParentCenterId) ?? null
       : null;
-    const parentServiceDay = centerServiceDayWindow(today, parentPortalCenter);
+    const parentHistoryEnabled = user.role === UserRole.PARENT_GUARDIAN && Boolean(family && !paymentContinuityAccess);
+    const parentUpdatesRequested = resolvedParentPortalView === "updates";
+    const parentHomeRequested = resolvedParentPortalView === "home";
+    const requestedUpdateDay = firstSearchParam(searchParams.updateDay) || null;
+    const invalidUpdateDay = searchParams.updateDay !== undefined && (Array.isArray(searchParams.updateDay) || !isParentUpdateDay(requestedUpdateDay));
+    // Re-prove current family/school scope inside the same snapshot as history and Home.
+    // Staff's existing authorized portal preview remains separate from the guardian-only API.
+    const parentUpdateSnapshot = parentHistoryEnabled && (parentUpdatesRequested || parentHomeRequested) ? await prisma.$transaction(async tx => {
+      const context = await readParentUpdatesContext(tx, { familyId, userId: user.id, tenantId: user.tenantId, tenantCenterIds: parentPortalTenantCenterIds });
+      if (!context) return null;
+      const home = parentHomeRequested ? await readParentUpdatesHome(tx, context, today) : null;
+      const rows = !parentUpdatesRequested || invalidUpdateDay ? null : await readParentUpdatesRows(tx, context, { familyId, day: requestedUpdateDay, kind: "day", cursor: null });
+      return { context, home, rows };
+    }, { isolationLevel: "RepeatableRead" }).catch(error => {
+      logOperationalError("parent_updates.snapshot_failed", error, { view: parentHomeRequested ? "home" : "updates" });
+      return null;
+    }) : null;
+    const parentUpdates = parentUpdateSnapshot?.rows ? await parentUpdatesView(parentUpdateSnapshot.rows) : null;
+    const parentHistoryUnavailable = parentHistoryEnabled && parentUpdatesRequested && !parentUpdates;
+    const parentServiceDay = serviceDayWindowInTimeZone(today, parentUpdateSnapshot?.context.timeZone ?? readCenterLocationTimeZone(parentPortalCenter));
     const agencyOnlyLedgerWhere: Prisma.LedgerEntryWhereInput = {
       OR: [
         { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } },
@@ -2609,7 +2631,7 @@ async function renderLivePage(
         select: parentInvoiceSelect,
       }),
       prisma.dailyReport.findMany({
-        where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sentAt: { not: null } },
+        where: { childId: { in: parentHistoryEnabled ? [] : childIds }, sentAt: { not: null } },
         orderBy: { date: "desc" },
         take: 20,
         select: {
@@ -2640,10 +2662,10 @@ async function renderLivePage(
         select: parentMessageSelect,
       }),
       prisma.childMedia.findMany({
-        where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sharedWithParents: true, status: "shared" },
-        orderBy: { createdAt: "desc" },
+        where: { childId: { in: parentHistoryEnabled ? [] : childIds }, sharedWithParents: true, status: "shared" },
+        orderBy: [{ takenAt: "desc" }, { id: "desc" }],
         take: 20,
-        select: { id: true, url: true, storageKey: true, caption: true, createdAt: true, child: { select: { fullName: true } } },
+        select: { id: true, url: true, storageKey: true, caption: true, takenAt: true, child: { select: { fullName: true } } },
       }),
       prisma.announcement.findMany({
         where: verifiedAppReviewKind === "parent"
@@ -2731,7 +2753,7 @@ async function renderLivePage(
     const messagePage = parentMessagePageRows(messages);
     const [signedDocuments, signedMedia, signedMessages, signedLinkedDocuments] = await Promise.all([
       signDocumentRecords(documents),
-      signChildMediaRecords(media),
+      parentPhotoViews(media),
       parentMessageViews(messagePage.items, user.id, userViewText),
       signDocumentRecords(parentDocuments.linkedDocument && !documents.some((document) => document.id === parentDocuments.linkedDocument?.id) ? [parentDocuments.linkedDocument] : []),
     ]);
@@ -2790,7 +2812,7 @@ async function renderLivePage(
     }
     const parentLatestCheckByChild = latestLogMap(parentCheckLogs);
     const parentDailyReportChildIds = new Set(
-      dailyReports
+      parentHistoryEnabled ? parentUpdateSnapshot?.home?.reportedChildIds ?? [] : dailyReports
         .filter((report) => report.sentAt && report.date >= parentServiceDay.start && report.date < parentServiceDay.end)
         .map((report) => report.childId),
     );
@@ -3180,7 +3202,14 @@ async function renderLivePage(
           hasPrevious: requestedLedgerPage > 1,
           hasNext: (billingAccount?.ledgerEntries.length ?? 0) > PARENT_LEDGER_PAGE_SIZE,
         }}
-        dailyReports={parentDailyReports}
+        dailyReports={parentHistoryEnabled ? parentUpdates?.reports ?? [] : parentDailyReports}
+        updatesHistory={parentUpdates}
+        updatesHistoryEnabled={parentHistoryEnabled}
+        updatesHistoryUnavailable={parentHistoryUnavailable}
+        homeUpdatesUnavailable={parentHistoryEnabled && parentHomeRequested && !parentUpdateSnapshot?.home}
+        homeUpdateDay={zonedDateKey(today, parentServiceDay.timeZone)}
+        requestedUpdateDay={requestedUpdateDay}
+        latestSharedReport={parentHistoryEnabled ? parentUpdateSnapshot?.home?.latestReport ?? null : undefined}
         incidents={incidents}
         attentionSummary={{ openInvoiceCount, unacknowledgedIncidentCount }}
         paymentActivitySummary={{ pendingCount: billingAccount?._count.payments ?? 0, provisionalCreditCents: pendingAchCreditCents }}
@@ -3191,7 +3220,7 @@ async function renderLivePage(
         requestedReplyUnavailable={Boolean(parentReplyToMessageId && !parentReplyTarget && !paymentContinuityAccess)}
         centerName={familyCenter ? formatCenterName(familyCenter) : parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
         centerEin={familyCenter ? readSchoolEin(familyCenter.customFields) : parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
-        centerTimeZone={familyCenter ? readCenterLocationTimeZone(familyCenter) : parentServiceDay.timeZone}
+        centerTimeZone={parentUpdateSnapshot?.context.timeZone ?? (familyCenter ? readCenterLocationTimeZone(familyCenter) : parentServiceDay.timeZone)}
         classroomTeachers={paymentContinuityAccess ? [] : classroomTeachers}
         documents={paymentContinuityAccess ? [] : signedDocuments}
         documentPagination={parentDocuments.pagination}
@@ -3199,7 +3228,7 @@ async function renderLivePage(
         linkedDocument={signedLinkedDocuments[0] ?? null}
         requestedDocumentId={parentDocuments.requestedDocumentId}
         requestedDocumentUnavailable={parentDocuments.requestedDocumentUnavailable}
-        media={signedMedia}
+        media={parentHistoryEnabled ? parentUpdates?.photos ?? [] : signedMedia}
         announcements={paymentContinuityAccess ? [] : announcements}
         uniformProducts={[]}
         currentGuardianId={linkedGuardian?.id ?? null}

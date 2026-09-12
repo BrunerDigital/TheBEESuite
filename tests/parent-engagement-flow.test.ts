@@ -7,7 +7,7 @@ const parentPage = readFileSync("src/app/[slug]/page.tsx", "utf8");
 const messageRoute = readFileSync("src/app/api/communications/messages/route.ts", "utf8");
 const parentRecipients = readFileSync("src/lib/parent-message-recipients.ts", "utf8");
 
-test("parent daily reports are complete, concise, and visible without expansion", () => {
+test("parent reports keep key notes visible and disclose complete care details without truncation", () => {
   const start = workspace.indexOf('{activeView === "updates" ? (');
   const end = workspace.indexOf('{activeView === "family"', start);
   assert.ok(start >= 0 && end > start, "The Updates section must be present");
@@ -15,7 +15,11 @@ test("parent daily reports are complete, concise, and visible without expansion"
   assert.match(updates, /Teacher note:/);
   assert.match(updates, /report\.activities\?\.map/);
   assert.doesNotMatch(updates, /report\.activities\?\.slice\(0, 4\)/);
-  assert.doesNotMatch(updates, /<details|<CollapsiblePanel|group-open:hidden/);
+  assert.ok(updates.indexOf("Teacher note:") < updates.indexOf("<details"));
+  assert.ok(updates.indexOf("Please bring:") < updates.indexOf("<details"));
+  assert.ok(updates.indexOf("Check-in:") < updates.indexOf("<details"));
+  assert.match(updates, /<summary[^>]*>Meals, naps, care &amp; activities<\/summary>/);
+  assert.doesNotMatch(updates, /<details[^>]*\bopen\b|<CollapsiblePanel|group-open:hidden/);
   for (const label of ["Mood:", "meal", "nap", "care log", "activit"]) assert.match(updates, new RegExp(label));
 });
 

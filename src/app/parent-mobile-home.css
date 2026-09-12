@@ -13,6 +13,13 @@
     backdrop-filter: none;
   }
 
+  /* On short phones the shell header is in document flow, not a fixed overlay. */
+  @media (max-height: 640px) and (max-width: 1023px) {
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-workspace #parent-update-day {
+      scroll-margin-block-start: 12px;
+    }
+  }
+
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .app-header a[aria-label$="home"] .text-amber-300 {
     color: var(--foreground);
   }

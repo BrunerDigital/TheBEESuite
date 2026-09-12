@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { executiveParentPortalDemo } from "@/lib/executive-demo-data";
 import { centers as demoCenters, kpis as demoKpis, pipelineStages as demoPipelineStages } from "@/lib/demo-data";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
+import { PARENT_UPDATES_PREVIEW_FAMILY, parentUpdatesPreview } from "@/lib/parent-updates-preview";
 import type { WorkspaceState } from "@/lib/workspace-selection";
 
 type PreviewRole = "director" | "assistant-director" | "role-dashboard" | "parent" | "pickup" | "teacher" | "executive" | "regional" | "billing" | "auditor" | "workflow" | "kiosk" | "kiosk-staff";
@@ -53,8 +54,10 @@ const previewPortfolioWorkspace: WorkspaceState = {
   ],
 };
 
-function ParentPreview({ screen, familySection, scenario }: { screen: string | undefined; familySection: string | undefined; scenario?: string }) {
+function ParentPreview({ screen, familySection, scenario, updateDay }: { screen: string | undefined; familySection: string | undefined; scenario?: string; updateDay?: string }) {
   const activeView = normalizeParentPortalView(screen);
+  const historyPreview = scenario === "updates-history";
+  const history = historyPreview ? parentUpdatesPreview(updateDay) : null;
   const singleChildReview = scenario === "single-review";
   const schoolContext = scenario === "school-context";
   const quietHome = scenario === "quiet-home" || scenario?.startsWith("account-") === true;
@@ -64,6 +67,7 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
   const oneChild = singleChildReview || schoolContext || quietHome || longContent || absentHome;
   const family = {
     ...executiveParentPortalDemo.family,
+    ...(historyPreview ? { id: PARENT_UPDATES_PREVIEW_FAMILY } : {}),
     guardians: oneChild
       ? executiveParentPortalDemo.family.guardians.map((guardian, index) =>
           index === 0 ? { ...guardian, fullName: "App Review Parent" } : guardian,
@@ -104,6 +108,9 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
       activeView={activeView}
       familySection={familySection}
       family={family}
+      {...(historyPreview ? { updatesHistoryEnabled: true, updatesHistory: history, requestedUpdateDay: updateDay ?? null,
+        updatesHistoryUnavailable: !history, centerTimeZone: "America/New_York", dailyReports: history?.reports ?? [], media: history?.photos ?? [],
+        latestSharedReport: { id: "preview-report-2026-09-11", date: "2026-09-11T12:00:00.000Z", child: { fullName: "Fake Avery Rivera" } } } : {})}
       centerName={longContent ? "Sunshine Academy of Early Learning and Family Discovery · North Campus" : schoolContext ? "Sunshine Academy - Little Harbor · Port Orange, FL" : "Sunshine Academy"}
       {...(featureStress ? {
         classroomTeachers: [{ id: "preview-teacher", name: "Ms. Alexandra Montgomery-Rivera", classroomNames: ["Early Explorers and Discoverers Afternoon Classroom"] }],
@@ -282,7 +289,7 @@ function PickupPreview() {
   );
 }
 
-function ShellPreview({ role, screen, familySection, scenario }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff">; screen?: string; familySection?: string; scenario?: string }) {
+function ShellPreview({ role, screen, familySection, scenario, updateDay }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff">; screen?: string; familySection?: string; scenario?: string; updateDay?: string }) {
   if (role === "role-dashboard" || role === "director" || role === "assistant-director") {
     const directorRole = role === "assistant-director" ? "ASSISTANT_DIRECTOR" : "CENTER_DIRECTOR";
     const directorLabel = role === "assistant-director" ? "Assistant Director" : "Center Director";
@@ -310,7 +317,7 @@ function ShellPreview({ role, screen, familySection, scenario }: { role: Exclude
   }
   if (role === "parent") {
     const reviewScenario = ["single-review", "school-context", "quiet-home", "long-content", "absent-home"].includes(scenario ?? "");
-    return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: reviewScenario ? "App Review Parent" : "Jordan Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Sunshine Academy", href: "/parent-portal" } }}><ParentPreview screen={screen} familySection={familySection} scenario={scenario} /></AppShell>;
+    return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: reviewScenario ? "App Review Parent" : "Jordan Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Sunshine Academy", href: "/parent-portal" } }}><ParentPreview screen={screen} familySection={familySection} scenario={scenario} updateDay={updateDay} /></AppShell>;
   }
   if (role === "teacher") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=teacher" currentUser={{ name: "Morgan Lee", email: "morgan@example.com", role: "TEACHER", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "classroom", label: "Butterflies", detail: "Sunshine Academy · Teacher", href: "/teacher-portal" } }}><TeacherPreview scenario={scenario} /></AppShell>;
@@ -336,10 +343,11 @@ function ShellPreview({ role, screen, familySection, scenario }: { role: Exclude
   return null;
 }
 
-export default async function DevicePreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; screen?: string; section?: string; scenario?: string }> }) {
+export default async function DevicePreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; screen?: string; section?: string; scenario?: string; updateDay?: string; familyId?: string }> }) {
   if (process.env.NODE_ENV !== "development") notFound();
 
-  const { view, screen, section, scenario } = await searchParams;
+  const { view, screen, section, scenario: requestedScenario, updateDay, familyId } = await searchParams;
+  const scenario = familyId === PARENT_UPDATES_PREVIEW_FAMILY ? "updates-history" : requestedScenario;
   const role: PreviewRole = view === "role-dashboard" || view === "assistant-director" || view === "parent" || view === "pickup" || view === "teacher" || view === "executive" || view === "regional" || view === "billing" || view === "auditor" || view === "workflow" || view === "kiosk" || view === "kiosk-staff" ? view : "director";
   if (role === "kiosk" || role === "kiosk-staff") {
     return <DevicePreviewGuard><KioskCheckIn previewMode familyOnly={role === "kiosk"} center={{ id: "preview-center", name: "Sunshine Academy", place: "Carmel, Indiana", timeZone: "America/Indiana/Indianapolis" }} initialMode={role === "kiosk-staff" ? "staff" : "family"} /></DevicePreviewGuard>;
@@ -351,6 +359,6 @@ export default async function DevicePreviewPage({ searchParams }: { searchParams
       <Link prefetch={false} href="/device-preview?view=billing&scenario=history-qa">Fake billing destination</Link>
       <Link prefetch={false} href="/device-preview?view=teacher&scenario=history-qa">Fake teacher destination</Link>
     </nav> : null}
-    <ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} />
+    <ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} updateDay={updateDay} />
   </DevicePreviewGuard>;
 }

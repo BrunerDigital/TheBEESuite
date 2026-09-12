@@ -21,7 +21,7 @@ test("parent, enrollment, and dashboard copy uses plain operational labels", () 
   assert.match(enrollment, /"CRM Location ID"/);
   assert.doesNotMatch(enrollment, /"School Location Label"/);
   assert.match(parent, /displayTokenLabel\(invoice\.status\)/);
-  assert.match(parent, /displayTokenLabel\(documentsNeedingAction\[0\]\.status\)/);
+  assert.match(parent, /displayTokenLabel\(firstRequiredDocument\.status\)/);
   assert.match(parent, /displayTokenLabel\(meal\.mealType\)/);
   assert.match(parent, /displayTokenLabel\(event\.type\)/);
   assert.match(parent, /displayTokenLabel\(incident\.type\)/);

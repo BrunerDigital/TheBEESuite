@@ -6,6 +6,18 @@ function source(path: string) {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
+test("deferred section navigation never steals a newer keyboard intent", () => {
+  const preferences = source("src/components/workspace-preferences.tsx");
+  assert.match(preferences, /window\.cancelAnimationFrame\(pendingFrame\)/);
+  assert.match(preferences, /clickedHash === window\.location\.hash/);
+  assert.match(preferences, /document\.activeElement !== originalFocus && document\.activeElement !== element/);
+  assert.match(preferences, /event\.defaultPrevented \|\| event\.button !== 0/);
+  assert.match(preferences, /destination\.search !== window\.location\.search/);
+  const browser = source("scripts/qa-ui-flow-recovery.ts");
+  assert.match(browser, /Click and hashchange schedule one navigation focus frame/);
+  assert.match(browser, /Deferred focus cannot steal the user's next shortcut/);
+});
+
 test("the shared directory separates review destinations from data-changing work", () => {
   const directory = source("src/components/workspace-section-directory.tsx");
   const preferences = source("src/components/workspace-preferences.tsx");

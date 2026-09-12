@@ -12,10 +12,28 @@ import { BillingWorkbench, type BillingWorkbenchFamily, type BillingWorkbenchCen
 import { DirectorPaymentTerminalWorkspace } from "../../src/components/director-payment-terminal-workspace";
 import { FamilyLedgerCard } from "../../src/components/family-ledger-card";
 import { billingSelectionKey } from "../../src/lib/billing-family-selection";
-import { useState } from "react";
+import { parentDocumentState } from "../../src/lib/parent-document-state";
+import { prioritizeParentAttentionRecords } from "../../src/lib/parent-attention";
+import { type ComponentProps, useEffect, useState } from "react";
+import { CollapsibleCard } from "../../src/components/workspace-preferences";
 
 const query = new URLSearchParams(location.search);
 const view = query.get("view");
+const attentionCase = query.get("attention-case") === "hidden";
+const hiddenOpenInvoice = { ...executiveParentPortalDemo.invoices[0], id: "fake-older-open", number: "FAKE-OLDER-OPEN", status: "OPEN" };
+const hiddenIncident = { ...executiveParentPortalDemo.incidents[0], id: "fake-older-incident", description: "Fake older report still needs acknowledgment", parentAcknowledgedAt: null };
+const priorInvoiceRows = Array.from({ length: 20 }, (_, index) => ({ ...hiddenOpenInvoice, id: `fake-paid-${index}`, number: `FAKE-PAID-${index}`, status: "PAID" }));
+const priorIncidentRows = Array.from({ length: 20 }, (_, index) => ({ ...hiddenIncident, id: `fake-ack-${index}`, parentAcknowledgedAt: "2026-09-12T00:00:00Z" }));
+const documentCase = query.get("document-case");
+const fixtureDocuments = documentCase === "many-required"
+  ? Array.from({ length: 25 }, (_, index) => ({ id: `fake-required-${index + 1}`, name: `Fake required form ${index + 1}`, type: "school_form", status: "REQUESTED", expiresAt: null, storageKey: "internal_signature_pending" }))
+  : documentCase === "history"
+    ? [...Array.from({ length: 25 }, (_, index) => ({ id: `fake-complete-${index + 1}`, name: `Fake completed form ${index + 1}`, type: "school_form", status: "APPROVED", expiresAt: null, storageKey: null })), { id: "fake-required", name: "Fake required form", type: "school_form", status: "REQUESTED", expiresAt: null, storageKey: "internal_signature_pending" }]
+    : documentCase ? [{ id: "fake-document", name: "Fake school document", type: "school_form", status: documentCase === "submitted" ? "SUBMITTED" : "APPROVED", expiresAt: null, storageKey: "internal_signature_pending" }] : executiveParentPortalDemo.documents;
+const orderedDocuments = fixtureDocuments.toSorted((a, b) => Number(parentDocumentState(b) === "action_required") - Number(parentDocumentState(a) === "action_required"));
+const documentPage = recordPagination(query.get("documentsPage"), fixtureDocuments.length, 20);
+const requestedDocumentId = query.get("documentId") || undefined;
+const linkedDocument = orderedDocuments.find((document) => document.id === requestedDocumentId) ?? null;
 const teacherRoster = Array.from({ length: query.has("large-roster") ? 42 : 2 }, (_, index) => ({
   id: index ? `fake-child-${index + 1}` : "fake-child", fullName: index ? `Fake Child ${index + 1}` : "Fake Child", ageGroup: "Preschool", enrollmentStatus: "active", photoVideoPermission: true, classroom: { id: "fake-room", name: "Fake Classroom" },
 }));
@@ -61,17 +79,47 @@ function BillingFixture() {
 }
 
 function Fixture() {
+  if (view === "shortcuts") return <>
+    <nav aria-label="Fake task shortcuts"><a href="#fake-task-a">First fake task</a><a href="#fake-task-b">Next fake task</a></nav>
+    <CollapsibleCard id="fake-task-a" title="First fake task" defaultCollapsed><input aria-label="First fake input" /></CollapsibleCard>
+    <CollapsibleCard id="fake-task-b" title="Next fake task" defaultCollapsed><input aria-label="Next fake input" /></CollapsibleCard>
+  </>;
   if (["billing", "terminal", "ledger"].includes(view ?? "")) return <BillingFixture />;
   if (view === "team") return <TeamPermissionsPage data={team} />;
   if (view === "fte") return <FteReportForm centers={query.get("single-school") ? centers.filter((center) => center.id === "b") : centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" allowCenterSelect={!query.get("director")} mode={query.get("director") ? "director" : "executive"} />;
   if (view === "fte-reader") return <FteReportExplorer centers={centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" canEdit={false} />;
   if (view === "teacher") return <TeacherMobileWorkspace teacherName="Fake Teacher" roster={teacherRoster} teacherProfile={{ name: "Fake Teacher", loginEmail: "teacher@example.com", contactEmail: "teacher@example.com", phone: "", title: "Teacher", centerId: "fake-center", centerName: "Fake School", classroomId: "fake-room", hasStaffKioskCode: true }} classroomOptions={[{ id: "fake-room", name: "Fake Classroom", ageGroup: "Preschool" }]} />;
+  return <ParentFixture />;
+}
+
+function ParentFixture() {
+  const [currentDocuments, setCurrentDocuments] = useState<ComponentProps<typeof ParentPortalWorkspace>["documents"]>(orderedDocuments);
+  useEffect(() => {
+    function refreshDocuments(event: Event) {
+      const detail = (event as CustomEvent<{ id: string; status: string }>).detail;
+      setCurrentDocuments((rows) => rows.map((row) => ({ ...row, ...(row.id === detail.id ? { status: detail.status } : {}) })));
+    }
+    window.addEventListener("fake-parent-server-refresh", refreshDocuments);
+    return () => window.removeEventListener("fake-parent-server-refresh", refreshDocuments);
+  }, []);
+  const currentPageDocuments = currentDocuments.slice(documentPage.skip, documentPage.skip + documentPage.pageSize);
+  const currentLinkedDocument = currentDocuments.find((record) => record.id === requestedDocumentId) ?? null;
   return <ParentPortalWorkspace {...executiveParentPortalDemo}
+    invoices={attentionCase ? prioritizeParentAttentionRecords(priorInvoiceRows, hiddenOpenInvoice) : executiveParentPortalDemo.invoices}
+    incidents={attentionCase ? prioritizeParentAttentionRecords<{ id: string; occurredAt: string | Date; type: string; description: string; actionTaken: string; parentAcknowledgedAt: string | Date | null; child: { fullName: string } }>(priorIncidentRows, hiddenIncident) : executiveParentPortalDemo.incidents}
+    attentionSummary={attentionCase ? { openInvoiceCount: 7, unacknowledgedIncidentCount: 5 } : undefined}
+    family={query.has("multi-child") ? { ...executiveParentPortalDemo.family!, children: Array.from({ length: 3 }, (_, index) => ({ ...executiveParentPortalDemo.family!.children[0], id: `fake-sibling-${index}`, preferredName: null, fullName: `Fake Sibling ${index + 1} With A Long Family Name` })) } : executiveParentPortalDemo.family}
+    documents={currentPageDocuments}
+    documentPagination={documentPage}
+    documentSummary={{ total: currentDocuments.length, actionRequired: currentDocuments.filter((document) => parentDocumentState(document) === "action_required").length, firstRequired: currentDocuments.find((document) => parentDocumentState(document) === "action_required") ?? null }}
+    linkedDocument={currentLinkedDocument && !currentPageDocuments.some((document) => document.id === currentLinkedDocument.id) ? currentLinkedDocument : null}
+    requestedDocumentId={requestedDocumentId}
+    requestedDocumentUnavailable={Boolean(requestedDocumentId && !linkedDocument)}
     centerTimeZone={query.get("tz")}
     dailyReports={query.has("tz") ? executiveParentPortalDemo.dailyReports.map((item, index) => ({ ...item, date: `2026-09-11T${index ? "23" : "14"}:00:00.000Z` })) : executiveParentPortalDemo.dailyReports}
     media={query.has("tz") ? [] : executiveParentPortalDemo.media}
-    activeView={view === "messages" ? "messages" : view === "updates" ? "updates" : view === "children" ? "family" : "home"}
-    familySection="children"
+    activeView={view === "payments" ? "payments" : view === "messages" ? "messages" : view === "updates" ? "updates" : view === "children" || view === "documents" ? "family" : "home"}
+    familySection={view === "documents" ? "documents" : "children"}
     currentGuardianId="exec-demo-guardian-a"
     messages={[1, 2].map((index) => ({ id: `fake-message-${index}`, subject: `Fake subject ${index}`, body: `Fake school message ${index}`, createdAt: `2026-09-10T1${index}:00:00.000Z`, isFromFamily: false }))}
     announcements={[

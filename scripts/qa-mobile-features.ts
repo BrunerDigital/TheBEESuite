@@ -155,12 +155,14 @@ async function main() {
             stage = "all available documents";
             assert.equal(await page.locator("[data-parent-document]").count(), 5);
             for (const count of [10, 12]) {
+              const beforeIds = await page.locator("[data-parent-document]").evaluateAll((items) => items.map((item) => item.getAttribute("data-parent-document")));
               const button = page.getByRole("button", { name: "Show more documents", exact: true });
               await button.focus();
               await button.press("Enter");
               await page.waitForFunction((count) => document.querySelectorAll("[data-parent-document]").length === count, count);
               await settle(page);
-              assert.equal(await page.evaluate(() => document.activeElement?.parentElement?.getAttribute("data-parent-document")), count === 10 ? "preview-document-6" : "preview-document-11");
+              const afterIds = await page.locator("[data-parent-document]").evaluateAll((items) => items.map((item) => item.getAttribute("data-parent-document")));
+              assert.equal(await page.evaluate(() => document.activeElement?.parentElement?.getAttribute("data-parent-document")), afterIds.find((id) => !beforeIds.includes(id)), "Continuation focuses the first newly revealed priority-ordered document");
             }
             assert.equal(await page.getByRole("button", { name: "Show more documents", exact: true }).count(), 0);
             const signature = page.locator('[data-parent-document="preview-document-1"]');

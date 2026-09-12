@@ -73,7 +73,12 @@ test("record-level parent actions recheck the signed-in guardian link", () => {
   for (const routePath of routes) {
     const route = readFileSync(routePath, "utf8");
     assert.match(route, /getCurrentUser\(\)/, routePath);
-    assert.match(route, /guardian(?:\.userId|s\.some)[\s\S]{0,180}user\.id/, routePath);
+    if (routePath.includes("/documents/")) {
+      assert.match(route, /getParentPortalFamilyScope\(user\.id, user\.tenantId,/);
+      assert.match(route, /parentPortalFamilyScopeWhere\(\{ userId: user\.id, requestedFamilyId: scope\.familyId \}\)/);
+      assert.match(route, /tx\.family\.findFirst\(\{ where: familyWhereFor/);
+      assert.match(readFileSync("src/lib/portal-guardrails.ts", "utf8"), /guardians: \{ some: \{ userId: input\.userId \} \}/);
+    } else assert.match(route, /guardian(?:\.userId|s\.some)[\s\S]{0,180}user\.id/, routePath);
   }
 });
 

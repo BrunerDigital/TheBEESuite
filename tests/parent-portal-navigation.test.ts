@@ -160,7 +160,7 @@ test("primary parent navigation uses document requests across responsive shells"
   assert.doesNotMatch(workspace, /<Link\b/);
   assert.match(
     workspace,
-    /<ParentPortalDocumentLink[\s\S]*Incident Report to Review[\s\S]*<\/ParentPortalDocumentLink>/,
+    /<ParentPortalDocumentLink[\s\S]*unacknowledgedIncidentCount === 1 \? "Incident report to review"[\s\S]*<\/ParentPortalDocumentLink>/,
   );
 });
 

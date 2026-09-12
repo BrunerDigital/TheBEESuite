@@ -65,8 +65,8 @@ test("role bottom navigation only renders overflow navigation when destinations 
   assert.match(shell, /const bottomNavItemCount = items\.length \+ \(moreItems\.length \? 1 : 0\)/);
   assert.match(shell, /\{moreItems\.length \? <Sheet/);
   assert.match(shell, /bottomNavItemCount === 4 \? "grid-cols-4"/);
-  assert.match(shell, /max-h-\[82dvh\] overflow-hidden overscroll-contain/);
-  assert.match(shell, /min-h-0 flex-1 overflow-y-auto overscroll-contain/);
+  assert.match(shell, /app-more-navigation[^\n]*overflow-hidden overscroll-contain[^\n]*data-\[side=bottom\]:max-h-\[82dvh\]/);
+  assert.match(shell, /min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain/);
 });
 
 test("dashboard content reflows before constrained laptop and touch layouts", () => {

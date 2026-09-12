@@ -1620,7 +1620,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-muted-foreground">{asOfLabel}</p>
-              <h1 className="mt-2 max-w-3xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className="mt-2 max-w-3xl break-words text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
                 {dashboardTitle}
               </h1>
               <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-muted-foreground">

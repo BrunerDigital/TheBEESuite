@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -28,6 +28,7 @@ import { BrandIcon, BrandLogo } from "@/components/brand-logo";
 import { AccountsReceivableSheet } from "@/components/accounts-receivable-sheet";
 import { LiveRefreshStatus } from "@/components/live-refresh-status";
 import { teacherActiveTask, teacherTaskHref } from "@/lib/teacher-navigation";
+import { activeShellNavigationHref, mobileScopeDetail } from "@/lib/shell-navigation-state";
 import { ProfilePhotoUploader } from "@/components/profile-photo-uploader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +52,7 @@ import { Input } from "@/components/ui/input";
 import { clearClassroomOfflineQueues } from "@/lib/classroom-offline-queue";
 import { canViewAccountBalances, isExecutiveAccountBalanceView } from "@/lib/accounts-receivable";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { modules, navGroups } from "@/lib/demo-data";
 import { notificationCenterHrefForRole, storedNotificationHrefForRole } from "@/lib/notification-links";
@@ -205,6 +206,10 @@ function TeacherTaskLink({ href, ...props }: React.ComponentPropsWithRef<"a"> & 
   return destination.startsWith("#") ? <a href={destination} {...props} /> : <Link href={destination} {...props} />;
 }
 
+function closeForPlainNavigation(event: ReactMouseEvent<HTMLAnchorElement>, close?: () => void) {
+  if (!event.defaultPrevented && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && (!event.currentTarget.target || event.currentTarget.target === "_self")) close?.();
+}
+
 function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
   if (slug === "data-readiness" && !dataReadinessCenterEnabled()) return false;
   if (slug === "terminal-store" && !terminalStoreEnabled()) return false;
@@ -248,12 +253,14 @@ function ScopeContextLink({
   mobile = false,
   previewMode = false,
   previewHrefBase,
+  onNavigate,
 }: {
   currentUser?: ShellUser;
   compact?: boolean;
   mobile?: boolean;
   previewMode?: boolean;
   previewHrefBase?: string;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -270,6 +277,8 @@ function ScopeContextLink({
   if (!context) return null;
   const label = shellUserViewText(context.label, currentUser);
   const detail = shellUserViewText(context.detail, currentUser);
+  const displayedDetail = mobile ? mobileScopeDetail(detail, roleLabel(currentUser?.role ?? "")) : detail;
+  const showDetail = !(mobile && context.kind === "school" && displayedDetail === "1 school");
   const staticFamilyScope = isParentFacingUser(currentUser) && context.kind === "family";
   const href = previewSafeShellHref(context.href, previewMode, previewHrefBase, pathname);
   const currentPath = `${pathname}${query ? `?${query}` : ""}${currentHash}`;
@@ -290,7 +299,7 @@ function ScopeContextLink({
         aria-label={`${label}. ${detail}. Change workspace.`}
         className={cn(
           "group flex min-w-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.07] p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          mobile && "mx-auto w-full max-w-xl border-border/70 bg-card/75 px-3 py-2 shadow-sm",
+          mobile && "app-scope-context-mobile mx-auto w-full max-w-xl border-border/70 bg-card/75 px-3 py-2 shadow-sm",
         )}
       >
         <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
@@ -298,7 +307,7 @@ function ScopeContextLink({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{label}</span>
-          <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+          {showDetail ? <span className="block truncate text-xs text-muted-foreground">{displayedDetail}</span> : null}
         </span>
         <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
       </button>
@@ -318,7 +327,7 @@ function ScopeContextLink({
             workspace={currentUser.workspace}
             nextPath={currentPath}
             compact
-            onSelected={() => setWorkspaceOpen(false)}
+            onSelected={() => { setWorkspaceOpen(false); onNavigate?.(); }}
             previewMode={previewMode}
           />
         </DialogContent>
@@ -345,6 +354,7 @@ function ScopeContextLink({
           render={(
             <Link
               href={href}
+              onClick={(event) => closeForPlainNavigation(event, onNavigate)}
               aria-label={`${label}. ${detail}`}
               className="grid size-11 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
@@ -365,7 +375,7 @@ function ScopeContextLink({
       <div
         className={cn(
           "flex min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-muted/35 p-3",
-          mobile && "mx-auto w-full max-w-xl bg-card/75 px-3 py-2 shadow-sm",
+          mobile && "app-scope-context-mobile mx-auto w-full max-w-xl bg-card/75 px-3 py-2 shadow-sm",
         )}
       >
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -373,7 +383,7 @@ function ScopeContextLink({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{label}</span>
-          <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+          {showDetail ? <span className="block truncate text-xs text-muted-foreground">{displayedDetail}</span> : null}
         </span>
       </div>
     );
@@ -382,10 +392,11 @@ function ScopeContextLink({
   return (
     <Link
       href={href}
+      onClick={(event) => closeForPlainNavigation(event, onNavigate)}
       aria-label={`${label}. ${detail}`}
       className={cn(
         "group flex min-w-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.07] p-3 transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        mobile && "mx-auto w-full max-w-xl border-border/70 bg-card/75 px-3 py-2 shadow-sm",
+        mobile && "app-scope-context-mobile mx-auto w-full max-w-xl border-border/70 bg-card/75 px-3 py-2 shadow-sm",
       )}
     >
       <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
@@ -393,7 +404,7 @@ function ScopeContextLink({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{label}</span>
-        <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+        {showDetail ? <span className="block truncate text-xs text-muted-foreground">{displayedDetail}</span> : null}
       </span>
       <ChevronDown className="size-4 -rotate-90 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
     </Link>
@@ -763,7 +774,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   );
 }
 
-function SidebarNav({ close, currentUser, onLogout, previewMode = false, previewHrefBase }: { close?: () => void; currentUser?: ShellUser; onLogout?: () => void; previewMode?: boolean; previewHrefBase?: string }) {
+function SidebarNav({ close, currentUser, onLogout, previewMode = false, previewHrefBase, mobileDrawer = false }: { close?: () => void; currentUser?: ShellUser; onLogout?: () => void; previewMode?: boolean; previewHrefBase?: string; mobileDrawer?: boolean }) {
   const pathname = usePathname();
   const parentFacing = isParentFacingUser(currentUser);
   const parentNavigationItems = parentPortalShellItemsForUser(currentUser);
@@ -798,7 +809,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
           render={
             <Link
               href={href}
-              onClick={close}
+              onClick={(event) => closeForPlainNavigation(event, close)}
               aria-current={active ? "page" : undefined}
               aria-description={description}
               className={cn(
@@ -821,12 +832,12 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 p-5">
-        <BrandMark branding={currentUser?.branding} href={brandHref} />
+    <div className={cn("flex h-full min-h-0 flex-col overflow-hidden", mobileDrawer && "min-w-0 flex-1")}>
+      <div className={cn("shrink-0", mobileDrawer ? "px-[12px] pb-[12px]" : "p-5")}>
+        {!mobileDrawer ? <BrandMark branding={currentUser?.branding} href={brandHref} /> : null}
         {!parentFacing ? (
-          <div className="mt-4">
-            <ScopeContextLink currentUser={currentUser} previewMode={previewMode} previewHrefBase={previewHrefBase} />
+          <div className={mobileDrawer ? undefined : "mt-4"}>
+            <ScopeContextLink currentUser={currentUser} mobile={mobileDrawer} previewMode={previewMode} previewHrefBase={previewHrefBase} onNavigate={close} />
           </div>
         ) : null}
       </div>
@@ -902,10 +913,10 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
           )}
         </nav>
       </ScrollArea>
-      {currentUser && onLogout ? (
-        <div className="shrink-0 border-t p-3">
+      {currentUser && (onLogout || (mobileDrawer && previewMode)) ? (
+        <div className="app-drawer-account shrink-0 border-t p-3">
           <div className="flex min-w-0 items-center gap-3 rounded-xl border bg-background/55 p-2.5">
-            <AccountMenu currentUser={currentUser} onLogout={onLogout} />
+            <AccountMenu currentUser={currentUser} onLogout={onLogout ?? (() => undefined)} previewMode={previewMode} previewHrefBase={previewHrefBase} onNavigate={close} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{shellUserViewText(currentUser.name, currentUser)}</div>
               <div className="truncate text-xs text-muted-foreground">{roleLabel(currentUser.role)}</div>
@@ -929,7 +940,7 @@ function roleUsesBottomNavigation(currentUser?: ShellUser) {
   return Boolean(currentUser && currentUser.role !== "AUTHORIZED_PICKUP");
 }
 
-function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBase }: { currentUser: ShellUser; onLogout: () => void; previewMode?: boolean; previewHrefBase?: string }) {
+function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBase, onNavigate }: { currentUser: ShellUser; onLogout: () => void; previewMode?: boolean; previewHrefBase?: string; onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const displayName = removeDemoMarkersFromUserView(currentUser.name);
@@ -1008,14 +1019,14 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
           <>
             <DropdownMenuItem
               className="p-0"
-              render={<Link href={profileHref} className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
+              render={<Link href={profileHref} onClick={(event) => closeForPlainNavigation(event, onNavigate)} className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
             >
               <ShieldCheck data-icon="inline-start" aria-hidden="true" />
               Profile &amp; security
             </DropdownMenuItem>
             <DropdownMenuItem
               className="p-0"
-              render={<Link href={notificationsHref} className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
+              render={<Link href={notificationsHref} onClick={(event) => closeForPlainNavigation(event, onNavigate)} className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
             >
               <Bell data-icon="inline-start" aria-hidden="true" />
               Notifications
@@ -1027,7 +1038,7 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
           <>
             <DropdownMenuItem
               className="p-0"
-              render={<TeacherTaskLink href="/teacher-portal#teacher-profile-setup" className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
+              render={<TeacherTaskLink href="/teacher-portal#teacher-profile-setup" onClick={(event) => closeForPlainNavigation(event, onNavigate)} className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
             >
               <ShieldCheck data-icon="inline-start" aria-hidden="true" />
               Profile settings
@@ -1106,6 +1117,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
             ? directorItems
             : [];
   const items = sourceItems.filter((item) => canAccessShellModule(currentUser, item.slug));
+  const activeShellHref = activeShellNavigationHref(items, pathname, searchParams.toString());
   const moreItems = parentFacing
     ? []
     : navGroups
@@ -1129,18 +1141,14 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
         {items.map((item) => {
           const { label, href, Icon } = item;
           const parentView = "view" in item ? item.view : undefined;
-          const hrefPath = href.split(/[?#]/)[0];
           const previewHref = parentView
             ? parentPortalShellHref(parentView, previewMode, previewHrefBase, pathname, familyId)
             : teacher && href.startsWith("/teacher-portal#") ? href : previewSafeShellHref(href, previewMode, previewHrefBase, pathname);
-          const selectedPath = selectedTarget.split(/[?#]/)[0];
           const active = parentView
             ? activeView === parentView
             : teacher ? activeTeacherTask === label : previewMode
               ? selectedTarget === href
-              : selectedPath === pathname
-                ? selectedTarget === href
-                : pathname === hrefPath && !href.includes("#") && !href.includes("?");
+              : activeShellHref === href;
           const NavigationLink = parentView ? ParentPortalDocumentLink : teacher ? TeacherTaskLink : Link;
           return (
             <NavigationLink
@@ -1173,10 +1181,10 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
             <MoreHorizontal className="size-4" aria-hidden="true" />
             <span className="max-w-full break-words text-center leading-tight">More</span>
           </SheetTrigger>
-          <SheetContent side="bottom" className="max-h-[82dvh] overflow-hidden overscroll-contain rounded-t-3xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-            <SheetTitle className="shrink-0 text-left">More</SheetTitle>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
-              <div className="grid gap-2 pb-px sm:grid-cols-2">
+          <SheetContent side="bottom" className="app-more-navigation min-w-0 gap-0 overflow-hidden overscroll-contain rounded-t-3xl data-[side=bottom]:max-h-[82dvh] data-[side=bottom]:pl-[max(12px,env(safe-area-inset-left))] data-[side=bottom]:pr-[max(12px,env(safe-area-inset-right))] data-[side=bottom]:pb-[max(12px,env(safe-area-inset-bottom))]">
+            <SheetHeader className="min-h-[68px] shrink-0 py-[16px] pl-0 pr-[56px]"><SheetTitle className="text-left">More</SheetTitle></SheetHeader>
+            <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-[4px]">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-[8px] pb-px sm:grid-cols-2">
                 {moreItems.map(({ label, slug, Icon, group }) => {
                   const targetHref = shellModuleHref(currentUser, slug);
                   const href = previewSafeShellHref(targetHref, previewMode, previewHrefBase, pathname);
@@ -1185,10 +1193,10 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
                       key={slug}
                       href={href}
                       onClick={() => setMoreOpen(false)}
-                      className="flex min-h-14 items-center gap-3 rounded-xl border bg-card/70 p-3 transition-colors hover:border-primary/40 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex min-h-[56px] min-w-0 max-w-full items-center gap-[12px] rounded-xl border bg-card/70 p-[12px] transition-colors hover:border-primary/40 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" aria-hidden="true" /></span>
-                      <span className="min-w-0"><span className="block truncate text-sm font-semibold">{label}</span><span className="block truncate text-xs text-muted-foreground">{group}</span></span>
+                      <span className="grid size-[40px] shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-[20px]" aria-hidden="true" /></span>
+                      <span className="min-w-0 flex-1 [overflow-wrap:anywhere]"><span className="block text-sm font-semibold">{label}</span><span className="block text-xs text-muted-foreground">{group}</span></span>
                     </Link>
                   );
                 })}
@@ -1224,6 +1232,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const appHeaderRef = useRef<HTMLElement>(null);
@@ -1477,7 +1486,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 size="sm"
                 className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
-            ) : <Sheet>
+            ) : <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
               <SheetTrigger
                 render={
                   <Button variant="outline" size="icon" className="shrink-0 touch-manipulation lg:hidden" aria-label="Open navigation" />
@@ -1485,9 +1494,9 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               >
                 <Menu aria-hidden="true" />
               </SheetTrigger>
-              <SheetContent side="left" className="w-80 p-0">
-                <SheetTitle className="sr-only">Navigation</SheetTitle>
-                <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
+              <SheetContent side="left" className="app-mobile-drawer min-w-0 max-w-full gap-0 overflow-hidden p-0 data-[side=left]:w-[min(320px,100vw)]">
+                <SheetHeader className="min-h-[68px] shrink-0 py-[16px] pl-[16px] pr-[68px]"><SheetTitle>Navigation</SheetTitle></SheetHeader>
+                <SidebarNav mobileDrawer close={() => setMobileNavigationOpen(false)} currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
               </SheetContent>
             </Sheet>}
             {showActiveWorkspaceTools && currentUser?.scopeContext ? (
@@ -1715,7 +1724,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
             </div>
           </div>
           {currentUser?.scopeContext && !parentFacing && !workspacePending ? (
-            <div className="border-t border-border/60 px-3 py-2 lg:hidden">
+            <div className="app-header-scope border-t border-border/60 px-3 py-2 lg:hidden">
               <ScopeContextLink currentUser={currentUser} mobile previewMode={previewMode} previewHrefBase={previewHrefBase} />
             </div>
           ) : null}

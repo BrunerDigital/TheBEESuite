@@ -6,10 +6,13 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
+import { useParentPaymentRecovery, type ParentPaymentRecovery } from "@/components/use-parent-payment-recovery";
+import { isServerCheckoutReceipt, paymentResponseNeedsConfirmation } from "@/lib/parent-payment-observation";
 import { isInternalSignatureRequest as requiresDocumentSignature, isParentDocumentSubmissionReceipt, optimisticParentDocumentIds, parentDocumentState, parentDocumentStatusLabel } from "@/lib/parent-document-state";
 import type { RecordPagination } from "@/lib/record-pagination";
 import { remainingParentIncidentCount } from "@/lib/parent-attention";
 import { canCompactParentAccount } from "@/lib/parent-home-account";
+import { parentActivePaymentSummary, parentPaymentStatusMessage, parentPaymentStatusTitle, type ParentAccountPaymentBlocker, type ParentPendingPayment } from "@/lib/parent-payment-status";
 import { activeItemScrollDelta } from "@/lib/horizontal-active-item";
 import { InvoicePrintButton, PaymentReceiptPrintButton } from "@/components/billing-print-actions";
 import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
@@ -120,17 +123,7 @@ type Child = {
   today?: ParentPortalTodayState;
 };
 
-type PendingInvoicePayment = {
-  id: string;
-  status: string | null;
-  paymentMethodCategory: string | null;
-  requestedPaymentMethodCategory: string | null;
-  bankAccountVerificationMethod: string | null;
-  stripeCheckoutSessionId: string | null;
-  stripePaymentIntentId: string | null;
-  stripePaymentIntentStatus: string | null;
-  stripePaymentStatus: string | null;
-};
+type PendingInvoicePayment = ParentPendingPayment;
 
 type Invoice = {
   id: string;
@@ -391,6 +384,7 @@ type Props = {
   incidents: Incident[];
   attentionSummary?: { openInvoiceCount: number; unacknowledgedIncidentCount: number };
   paymentActivitySummary?: { pendingCount: number; provisionalCreditCents: number };
+  accountPaymentBlocker?: ParentAccountPaymentBlocker | null;
   messages: Array<{
     id: string;
     subject: string | null;
@@ -449,6 +443,7 @@ type Props = {
 type PaymentCheckoutMethod = "ach" | "card" | "link_bank" | null;
 
 type ParentPortalWorkspaceViewProps = Props & {
+  paymentRecovery: ParentPaymentRecovery;
   paymentCheckoutMethod: PaymentCheckoutMethod;
   setPaymentCheckoutMethod: Dispatch<SetStateAction<PaymentCheckoutMethod>>;
 };
@@ -513,16 +508,6 @@ function guardianFirstName(value: string | null | undefined) {
   return firstName;
 }
 
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function textField(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
 const DISPLAY_ACRONYMS: Record<string, string> = {
   ach: "ACH",
   id: "ID",
@@ -561,67 +546,12 @@ function communicationPreferenceLabel(value: string | null | undefined) {
   return displayTokenLabel(value);
 }
 
-function paymentMethodCategoryLabel(category: string | null | undefined) {
-  switch (category) {
-    case "ach":
-      return "Bank account";
-    case "link_bank":
-      return "Stripe Link";
-    case "card":
-      return "Debit or credit card";
-    default:
-      return "Payment";
-  }
-}
-
-function pendingPaymentCategory(
-  payment: Pick<
-    PendingInvoicePayment,
-    "paymentMethodCategory" | "requestedPaymentMethodCategory"
-  > | null | undefined,
-) {
-  return (
-    payment?.paymentMethodCategory || payment?.requestedPaymentMethodCategory
-  );
-}
-
 function isConfirmedAchPendingPayment(payment: PendingInvoicePayment | null | undefined) {
-  if (!payment) return false;
-  if (pendingPaymentCategory(payment) !== "ach") return false;
-  const status = (textField(payment.status) || "").toLowerCase();
-  const stripeStatus = (textField(payment.stripePaymentIntentStatus) || "").toLowerCase();
-  return status === "paid_processing"
-    || (status.endsWith("_processing") && stripeStatus === "processing");
+  return payment?.phase === "ach_processing";
 }
 
 function pendingPaymentMessage(payment: PendingInvoicePayment) {
-  const label = paymentMethodCategoryLabel(pendingPaymentCategory(payment));
-  if (isConfirmedAchPendingPayment(payment)) {
-    return "Paid — processing by ACH. Your balance has been provisionally credited while the bank transfer settles. If the bank returns it, the amount due will automatically be restored.";
-  }
-  if (pendingPaymentCategory(payment) === "ach") {
-    return "ACH submission is pending. It will be marked Paid — processing only after Stripe confirms that the bank transfer is processing.";
-  }
-  if (label === "Debit or credit card") {
-    return "A card checkout is already pending for this invoice. Complete or expire it before starting another checkout.";
-  }
-  if (label === "Stripe Link") {
-    return "A Stripe Link payment is processing. The invoice will update when the payment processor confirms it.";
-  }
-  return `${label} payment is processing. Bank payments can take a few business days to settle; the invoice will update when the payment processor confirms the funds.`;
-}
-
-function paymentFields(payment: Payment) {
-  return recordFromUnknown(payment.customFields);
-}
-
-function isProcessingPayment(payment: Payment) {
-  if (isAchPaymentProcessing(payment)) return true;
-  const status = textField(paymentFields(payment).status);
-  return (
-    payment.status === "DRAFT" &&
-    (status === "checkout_created" || status === "checkout_pending")
-  );
+  return parentPaymentStatusMessage(payment);
 }
 
 function paymentListLabel(payment: Payment, timeZone: string) {
@@ -631,13 +561,8 @@ function paymentListLabel(payment: Payment, timeZone: string) {
       : "Payment returned";
   }
   if (isAchPaymentProcessing(payment)) return "Paid — processing · ACH";
-  if (isProcessingPayment(payment)) {
-    const fields = paymentFields(payment);
-    const category =
-      textField(fields.paymentMethodCategory) ||
-      textField(fields.requestedPaymentMethodCategory);
-    return `${paymentMethodCategoryLabel(category)} processing`;
-  }
+  const activePayment = parentActivePaymentSummary(payment);
+  if (activePayment) return parentPaymentStatusTitle(activePayment);
   if (payment.status === "PAID")
     return `Paid · ${formatDateInTimeZone(payment.paidAt, timeZone)}`;
   return displayTokenLabel(payment.status);
@@ -753,6 +678,8 @@ export function ParentPortalWorkspace(props: Props) {
   const familyId = props.family?.id ?? "no-family";
   const [paymentCheckoutMethod, setPaymentCheckoutMethod] =
     useState<PaymentCheckoutMethod>(null);
+  const router = useRouter();
+  const paymentRecovery = useParentPaymentRecovery(familyId, parentPortalRequest, () => router.refresh(), props.accountPaymentBlocker);
 
   return (
     <ParentPortalWorkspaceView
@@ -760,6 +687,7 @@ export function ParentPortalWorkspace(props: Props) {
       {...props}
       activeView={activeView}
       familySection={familySection}
+      paymentRecovery={paymentRecovery}
       paymentCheckoutMethod={paymentCheckoutMethod}
       setPaymentCheckoutMethod={setPaymentCheckoutMethod}
     />
@@ -769,6 +697,7 @@ export function ParentPortalWorkspace(props: Props) {
 function ParentPortalWorkspaceView({
   attentionSummary,
   paymentActivitySummary,
+  accountPaymentBlocker: serverPaymentBlocker,
   activeView = "home",
   familySection,
   family,
@@ -813,7 +742,10 @@ function ParentPortalWorkspaceView({
   previewMode = false,
   paymentCheckoutMethod,
   setPaymentCheckoutMethod,
+  paymentRecovery,
 }: ParentPortalWorkspaceViewProps) {
+  const accountPaymentBlocker = paymentRecovery.blocker ?? serverPaymentBlocker;
+  const invoicePaymentBlocked = (invoiceId: string) => Boolean(serverPaymentBlocker?.blocksInvoicePayments) || paymentRecovery.blocksInvoice(invoiceId);
   const workspaceTimeZone = useSchoolTimeZone();
   const timeZone = centerTimeZone || workspaceTimeZone;
   const formatDate = (value: string | Date | null) =>
@@ -1033,10 +965,6 @@ function ParentPortalWorkspaceView({
         : [],
     [balanceCents, openInvoices],
   );
-  const pendingOpenInvoices = useMemo(
-    () => openInvoices.filter((invoice) => invoice.pendingPayment),
-    [openInvoices],
-  );
   const nextOpenInvoice = useMemo(
     () =>
       payableOpenInvoices
@@ -1048,7 +976,6 @@ function ParentPortalWorkspaceView({
         )[0] ?? null,
     [payableOpenInvoices],
   );
-  const firstPendingOpenInvoice = pendingOpenInvoices[0] ?? null;
   const accountPaymentAmountCents = paymentAmountCents(
     accountPaymentAmountDollars,
   );
@@ -1063,6 +990,7 @@ function ParentPortalWorkspaceView({
   const accountPaymentAmountRequired =
     parentBalanceReviewRequired && !accountPaymentAmountEntered;
   const accountPaymentDisabled =
+    Boolean(accountPaymentBlocker) ||
     accountPaymentAmountRequired ||
     accountPaymentAmountInvalid ||
     accountPaymentAmountExceedsBalance;
@@ -1202,7 +1130,7 @@ function ParentPortalWorkspaceView({
     (incident) => !incident.parentAcknowledgedAt && !acknowledgedIncidentIds.has(incident.id),
   );
   const openInvoiceCount = attentionSummary?.openInvoiceCount ?? openInvoices.length;
-  const compactHomeAccount = canCompactParentAccount({
+  const compactHomeAccount = !accountPaymentBlocker && canCompactParentAccount({
     billingAccount,
     openInvoiceCount: attentionSummary?.openInvoiceCount,
     paymentActivity: paymentActivitySummary,
@@ -1447,6 +1375,7 @@ function ParentPortalWorkspaceView({
     paymentMethodCategory: "ach" | "card" | "link_bank",
   ) {
     if (previewOnly()) return;
+    if (accountPaymentBlocker) return showError(parentPaymentStatusMessage(accountPaymentBlocker, "account"));
     if (!family) {
       return showError("Choose a linked family before making a payment.");
     }
@@ -1472,6 +1401,8 @@ function ParentPortalWorkspaceView({
         "Payment amount cannot exceed your current family balance.",
       );
     }
+    const attempt = paymentRecovery.begin(null, paymentMethodCategory);
+    if (!attempt) return;
     setPaymentCheckoutMethod(paymentMethodCategory);
     setPaymentCheckoutError("");
     setError("");
@@ -1498,14 +1429,20 @@ function ParentPortalWorkspaceView({
         error?: string;
         url?: string;
         configured?: boolean;
+        paymentId?: string;
       } | null;
-      if (!response.ok || !json?.url) {
+      if (!response.ok || !isServerCheckoutReceipt(json)) {
+        if (paymentResponseNeedsConfirmation(response, json)) paymentRecovery.hold(attempt, json?.paymentId);
+        else paymentRecovery.finish(attempt);
         const message =
-          json?.error || "Payment checkout is not configured yet.";
+          paymentResponseNeedsConfirmation(response, json) ? "Payment confirmation is pending. Refresh the status before attempting another payment." : json?.error || "Payment checkout is not configured yet.";
         setPaymentCheckoutMethod(null);
         setPaymentCheckoutError(message);
         showError(message);
         return;
+      }
+      if (!paymentRecovery.canNavigate(attempt)) {
+        paymentRecovery.hold(attempt, json.paymentId); setPaymentCheckoutMethod(null); return;
       }
       window.location.href = json.url;
     })();
@@ -1523,6 +1460,7 @@ function ParentPortalWorkspaceView({
     paymentMethodCategory: "card" | "link_bank",
   ) {
     if (previewOnly()) return;
+    if (invoicePaymentBlocked(invoiceId)) return showError("This payment needs confirmation. Refresh the payment status before trying again.");
     if (!family) {
       return showError("Choose a linked family before paying this invoice.");
     }
@@ -1538,6 +1476,8 @@ function ParentPortalWorkspaceView({
     if (invoice.pendingPayment) {
       return showError(pendingPaymentMessage(invoice.pendingPayment));
     }
+    const attempt = paymentRecovery.begin(invoiceId, paymentMethodCategory);
+    if (!attempt) return;
     startTransition(async () => {
       const response = await parentPortalRequest("/api/billing/checkout-session", {
         method: "POST",
@@ -1551,12 +1491,16 @@ function ParentPortalWorkspaceView({
       const json = (await response.json().catch(() => null)) as {
         error?: string;
         url?: string;
+        paymentId?: string;
       } | null;
-      if (!response.ok || !json?.url) {
+      if (!response.ok || !isServerCheckoutReceipt(json)) {
+        if (paymentResponseNeedsConfirmation(response, json)) paymentRecovery.hold(attempt, json?.paymentId);
+        else paymentRecovery.finish(attempt);
         return showError(
-          json?.error || "Product checkout could not be opened.",
+          paymentResponseNeedsConfirmation(response, json) ? "Payment confirmation is pending. Refresh the status before attempting another payment." : json?.error || "Product checkout could not be opened.",
         );
       }
+      if (!paymentRecovery.canNavigate(attempt)) { paymentRecovery.hold(attempt, json.paymentId); return; }
       window.location.href = json.url;
     });
   }
@@ -1593,6 +1537,9 @@ function ParentPortalWorkspaceView({
 
   function buyUniform(paymentMethodCategory: "ach" | "card" | "link_bank") {
     if (previewOnly()) return;
+    if (paymentRecovery.isSubmitting || accountPaymentBlocker?.blocksInvoicePayments) {
+      return showError("Confirm the earlier payment before starting a new purchase. Refresh the payment status or contact your school.");
+    }
     if (!family) {
       return showError("Choose a linked family before purchasing a uniform.");
     }
@@ -1994,10 +1941,10 @@ function ParentPortalWorkspaceView({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold leading-5">
-                        Upcoming payment
+                        {accountPaymentBlocker ? "Payment status" : "Upcoming payment"}
                       </span>
                       <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {openInvoices[0] ? `${openInvoices[0].number} · due ${formatDate(openInvoices[0].dueDate)}` : "Review your account’s open invoices"}
+                        {accountPaymentBlocker ? parentPaymentStatusTitle(accountPaymentBlocker, "account") : openInvoices[0] ? `${openInvoices[0].number} · due ${formatDate(openInvoices[0].dueDate)}` : "Review your account’s open invoices"}
                       </span>
                     </span>
                     <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
@@ -2433,22 +2380,23 @@ function ParentPortalWorkspaceView({
                     {balanceCents > 0
                       ? checkoutBlocked
                         ? "Payment details are available; online checkout is temporarily unavailable."
-                        : "Review invoices and choose a payment method."
+                        : accountPaymentBlocker ? "Current amount due while the earlier payment is confirmed." : "Review invoices and choose a payment method."
                       : balanceCents < 0
                         ? "This account has a family credit."
                         : "Currently due"}
                   </p>
                 </div>
               )}
+              {accountPaymentBlocker ? <p className="mt-3 text-sm font-medium" data-parent-home-payment-status>{parentPaymentStatusTitle(accountPaymentBlocker, "account")}</p> : null}
               <ParentPortalDocumentLink
                 href={workspaceHref("payments", { familyId: family.id })}
                 data-slot="button"
                 className={buttonVariants({
-                  variant: balanceCents > 0 && !checkoutBlocked ? "default" : "outline",
+                  variant: balanceCents > 0 && !checkoutBlocked && !accountPaymentBlocker ? "default" : "outline",
                   className: "mt-4 w-full min-h-12",
                 })}
               >
-                <span className="min-w-0 break-words">{balanceCents > 0 && !checkoutBlocked ? "Review & Pay" : "View Payment Details"}</span>
+                <span className="min-w-0 break-words">{accountPaymentBlocker ? "View payment status" : balanceCents > 0 && !checkoutBlocked ? "Review & Pay" : "View Payment Details"}</span>
                 <ArrowRight data-icon="inline-end" aria-hidden="true" />
               </ParentPortalDocumentLink>
               {billingAccount ? <p className="mt-3 text-xs text-muted-foreground">
@@ -2982,6 +2930,18 @@ function ParentPortalWorkspaceView({
             <CardTitle as="h2">Payment account</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {accountPaymentBlocker ? (
+              <Alert data-parent-payment-status role="status" aria-live="polite">
+                <AlertTitle><AlertCircle className="mr-2 inline size-4 align-text-bottom" aria-hidden="true" />{paymentRecovery.allSettled ? "Payment recorded" : parentPaymentStatusTitle(accountPaymentBlocker, "account")}</AlertTitle>
+                <AlertDescription className="min-w-0 break-words">
+                  <p>{paymentRecovery.allSettled ? "Your earlier payment is recorded. Open the updated account before starting a new payment; do not repeat the earlier amount." : parentPaymentStatusMessage(accountPaymentBlocker, "account")}</p>
+                  {accountPaymentBlocker.count > 1 ? <p>{accountPaymentBlocker.count} active payment attempts need confirmation.</p> : null}
+                  <Button type="button" variant="outline" className="mt-2 min-h-11 h-auto whitespace-normal" disabled={paymentRecovery.isRefreshing || paymentRecovery.isSubmitting} aria-busy={paymentRecovery.isRefreshing} onClick={() => void paymentRecovery.refresh()}>{paymentRecovery.isRefreshing ? "Refreshing status…" : "Refresh payment status"}</Button>
+                  {paymentRecovery.allSettled ? <a className={buttonVariants({ variant: "outline", className: "mt-2 ml-2 min-h-11 h-auto whitespace-normal" })} href={workspaceHref("payments")}>Review updated balance</a> : null}
+                  {paymentRecovery.refreshMessage ? <p role="status" className="mt-2">{paymentRecovery.refreshMessage}</p> : null}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {paymentMethodReauthorizationRequired ? (
               <Alert variant="destructive">
                 <AlertCircle className="size-4" />
@@ -3095,11 +3055,11 @@ function ParentPortalWorkspaceView({
             ) : null}
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
               <div className="rounded-xl border bg-background/40 p-3 sm:p-4">
-                <div className="text-xs text-muted-foreground">Balance due</div>
+                <div className="text-xs text-muted-foreground">{balanceCents < 0 ? "Account credit" : "Balance due"}</div>
                 <div className="mt-1 text-2xl font-semibold">
                   {parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed
                     ? "Being confirmed"
-                    : money(balanceCents)}
+                    : money(Math.abs(balanceCents))}
                 </div>
                 {parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? (
                   <div className="mt-1 text-xs text-muted-foreground">
@@ -3107,7 +3067,7 @@ function ParentPortalWorkspaceView({
                   </div>
                 ) : (
                   <p className="sr-only">
-                    {parentBalanceVisibilityConfirmed
+                    {balanceCents < 0 ? "This credit is held on your family account; it is not an amount you owe." : parentBalanceVisibilityConfirmed
                       ? "This reviewed family balance is visible while automatic collection remains blocked."
                       : "This is the amount currently due from your family."}
                   </p>
@@ -3458,7 +3418,7 @@ function ParentPortalWorkspaceView({
                 <ArrowRight className="size-5 shrink-0 text-primary" aria-hidden="true" />
               </ParentPortalDocumentLink>
             ) : null}
-            {showFamilyPaymentPanel ? (
+            {showFamilyPaymentPanel && !accountPaymentBlocker ? (
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -3662,22 +3622,6 @@ function ParentPortalWorkspaceView({
                 ) : null}
               </div>
             ) : null}
-            {!nextOpenInvoice && firstPendingOpenInvoice?.pendingPayment ? (
-              <Alert>
-                <AlertCircle className="size-4" />
-                <AlertTitle>
-                  {isConfirmedAchPendingPayment(firstPendingOpenInvoice.pendingPayment)
-                    ? "Paid — processing"
-                    : "Payment processing"}
-                </AlertTitle>
-                <AlertDescription>
-                  {firstPendingOpenInvoice.number}:{" "}
-                  {pendingPaymentMessage(
-                    firstPendingOpenInvoice.pendingPayment,
-                  )}
-                </AlertDescription>
-              </Alert>
-            ) : null}
             {uniformProducts.length ? (
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3840,6 +3784,7 @@ function ParentPortalWorkspaceView({
                       isPending ||
                       paymentCheckoutMethod !== null ||
                       checkoutBlocked ||
+                      paymentRecovery.isSubmitting || Boolean(accountPaymentBlocker?.blocksInvoicePayments) ||
                       !selectedUniformProduct
                     }
                     onClick={() => buyUniform("card")}
@@ -3853,6 +3798,7 @@ function ParentPortalWorkspaceView({
                       isPending ||
                       paymentCheckoutMethod !== null ||
                       checkoutBlocked ||
+                      paymentRecovery.isSubmitting || Boolean(accountPaymentBlocker?.blocksInvoicePayments) ||
                       !selectedUniformProduct
                     }
                     onClick={() => buyUniform("link_bank")}
@@ -3886,7 +3832,8 @@ function ParentPortalWorkspaceView({
                   Review invoice dates and payment status. The balance above is
                   the current amount due from your family.
                 </p>
-            {invoices.map((invoice) => {
+            {invoices.map((sourceInvoice) => {
+              const invoice = { ...sourceInvoice, pendingPayment: paymentRecovery.pendingInvoice(sourceInvoice.id) ?? sourceInvoice.pendingPayment };
               const invoiceHasPendingPayment = Boolean(invoice.pendingPayment);
               return (
                 <div
@@ -3912,7 +3859,7 @@ function ParentPortalWorkspaceView({
                     {invoiceHasPendingPayment
                       ? isConfirmedAchPendingPayment(invoice.pendingPayment)
                         ? "Paid — processing"
-                        : "Processing"
+                        : parentPaymentStatusTitle(invoice.pendingPayment!)
                       : displayTokenLabel(invoice.status)}
                   </Badge>
                   {typeof invoice.familyDocumentAmountCents === "number" ? <InvoicePrintButton
@@ -3943,6 +3890,7 @@ function ParentPortalWorkspaceView({
                         disabled={
                           isPending ||
                           paymentCheckoutMethod !== null ||
+                          paymentRecovery.isSubmitting || invoicePaymentBlocked(invoice.id) ||
                           checkoutBlocked
                         }
                         onClick={() => payProductInvoice(invoice.id, "card")}
@@ -3955,6 +3903,7 @@ function ParentPortalWorkspaceView({
                         disabled={
                           isPending ||
                           paymentCheckoutMethod !== null ||
+                          paymentRecovery.isSubmitting || invoicePaymentBlocked(invoice.id) ||
                           checkoutBlocked
                         }
                         onClick={() =>

@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { stripeWebhookSecretFingerprint, verifyStripeSignature } from "../src/lib/integrations";
 import { stripePaymentIntentFailureDisposition } from "../src/lib/billing-guardrails";
+import { parentPaymentStatus } from "../src/lib/parent-payment-status";
 import { succeededFamilyBalancePaymentClaim } from "../src/lib/stripe-payment-application";
 import { STRIPE_WEBHOOK_SUPPORTED_EVENT_TYPES, stripeSetupIntentTerminalEventTypeForStatus, stripeWebhookObjectForRouting } from "../src/lib/stripe-webhook-event-types";
 import {
@@ -431,10 +432,16 @@ test("later Checkout failures preserve insufficient-funds retry state", async ()
 
 test("parent invoice status maps off-session and ACH processing payments", async () => {
   const source = await readFile("src/app/[slug]/page.tsx", "utf8");
-  assert.match(
-    source,
-    /!isActiveStripeCheckoutPayment\(payment\)[\s\S]*!isActiveStripeAutopayPayment\(payment\)[\s\S]*!isAchPaymentProcessing\(payment\)/,
-  );
+  assert.match(source, /byInvoiceId: pendingPaymentByInvoiceId \} = parentPaymentStatus\(activeParentPaymentRows\)/);
+  assert.match(source, /pendingPayment: pendingPaymentByInvoiceId\.get\(invoice\.id\) \?\? null/);
+  for (const status of ["checkout_pending", "checkout_created", "autopay_processing", "stored_method_processing", "paid_processing"]) {
+    const payment = { id: "fake-payment", amountCents: 5000, status: "DRAFT" as const, provider: "stripe",
+      customFields: { status, invoiceId: "fake-invoice", paymentMethodCategory: "ach", stripePaymentIntentStatus: "processing" } };
+    const summary = parentPaymentStatus([payment]);
+    assert.equal(summary.byInvoiceId.has("fake-invoice"), true, status);
+    assert.equal(summary.byInvoiceId.has("unrelated-invoice"), false);
+    assert.equal(parentPaymentStatus([{ ...payment, status: "PAID" }]).byInvoiceId.size, 0);
+  }
 });
 
 test("ACH return audits require an actual submitted return transition", async () => {

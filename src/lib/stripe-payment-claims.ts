@@ -15,44 +15,8 @@ import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import { retrySerialization } from "@/lib/retry-serialization";
 
-export type StripePaymentClaimScope = "family_balance" | "invoice_collection";
-
-type StripePaymentClaimCandidate = {
-  id: string;
-  status: PaymentStatus;
-  provider: string;
-  customFields: unknown;
-};
-
-export function stripePaymentClaimConflict({
-  scope,
-  invoiceId,
-  payment,
-}: {
-  scope: StripePaymentClaimScope;
-  invoiceId?: string | null;
-  payment: StripePaymentClaimCandidate;
-}) {
-  if (scope === "invoice_collection") {
-    if (isActiveStripeFamilyBalancePayment(payment)) return "active_family_balance" as const;
-    const fields = jsonRecord(payment.customFields);
-    if (
-      invoiceId &&
-      fields.invoiceId === invoiceId &&
-      (isActiveStripeCheckoutPayment(payment) || isActiveStripeAutopayPayment(payment) || isActiveStripeTerminalPayment(payment))
-    ) {
-      return "active_invoice_payment" as const;
-    }
-    return null;
-  }
-
-  if (isActiveStripeFamilyBalancePayment(payment)) return "active_family_balance" as const;
-  if (isActiveStripeAutopayPayment(payment)) return "active_invoice_collection" as const;
-  if (isActiveStripeTerminalPayment(payment)) return "active_invoice_collection" as const;
-  const fields = jsonRecord(payment.customFields);
-  if (fields.invoiceId && isActiveStripeCheckoutPayment(payment)) return "active_invoice_collection" as const;
-  return null;
-}
+import { stripePaymentClaimConflict, type StripePaymentClaimScope } from "@/lib/stripe-payment-claim-conflict";
+export { stripePaymentClaimConflict, type StripePaymentClaimScope } from "@/lib/stripe-payment-claim-conflict";
 
 export async function createStripePaymentClaim({
   billingAccountId,

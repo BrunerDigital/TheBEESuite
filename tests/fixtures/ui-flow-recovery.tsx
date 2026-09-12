@@ -18,6 +18,7 @@ import { parentDocumentState } from "../../src/lib/parent-document-state";
 import { prioritizeParentAttentionRecords } from "../../src/lib/parent-attention";
 import { type ComponentProps, useEffect, useState } from "react";
 import { CollapsibleCard } from "../../src/components/workspace-preferences";
+import { parentPaymentFixture } from "./parent-payment-status";
 
 const query = new URLSearchParams(location.search);
 const view = query.get("view");
@@ -114,6 +115,15 @@ function AutomationFixture() {
 }
 
 function ParentFixture() {
+  const [paymentScenario, setPaymentScenario] = useState(query.get("payment-case"));
+  const [paymentFamilyId, setPaymentFamilyId] = useState<string | null>(null);
+  useEffect(() => {
+    function refreshPayment(event: Event) { setPaymentScenario((event as CustomEvent<string>).detail); }
+    function changePaymentFamily(event: Event) { setPaymentFamilyId((event as CustomEvent<string>).detail); }
+    window.addEventListener("fake-parent-payment-refresh", refreshPayment);
+    window.addEventListener("fake-parent-payment-family", changePaymentFamily);
+    return () => { window.removeEventListener("fake-parent-payment-refresh", refreshPayment); window.removeEventListener("fake-parent-payment-family", changePaymentFamily); };
+  }, []);
   const [currentDocuments, setCurrentDocuments] = useState<ComponentProps<typeof ParentPortalWorkspace>["documents"]>(orderedDocuments);
   useEffect(() => {
     function refreshDocuments(event: Event) {
@@ -129,7 +139,7 @@ function ParentFixture() {
     invoices={attentionCase ? prioritizeParentAttentionRecords(priorInvoiceRows, hiddenOpenInvoice) : executiveParentPortalDemo.invoices}
     incidents={attentionCase ? prioritizeParentAttentionRecords<{ id: string; occurredAt: string | Date; type: string; description: string; actionTaken: string; parentAcknowledgedAt: string | Date | null; child: { fullName: string } }>(priorIncidentRows, hiddenIncident) : executiveParentPortalDemo.incidents}
     attentionSummary={attentionCase ? { openInvoiceCount: 7, unacknowledgedIncidentCount: 5 } : undefined}
-    family={query.has("multi-child") ? { ...executiveParentPortalDemo.family!, children: Array.from({ length: 3 }, (_, index) => ({ ...executiveParentPortalDemo.family!.children[0], id: `fake-sibling-${index}`, preferredName: null, fullName: `Fake Sibling ${index + 1} With A Long Family Name` })) } : executiveParentPortalDemo.family}
+    family={paymentFamilyId ? { ...executiveParentPortalDemo.family!, id: paymentFamilyId } : query.has("multi-child") ? { ...executiveParentPortalDemo.family!, children: Array.from({ length: 3 }, (_, index) => ({ ...executiveParentPortalDemo.family!.children[0], id: `fake-sibling-${index}`, preferredName: null, fullName: `Fake Sibling ${index + 1} With A Long Family Name` })) } : executiveParentPortalDemo.family}
     documents={currentPageDocuments}
     documentPagination={documentPage}
     documentSummary={{ total: currentDocuments.length, actionRequired: currentDocuments.filter((document) => parentDocumentState(document) === "action_required").length, firstRequired: currentDocuments.find((document) => parentDocumentState(document) === "action_required") ?? null }}
@@ -147,6 +157,7 @@ function ParentFixture() {
       { id: "fake-latest", title: "Fake latest announcement", body: "Fake latest classroom news.", sendAt: "2026-09-10T14:00:00.000Z" },
       { id: "fake-earlier", title: "Fake earlier announcement", body: "Fake earlier classroom news remains available.", sendAt: "2026-09-09T14:00:00.000Z" },
     ]}
+    {...(paymentScenario ? parentPaymentFixture(paymentScenario) : {})}
   />;
 }
 

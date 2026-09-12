@@ -55,6 +55,7 @@ import { STAFF_MESSAGING_HREF, staffMessagingHref } from "@/lib/messaging-naviga
 import { roleExperienceFor } from "@/lib/role-experience";
 import { accessibleModuleRouteSlug } from "@/lib/rbac";
 import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
+import { dashboardNotificationHref, type DashboardNotification } from "@/lib/dashboard-notification-navigation";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
 const documentNavigationPrimaryActions = new Set([
@@ -74,7 +75,6 @@ const kpiWidgetIds: readonly DashboardWidgetId[] = [
   "complianceQueue",
 ];
 type DashboardLens = "platform" | "brand" | "regional" | "director" | "billing" | "teacher" | "parent" | "pickup";
-type DashboardNotification = string | { text: string; widgetId?: DashboardWidgetId };
 
 type PayrollSummary = {
   id: string;
@@ -1340,10 +1340,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   }
 
   function actionQueueHref(item: DashboardNotification) {
-    const href = typeof item !== "string" && item.widgetId
-      ? widgetSummaries[item.widgetId]?.href ?? "/notifications"
-      : "/notifications";
-    return withQueryParam(href, "q", notificationText(item));
+    return dashboardNotificationHref(item, widgetSummaries);
   }
 
   const topKpiItems: WorkspaceBoardItem[] = [

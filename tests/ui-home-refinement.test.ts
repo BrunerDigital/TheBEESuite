@@ -25,7 +25,8 @@ test("actual teacher preview cannot initialize, replay, upload or mutate product
   for (const [start, end] of [["async function postJsonOrQueue", "function flushOfflineQueue"], ["function flushOfflineQueue", "function attendanceFor"], ["function saveTeacherProfile", "function submitAttendance"], ["function submitPhoto", "const activeDailyReportChildren"]]) {
     const block = teacher.slice(teacher.indexOf(start), teacher.indexOf(end));
     assert.ok(block.indexOf("if (previewMode)") >= 0, start);
-    assert.ok(block.indexOf("if (previewMode)") < block.indexOf("fetch("), start);
+    const requestIndex = block.search(/(?:fetch|requestWithNetworkRecovery)\(/);
+    assert.ok(requestIndex > block.indexOf("if (previewMode)"), start);
   }
   assert.match(teacher, /!appReviewMode && !previewMode \? \([\s\S]*<SetupChecklistPanel/);
   const preview = source("src/app/device-preview/page.tsx");
@@ -36,7 +37,7 @@ test("actual teacher preview cannot initialize, replay, upload or mutate product
 test("dashboard priorities reuse scoped destinations and empty states remain truthful", () => {
   const dashboard = source("src/components/dashboard.tsx");
   assert.ok((dashboard.match(/href=\{actionQueueHref\(item\)\}/g) ?? []).length === 2);
-  assert.match(dashboard, /function actionQueueHref[\s\S]*widgetSummaries\[item\.widgetId\]\?\.href[\s\S]*withQueryParam/);
+  assert.match(dashboard, /function actionQueueHref[\s\S]*return dashboardNotificationHref\(item, widgetSummaries\)/);
   assert.match(dashboard, /<h2[^>]*id="dashboard-needs-attention"/);
   assert.match(dashboard, /You’re up to date/);
   assert.match(dashboard, /View all \{actionQueue\.length\} items/);

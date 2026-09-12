@@ -138,6 +138,7 @@ import { OperationalCalendar, type CalendarEventRow } from "@/components/operati
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportExplorer } from "@/components/fte-report-explorer";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FteReportForm, type FteReportCenterOption, type FteReportPrefill, type FteReportRow } from "@/components/fte-report-form";
 import { FormBuilderPanel } from "@/components/form-builder-panel";
 import { GuardianChangeRequestReviewActions } from "@/components/guardian-change-request-review-actions";
@@ -158,7 +159,7 @@ import { RegistrationReviewActions } from "@/components/registration-review-acti
 import type { RegistrationReviewPreview } from "@/lib/registration-packet";
 import { ReputationWorkspace, type ReputationWorkspaceData } from "@/components/reputation-workspace";
 import { RequiredDocumentChecklistPanel } from "@/components/required-document-checklist-panel";
-import { CollapsibleCard } from "@/components/workspace-preferences";
+import { CollapsibleCard, CollapsiblePanel } from "@/components/workspace-preferences";
 import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
 import { SchoolReceiptDetailsCard } from "@/components/school-receipt-details-card";
 import { StaffManagementPanel } from "@/components/staff-management-panel";
@@ -1719,6 +1720,8 @@ export function HelpPage({ data }: { data: HelpPageData }) {
 }
 
 export type CenterDashboardData = {
+  canManageFte?: boolean;
+  canApproveFte?: boolean;
   centerId: string | null;
   centerName: string;
   place: string;
@@ -1802,12 +1805,12 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
           detail="Most recent report on file"
         />
       </div>
-      {data.fteCenters.length ? (
+      {data.canManageFte && data.fteCenters.length ? (
         <FteReportForm
           centers={data.fteCenters}
           prefills={data.ftePrefills}
           reports={data.fteReports}
-          mode="director"
+          mode={data.canApproveFte ? "executive" : "director"}
           title="Submit Weekly FTE"
           description="Directors submit the weekly FTE report here. The latest rows show below for quick corrections."
         />
@@ -4405,6 +4408,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
 }
 
 export type MultiLocationDashboardData = {
+  canManageFte?: boolean;
   brandName: string;
   centers: Array<{
     id: string;
@@ -4477,7 +4481,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
           detail={data.dueCenters.slice(0, 2).map((center) => center.name).join("; ") || "All visible schools submitted"}
         />
       </div>
-      <FteReportForm
+      {data.canManageFte ? <FteReportForm
         centers={data.fteCenters}
         prefills={data.ftePrefills}
         reports={data.fteReports}
@@ -4485,7 +4489,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
         mode="executive"
         title="Executive FTE Reporting"
         description="Submit, correct, or manually enter weekly FTE data for any visible school. Rows can also forward to the configured FTE Google Sheet backup."
-      />
+      /> : <Link href="/fte-reports" className={buttonVariants({ variant: "outline" })}>View FTE report history</Link>}
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle as="h2">Current Week Submission Tracker</CardTitle>
@@ -4610,6 +4614,9 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
 }
 
 export type FteReportsPageData = {
+  canManageFte?: boolean;
+  canApproveFte?: boolean;
+  selection?: { centerId: string | null; weekStart: string | null; error: string | null };
   mode: "director" | "executive";
   centers: Array<{
     id: string;
@@ -4663,6 +4670,9 @@ export type FteReportsPageData = {
 
 export function FteReportsPage({ data }: { data: FteReportsPageData }) {
   const isExecutive = data.mode === "executive";
+  const canManageFte = data.canManageFte === true;
+  const canApproveFte = canManageFte && data.canApproveFte === true;
+  const selectionKey = `${data.selection?.centerId ?? "all"}:${data.selection?.weekStart ?? "all"}`;
   const maxTrendFte = Math.max(...data.trendWeeks.map((week) => week.fteTotal), 1);
 
   return (
@@ -4676,18 +4686,18 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
             </Badge>
             <h1 className="text-3xl font-semibold tracking-tight">FTE Reports</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              {isExecutive
+              {!canManageFte ? "Read-only FTE reports for your authorized schools. You can filter report history and print it; corrections require an authorized operator." : isExecutive
                 ? "Executive review, correction, approval, CSV export, and missing-school tracking for weekly FTE submissions."
                 : "Submit this week's full-time-equivalent report for your assigned school and review recent submissions."}
             </p>
           </div>
-          <a
+          {canManageFte ? <a
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold text-primary transition hover:bg-muted"
             href={data.exportHref}
           >
             <Link2 data-icon="inline-start" />
             Export CSV
-          </a>
+          </a> : <Badge variant="outline">Read-only access</Badge>}
         </div>
         <div className="mt-5 rounded-xl border bg-background/45 p-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -4790,21 +4800,32 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
         </div>
       ) : null}
 
-      {isExecutive ? <FteReportExplorer centers={data.centers} reports={data.fteReports} /> : null}
-
-      <FteReportForm
+      {data.selection?.error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Report selection unavailable</AlertTitle>
+          <AlertDescription>{data.selection.error} <Link href="/fte-reports" className="underline">Choose a report</Link></AlertDescription>
+        </Alert>
+      ) : <>
+      {canManageFte ? <FteReportForm
+        key={selectionKey}
+        initialCenterId={data.selection?.centerId}
+        initialWeekStart={data.selection?.weekStart}
         centers={data.fteCenters}
         reports={data.fteReports}
         prefills={data.ftePrefills}
         allowCenterSelect={isExecutive}
-        mode={data.mode}
+        mode={canApproveFte ? "executive" : "director"}
         title={isExecutive ? "Review or Enter FTE" : "Submit Weekly FTE"}
         description={isExecutive
           ? "Executives can enter, correct, or approve visible school reports. Approved rows are locked for directors."
           : "Directors can submit or correct reports for their assigned school until an executive approves the row."}
-      />
+      /> : null}
+      <CollapsiblePanel id="fte-detailed-history" title="Browse report history" summary="Filter and print saved reports by school and reporting week" defaultCollapsed={canManageFte}>
+        <FteReportExplorer key={selectionKey} centers={data.centers} reports={data.fteReports} canEdit={canApproveFte} initialCenterId={data.selection?.centerId} initialWeekStart={data.selection?.weekStart} />
+      </CollapsiblePanel>
+      </>}
 
-      {isExecutive ? <FteBulkImportPanel /> : null}
+      {isExecutive && canApproveFte && !data.selection?.error ? <FteBulkImportPanel /> : null}
 
       <Card className="glass-panel">
         <CardHeader>

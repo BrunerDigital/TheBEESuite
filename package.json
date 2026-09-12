@@ -38,6 +38,7 @@
     "qa:home-focus": "tsx scripts/qa-home-focus.ts",
     "qa:mobile-features": "tsx scripts/qa-mobile-features.ts",
     "qa:mobile-density": "tsx scripts/qa-mobile-density.ts",
+    "qa:ui-flow-recovery": "tsx scripts/qa-ui-flow-recovery.ts",
     "qa:responsive": "tsx scripts/qa-responsive.ts",
     "qa:parent-login": "tsx scripts/qa-synthetic-parent-login.ts",
     "qa:role-accounts": "tsx -r tsconfig-paths/register scripts/ensure-synthetic-role-qa.ts",

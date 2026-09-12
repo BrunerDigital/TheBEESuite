@@ -105,7 +105,8 @@ import {
 } from "@/lib/enrollment-status";
 import { billingFamilyAccountCategory } from "@/lib/prospective-family-billing";
 import { SCHOOL_DASHBOARD_LIST_LIMIT } from "@/lib/dashboard-query-limits";
-import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
+import { getFteDueState, isExecutiveFteManager, startOfFteWeek } from "@/lib/fte-report-guardrails";
+import { resolveFteReportSelection } from "@/lib/fte-report-selection";
 import { invoiceBelongsToFteWeek } from "@/lib/fte-billing-period";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
@@ -654,9 +655,9 @@ function serializeFteReport(report: {
   };
 }
 
-async function getFteReports(centerIds: string[], take = 150) {
+async function getFteReports(centerIds: string[], take = 150, weekStart?: string) {
   return prisma.fteReport.findMany({
-    where: { centerId: centerIdFilter(centerIds) },
+    where: { centerId: centerIdFilter(centerIds), ...(weekStart ? { weekStart: new Date(`${weekStart}T00:00:00.000Z`) } : {}) },
     orderBy: [{ weekStart: "desc" }, { updatedAt: "desc" }],
     take,
     include: {
@@ -1446,6 +1447,7 @@ async function renderLivePage(
     return (
       <MultiLocationDashboardPage
         data={{
+          canManageFte: canManageOperations(user),
           brandName: user.branding.name,
           centers,
           stats: {
@@ -1474,11 +1476,17 @@ async function renderLivePage(
   }
 
   if (slug === "fte-reports") {
-    const [fteReports, fte, ftePrefills] = await Promise.all([
+    const selection = resolveFteReportSelection(visibleCenterIds, firstSearchParam(searchParams.centerId), firstSearchParam(searchParams.weekStart));
+    const [recentFteReports, requestedFteReports, fte, ftePrefills] = await Promise.all([
       getFteReports(visibleCenterIds, tenantWide ? executiveFteReportTake(visibleCenterIds.length) : 100),
+      !selection.error && selection.weekStart
+        ? getFteReports(selection.centerId ? [selection.centerId] : visibleCenterIds, Math.max(visibleCenterIds.length, 1), selection.weekStart)
+        : Promise.resolve([]),
       tenantWide ? getKidCityFteSnapshot(centers) : Promise.resolve(undefined),
       buildFtePrefills(centers),
     ]);
+    const fteReports = Array.from(new Map([...recentFteReports, ...requestedFteReports].map((report) => [report.id, report])).values())
+      .sort((left, right) => right.weekStart.getTime() - left.weekStart.getTime() || right.updatedAt.getTime() - left.updatedAt.getTime());
     const currentFteWeekStart = fteDueState.weekStart;
     const trend = buildFteTrendData(centers, fteReports, currentFteWeekStart);
     const currentWeekReports = Array.from(trend.currentByCenter.values());
@@ -1487,6 +1495,9 @@ async function renderLivePage(
     return (
       <FteReportsPage
         data={{
+          canManageFte: canManageOperations(user),
+          canApproveFte: isExecutiveFteManager(user.role),
+          selection,
           mode: tenantWide ? "executive" : "director",
           centers,
           stats: {
@@ -6230,6 +6241,8 @@ async function renderLivePage(
     return (
       <CenterDashboardPage
         data={{
+          canManageFte: canManageOperations(user),
+          canApproveFte: isExecutiveFteManager(user.role),
           centerId: center?.id ?? null,
           centerName: center?.crmLocationId ?? center?.name ?? "No center assigned",
           place: [center?.city, center?.state].filter(Boolean).join(", "),

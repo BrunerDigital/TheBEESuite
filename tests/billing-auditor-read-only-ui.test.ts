@@ -19,15 +19,15 @@ test("billing auditor keeps reporting access while the page hides every billing 
   assert.match(billingPageSource, /\{!data\.readOnly \? \([\s\S]*?Open Payment Terminal[\s\S]*?\) : null\}/);
   assert.match(billingPageSource, /Read-only billing view/);
   assert.match(billingPageSource, /Payment, invoice, enrollment, and billing-setup changes are hidden for auditor accounts\./);
-  assert.match(billingPageSource, /\{!data\.readOnly \? \(\s*<BillingWorkbench/);
+  assert.match(billingPageSource, /\{!data\.readOnly && writableTarget \? \(\s*<BillingWorkbench/);
   assert.match(billingPageSource, /\{!data\.readOnly \? <TableHead>Payment Actions<\/TableHead> : null\}/);
   assert.match(billingPageSource, /\{!data\.readOnly \? \([\s\S]*?<InvoiceStoredPaymentButton invoice=\{invoice\} \/>[\s\S]*?\) : null\}/);
-  assert.match(billingPageSource, /data\.readOnly \? \([\s\S]*?Read only[\s\S]*?Complete enrollment/);
+  assert.match(billingPageSource, /!data\.canManageEnrollment \? \([\s\S]*?data\.readOnly \? "Read only"[\s\S]*?Complete enrollment/);
   assert.match(billingPageSource, /data\.readOnly \? invoice\.number : \([\s\S]*?billingFamilyHref/);
   assert.match(billingPageSource, /data\.readOnly \? \([\s\S]*?<span className="font-medium">\{invoice\.billingAccount\.family\.name\}<\/span>/);
   assert.match(billingPageSource, /<AgencySubsidyWorkspace /);
   assert.match(billingPageSource, /<FamilyLedgerCard[\s\S]*?readOnly=\{data\.readOnly\}/);
-  assert.match(ledgerSource, /\{!readOnly \? \([\s\S]*?Family profile[\s\S]*?\) : null\}/);
+  assert.match(ledgerSource, /\{!readOnly && canOpenFamilyProfile \? \([\s\S]*?Family profile[\s\S]*?\) : null\}/);
 });
 
 test("billing mutation APIs retain an explicit auditor-denial gate", () => {

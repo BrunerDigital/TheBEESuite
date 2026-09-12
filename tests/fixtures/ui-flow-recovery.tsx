@@ -8,6 +8,11 @@ import { executiveParentPortalDemo } from "../../src/lib/executive-demo-data";
 import { SchoolTimeZoneProvider } from "../../src/components/school-time-zone-context";
 import { TeamPermissionsPage, type TeamPermissionsData } from "../../src/components/team-permissions-page";
 import { recordPagination, teamPermissionsHref } from "../../src/lib/record-pagination";
+import { BillingWorkbench, type BillingWorkbenchFamily, type BillingWorkbenchCenter } from "../../src/components/billing-workbench";
+import { DirectorPaymentTerminalWorkspace } from "../../src/components/director-payment-terminal-workspace";
+import { FamilyLedgerCard } from "../../src/components/family-ledger-card";
+import { billingSelectionKey } from "../../src/lib/billing-family-selection";
+import { useState } from "react";
 
 const query = new URLSearchParams(location.search);
 const view = query.get("view");
@@ -37,7 +42,26 @@ const team: TeamPermissionsData = {
   canManageDeviceSessions: query.has("manage"),
 };
 
+const billingCenters: BillingWorkbenchCenter[] = ["a", "b"].map((id) => ({ id, name: `Fake School ${id.toUpperCase()}`, crmLocationId: null, classrooms: [{ id: `room-${id}`, name: `Room ${id}`, ageGroup: "Preschool" }], hardwareTerminalConfigured: false }));
+const billingFamilies: BillingWorkbenchFamily[] = ["a", "b", "c"].map((id) => ({
+  id, centerId: id === "c" ? "a" : id, name: `Fake Family ${id.toUpperCase()}`, billingEmail: null, guardians: [],
+  children: [1, 2].map((index) => ({ id: `child-${id}${index === 1 ? "" : "-2"}`, fullName: `Fake Child ${id.toUpperCase()}${index === 1 ? "" : " Two"}`, ageGroup: "Preschool", classroomId: `room-${id}`, enrollmentStatus: "active", startDate: null, careScheduleType: "full_time" as const, scheduledDaysPerWeek: 5 as const })),
+  billingAccount: { id: `account-${id}`, balanceCents: 10000, autopayPlaceholder: false, openInvoices: [1, ...(query.has("selectors") ? [2] : [])].map((index) => ({ id: `invoice-${id}${index === 1 ? "" : "-2"}`, number: `FAKE-${id}${index === 1 ? "" : "-2"}`, status: "OPEN", dueDate: "2026-09-14", totalCents: 10000 })) },
+}));
+
+function BillingFixture() {
+  const [selection, setSelection] = useState({ familyId: query.get("family") ?? "a", centerId: query.get("center") ?? "" });
+  const canManageEnrollment = query.has("director");
+  const targetKey = billingSelectionKey(selection);
+  return <><nav aria-label="Fake target navigation" className="flex flex-wrap gap-2">{["a", "missing", "b"].map((id) => <button key={id} className="min-h-11 rounded border px-3" onClick={() => setSelection({ familyId: id, centerId: "" })}>Navigate to {id}</button>)}</nav>
+    {view === "billing" ? <BillingWorkbench key={targetKey} families={billingFamilies} centers={billingCenters} products={[]} tuitionPlans={query.has("selectors") ? [{ id: "fake-rate", centerId: "a", name: "Fake saved rate", ageGroup: "Preschool", cadence: "weekly", amountCents: 20000 }] : []} currentRole={canManageEnrollment ? "CENTER_DIRECTOR" : "BILLING_ADMIN"} canOpenFamilyProfile={canManageEnrollment} canManageEnrollment={canManageEnrollment} initialChildId={query.get("child") ?? undefined} initialFamilyId={selection.familyId} initialCenterId={selection.centerId} /> : null}
+    {view === "terminal" ? <DirectorPaymentTerminalWorkspace key={targetKey} families={billingFamilies} centers={billingCenters} initialFamilyId={selection.familyId} initialCenterId={selection.centerId} previewMode={!query.has("request-boundary")} /> : null}
+    {view === "ledger" ? <FamilyLedgerCard key={targetKey} families={[...billingFamilies, { id: "past", name: "Fake Historical Family", centerId: "a" }]} accounts={[...billingFamilies.map((family) => ({ familyId: family.id, familyName: family.name, billingEmail: null, centerId: family.centerId, balanceCents: 10000 })), { familyId: "past", familyName: "Fake Historical Family", billingEmail: null, centerId: "a", balanceCents: 0 }]} entries={billingFamilies.map((family) => ({ id: `entry-${family.id}`, type: "tuition", description: `Fake ledger for ${family.id}`, amountCents: 10000, balanceAfterCents: 10000, effectiveAt: "2026-09-10T12:00:00.000Z", billingAccount: { family } }))} schools={billingCenters.map((center) => ({ ...center, ein: null }))} initialFamilyId={selection.familyId} initialCenterId={selection.centerId} canOpenFamilyProfile={canManageEnrollment} readOnly={!canManageEnrollment} /> : null}
+  </>;
+}
+
 function Fixture() {
+  if (["billing", "terminal", "ledger"].includes(view ?? "")) return <BillingFixture />;
   if (view === "team") return <TeamPermissionsPage data={team} />;
   if (view === "fte") return <FteReportForm centers={query.get("single-school") ? centers.filter((center) => center.id === "b") : centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" allowCenterSelect={!query.get("director")} mode={query.get("director") ? "director" : "executive"} />;
   if (view === "fte-reader") return <FteReportExplorer centers={centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" canEdit={false} />;

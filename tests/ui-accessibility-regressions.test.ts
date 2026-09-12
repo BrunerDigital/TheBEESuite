@@ -203,7 +203,10 @@ test("billing mutations surface interrupted requests with a reconciliation-safe 
   assert.match(billing, /function runBillingTransition\(action: \(\) => Promise<void>\)/);
   assert.match(billing, /Review the current account and Stripe activity, if applicable, before trying the action again/);
   assert.equal((billing.match(/runBillingTransition\(async \(\) =>/g) ?? []).length, 10);
-  assert.match(billing, /beforeunload/);
+  assert.match(billing, /useUnsavedChangesGuard\(hasUncommittedBillingInput/);
+  const billingNavigationGuard = readFileSync("src/components/use-unsaved-changes-guard.ts", "utf8");
+  assert.match(billingNavigationGuard, /beforeunload/);
+  assert.match(billingNavigationGuard, /document\.addEventListener\("click", guardLink, true\)/);
   assert.match(billing, /This billing workspace has unsaved input/);
   assert.match(billing, /setLastSavedTuitionDraftSignature\(assignmentTuitionDraftSignature\)/);
   assert.match(billing, /setLastSavedChildContextDraftSignature\(assignmentChildContextDraftSignature\)/);

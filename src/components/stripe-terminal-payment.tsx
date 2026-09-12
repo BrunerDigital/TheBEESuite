@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { terminalPaymentReceiptStatus } from "@/lib/terminal-payment-receipt";
 
 type TerminalReader = {
   id: string;
@@ -81,30 +82,36 @@ export function StripeTerminalPayment({
   const [parentPresent, setParentPresent] = useState(false);
   const [paymentId, setPaymentId] = useState("");
   const [status, setStatus] = useState<TerminalPaymentStatus>("idle");
+  const [readersLoading, setReadersLoading] = useState(!previewMode);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const embedded = presentation === "embedded";
   const active = embedded || open;
+  const targetLocked = status === "loading" || status === "processing" || status === "review";
 
   useEffect(() => {
     onStatusChange?.(status);
   }, [onStatusChange, status]);
 
-  const loadReaders = useCallback(async () => {
+  const loadReaders = useCallback(async (signal?: AbortSignal) => {
     if (!centerId || amountCents <= 0) return;
     if (previewMode) return;
-    setStatus("loading");
+    // A read-only quote must not lock amount entry. Only mutation dispatch locks
+    // the containing target; a superseded quote is aborted on keyed remount.
+    setReadersLoading(true);
+    setAmounts(null);
     setError("");
     try {
       const response = await fetch(
         `/api/billing/terminal-payment?centerId=${encodeURIComponent(centerId)}&billingAccountId=${encodeURIComponent(billingAccountId)}&familyId=${encodeURIComponent(familyId)}&invoiceId=${encodeURIComponent(invoiceId || "")}&amountCents=${amountCents}`,
-        { cache: "no-store" },
+        { cache: "no-store", signal },
       );
       const json = await response.json().catch(() => null) as {
         error?: string;
         readers?: TerminalReader[];
         amounts?: TerminalAmounts | null;
       } | null;
+      if (signal?.aborted) return;
       if (!response.ok) {
         setStatus("failed");
         setError(json?.error || "Card readers could not be loaded.");
@@ -118,8 +125,11 @@ export function StripeTerminalPayment({
         : nextReaders.find((reader) => reader.status === "online")?.id || nextReaders[0]?.id || "");
       setStatus("idle");
     } catch {
+      if (signal?.aborted) return;
       setStatus("failed");
       setError("Card readers could not be loaded. Check the connection, then refresh the reader list.");
+    } finally {
+      if (!signal?.aborted) setReadersLoading(false);
     }
   }, [amountCents, billingAccountId, centerId, familyId, invoiceId, previewMode]);
 
@@ -135,15 +145,16 @@ export function StripeTerminalPayment({
         });
         const json = await response.json().catch(() => null) as { status?: string; error?: string } | null;
         if (stopped) return;
-        if (json?.status === "succeeded") {
+        const receiptStatus = terminalPaymentReceiptStatus(response.ok, json, paymentId);
+        if (receiptStatus === "succeeded") {
           setStatus("succeeded");
           setMessage("The in-person card payment was approved and recorded.");
           router.refresh();
           return;
         }
-        if ((!response.ok && json?.status !== "processing") || json?.status === "failed" || json?.status === "review") {
-          setStatus(json?.status === "review" ? "review" : "failed");
-          setError(json?.error || "The in-person card payment did not complete.");
+        if (receiptStatus === "failed" || receiptStatus === "review") {
+          setStatus(receiptStatus);
+          setError(receiptStatus === "review" ? "The payment status could not be confirmed. Do not retry this charge until the original attempt is reconciled in Billing and Stripe." : json?.error || "The in-person card payment did not complete.");
         }
       } catch {
         if (!stopped) {
@@ -161,11 +172,13 @@ export function StripeTerminalPayment({
 
   useEffect(() => {
     if (!embedded) return;
-    const timer = window.setTimeout(() => void loadReaders(), 0);
-    return () => window.clearTimeout(timer);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => void loadReaders(controller.signal), 300);
+    return () => { window.clearTimeout(timer); controller.abort(); };
   }, [embedded, loadReaders]);
 
   async function registerReader() {
+    if (readersLoading || status === "loading" || status === "processing" || status === "review") return;
     if (previewMode) {
       setMessage("Preview only. Reader settings are not saved.");
       return;
@@ -174,6 +187,9 @@ export function StripeTerminalPayment({
       setError("Enter the registration code shown on the reader.");
       return;
     }
+    // Lock the containing target before starting a request. Async completion
+    // still reports through the mounted effect, never from an obsolete target.
+    onStatusChange?.("loading");
     setStatus("loading");
     setError("");
     setMessage("");
@@ -205,6 +221,7 @@ export function StripeTerminalPayment({
   }
 
   async function startPayment() {
+    if (disabled || readersLoading || status === "loading" || status === "processing" || status === "review" || status === "succeeded") return;
     if (!readerId) {
       setError("Choose an online card reader.");
       return;
@@ -218,6 +235,9 @@ export function StripeTerminalPayment({
       setMessage("Preview approved. No payment was submitted or recorded.");
       return;
     }
+    // Lock the containing target before starting a request. Async completion
+    // still reports through the mounted effect, never from an obsolete target.
+    onStatusChange?.("loading");
     setStatus("loading");
     setError("");
     setMessage("");
@@ -247,8 +267,9 @@ export function StripeTerminalPayment({
         return;
       }
       if (!response.ok || !json?.paymentId) {
-        setStatus("failed");
-        setError(json?.error || "The reader payment could not be started.");
+        const unconfirmed = response.ok || response.status >= 500;
+        setStatus(unconfirmed ? "review" : "failed");
+        setError(unconfirmed ? "The payment outcome could not be confirmed. Review the original attempt in Billing and Stripe before another charge." : json?.error || "The reader payment could not be started.");
         return;
       }
       setPaymentId(json.paymentId);
@@ -266,12 +287,14 @@ export function StripeTerminalPayment({
     readerId &&
     selectedReader?.status === "online" &&
     !readerBusy &&
+    !readersLoading &&
     parentPresent &&
     amountCents > 0 &&
     amounts?.paymentRequired === true &&
     status !== "loading" &&
     status !== "processing" &&
-    status !== "review",
+    status !== "review" &&
+    status !== "succeeded",
   );
 
   function openTerminal() {
@@ -314,7 +337,7 @@ export function StripeTerminalPayment({
             {readers.length ? (
               <div className="space-y-2">
                 <Label htmlFor={readerSelectId}>School card reader</Label>
-                <Select value={readerId} onValueChange={(value) => value && setReaderId(value)}>
+                <Select disabled={readersLoading || targetLocked || status === "succeeded"} value={readerId} onValueChange={(value) => { if (!readersLoading && !targetLocked && status !== "succeeded" && value && readers.some((reader) => reader.id === value)) setReaderId(value); }}>
                   <SelectTrigger id={readerSelectId}><SelectValue placeholder="Choose a reader" /></SelectTrigger>
                   <SelectContent>
                     {readers.map((reader) => (
@@ -366,7 +389,7 @@ export function StripeTerminalPayment({
                   />
                 </div>
               </div>
-              <Button type="button" variant="outline" disabled={status === "loading" || status === "processing"} onClick={registerReader}>
+              <Button type="button" variant="outline" disabled={readersLoading || status === "loading" || status === "processing" || status === "review"} onClick={registerReader}>
                 {status === "loading" ? "Working…" : "Register reader"}
               </Button>
             </details>
@@ -378,7 +401,7 @@ export function StripeTerminalPayment({
                 type="checkbox"
                 className="mt-0.5 size-5 shrink-0"
                 checked={parentPresent}
-                disabled={status === "processing" || status === "succeeded"}
+                disabled={targetLocked || status === "succeeded"}
                 onChange={(event) => setParentPresent(event.target.checked)}
               />
               <span>
@@ -386,6 +409,7 @@ export function StripeTerminalPayment({
               </span>
             </label>
 
+            {readersLoading ? <p role="status" className="text-sm text-muted-foreground">Checking readers and payment total… You can keep editing the amount.</p> : null}
             {message ? (
               <Alert role="status" aria-live="polite">
                 <CreditCard className="size-4" />

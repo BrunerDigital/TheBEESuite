@@ -1,21 +1,19 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
-export const STUDENT_UNIFORM_SHIRT_BASE_NAME = "Student Uniform Shirt";
-export const STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE = "uniform_shirt";
-export const STUDENT_UNIFORM_SHIRT_BUNDLE_PRODUCT_TYPE = "uniform_shirt_bundle";
-export const STUDENT_UNIFORM_SHIRT_PRODUCT_TYPES = [
+import {
+  STUDENT_UNIFORM_SHIRT_BASE_NAME,
   STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE,
   STUDENT_UNIFORM_SHIRT_BUNDLE_PRODUCT_TYPE,
-] as const;
-export const STUDENT_UNIFORM_SHIRT_CATALOG = "student_uniform_shirt";
-export const STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS = 1800;
-export const STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS = 8000;
-export const STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT = 5;
-export const STUDENT_UNIFORM_SHIRT_DEFAULT_PRICE_CENTS = STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS;
-
-export const STUDENT_UNIFORM_SHIRT_COLORS = ["Black", "Yellow"] as const;
-export const STUDENT_UNIFORM_SHIRT_SIZES = ["2T", "3T", "4T", "5T", "6T", "Youth Small"] as const;
+  STUDENT_UNIFORM_SHIRT_PRODUCT_TYPES,
+  STUDENT_UNIFORM_SHIRT_CATALOG,
+  STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS,
+  STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS,
+  STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT,
+  STUDENT_UNIFORM_SHIRT_COLORS,
+  STUDENT_UNIFORM_SHIRT_SIZES,
+} from "@/lib/uniform-product-constants";
+export * from "@/lib/uniform-product-constants";
 
 export type StudentUniformShirtColor = typeof STUDENT_UNIFORM_SHIRT_COLORS[number];
 export type StudentUniformShirtSize = typeof STUDENT_UNIFORM_SHIRT_SIZES[number];

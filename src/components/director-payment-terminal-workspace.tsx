@@ -13,11 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { BILLING_TARGET_UNAVAILABLE, resolveBillingFamilySelection } from "@/lib/billing-family-selection";
 
 type Props = {
   families: BillingWorkbenchFamily[];
   centers: BillingWorkbenchCenter[];
   initialFamilyId?: string;
+  initialCenterId?: string;
   previewMode?: boolean;
 };
 
@@ -43,10 +45,12 @@ function WorkflowStep({ number, title, detail, complete, active }: { number: num
   );
 }
 
-export function DirectorPaymentTerminalWorkspace({ families, centers, initialFamilyId, previewMode = false }: Props) {
-  const initialFamily = families.find((family) => family.id === initialFamilyId) ?? families[0] ?? null;
+export function DirectorPaymentTerminalWorkspace({ families, centers, initialFamilyId, initialCenterId, previewMode = false }: Props) {
+  const initialSelection = resolveBillingFamilySelection({ families, allowedCenterIds: centers.map((center) => center.id), requestedFamilyId: initialFamilyId, requestedCenterId: initialCenterId });
+  const initialFamily = initialSelection.family;
+  const [selectionError, setSelectionError] = useState(initialSelection.error);
   const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
-  const selectedFamily = families.find((family) => family.id === familyId) ?? null;
+  const selectedFamily = families.find((family) => family.id === familyId && centers.some((center) => center.id === family.centerId)) ?? null;
   const openInvoices = selectedFamily?.billingAccount?.openInvoices ?? [];
   const [paymentTarget, setPaymentTarget] = useState(openInvoices[0] ? `invoice:${openInvoices[0].id}` : "account");
   const [customAmount, setCustomAmount] = useState("");
@@ -64,9 +68,12 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
   const amountReady = amountCents > 0;
   const terminalReady = familyReady && amountReady && center?.checkoutReadiness?.canAcceptParentPayments !== false;
   const paymentRecorded = terminalStatus === "succeeded";
+  const targetLocked = terminalStatus === "loading" || terminalStatus === "processing" || terminalStatus === "review";
   const selectedFamilyLabel = selectedFamily ? `${selectedFamily.name}${center ? ` · ${center.crmLocationId || center.name}` : ""}` : "Choose a current family";
 
   function changeFamily(nextFamilyId: string) {
+    if (targetLocked || !families.some((family) => family.id === nextFamilyId && centers.some((center) => center.id === family.centerId))) return;
+    setSelectionError(null);
     setTerminalStatus("idle");
     setFamilyId(nextFamilyId);
     const nextFamily = families.find((family) => family.id === nextFamilyId) ?? null;
@@ -76,11 +83,13 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
   }
 
   function changePaymentTarget(nextTarget: string) {
+    if (targetLocked || (nextTarget !== "account" && !openInvoices.some((invoice) => nextTarget === `invoice:${invoice.id}`))) return;
     setTerminalStatus("idle");
     setPaymentTarget(nextTarget);
   }
 
   function changeCustomAmount(nextAmount: string) {
+    if (targetLocked) return;
     setTerminalStatus("idle");
     setCustomAmount(nextAmount);
   }
@@ -111,6 +120,8 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
         </div>
       </section>
 
+      {selectionError || (familyId && !selectedFamily) ? <Alert variant="destructive"><AlertTitle>Family selection needed</AlertTitle><AlertDescription>{selectionError || BILLING_TARGET_UNAVAILABLE}</AlertDescription></Alert> : null}
+      {targetLocked ? <p role="status" className="text-sm text-muted-foreground">The payment target is locked while the reader request is pending or needs review. Resolve that request before selecting another family or amount.</p> : null}
       <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Payment workflow progress">
         <WorkflowStep number={1} title="Family" detail={selectedFamily ? selectedFamily.name : "Choose current family"} complete={familyReady} active={!familyReady} />
         <WorkflowStep number={2} title="Amount" detail={amountReady ? money(amountCents) : "Choose invoice or amount"} complete={amountReady} active={familyReady && !amountReady} />
@@ -123,12 +134,12 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
           <Card className="glass-panel">
             <CardHeader>
               <h2 className="font-heading text-base font-medium leading-snug">1. Choose Family & Balance</h2>
-              <CardDescription>Only currently enrolled families in your visible school scope appear here.</CardDescription>
+              <CardDescription>Only billing-eligible families in your authorized school scope appear here.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="terminal-family">Current family</Label>
-                <Select value={familyId} onValueChange={(value) => value && changeFamily(value)}>
+                <Select disabled={targetLocked} value={selectedFamily?.id ?? ""} onValueChange={(value) => value && changeFamily(value)}>
                   <SelectTrigger id="terminal-family" aria-label="Current family"><SelectValue placeholder="Choose a current family…" /></SelectTrigger>
                   <SelectContent>
                     {families.map((family) => {
@@ -142,7 +153,7 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
               {selectedFamily?.billingAccount ? (
                 <div className="space-y-2">
                   <Label htmlFor="terminal-payment-target">Apply payment to</Label>
-                  <Select value={paymentTarget} onValueChange={(value) => value && changePaymentTarget(value)}>
+                  <Select disabled={targetLocked} value={paymentTarget} onValueChange={(value) => value && changePaymentTarget(value)}>
                     <SelectTrigger id="terminal-payment-target" aria-label="Apply payment to"><SelectValue placeholder="Choose an invoice or account payment…" /></SelectTrigger>
                     <SelectContent>
                       {openInvoices.map((invoice) => (
@@ -163,6 +174,7 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
                     <span className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-sm text-muted-foreground" aria-hidden="true">$</span>
                     <Input
                       id="terminal-custom-amount"
+                      disabled={targetLocked || !selectedFamily}
                       name="terminalCustomAmount"
                       type="number"
                       inputMode="decimal"
@@ -181,7 +193,7 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
               {!families.length ? (
                 <Alert variant="destructive">
                   <AlertTitle>No Current Families Available</AlertTitle>
-                  <AlertDescription>No currently enrolled family billing accounts are visible in this school scope.</AlertDescription>
+                  <AlertDescription>No billing-eligible family accounts are visible in this school scope.</AlertDescription>
                 </Alert>
               ) : selectedFamily && !selectedFamily.billingAccount ? (
                 <Alert variant="destructive">

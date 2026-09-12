@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, ChevronDown, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, PlusCircle, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
+import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { formatZonedDateTime, unambiguousZonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,7 @@ import {
   STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS,
   STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS,
   STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT,
-} from "@/lib/uniform-products";
+} from "@/lib/uniform-product-constants";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 import { TUITION_CREDIT_CATEGORIES, type TuitionCreditCategory } from "@/lib/tuition-credits";
@@ -39,6 +40,7 @@ import {
 } from "@/lib/one-time-billing-adjustments";
 import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
 import { isCurrentlyEnrolledChildRecord, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
+import { BILLING_TARGET_UNAVAILABLE, resolveBillingChildSelection, resolveBillingFamilySelection } from "@/lib/billing-family-selection";
 import {
   childTuitionEligibilityError,
   singleInvoiceFamilyEligibilityError,
@@ -168,6 +170,8 @@ type Props = {
   products: BillingWorkbenchProduct[];
   tuitionPlans: BillingWorkbenchTuitionPlan[];
   currentRole: string;
+  canOpenFamilyProfile: boolean;
+  canManageEnrollment: boolean;
   initialFamilyId?: string;
   initialCenterId?: string;
   initialChildId?: string;
@@ -196,6 +200,12 @@ function currentLocalDateTime(timeZone: string) {
 
 function currentLocalDate(timeZone: string) {
   return currentLocalDateTime(timeZone).slice(0, 10);
+}
+
+function billingDraftDates(timeZone: string) {
+  const localNow = currentLocalDateTime(timeZone);
+  const date = localNow.slice(0, 10);
+  return { localNow, date, month: date.slice(0, 7), week: currentWeeklyPeriod(new Date(`${date}T12:00:00.000Z`)) };
 }
 
 function manualPaymentTimestamp(value: string, timeZone: string) {
@@ -352,22 +362,8 @@ function billingFamilySearchText(family: BillingWorkbenchFamily) {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
-function pickInitialBillingFamily(families: BillingWorkbenchFamily[], initialFamilyId?: string, searchQuery?: string) {
-  const byId = initialFamilyId ? families.find((family) => family.id === initialFamilyId) : null;
-  if (byId) return byId;
-  const query = searchQuery?.trim().toLowerCase();
-  if (query) {
-    const bySearch = families.find((family) => billingFamilySearchText(family).includes(query));
-    if (bySearch) return bySearch;
-  }
-  return families[0] ?? null;
-}
-
 function preferredTuitionChild(family: BillingWorkbenchFamily | null | undefined, preferredChildId?: string) {
-  return family?.children.find((child) => child.id === preferredChildId)
-    ?? family?.children.find(isCurrentlyEnrolledChildRecord)
-    ?? family?.children[0]
-    ?? null;
+  return resolveBillingChildSelection(family?.children ?? [], preferredChildId, isCurrentlyEnrolledChildRecord);
 }
 
 function familyProfileHref(family: BillingWorkbenchFamily | null | undefined) {
@@ -382,23 +378,29 @@ function formatShortDate(value: Date | string | null | undefined) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-export function BillingWorkbench({ families, centers, products, tuitionPlans, currentRole, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
+export function BillingWorkbench({ families, centers, products, tuitionPlans, currentRole, canOpenFamilyProfile, canManageEnrollment, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
   const router = useRouter();
-  const initialFamily = useMemo(
-    () => pickInitialBillingFamily(families, initialFamilyId, searchQuery),
-    [families, initialFamilyId, searchQuery],
+  const initialSelection = useMemo(
+    () => resolveBillingFamilySelection({
+      families, allowedCenterIds: centers.map((center) => center.id),
+      requestedFamilyId: initialFamilyId, requestedCenterId: initialCenterId,
+      matchesSearch: (family) => Boolean(searchQuery?.trim() && billingFamilySearchText(family).includes(searchQuery.trim().toLowerCase())),
+    }),
+    [families, centers, initialFamilyId, initialCenterId, searchQuery],
   );
-  const initialCenter = initialCenterId && centers.some((center) => center.id === initialCenterId)
-    ? initialCenterId
-    : initialFamily?.centerId ?? centers[0]?.id ?? "";
+  const initialFamily = initialSelection.family;
+  const initialCenter = initialSelection.centerId;
+  const [selectionError, setSelectionError] = useState(initialSelection.error);
   const initialLocationTuitionPlans = tuitionPlans.filter((plan) => plan.centerId === initialCenter);
   const initialAssignmentChild = preferredTuitionChild(initialFamily, initialChildId);
+  const [childSelectionError, setChildSelectionError] = useState(Boolean(initialChildId && !initialAssignmentChild));
   const initialAssignment = initialAssignmentChild?.tuitionAssignment ?? null;
   const initialAssignedPlan = initialLocationTuitionPlans.find((plan) => plan.id === initialAssignment?.tuitionPlanId) ?? null;
   const initialFamilyIsProspective = initialFamily?.accountCategory === "prospective";
   const [centerId, setCenterId] = useState(initialCenter);
   const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
   const timeZone = resolveSchoolTimeZone(centerId);
+  const [draftDates, setDraftDates] = useState(() => billingDraftDates(timeZone));
   const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
   const [chargeSource, setChargeSource] = useState<SingleInvoiceChargeSource>(initialFamilyIsProspective ? "custom" : "tuitionPlan");
   const [tuitionPlanId, setTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
@@ -408,25 +410,25 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [childId, setChildId] = useState("none");
   const [description, setDescription] = useState(initialFamilyIsProspective ? "Enrollment fee" : "");
   const [amountDollars, setAmountDollars] = useState("");
-  const [dueDate, setDueDate] = useState(todayDate());
-  const [billingPeriod, setBillingPeriod] = useState(currentBillingPeriod());
+  const [dueDate, setDueDate] = useState(draftDates.date);
+  const [billingPeriod, setBillingPeriod] = useState(draftDates.month);
   const [batchTarget, setBatchTarget] = useState("child");
   const [ageGroup, setAgeGroup] = useState("all");
   const [enrollmentStatus, setEnrollmentStatus] = useState("enrolled");
   const [adjustmentReason, setAdjustmentReason] = useState<OneTimeBillingAdjustmentReason>("vacation_credit");
   const [adjustmentAmountDollars, setAdjustmentAmountDollars] = useState("");
-  const [adjustmentEffectiveDate, setAdjustmentEffectiveDate] = useState(() => currentLocalDate(timeZone));
+  const [adjustmentEffectiveDate, setAdjustmentEffectiveDate] = useState(draftDates.date);
   const [adjustmentNote, setAdjustmentNote] = useState("");
   const [checkAmountDollars, setCheckAmountDollars] = useState("");
   const [checkNumber, setCheckNumber] = useState("");
-  const [checkPaidAt, setCheckPaidAt] = useState(() => currentLocalDateTime(timeZone));
+  const [checkPaidAt, setCheckPaidAt] = useState(draftDates.localNow);
   const [checkNotes, setCheckNotes] = useState("");
   const [cashAmountDollars, setCashAmountDollars] = useState("");
-  const [cashPaidAt, setCashPaidAt] = useState(() => currentLocalDateTime(timeZone));
+  const [cashPaidAt, setCashPaidAt] = useState(draftDates.localNow);
   const [cashReference, setCashReference] = useState("");
   const [cashNotes, setCashNotes] = useState("");
   const [payrollAmountDollars, setPayrollAmountDollars] = useState("");
-  const [payrollPaidAt, setPayrollPaidAt] = useState(() => currentLocalDateTime(timeZone));
+  const [payrollPaidAt, setPayrollPaidAt] = useState(draftDates.localNow);
   const [payrollReference, setPayrollReference] = useState("");
   const [payrollNotes, setPayrollNotes] = useState("");
   const [refundPaymentIds, setRefundPaymentIds] = useState<string[]>([]);
@@ -482,7 +484,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }, []);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [weeklyRecoveryPeriod, setWeeklyRecoveryPeriod] = useState(currentWeeklyPeriod());
+  const [weeklyRecoveryPeriod, setWeeklyRecoveryPeriod] = useState(draftDates.week);
   const [weeklyRecoveryPreview, setWeeklyRecoveryPreview] = useState<{ centerId: string; dueChildren: number; wouldCreate: number; assignedChildren: number; billingPeriod: string } | null>(null);
   const [manualPaymentEmailCopies, setManualPaymentEmailCopies] = useState<Array<{ clipboardText: string }>>([]);
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
@@ -501,7 +503,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   const filteredFamilies = useMemo(
-    () => families.filter((family) => !centerId || family.centerId === centerId),
+    () => families.filter((family) => Boolean(centerId) && family.centerId === centerId),
     [centerId, families],
   );
   const locationTuitionPlans = useMemo(
@@ -510,11 +512,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   );
   const effectiveFamilyId = familyId && filteredFamilies.some((family) => family.id === familyId)
     ? familyId
-    : filteredFamilies[0]?.id ?? "";
+    : "";
   const selectedFamily = filteredFamilies.find((family) => family.id === effectiveFamilyId) ?? null;
   const selectedFamilyIsPast = selectedFamily?.accountCategory === "past";
   const selectedFamilyIsProspective = selectedFamily?.accountCategory === "prospective";
-  const selectedCenter = centers.find((center) => center.id === centerId) ?? centers[0] ?? null;
+  const selectedCenter = centers.find((center) => center.id === centerId) ?? null;
   const selectedCenterClassrooms = selectedCenter?.classrooms ?? [];
   const selectedCheckoutReadiness = selectedCenter?.checkoutReadiness ?? null;
   const selectedPlan = locationTuitionPlans.find((plan) => plan.id === tuitionPlanId) ?? null;
@@ -535,7 +537,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       ? "enrolled"
       : enrollmentStatus;
   const selectedChildren = selectedFamily?.children ?? [];
-  const effectiveAssignmentChildId = preferredTuitionChild(selectedFamily, assignmentChildId)?.id ?? "";
+  const effectiveAssignmentChildId = selectedChildren.some((child) => child.id === assignmentChildId) ? assignmentChildId : "";
   const selectedAssignmentChild = selectedChildren.find((child) => child.id === effectiveAssignmentChildId) ?? null;
   const selectedAssignmentChildIsCurrent = Boolean(selectedAssignmentChild && isCurrentlyEnrolledChildRecord(selectedAssignmentChild));
   const selectedAssignment = selectedAssignmentChild?.tuitionAssignment ?? null;
@@ -602,14 +604,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const selectedPaymentRequestEmails = (
     paymentRequestEmailSelections[effectiveFamilyId] ?? selectedPaymentRequestAvailableEmails
   ).filter((email) => selectedPaymentRequestAvailableEmails.includes(email));
-  const ageGroups = useMemo(
-    () => mergeAgeGroupOptions(
-      selectedCenter?.dashboardOptions?.ageGroups,
-      locationTuitionPlans.map((plan) => plan.ageGroup),
-      families.flatMap((family) => family.children.map((child) => child.ageGroup)),
-      planAgeGroup,
-    ),
-    [families, locationTuitionPlans, planAgeGroup, selectedCenter],
+  const ageGroups = mergeAgeGroupOptions(
+    selectedCenter?.dashboardOptions?.ageGroups,
+    locationTuitionPlans.map((plan) => plan.ageGroup),
+    families.flatMap((family) => family.children.map((child) => child.ageGroup)),
+    planAgeGroup,
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
   const selectedAdjustmentOption = oneTimeBillingAdjustmentOption(adjustmentReason) ?? ONE_TIME_BILLING_ADJUSTMENT_OPTIONS[0];
@@ -720,6 +719,18 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   );
   const hasUncommittedBillingInput = Boolean(
     amountDollars.trim()
+    || description !== (selectedFamilyIsProspective ? "Enrollment fee" : "")
+    || paymentDescription !== "Tuition payment"
+    || paymentTarget !== "balance"
+    || childId !== "none"
+    || productQuantity !== "1"
+    || productId !== (uniformShirtProduct?.id ?? products[0]?.id ?? "")
+    || chargeSource !== (selectedFamilyIsProspective ? "custom" : "tuitionPlan")
+    || batchTarget !== "child" || ageGroup !== "all" || enrollmentStatus !== "enrolled"
+    || adjustmentReason !== "vacation_credit"
+    || dueDate !== draftDates.date || adjustmentEffectiveDate !== draftDates.date
+    || billingPeriod !== draftDates.month || weeklyRecoveryPeriod !== draftDates.week
+    || checkPaidAt !== draftDates.localNow || cashPaidAt !== draftDates.localNow || payrollPaidAt !== draftDates.localNow
     || adjustmentAmountDollars.trim()
     || adjustmentNote.trim()
     || checkAmountDollars.trim()
@@ -741,15 +752,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     || planDraftIsDirty
   );
 
-  useEffect(() => {
-    if (!hasUncommittedBillingInput) return;
-    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warnBeforeUnload);
-    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
-  }, [hasUncommittedBillingInput]);
+  useUnsavedChangesGuard(hasUncommittedBillingInput, "This billing workspace has unsaved input. Discard it and leave this page?");
 
   function billingContextDescription(childName?: string) {
     return [
@@ -766,7 +769,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function confirmDiscardBillingInput() {
     return !hasUncommittedBillingInput
-      || window.confirm("This billing workspace has unsaved input. Discard it and change the selected school or family?");
+      || window.confirm("This billing workspace has unsaved input. Discard it and change the selected school, family, or child?");
   }
 
   function updateInvoiceEditDraft(patch: Partial<Omit<InvoiceEditDraft, "invoiceId">>) {
@@ -1033,56 +1036,59 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     };
   }
 
+  function resetFamilyBoundBillingDrafts(nextFamily: BillingWorkbenchFamily | null, nextCenterId: string) {
+    const dates = billingDraftDates(resolveSchoolTimeZone(nextCenterId));
+    setDraftDates(dates);
+    setChargeSource(nextFamily?.accountCategory === "prospective" ? "custom" : "tuitionPlan");
+    setProductId(uniformShirtProduct?.id ?? products[0]?.id ?? "");
+    setProductQuantity("1");
+    setChildId("none");
+    setDescription(nextFamily?.accountCategory === "prospective" ? "Enrollment fee" : "");
+    setAmountDollars("");
+    setDueDate(dates.date);
+    setBillingPeriod(dates.month);
+    setBatchTarget("child");
+    setAgeGroup("all");
+    setEnrollmentStatus("enrolled");
+    setAdjustmentReason("vacation_credit");
+    setAdjustmentAmountDollars("");
+    setAdjustmentEffectiveDate(dates.date);
+    setAdjustmentNote("");
+    setCheckAmountDollars(""); setCheckNumber(""); setCheckNotes(""); setCheckPaidAt(dates.localNow);
+    setCashAmountDollars(""); setCashReference(""); setCashNotes(""); setCashPaidAt(dates.localNow);
+    setPayrollAmountDollars(""); setPayrollReference(""); setPayrollNotes(""); setPayrollPaidAt(dates.localNow);
+    setRefundPaymentIds([]); setRefundAmountDollars(""); setRefundReason("");
+    setPaymentTarget("balance"); setPaymentAmountDollars(""); setPaymentDescription("Tuition payment");
+    setInvoiceEditorId(""); setInvoiceEditDraft(null); setInvoiceVoidReason("");
+    setWeeklyRecoveryPeriod(dates.week); setWeeklyRecoveryPreview(null);
+    setManualPaymentEmailCopies([]); setPaymentReviewMethod(null);
+    setStatusMessage(""); setErrorMessage("");
+    setBillingAction(nextFamily?.accountCategory === "prospective" ? "single" : "recurring");
+    setMoreBillingActionsExpanded(false);
+  }
+
   function handleCenterChange(value: string | null) {
-    if (!value || value === centerId || !confirmDiscardBillingInput()) return;
+    if (isPending || !value || !centers.some((center) => center.id === value) || value === centerId || !confirmDiscardBillingInput()) return;
     const nextPlans = tuitionPlans.filter((plan) => plan.centerId === value);
     const nextFamily = families.find((family) => family.centerId === value) ?? null;
-    const localNow = currentLocalDateTime(resolveSchoolTimeZone(value));
+    resetFamilyBoundBillingDrafts(nextFamily, value);
     setCenterId(value);
-    setCheckPaidAt(localNow);
-    setCashPaidAt(localNow);
-    setPayrollPaidAt(localNow);
-    setWeeklyRecoveryPreview(null);
+    setSelectionError(null);
     setFamilyId(nextFamily?.id ?? "");
-    setChildId("none");
-    setRefundPaymentIds([]);
-    setRefundAmountDollars("");
-    setInvoiceEditorId("");
-    setInvoiceEditDraft(null);
-    setAdjustmentAmountDollars("");
-    setAdjustmentEffectiveDate(localNow.slice(0, 10));
-    setAdjustmentNote("");
     applyFamilyTuitionContext(nextFamily, nextPlans);
-    applyProspectiveBillingContext(nextFamily);
   }
 
   function handleFamilyChange(value: string | null) {
-    if (!value || value === effectiveFamilyId || !confirmDiscardBillingInput()) return;
+    if (isPending || !value || value === effectiveFamilyId || !filteredFamilies.some((family) => family.id === value) || !confirmDiscardBillingInput()) return;
     const nextFamily = filteredFamilies.find((family) => family.id === value) ?? null;
+    resetFamilyBoundBillingDrafts(nextFamily, centerId);
     setFamilyId(value);
-    setChildId("none");
-    setRefundPaymentIds([]);
-    setRefundAmountDollars("");
-    setInvoiceEditorId("");
-    setInvoiceEditDraft(null);
-    setAdjustmentAmountDollars("");
-    setAdjustmentEffectiveDate(currentLocalDate(timeZone));
-    setAdjustmentNote("");
+    setSelectionError(null);
     applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
-    applyProspectiveBillingContext(nextFamily);
-  }
-
-  function applyProspectiveBillingContext(family: BillingWorkbenchFamily | null) {
-    if (family?.accountCategory !== "prospective") return;
-    setBillingAction("single");
-    setChargeSource("custom");
-    setDescription("Enrollment fee");
-    setAmountDollars("");
-    setChildId("none");
   }
 
   function handleTuitionPlanChange(value: string | null) {
-    if (!value) return;
+    if (isPending || !value) return;
     setTuitionPlanId(value);
     const nextPlan = locationTuitionPlans.find((plan) => plan.id === value);
     if (nextPlan) setAgeGroup(nextPlan.ageGroup || "all");
@@ -1098,6 +1104,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const assignedPlan = availablePlans.find((plan) => plan.id === assignment?.tuitionPlanId) ?? null;
 
     setLastSavedTuitionDraftSignature(null);
+    setChildSelectionError(false);
     setLastSavedChildContextDraftSignature(null);
     setAssignmentChildId(child?.id ?? "");
     setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
@@ -1535,12 +1542,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function handleAssignmentChildChange(value: string | null) {
-    if (!value) return;
+    if (isPending || !value || value === effectiveAssignmentChildId || !selectedChildren.some((child) => child.id === value)) return;
+    if ((assignmentDraftIsDirty || planDraftIsDirty) && !window.confirm("Discard unsaved tuition and child-setup changes before selecting another child? Other family billing drafts stay as entered.")) return;
     applyFamilyTuitionContext(selectedFamily, locationTuitionPlans, value);
   }
 
   function handleAssignmentPlanChange(value: string | null) {
-    if (!value) return;
+    if (isPending || !value) return;
     const plan = locationTuitionPlans.find((item) => item.id === value);
     setAssignmentTuitionPlanId(value);
     setTuitionPlanId(value);
@@ -1559,6 +1567,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function saveAssignmentChildContext() {
+    if (!canManageEnrollment) return setErrorMessage("Ask a director to update the child’s program, classroom, or care schedule.");
     if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving child setup.");
     if (!assignmentChildProgram || !assignmentChildClassroomId) {
       return setErrorMessage("Choose a program and classroom before saving child setup.");
@@ -1643,7 +1652,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function handlePlanEditorChange(value: string | null) {
-    if (!value) return;
+    if (isPending || !value || value === planEditorId) return;
+    const plan = value === "new" ? null : locationTuitionPlans.find((item) => item.id === value);
+    if (value !== "new" && !plan) return;
+    if (planDraftIsDirty && !window.confirm("Discard unsaved tuition-rate changes before selecting another rate? Other family billing drafts stay as entered.")) return;
     setPlanEditorId(value);
     if (value === "new") {
       setPlanName("");
@@ -1653,7 +1665,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       setPlanFundingType("family");
       return;
     }
-    const plan = locationTuitionPlans.find((item) => item.id === value);
     if (!plan) return;
     setPlanName(plan.name);
     setPlanAgeGroup(plan.ageGroup || ageGroups[0] || defaultAgeGroupOptions[0]);
@@ -1829,6 +1840,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        <fieldset disabled={isPending} aria-busy={isPending} className="min-w-0 space-y-4">
+        {childSelectionError || (assignmentChildId && !selectedAssignmentChild) ? <Alert variant="destructive"><AlertTitle>Child selection needed</AlertTitle><AlertDescription>The requested child is not available for this family. No other child has been selected. Choose the intended child before saving tuition or enrollment details.</AlertDescription></Alert> : null}
+        {selectionError || (familyId && !selectedFamily) ? (
+          <Alert variant="destructive">
+            <AlertTitle>Family selection needed</AlertTitle>
+            <AlertDescription>{selectionError || BILLING_TARGET_UNAVAILABLE}</AlertDescription>
+          </Alert>
+        ) : null}
         {statusMessage ? (
           <Alert role="status" aria-live="polite">
             <CheckCircle2 className="size-4" />
@@ -1871,7 +1890,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               ? <ContextBadge label="Account" value="Pending / waitlisted" variant="outline" />
               : <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
           actions={
-            selectedFamily ? (
+            selectedFamily && canOpenFamilyProfile ? (
               <Link href={selectedFamilyProfileHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
                 <ArrowUpRight data-icon="inline-start" />
                 Open family
@@ -1924,7 +1943,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div className="space-y-1">
             <Label htmlFor="billing-workbench-school">School</Label>
-            <Select value={centerId} onValueChange={handleCenterChange}>
+            <Select disabled={isPending} value={centerId} onValueChange={handleCenterChange}>
               <SelectTrigger id="billing-workbench-school"><SelectValue placeholder="Choose school" /></SelectTrigger>
               <SelectContent>
                 {centers.map((center) => (
@@ -1935,7 +1954,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </div>
           <div className="space-y-1">
             <Label htmlFor="billing-workbench-family">Family</Label>
-            <Select value={effectiveFamilyId} onValueChange={handleFamilyChange}>
+            <Select disabled={isPending} value={effectiveFamilyId} onValueChange={handleFamilyChange}>
               <SelectTrigger id="billing-workbench-family"><SelectValue placeholder="Choose family" /></SelectTrigger>
               <SelectContent>
                 {filteredFamilies.map((family) => (
@@ -2377,7 +2396,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     <Select
                       value={effectiveInvoiceEditorId}
                       onValueChange={(value) => {
-                        if (!value) return;
+                        if (isPending || !value || value === effectiveInvoiceEditorId || !openInvoices.some((invoice) => invoice.id === value)) return;
+                        if ((invoiceDraftIsDirty || invoiceVoidReason.trim()) && !window.confirm("Discard unsaved invoice changes before selecting another invoice? Other family billing drafts stay as entered.")) return;
                         setInvoiceEditorId(value);
                         setInvoiceEditDraft(null);
                         setInvoiceVoidReason("");
@@ -2580,6 +2600,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     type="button"
                     aria-pressed={selected}
                     aria-label={`Select ${child.fullName} for recurring tuition setup`}
+                    disabled={isPending}
                     onClick={() => handleAssignmentChildChange(child.id)}
                     className={`rounded-lg border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10" : "bg-background/60 hover:border-primary/50"}`}
                   >
@@ -2599,7 +2620,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 );
               })}
             </div>
-            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+            {canManageEnrollment ? <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
               <div>
                 <div className="text-sm font-medium">Selected child setup</div>
                 <p className="text-xs text-muted-foreground">
@@ -2650,11 +2671,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <Save data-icon="inline-start" />
                 Save child setup
               </Button>
-            </div>
+            </div> : <p className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">Program, classroom, and care schedule are shown above. Ask a director to change enrollment details; authorized tuition changes remain available below.</p>}
             <div className="grid gap-3 md:grid-cols-5">
               <div className="space-y-1">
                 <Label htmlFor="billing-assignment-child">Child</Label>
-                <Select value={effectiveAssignmentChildId} onValueChange={handleAssignmentChildChange}>
+                <Select disabled={isPending} value={effectiveAssignmentChildId} onValueChange={handleAssignmentChildChange}>
                   <SelectTrigger id="billing-assignment-child"><SelectValue placeholder="Choose child" /></SelectTrigger>
                   <SelectContent>
                     {selectedChildren.map((child) => (
@@ -3100,6 +3121,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </Button>
           </TabsContent>
         </Tabs>
+        </fieldset>
       </CardContent>
     </Card>
     </>

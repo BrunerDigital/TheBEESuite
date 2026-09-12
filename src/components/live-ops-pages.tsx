@@ -68,6 +68,7 @@ import {
   type BillingReceiptSchool,
 } from "@/components/billing-print-actions";
 import { FamilyLedgerCard } from "@/components/family-ledger-card";
+import { BILLING_TARGET_UNAVAILABLE, billingSelectionKey, billingWorkspaceTarget, exactBillingFamilyHref } from "@/lib/billing-family-selection";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
 import { CampaignWorkspace, type CampaignWorkspaceData } from "@/components/campaign-workspace";
 import {
@@ -4994,6 +4995,8 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
 
 export type BillingInvoicesPageData = {
   readOnly: boolean;
+  canOpenFamilyProfile: boolean;
+  canManageEnrollment: boolean;
   canProcessAutopay: boolean;
   invoiceStatus: DirectorInvoiceStatus;
   initialSelection?: {
@@ -5121,9 +5124,19 @@ export type BillingInvoicesPageData = {
 };
 
 export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData }) {
-  if (data.initialSelection?.workspace === "terminal" && !data.readOnly) {
+  const targetState = billingWorkspaceTarget({
+    families: data.workbench.families,
+    historicalFamilies: data.ledgerAccounts.map((account) => ({ id: account.familyId, centerId: account.centerId })),
+    allowedCenterIds: data.workbench.centers.map((center) => center.id),
+    requestedFamilyId: data.initialSelection?.familyId,
+    requestedCenterId: data.initialSelection?.centerId,
+  });
+  const writableTarget = targetState === "default" || targetState === "eligible";
+  if (data.initialSelection?.workspace === "terminal" && !data.readOnly && writableTarget) {
     return (
       <DirectorPaymentTerminalWorkspace
+        key={billingSelectionKey(data.initialSelection)}
+        initialCenterId={data.initialSelection?.centerId}
         families={data.workbench.families}
         centers={data.workbench.centers}
         initialFamilyId={data.initialSelection.familyId}
@@ -5132,6 +5145,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
   }
 
   const ledgerFamilyOptions = Array.from(new Map([
+    ...data.ledgerAccounts.map((account) => [account.familyId, { id: account.familyId, name: account.familyName, centerId: account.centerId }] as const),
     ...data.workbench.families.map((family) => [
       family.id,
       { id: family.id, name: family.name, centerId: family.centerId },
@@ -5147,13 +5161,11 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
   ]).values()).toSorted((left, right) => left.name.localeCompare(right.name));
 
   function billingFamilyHref(family: { id: string; centerId: string | null }) {
-    const params = new URLSearchParams({ familyId: family.id });
-    if (family.centerId) params.set("centerId", family.centerId);
-    return `/billing-invoices?${params.toString()}#billing-workbench`;
+    return exactBillingFamilyHref(family, { invoiceStatus: data.invoiceStatus, history: !data.workbench.families.some((candidate) => candidate.id === family.id && candidate.centerId === family.centerId) });
   }
 
-  function familyProfileHref(family: { id: string }) {
-    return `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`;
+  function familyProfileHref(family: { id: string; centerId: string | null }) {
+    return data.canOpenFamilyProfile ? `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor` : billingFamilyHref(family);
   }
 
   function enrollmentSetupHref(row: BillingInvoicesPageData["needsEnrollmentSetup"][number], childId: string) {
@@ -5323,8 +5335,8 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                       <TableCell>{child.fullName}</TableCell>
                       <TableCell><Badge variant="outline">Needs classroom</Badge></TableCell>
                       <TableCell>
-                        {data.readOnly ? (
-                          <span className="text-xs text-muted-foreground">Read only</span>
+                        {!data.canManageEnrollment ? (
+                          <span className="text-xs text-muted-foreground">{data.readOnly ? "Read only" : "Ask a director to complete enrollment"}</span>
                         ) : (
                           <Link href={enrollmentSetupHref(family, child.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                             <ArrowRight data-icon="inline-start" />
@@ -5342,14 +5354,19 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           )}
         </CardContent>
       </Card>
-      {!data.readOnly ? (
+      {!writableTarget ? (
+        <Card id="billing-workbench" className="glass-panel scroll-mt-24"><CardHeader><CardTitle as="h2">{targetState === "history" ? "Historical family account" : "Family selection needed"}</CardTitle><CardDescription>{targetState === "history" ? "This settled historical account is available in the family ledger below. No payment or account-editing tools have been opened." : BILLING_TARGET_UNAVAILABLE}</CardDescription></CardHeader><CardContent><Link href="/billing-invoices" className={buttonVariants({ variant: "outline" })}>Choose another billing family</Link>{targetState === "history" ? <Link href="#family-ledger" className={buttonVariants({ variant: "ghost" })}>Review this family’s ledger</Link> : null}</CardContent></Card>
+      ) : null}
+      {!data.readOnly && writableTarget ? (
         <BillingWorkbench
-          key={`${data.initialSelection?.familyId ?? ""}-${data.initialSelection?.centerId ?? ""}-${data.initialSelection?.childId ?? ""}-${data.initialSelection?.searchQuery ?? ""}`}
+          key={billingSelectionKey(data.initialSelection)}
           families={data.workbench.families}
           centers={data.workbench.centers}
           products={data.workbench.products}
           tuitionPlans={data.workbench.tuitionPlans}
           currentRole={data.workbench.currentRole}
+          canOpenFamilyProfile={data.canOpenFamilyProfile}
+          canManageEnrollment={data.canManageEnrollment}
           initialFamilyId={data.initialSelection?.familyId}
           initialCenterId={data.initialSelection?.centerId}
           initialChildId={data.initialSelection?.childId}
@@ -5383,7 +5400,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                   <TableCell className="font-medium">
                     {data.readOnly ? invoice.number : (
                       <Link
-                        href={billingFamilyHref(invoice.billingAccount.family.currentFamilyMatch ?? invoice.billingAccount.family)}
+                        href={billingFamilyHref(invoice.billingAccount.family)}
                         className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {invoice.number}
@@ -5440,7 +5457,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                       <div className="flex flex-wrap gap-2">
                         <Link href={familyProfileHref(invoice.billingAccount.family)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                           <ArrowRight data-icon="inline-start" />
-                          Family
+                          {data.canOpenFamilyProfile ? "Family" : "Billing account"}
                         </Link>
                         <InvoiceStoredPaymentButton invoice={invoice} />
                       </div>
@@ -5457,6 +5474,9 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         </CardContent>
       </Card>
       <FamilyLedgerCard
+        key={billingSelectionKey(data.initialSelection)}
+        initialCenterId={data.initialSelection?.centerId}
+        canOpenFamilyProfile={data.canOpenFamilyProfile}
         entries={data.ledgerEntries}
         accounts={data.ledgerAccounts}
         families={ledgerFamilyOptions}
@@ -5469,6 +5489,8 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
 }
 
 export type PaymentsPageData = {
+  readOnly: boolean;
+  canOpenFamilyProfile: boolean;
   receiptSchools: BillingReceiptSchool[];
   payments: Array<{
     id: string;
@@ -5552,7 +5574,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
         <StatCard label="Retry waiting" value={data.stats.dunningWaiting} detail="follow-up scheduled" />
         <StatCard label="Maxed retries" value={data.stats.dunningMaxed} detail="manual billing review" />
       </div>
-      <PaymentAutopayActions />
+      {!data.readOnly ? <PaymentAutopayActions /> : null}
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle as="h2">Payment attempts</CardTitle>
@@ -5587,7 +5609,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                 return <TableRow key={payment.id} className="group">
                   <TableCell>
                     <Link
-                      href={familyRecordHref(payment.billingAccount.family, null, payment.billingAccount.family.name)}
+                      href={data.canOpenFamilyProfile ? familyRecordHref(payment.billingAccount.family, null, payment.billingAccount.family.name) : payment.billingAccount.family.id ? exactBillingFamilyHref({ id: payment.billingAccount.family.id, centerId: payment.billingAccount.family.centerId }, { history: true }) : "/billing-invoices"}
                       className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {payment.billingAccount.family.name}

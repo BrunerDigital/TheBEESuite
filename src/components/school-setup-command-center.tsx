@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -20,6 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import { EditableDisplayField } from "@/components/ui/editable-display-field";
 import { SchoolDataSetupPanel, type SchoolDataSetupPanelData } from "@/components/school-data-setup-panel";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
+import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { CollapsibleCard } from "@/components/workspace-preferences";
 import { directorLaunchChecklistTasks, type SetupChecklistTask } from "@/lib/setup-checklists";
 import { cn } from "@/lib/utils";
@@ -171,29 +172,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
   const hasUnsavedChanges = schoolEin !== savedSchoolEin
     || businessProfileChanged
     || sections.some((section) => (values[section.field] ?? "") !== (savedValues[section.field] ?? ""));
-
-  useEffect(() => {
-    if (!hasUnsavedChanges) return;
-    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    const warnBeforeNavigation = (event: MouseEvent) => {
-      if (event.defaultPrevented || !(event.target instanceof Element)) return;
-      const link = event.target.closest("a[href]");
-      if (!link || link.getAttribute("target") === "_blank" || link.getAttribute("href")?.startsWith("#")) return;
-      if (!window.confirm("This school setup page has unsaved changes. Discard them and leave this page?")) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
-    window.addEventListener("beforeunload", warnBeforeUnload);
-    document.addEventListener("click", warnBeforeNavigation, true);
-    return () => {
-      window.removeEventListener("beforeunload", warnBeforeUnload);
-      document.removeEventListener("click", warnBeforeNavigation, true);
-    };
-  }, [hasUnsavedChanges]);
+  useUnsavedChangesGuard(hasUnsavedChanges, "This school setup page has unsaved changes. Discard them and leave this page?");
 
   function displayedStatus(section: SchoolSetupCommandSection): SchoolSetupStatus {
     if (section.status === "complete") return "complete";

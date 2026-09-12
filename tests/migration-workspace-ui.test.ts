@@ -34,6 +34,13 @@ test("school setup offers guarded import and clean-start paths with final confir
   assert.match(source, /Open Guided Import & Review/);
   assert.match(source, /Run Whole-School Check/);
   assert.match(source, /Confirm Data Review/);
+  assert.match(source, /Save & Confirm Data Review/);
+  assert.match(source, /Detected from existing import/);
+  assert.match(source, /recommendedSourceSystem/);
+  assert.match(source, /useUnsavedChangesGuard\(hasUnsavedChanges/);
+  assert.match(source, /This school data setup has unsaved changes/);
+  assert.match(source, /disabled=\{!data\.centerId \|\| !attested \|\| isPending\}/);
+  assert.doesNotMatch(source, /disabled=\{!attested \|\| hasUnsavedChanges \|\| isPending\}/);
   assert.match(source, /does not activate invitations, billing, payments, kiosk access, or cutover/i);
   assert.match(route, /loadSchoolDataReviewEvidence/);
   assert.match(route, /status: 409/);

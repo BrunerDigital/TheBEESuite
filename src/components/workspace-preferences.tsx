@@ -79,6 +79,7 @@ type CollapsibleCardProps = {
   titleClassName?: string;
   defaultCollapsed?: boolean;
   forceExpanded?: boolean;
+  compactHeader?: boolean;
 };
 
 function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpanded = false) {
@@ -216,6 +217,7 @@ export function CollapsibleCard({
   titleClassName,
   defaultCollapsed = false,
   forceExpanded = false,
+  compactHeader = false,
 }: CollapsibleCardProps) {
   const contentId = useId();
   const { collapsed, expandForNavigation, preferenceLoaded, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed, forceExpanded);
@@ -231,17 +233,17 @@ export function CollapsibleCard({
       size={collapsed ? "sm" : "default"}
     >
       <CardHeader className={cn("min-w-0 grid-cols-[minmax(0,1fr)]", collapsed && "py-0", headerClassName)}>
-        <div className={cn("flex min-w-0 gap-3", collapsed ? "flex-wrap items-center justify-between" : "flex-col lg:flex-row lg:items-start lg:justify-between")}>
+        <div className={cn("flex min-w-0 gap-3", compactHeader ? "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2" : collapsed ? "flex-wrap items-center justify-between" : "flex-col lg:flex-row lg:items-start lg:justify-between")}>
           <div className={cn("min-w-0", collapsed && "flex-1 basis-40")}>
             {!collapsed && eyebrow ? <div className="mb-2 flex flex-wrap items-center gap-2">{eyebrow}</div> : null}
             <CardTitle as="h2" className={cn(collapsed && "text-sm", titleClassName)}>{title}</CardTitle>
-            {!collapsed && description ? <CardDescription className="mt-2 max-w-3xl">{description}</CardDescription> : null}
+            {!collapsed && description && !compactHeader ? <CardDescription className="mt-2 max-w-3xl">{description}</CardDescription> : null}
             {collapsed && (collapsedSummary || description) ? (
               <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">{collapsedSummary || description}</div>
             ) : null}
           </div>
           <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
-            {headerActions}
+            {!compactHeader ? headerActions : null}
             {!forceExpanded ? <Tooltip>
               <TooltipTrigger
                 render={(
@@ -249,6 +251,7 @@ export function CollapsibleCard({
                     type="button"
                     variant="outline"
                     size="icon-sm"
+                    className={compactHeader ? "size-[44px] min-h-[44px] min-w-[44px]" : undefined}
                     aria-expanded={!collapsed}
                     aria-controls={contentId}
                     aria-label={`${collapsed ? "Expand" : "Collapse"} ${typeof title === "string" ? title : "section"}`}
@@ -261,6 +264,8 @@ export function CollapsibleCard({
               <TooltipContent>{collapsed ? "Expand" : "Collapse"}</TooltipContent>
             </Tooltip> : null}
           </div>
+          {compactHeader && !collapsed && description ? <CardDescription className="col-span-2 min-w-0 max-w-3xl">{description}</CardDescription> : null}
+          {compactHeader && headerActions ? <div className="col-span-2 min-w-0">{headerActions}</div> : null}
         </div>
         {!collapsed ? headerAfter : null}
       </CardHeader>

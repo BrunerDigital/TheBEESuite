@@ -13,7 +13,7 @@ test("teacher daily tasks precede setup without losing accessible roster actions
   assert.match(teacher, /!isOnline \|\| offlineQueue\.length > 0/);
   assert.match(teacher, /Sync queued actions/);
   const css = source("src/app/product-ui.css");
-  assert.match(css, /\.teacher-mobile-workspace :is\(\[data-collapsible-card="true"\], #teacher-quick-log\)\s*\{\s*scroll-margin-top: calc\(var\(--bee-app-header-height, 4\.75rem\) \+ 1rem\)/);
+  assert.match(css, /\.teacher-mobile-workspace :is\(\[data-collapsible-card="true"\], #teacher-quick-log, #teacher-home-heading\)\s*\{\s*scroll-margin-top: calc\(var\(--bee-app-header-height, 4\.75rem\) \+ 1rem\)/);
   const captures = source("scripts/capture-app-store-screenshot-drafts.mjs");
   assert.match(captures, /expandedSelector: "#teacher-roster", focusSelector: "#teacher-roster"/);
   assert.match(captures, /expandedSelector: "#teacher-daily-report", focusSelector: "#teacher-quick-log"/);

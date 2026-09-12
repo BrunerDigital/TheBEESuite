@@ -465,7 +465,7 @@
     flex-wrap: wrap;
   }
 
-  .teacher-mobile-workspace :is([data-collapsible-card="true"], #teacher-quick-log) {
+  .teacher-mobile-workspace :is([data-collapsible-card="true"], #teacher-quick-log, #teacher-home-heading) {
     scroll-margin-top: calc(var(--bee-app-header-height, 4.75rem) + 1rem);
   }
 
@@ -482,6 +482,18 @@
   .teacher-mobile-workspace [data-slot="card-header"] > div > div:last-child {
     flex-shrink: 1;
     min-width: 0;
+  }
+
+  @media (max-width: 639px) {
+    /* Text can enlarge without doubling decorative gutters around each form. */
+    .bee-app-frame:has(.teacher-mobile-workspace) #workspace-main {
+      padding-inline: 16px;
+    }
+
+    .teacher-mobile-workspace [data-collapsible-card="true"] > [data-slot="card-header"],
+    .teacher-mobile-workspace [data-collapsible-card="true"] > div > [data-slot="card-content"] {
+      padding-inline: 12px;
+    }
   }
 
   .bee-app-frame[data-honeyglass="true"] .readiness-honeycomb,

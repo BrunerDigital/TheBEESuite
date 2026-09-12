@@ -61,6 +61,8 @@ type Props = {
   appReviewMode?: boolean;
   /** Development-only synthetic preview: never reads or writes classroom data. */
   previewMode?: boolean;
+  /** Only enables draft navigation checks in the development-only fake fixture. */
+  previewHistoryGuard?: boolean;
 };
 
 type TeacherProfileSetup = {
@@ -261,6 +263,7 @@ export function TeacherMobileWorkspace({
   teacherChecklistCompletedIds = [],
   appReviewMode = false,
   previewMode = false,
+  previewHistoryGuard = false,
 }: Props) {
   const timeZone = useSchoolTimeZone(teacherProfile?.centerId);
   const router = useRouter();
@@ -310,7 +313,7 @@ export function TeacherMobileWorkspace({
   const [reportDraftBaseline, setReportDraftBaseline] = useState(() => teacherReportDraftSignature(dailyReportDraft));
   const hasReportDraft = teacherReportDraftSignature(dailyReportDraft) !== reportDraftBaseline;
   const hasSingleChildDraft = Boolean(photo || photoCaption || incidentDescription || actionTaken || incidentType !== "Minor injury" || locationReason || locationTarget !== "area:Playground");
-  useUnsavedChangesGuard(!previewMode && (hasReportDraft || hasSingleChildDraft || hasProfileDraft), "Leave this page and discard your unsaved profile or classroom drafts?");
+  useUnsavedChangesGuard((!previewMode || (process.env.NODE_ENV === "development" && previewHistoryGuard)) && (hasReportDraft || hasSingleChildDraft || hasProfileDraft), "Leave this page and discard your unsaved profile or classroom drafts?");
   const offlineCredentialsRef = useRef<{ key: string; scopeId: string } | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isPending, startTransition] = useTransition();
@@ -1014,7 +1017,7 @@ export function TeacherMobileWorkspace({
             <p className="flex items-center gap-1.5"><CheckCircle2 className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />Online<span className="sr-only"> · ready for classroom updates</span></p>
           ) : null}
         </div>
-        <h1 id="teacher-home-heading" className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">Today in your classroom</h1>
+        <h1 id="teacher-home-heading" tabIndex={-1} className="mt-1 scroll-mt-28 text-xl font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-2xl">Today in your classroom</h1>
         <dl className="my-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,5rem),1fr))] gap-2 border-y py-2 text-sm">
           <div><dt className="text-xs text-muted-foreground">In your roster</dt><dd className="text-lg font-semibold tabular-nums">{roster.length}</dd></div>
           <div><dt className="text-xs text-muted-foreground">At school</dt><dd className="text-lg font-semibold tabular-nums">{roster.filter((child) => attendanceFor(child).latestLogType === "check_in" || attendanceFor(child).status === "present").length}</dd></div>
@@ -1042,6 +1045,7 @@ export function TeacherMobileWorkspace({
       {kioskAccess ? (
         <CollapsibleCard
           id="teacher-staff-clock"
+          compactHeader
           title="Staff clock"
           description={kioskAccess.centerName}
           collapsedSummary={`${kioskAccess.clockStatus === "clocked_in" ? "Clocked in" : "Clocked out"} · ${kioskAccess.hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}`}
@@ -1096,6 +1100,7 @@ export function TeacherMobileWorkspace({
 
       <CollapsibleCard
         id="teacher-roster"
+        compactHeader
         title="Roster"
         description={`${roster.length} ${roster.length === 1 ? "child" : "children"} in your assigned classrooms`}
         collapsedSummary={`${roster.length} ${roster.length === 1 ? "child" : "children"} · ${byClassroom.length} ${byClassroom.length === 1 ? "classroom" : "classrooms"}`}
@@ -1286,7 +1291,7 @@ export function TeacherMobileWorkspace({
       </CollapsibleCard>
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-        <CollapsibleCard id="teacher-attendance" title="Attendance" description={selectedChild?.fullName ?? "Choose a child"} collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${attendanceStatus}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+        <CollapsibleCard id="teacher-attendance" compactHeader title="Attendance" description={selectedChild?.fullName ?? "Choose a child"} collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${attendanceStatus}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
             <div className="space-y-1">
               <Label htmlFor="teacher-attendance-status">Status</Label>
               <Select value={attendanceStatus} onValueChange={(value) => value && setAttendanceStatus(value)}>
@@ -1316,7 +1321,7 @@ export function TeacherMobileWorkspace({
             </Button>
         </CollapsibleCard>
 
-        <CollapsibleCard id="teacher-location" title="Child location" description={selectedChild ? `${selectedChild.fullName} · currently ${locationFor(selectedChild)}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+        <CollapsibleCard id="teacher-location" compactHeader title="Child location" description={selectedChild ? `${selectedChild.fullName} · currently ${locationFor(selectedChild)}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
             <div className="space-y-1">
               <Label htmlFor="teacher-location-target">Move to</Label>
               <Select value={locationTarget} onValueChange={(value) => value && setLocationTarget(value)}>
@@ -1343,7 +1348,7 @@ export function TeacherMobileWorkspace({
             </Button>
         </CollapsibleCard>
 
-        <CollapsibleCard id="teacher-photo" title="Photo" description={selectedChild?.fullName ?? "Choose a child"} collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${selectedChild.photoVideoPermission ? "Sharing allowed" : "Permission required"}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+        <CollapsibleCard id="teacher-photo" compactHeader title="Photo" description={selectedChild?.fullName ?? "Choose a child"} collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${selectedChild.photoVideoPermission ? "Sharing allowed" : "Permission required"}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
             <div className="space-y-1">
               <Label htmlFor="photo-child">Child</Label>
               <Select value={selectedChild?.id ?? ""} onValueChange={(value) => { if (value) chooseChild(value); }}>
@@ -1391,6 +1396,7 @@ export function TeacherMobileWorkspace({
 
         <CollapsibleCard
           id="teacher-daily-report"
+          compactHeader
           title="Daily Report"
           description={activeDailyReportChildren.length === 1 ? activeDailyReportChildren[0].fullName : `${activeDailyReportChildren.length} children selected`}
           collapsedSummary={`${activeDailyReportChildren.length} selected · ${mealRows.length} meals · ${napRows.length} naps`}
@@ -1682,7 +1688,7 @@ export function TeacherMobileWorkspace({
             </Button>
         </CollapsibleCard>
 
-        <CollapsibleCard id="teacher-incident" title="Incident report" description="Send an objective record to the director for review." collapsedSummary={selectedChild?.fullName ?? "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+        <CollapsibleCard id="teacher-incident" compactHeader title="Incident report" description="Send an objective record to the director for review." collapsedSummary={selectedChild?.fullName ?? "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
             <Input aria-label="Incident type" value={incidentType} onChange={(event) => setIncidentType(event.target.value)} placeholder="Incident type" />
             <Textarea id="teacher-incident-description" aria-label="Objective incident description" value={incidentDescription} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Describe what happened using observable facts" />
             <Textarea id="teacher-incident-action" aria-label="Action taken after incident" value={actionTaken} onChange={(event) => setActionTaken(event.target.value)} placeholder="Action taken" />
@@ -1695,10 +1701,11 @@ export function TeacherMobileWorkspace({
 
       <CollapsibleCard
         id="teacher-profile-setup"
+        compactHeader
         title="My profile"
         description={appReviewMode
           ? "Review the protected account and assigned synthetic classroom."
-          : "Review your contact information, classroom assignment, and staff kiosk code."}
+          : "Contact details, classroom, and staff kiosk code."}
         collapsedSummary={`${profileReady ? "Ready" : "Needs setup"} · ${teacherProfile?.centerName ?? "School not assigned"}`}
         headerActions={(
           <div className="flex flex-wrap gap-2">

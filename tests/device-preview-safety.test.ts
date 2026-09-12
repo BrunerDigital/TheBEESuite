@@ -32,7 +32,8 @@ test("device preview is development-only and uses fake identifiers", () => {
   assert.match(kioskSource, /if \(previewMode\)/);
   assert.match(kioskSource, /if \(previewMode \|\| activeKioskMode/);
   assert.match(appShellSource, /const searchUserEmail = previewMode \? ""/);
-  assert.match(appShellSource, /if \(previewMode && !parentFacing\) \{\s*return <UserAvatar/);
+  assert.match(appShellSource, /const teacherHistoryPreview = process\.env\.NODE_ENV === "development" && previewMode && isTeacherUser\(currentUser\)\s*&& pathname === "\/device-preview" && searchParams\.get\("view"\) === "teacher" && searchParams\.get\("scenario"\) === "history-qa"/);
+  assert.match(appShellSource, /if \(previewMode && !parentFacing && !teacherHistoryPreview\) \{\s*return <UserAvatar/);
   assert.match(appShellSource, /\{previewMode \? \([\s\S]*Preview account[\s\S]*\) : \([\s\S]*ProfilePhotoUploader/);
   assert.match(appShellSource, /parentPortalWorkspaceHref/);
   assert.match(appShellSource, /!previewMode && canViewAccountBalances\(currentUser\)/);

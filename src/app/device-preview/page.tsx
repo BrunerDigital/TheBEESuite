@@ -198,7 +198,7 @@ function TeacherPreview({ scenario }: { scenario?: string }) {
       entries: { meals: 1, naps: 0, diapers: 0, activities: 1 },
     },
   }));
-  return <TeacherMobileWorkspace previewMode appReviewMode={scenario === "review"} teacherName="Morgan Lee" roster={roster}
+  return <TeacherMobileWorkspace previewMode previewHistoryGuard={scenario === "history-qa"} appReviewMode={scenario === "review"} teacherName="Morgan Lee" roster={roster}
     teacherProfile={{ id: "preview-teacher", name: "Morgan Lee", loginEmail: "morgan@example.com", contactEmail: "morgan@example.com", phone: "", title: "Teacher", centerId: "preview-center", centerName: "Sunshine Academy", classroomId: "preview-classroom", hasStaffKioskCode: true }}
     classroomOptions={[{ id: "preview-classroom", name: "Butterflies", ageGroup: "Preschool" }]}
     classroomRatios={[{ classroomId: "preview-classroom", name: "Butterflies", capacity: 20, ratioRule: "1:10", assignedStaff: 1 }]}
@@ -341,10 +341,11 @@ export default async function DevicePreviewPage({ searchParams }: { searchParams
     return <DevicePreviewGuard><KioskCheckIn previewMode familyOnly={role === "kiosk"} center={{ id: "preview-center", name: "Sunshine Academy", place: "Carmel, Indiana", timeZone: "America/Indiana/Indianapolis" }} initialMode={role === "kiosk-staff" ? "staff" : "family"} /></DevicePreviewGuard>;
   }
   return <DevicePreviewGuard rewriteWorkspaceLinks={role === "director" || role === "role-dashboard" || role === "executive" || role === "regional"}>
-    {scenario === "history-qa" ? <nav aria-label="Fake history destinations" className="relative z-[100] flex gap-3 bg-background p-3">
+    {scenario === "history-qa" ? <nav aria-label="Fake history destinations" className="relative z-[100] flex flex-wrap gap-3 bg-background p-3">
       <Link prefetch={false} href="/device-preview?view=parent&scenario=history-qa">Fake parent destination</Link>
       <Link prefetch={false} href="/device-preview?view=workflow&scenario=history-qa">Fake workflow destination</Link>
       <Link prefetch={false} href="/device-preview?view=billing&scenario=history-qa">Fake billing destination</Link>
+      <Link prefetch={false} href="/device-preview?view=teacher&scenario=history-qa">Fake teacher destination</Link>
     </nav> : null}
     <ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} />
   </DevicePreviewGuard>;

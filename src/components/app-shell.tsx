@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -27,6 +27,7 @@ import {
 import { BrandIcon, BrandLogo } from "@/components/brand-logo";
 import { AccountsReceivableSheet } from "@/components/accounts-receivable-sheet";
 import { LiveRefreshStatus } from "@/components/live-refresh-status";
+import { teacherActiveTask, teacherTaskHref } from "@/lib/teacher-navigation";
 import { ProfilePhotoUploader } from "@/components/profile-photo-uploader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -188,6 +189,20 @@ function ParentPortalDocumentLink({
   ...props
 }: React.ComponentPropsWithoutRef<"a"> & { href: string }) {
   return <a href={href} {...props} />;
+}
+
+function subscribeToHashChange(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  window.addEventListener("popstate", onChange);
+  return () => { window.removeEventListener("hashchange", onChange); window.removeEventListener("popstate", onChange); };
+}
+const locationHashSnapshot = () => window.location.hash;
+const serverHashSnapshot = () => "";
+
+function TeacherTaskLink({ href, ...props }: React.ComponentPropsWithRef<"a"> & { href: string }) {
+  const pathname = usePathname(), searchParams = useSearchParams();
+  const destination = teacherTaskHref(href, { pathname, search: searchParams.toString(), previewMode: process.env.NODE_ENV === "development" });
+  return destination.startsWith("#") ? <a href={destination} {...props} /> : <Link href={destination} {...props} />;
 }
 
 function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
@@ -925,7 +940,9 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
   ].includes(currentUser.email.trim().toLowerCase());
   const parentFacing = isParentFacingUser(currentUser);
   const parentGuardian = currentUser.role === "PARENT_GUARDIAN";
-  if (previewMode && !parentFacing) {
+  const teacherHistoryPreview = process.env.NODE_ENV === "development" && previewMode && isTeacherUser(currentUser)
+    && pathname === "/device-preview" && searchParams.get("view") === "teacher" && searchParams.get("scenario") === "history-qa";
+  if (previewMode && !parentFacing && !teacherHistoryPreview) {
     return <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="app-header-avatar border shadow-none" />;
   }
   const familyId = parentFacing ? searchParams.get("familyId") : null;
@@ -1010,7 +1027,7 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
           <>
             <DropdownMenuItem
               className="p-0"
-              render={<Link href="/teacher-portal#teacher-profile-setup" className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
+              render={<TeacherTaskLink href="/teacher-portal#teacher-profile-setup" className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
             >
               <ShieldCheck data-icon="inline-start" aria-hidden="true" />
               Profile settings
@@ -1031,6 +1048,10 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
 
 function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { currentUser?: ShellUser; previewMode?: boolean; previewHrefBase?: string }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const hash = useSyncExternalStore(subscribeToHashChange, locationHashSnapshot, serverHashSnapshot);
+  const teacher = isTeacherUser(currentUser);
+  const activeTeacherTask = teacherActiveTask({ pathname, search: searchParams.toString(), hash, previewMode });
   const parentFacing = isParentFacingUser(currentUser);
   const parentNavigationItems = parentPortalShellItemsForUser(currentUser);
   const parentNavigationLabel = currentUser?.role === "AUTHORIZED_PICKUP" ? "Authorized pickup navigation" : "Family portal navigation";
@@ -1041,7 +1062,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
   if (!roleUsesBottomNavigation(currentUser)) return null;
 
   const teacherItems = [
-    { label: "Today", href: "/teacher-portal", slug: "teacher-portal", Icon: Home },
+    { label: "Today", href: "/teacher-portal#teacher-home-heading", slug: "teacher-portal", Icon: Home },
     { label: "Roster", href: "/teacher-portal#teacher-roster", slug: "teacher-portal", Icon: Users },
     { label: "Log", href: "/teacher-portal#teacher-quick-log", slug: "teacher-portal", Icon: ClipboardList },
     { label: "Messages", href: STAFF_MESSAGING_HREF, slug: "messages", Icon: MessageSquare },
@@ -1111,23 +1132,23 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
           const hrefPath = href.split(/[?#]/)[0];
           const previewHref = parentView
             ? parentPortalShellHref(parentView, previewMode, previewHrefBase, pathname, familyId)
-            : previewSafeShellHref(href, previewMode, previewHrefBase, pathname);
+            : teacher && href.startsWith("/teacher-portal#") ? href : previewSafeShellHref(href, previewMode, previewHrefBase, pathname);
           const selectedPath = selectedTarget.split(/[?#]/)[0];
           const active = parentView
             ? activeView === parentView
-            : previewMode
+            : teacher ? activeTeacherTask === label : previewMode
               ? selectedTarget === href
               : selectedPath === pathname
                 ? selectedTarget === href
                 : pathname === hrefPath && !href.includes("#") && !href.includes("?");
-          const NavigationLink = parentView ? ParentPortalDocumentLink : Link;
+          const NavigationLink = parentView ? ParentPortalDocumentLink : teacher ? TeacherTaskLink : Link;
           return (
             <NavigationLink
               key={href}
               href={previewHref}
               aria-current={active ? "page" : undefined}
               onClick={() => {
-                setSelectedTarget(href);
+                if (!teacher) setSelectedTarget(href);
               }}
               className={cn(
                 "relative flex h-full min-h-12 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-1.5 text-[0.68rem] font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",

@@ -151,7 +151,7 @@ test("primary parent navigation uses document requests across responsive shells"
     /function ParentPortalDocumentLink\([\s\S]*React\.ComponentPropsWithoutRef<"a">[\s\S]*return <a href=\{href\} \{\.\.\.props\} \/>/,
   );
   assert.equal(shell.match(/<ParentPortalDocumentLink/g)?.length, 2);
-  assert.match(shell, /const NavigationLink = parentView \? ParentPortalDocumentLink : Link/);
+  assert.match(shell, /const NavigationLink = parentView \? ParentPortalDocumentLink : teacher \? TeacherTaskLink : Link/);
   assert.match(
     workspace,
     /function ParentPortalDocumentLink\([\s\S]*ComponentPropsWithoutRef<"a">[\s\S]*return <a href=\{href\} \{\.\.\.props\} \/>/,

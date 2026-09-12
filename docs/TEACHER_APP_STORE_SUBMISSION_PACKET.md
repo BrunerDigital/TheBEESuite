@@ -174,7 +174,9 @@ Final answers must be reconciled with production vendors and SDKs.
 Likely data collected and linked to the user:
 
 - Contact Info: teacher name, email address, phone number, staff profile details.
-- User Content: daily report notes, incident notes, uploaded classroom media, support requests.
+- User Content — Emails or Text Messages: private in-app message subject, sender, recipients and contents. Collected, linked to the user, App Functionality, not tracking (inventory corrected September 12, 2026).
+- User Content — Photos or Videos: uploaded classroom photos and visual message attachments. Collected, linked to the user, App Functionality, not tracking.
+- User Content — Other User Content: daily report notes, incident notes and school documentation. Collected, linked to the user, App Functionality, not tracking.
 - Identifiers: internal user ID, staff ID, classroom ID, school ID, session/device identifiers.
 - Usage Data: product interaction and page/app usage if analytics are enabled.
 - Diagnostics: crash/performance/log data if added to the native build or collected by hosting/logging tools.

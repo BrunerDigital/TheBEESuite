@@ -1,6 +1,6 @@
 # iOS native verification and final handoff
 
-Status established September 11, 2026. Parent and Teacher are the only intended v1 native apps. This record separates unsigned compilation from signed/device/store readiness.
+Baseline established September 11; evidence reconciled September 12, 2026. Parent and Teacher are the only intended v1 native apps. This record separates unsigned compilation from signed/device/store readiness.
 
 ## Current-state evidence before this change
 
@@ -33,9 +33,11 @@ The initial complete launch run produced home-screen screenshots, not verified a
 
 The scoped logs then confirmed both apps voluntarily exited with status 1 during startup. Capacitor 8.4.1's installed `CAPBridgeViewController.loadWebView()` requires `appStartFileURL` to exist even when loading a remote server. `server.appStartPath` also appends the role route to this local path, but the original shells contained only `index.html` and `offline.html`, not `/parents` or `/teachers`. Each shell now includes a real role launch directory with the same branded `index.html`; static and compiled-bundle regressions verify its existence and equality with the canonical shell. Keep these copies synchronized when editing shell branding.
 
-Do not move the role path into `server.url`: Capacitor's navigation handler uses that URL as a prefix and could eject subsequent `/parent-portal`, `/teacher-portal`, support or authentication navigation to Safari. The final fix preserves the original full HTTPS application origin and role-specific `appStartPath`, without adding navigation allowlists. Launch remains unverified until both native sign-in screenshots and survival checks pass.
+Do not move the role path into `server.url`: Capacitor's navigation handler uses that URL as a prefix and could eject subsequent `/parent-portal`, `/teacher-portal`, support or authentication navigation to Safari. The final fix preserves the original full HTTPS application origin and role-specific `appStartPath`, without adding navigation allowlists. The earlier launch failures described above are historical; the subsequent successful evidence follows.
 
-Record the Git SHA, workflow run URL, Xcode/SDK/runtime, compile results and screenshot review in the protected PR closeout. Until that evidence exists, compilation and simulator launch remain **unverified**. CI never archives, signs, uploads, invites testers or submits either app.
+Historical successful main evidence: [run 34671392809](https://github.com/BrunerDigital/TheBEESuite/actions/runs/34671392809), source `7e36706cd4526c3f656c109ab23b696f0db86a32`, Xcode 26.6 (17F113), iOS SDK/runtime 26.5, iPhone 17. Both roles passed seven checks: four unsigned Release compilations in total, compiled resources, isolated simulator installation, and matching public cold/terminated-relaunch screenshots. Reports and screenshots were downloaded and reviewed. Authenticated native flows, background/session continuity, signing, archives, uploads, physical devices and store-ready screenshots were **not performed**.
+
+The September 12 messaging privacy correction adds per-category semantic validation and compiled/source reconciliation for both SDKs. See `IOS_PRIVACY_MANIFEST_RECONCILIATION_2026-09-12.md` for its fresh run status; the historical run above does not verify that later correction. Record the exact SHA, workflow URL, Xcode/SDK/runtime, compile results and screenshot review for every native release. CI never archives, signs, uploads, invites testers or submits either app.
 
 ## Remaining human-only critical path
 

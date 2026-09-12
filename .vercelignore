@@ -30,7 +30,12 @@ docs/*
 !docs/sops/PARENT_PORTAL_SOP.md
 !docs/sops/SCHOOL_SYSTEM_OPERATING_MANUAL.md
 !docs/sops/TEACHER_SOP.md
-ios
+ios/*
+!ios/App
+ios/App/*
+!ios/App/App
+ios/App/App/*
+!ios/App/App/PrivacyInfo.xcprivacy
 native/*
 !native/parent-shell
 !native/teacher-shell

@@ -137,7 +137,9 @@ Final answers must be reconciled with production vendors and SDKs.
 | Apple data type | Likely collected | Linked to user | Purpose |
 | --- | --- | --- | --- |
 | Contact Info | Yes | Yes | Account, staff profile, support |
-| User Content | Yes | Yes | Daily reports, incident notes, uploads, classroom media, support |
+| Emails or Text Messages (User Content) | Yes | Yes | App Functionality: private in-app subject, sender, recipients and contents; not tracking |
+| Photos or Videos (User Content) | Yes | Yes | App Functionality: classroom photos and visual attachments; not tracking |
+| Other User Content | Yes | Yes | App Functionality: daily reports, incident notes and school documentation; not tracking |
 | Identifiers | Yes | Yes | User IDs, staff IDs, classroom IDs, school IDs, session/device identifiers |
 | Usage Data | Yes if analytics/logging enabled | Yes or pseudonymous depending vendor setup | Product operation, reliability, analytics |
 | Diagnostics | Yes | Yes or pseudonymous depending vendor setup | Crash/error reports, operational logs, performance, support, security |
@@ -155,6 +157,8 @@ No tracking, unless a vendor is added that tracks users across apps or websites 
 ```
 
 ## Permission Strings
+
+September 12, 2026 inventory correction: private messages have their own Emails or Text Messages category in the Teacher manifest; do not subsume them under Other User Content. See `IOS_PRIVACY_MANIFEST_RECONCILIATION_2026-09-12.md`. Final archive/vendor/disclosure review is still required before upload approval.
 
 Current teacher iOS plist contains:
 

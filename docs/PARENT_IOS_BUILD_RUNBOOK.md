@@ -54,15 +54,16 @@ In Xcode:
 7. Smoke test parent login, parent dashboard, messages, documents, billing, and password reset.
 8. Set the run destination to `Any iOS Device (arm64)` and select Release configuration.
 9. Use **Product > Archive**.
-10. In Organizer, select the archive and run **Validate App**. Resolve every signing, entitlement, icon, privacy, or bundle error.
-11. Stop for exact upload approval. Only after approval, use **Distribute App > App Store Connect > Upload** and keep symbol upload enabled unless the release owner documents otherwise.
-12. Record the archive UUID, version, build, Git commit, signing team, upload time, and processing result.
+10. Before uploading, generate/export the privacy report for this exact archive and complete the reconciliation below. Resolve discrepancies in the binary, vendor inventory and disclosures; rebuild/re-archive if anything changes.
+11. In Organizer, select the reconciled archive and run **Validate App**. Resolve every signing, entitlement, icon, privacy, or bundle error.
+12. Stop for exact upload approval naming this app, Git commit, version/build and archive UUID. Only after approval, use **Distribute App > App Store Connect > Upload** and keep symbol upload enabled unless the release owner documents otherwise.
+13. Record the archive UUID, version, build, Git commit, signing team, privacy-report signoff, upload time, and processing result.
 
 ## Privacy Report And TestFlight
 
-1. In Xcode Organizer, select the exact uploaded archive and generate/export its privacy report using the privacy-report action available in the installed Xcode version.
+1. **Before upload approval**, in Xcode Organizer select the exact candidate archive and generate/export its privacy report using the privacy-report action available in the installed Xcode version.
 2. Inventory the app target and every embedded Capacitor/native SDK. Reconcile accessed API reasons and collected-data categories against `PrivacyInfo.xcprivacy`, production vendors, the public Privacy Policy, and App Store Connect App Privacy answers.
-3. Stop if the report contains an undeclared SDK, tracking domain, accessed API, permission, or data category. Fix the binary/manifest or disclosures and upload a new build number.
+3. Stop if the report contains an undeclared SDK, tracking domain, accessed API, permission, or data category. Explicitly reconcile Emails or Text Messages separately from Photos or Videos and Other User Content. Fix the binary/manifest or disclosures before upload; rebuild and repeat archive/report/validation when the binary changes. If that build number was already uploaded, increment it and obtain new exact upload approval.
 4. Wait for App Store Connect processing and export-compliance questions to finish. Do not select the build for review yet.
 5. Add only approved internal TestFlight testers and install from TestFlight on a physical supported iPhone; an Xcode debug install is not release evidence.
 6. Complete `docs/MOBILE_APP_PHYSICAL_DEVICE_EVIDENCE_PACKET.md`, attach TestFlight/crash evidence, and close every blocker before external testing or App Review.

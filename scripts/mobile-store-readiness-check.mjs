@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { assertPrivacyManifest, parsePrivacyManifest } from "./ios-privacy-manifest.mjs";
 
 const roles = [
   {
@@ -18,8 +19,6 @@ const roles = [
     runbook: "docs/PARENT_IOS_BUILD_RUNBOOK.md",
     cameraPurpose: /Parents can take photos of requested documents or attach images to messages for their school\./,
     photoPurpose: /Parents can choose photos and files to send to their school through the parent portal\./,
-    requiredPrivacyTypes: ["PaymentInfo", "PurchaseHistory", "OtherFinancialInfo"],
-    excludedPrivacyTypes: [],
     storeIcon: "output/app-store/ios/app-icon-1024-no-alpha.png",
     screenshotDirectory: "output/app-store/ios/screenshots-draft",
     screenshotCount: 5,
@@ -40,8 +39,6 @@ const roles = [
     runbook: "docs/TEACHER_IOS_BUILD_RUNBOOK.md",
     cameraPurpose: /Teachers can take classroom photos for parent-approved media updates and school records\./,
     photoPurpose: /Teachers can choose photos and files for classroom updates, daily reports, and school documentation\./,
-    requiredPrivacyTypes: [],
-    excludedPrivacyTypes: ["PaymentInfo", "PurchaseHistory", "OtherFinancialInfo"],
     storeIcon: "output/app-store/ios-teacher/app-icon-1024-no-alpha.png",
     screenshotDirectory: "output/app-store/ios-teacher/screenshots-draft",
     screenshotCount: 3,
@@ -136,24 +133,7 @@ function checkNativeRole(role, shared) {
   assert.match(sharedScheme, /buildConfiguration = "Release"/);
   assert.doesNotMatch(swiftPackage, /path: "[^"\n]*\\/, `${role.key} Swift package path must use portable forward slashes`);
 
-  assert.match(privacy, /NSPrivacyTracking[\s\S]*?<false\/>/);
-  assert.match(privacy, /NSPrivacyTrackingDomains/);
-  assert.match(privacy, /NSPrivacyCollectedDataTypes/);
-  for (const dataType of [
-    "Name",
-    "EmailAddress",
-    "PhoneNumber",
-    "UserID",
-    "OtherUserContent",
-    "Health",
-    "SensitiveInfo",
-    ...role.requiredPrivacyTypes,
-  ]) {
-    assert.match(privacy, new RegExp(`NSPrivacyCollectedDataType${dataType}`));
-  }
-  for (const dataType of role.excludedPrivacyTypes) {
-    assert.doesNotMatch(privacy, new RegExp(`NSPrivacyCollectedDataType${dataType}`));
-  }
+  assertPrivacyManifest(parsePrivacyManifest(privacy), role.key);
 
   const iconEntry = iconContents.images.find((image) => image.filename === "AppIcon-512@2x.png");
   assert.ok(iconEntry, `${role.key} app icon asset catalog entry is missing`);

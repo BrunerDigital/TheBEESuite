@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { resolveFteReportSelection } from "../src/lib/fte-report-selection";
+import { resolveFteReportSelection, writableFteCenterIds } from "../src/lib/fte-report-selection";
+
+test("FTE writable schools follow the save boundary independently of visible history and workspace layout", () => {
+  for (const role of ["CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"]) {
+    assert.deepEqual(writableFteCenterIds(["a", "b"], role, "a"), ["a"]);
+    assert.deepEqual(writableFteCenterIds(["b"], role, "a"), []);
+    assert.deepEqual(writableFteCenterIds(["a", "b"], role), []);
+  }
+  assert.deepEqual(writableFteCenterIds(["a", "b"], "REGIONAL_MANAGER", "a"), ["a", "b"]);
+  assert.deepEqual(writableFteCenterIds(["b"], "BRAND_ADMIN", "a"), ["b"]);
+  assert.deepEqual(resolveFteReportSelection(["a", "b"], "b", "2026-04-08"), { centerId: "b", weekStart: "2026-04-08", error: null });
+});
 
 test("FTE links select only authorized schools and exact calendar dates", () => {
   for (const week of ["2024-02-29", "2026-09-09", "2026-12-31"]) {
@@ -41,7 +52,10 @@ test("FTE editors preserve saved zeros, exact targets and historical isolation",
 test("read-only FTE users retain history without write or forbidden export controls", () => {
   const pages = readFileSync("src/components/live-ops-pages.tsx", "utf8");
   assert.match(pages, /const canManageFte = data.canManageFte === true/);
-  assert.match(pages, /canManageFte \? <FteReportForm/);
+  assert.match(pages, /canManageFte && canWriteSelectedReport \? <FteReportForm/);
+  assert.match(pages, /centers=\{writableCenters\}/);
+  assert.match(pages, /reports=\{data.fteReports.filter/);
+  assert.match(pages, /allowCenterSelect=\{canApproveFte\}/);
   assert.match(pages, /canManageFte \? <a/);
   assert.match(pages, /isExecutive && canApproveFte && !data.selection\?\.error \? <FteBulkImportPanel/);
   assert.match(pages, /canEdit=\{canApproveFte\}/);
@@ -49,5 +63,7 @@ test("read-only FTE users retain history without write or forbidden export contr
   const route = readFileSync("src/app/[slug]/page.tsx", "utf8");
   assert.equal(route.match(/canApproveFte: isExecutiveFteManager\(user.role\)/g)?.length, 2, "Approval permission follows the role even in a one-school workspace");
   const form = readFileSync("src/components/fte-report-form.tsx", "utf8");
+  assert.match(form, /disabled=\{!allowCenterSelect \|\| centers.length <= 1\}/);
+  assert.match(form, /if \(!centers.some\(\(center\) => center.id === report.centerId\)\) return/);
   assert.match(form, /currentWeekReport\?\.status === "approved" && mode !== "executive"/);
 });

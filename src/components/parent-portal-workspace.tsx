@@ -796,7 +796,8 @@ function ParentPortalWorkspaceView({
   paymentCheckoutMethod,
   setPaymentCheckoutMethod,
 }: ParentPortalWorkspaceViewProps) {
-  const timeZone = useSchoolTimeZone();
+  const workspaceTimeZone = useSchoolTimeZone();
+  const timeZone = centerTimeZone || workspaceTimeZone;
   const formatDate = (value: string | Date | null) =>
     formatDateInTimeZone(value, timeZone);
   const formatTime = (value: string | Date | null) =>

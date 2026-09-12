@@ -4617,6 +4617,7 @@ export type FteReportsPageData = {
   canManageFte?: boolean;
   canApproveFte?: boolean;
   selection?: { centerId: string | null; weekStart: string | null; error: string | null };
+  writableCenterIds?: string[];
   mode: "director" | "executive";
   centers: Array<{
     id: string;
@@ -4672,6 +4673,8 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
   const isExecutive = data.mode === "executive";
   const canManageFte = data.canManageFte === true;
   const canApproveFte = canManageFte && data.canApproveFte === true;
+  const writableCenters = data.fteCenters.filter((center) => data.writableCenterIds?.includes(center.id) ?? canApproveFte);
+  const canWriteSelectedReport = writableCenters.length > 0 && (!data.selection?.centerId || writableCenters.some((center) => center.id === data.selection?.centerId));
   const selectionKey = `${data.selection?.centerId ?? "all"}:${data.selection?.weekStart ?? "all"}`;
   const maxTrendFte = Math.max(...data.trendWeeks.map((week) => week.fteTotal), 1);
 
@@ -4806,14 +4809,15 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
           <AlertDescription>{data.selection.error} <Link href="/fte-reports" className="underline">Choose a report</Link></AlertDescription>
         </Alert>
       ) : <>
-      {canManageFte ? <FteReportForm
+      {canManageFte && !canWriteSelectedReport ? <Alert><AlertTitle>Report is read-only</AlertTitle><AlertDescription>You can review the selected school here. FTE submissions are limited to your assigned school. <Link href="/fte-reports" className="underline">Open assigned-school reporting</Link></AlertDescription></Alert> : null}
+      {canManageFte && canWriteSelectedReport ? <FteReportForm
         key={selectionKey}
         initialCenterId={data.selection?.centerId}
         initialWeekStart={data.selection?.weekStart}
-        centers={data.fteCenters}
-        reports={data.fteReports}
-        prefills={data.ftePrefills}
-        allowCenterSelect={isExecutive}
+        centers={writableCenters}
+        reports={data.fteReports.filter((report) => writableCenters.some((center) => center.id === report.centerId))}
+        prefills={data.ftePrefills.filter((prefill) => writableCenters.some((center) => center.id === prefill.centerId))}
+        allowCenterSelect={canApproveFte}
         mode={canApproveFte ? "executive" : "director"}
         title={isExecutive ? "Review or Enter FTE" : "Submit Weekly FTE"}
         description={isExecutive

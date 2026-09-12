@@ -71,6 +71,7 @@ async function main() {
     assert.equal(await notes.inputValue(), "Fake saved historical notes");
     await page.goto(`${base}/?view=fte&director=1&approved=1`);
     await page.getByText("Approved report · read-only", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("combobox", { name: "School", exact: true }).isDisabled(), true, "Director picker remains locked even when multiple schools are readable");
     assert.equal(await page.getByRole("button", { name: "Save FTE Correction", exact: true }).isDisabled(), true);
     assert.equal(await page.getByPlaceholder("Optional context or correction notes").isDisabled(), true);
     await page.goto(`${base}/?view=fte&single-school=1&approved=1`);
@@ -81,6 +82,13 @@ async function main() {
     await page.getByText("Historical FTE Explorer", { exact: true }).last().waitFor();
     assert.equal(await page.getByRole("button", { name: /^Correct FTE/ }).count(), 0);
 
+    for (const [zone, expectedDays] of [["America/New_York", 1], ["Asia/Tokyo", 2]] as const) {
+      await page.goto(`${base}/?view=updates&tz=${encodeURIComponent(zone)}`);
+      await page.getByRole("combobox", { name: "Choose update day" }).click();
+      await page.getByRole("option").first().waitFor();
+      assert.equal(await page.getByRole("option").count(), expectedDays, "Update days follow the selected family's school, not the AppShell default");
+      await page.keyboard.press("Escape");
+    }
     await page.goto(`${base}/?view=home`);
     const earlier = page.locator("[data-earlier-announcements]");
     await earlier.waitFor();

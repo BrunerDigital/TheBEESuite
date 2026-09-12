@@ -57,3 +57,11 @@ Mac/Xcode access, signing-team selection, physical-iPhone authenticated checks, 
 - Baseline authenticated production checks passed **Parent 10/10 and Teacher 10/10** across phone/desktop navigation with strict write blocking (only login/session heartbeat allowed). Both accounts passed the full isolated App Review runtime scope check. Deployment and post-release checks remain required.
 
 Still actionable after this wave: older parent-record continuation, billing date/draft context safety, complete Team Permissions directory pagination, automation draft recovery, and remaining cross-screen navigation checks. These are not labeled human-only or complete.
+
+### PR review corrections before merge
+
+- Both unsigned Parent and Teacher macOS CI compile/public-launch checks passed on the initial PR head. Signing, archive, physical device, authenticated native behavior, and TestFlight were not performed.
+- Review caught readable-versus-writable FTE school scope for directors with multiple grants. The editor now receives only schools accepted by the existing save guard, including its history and prefills. A readable secondary-school deep link stays read-only without silently opening the primary school. Executive capability remains independent of workspace layout.
+- Parent date grouping and display now prefer the selected family's school timezone over the shell default. A real-component fake-data browser regression exercises two reports around midnight in New York and Tokyo.
+- These corrections require fresh focused/browser and full production validation before the PR can merge. The protected review-conversation gate is not bypassed.
+- Corrected code passed the full gate: lint, types, **1,968 tests**, and optimized production build. The real-component browser harness passed again, including director picker locking and selected-family timezone day counts. Independent read-only review found no blocker. Exact deployment and post-release verification are still required.

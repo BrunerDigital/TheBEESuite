@@ -1,3 +1,9 @@
+import { resolveFteCenterId } from "./fte-report-guardrails";
+
+export function writableFteCenterIds(visibleCenterIds: readonly string[], role: string, primaryCenterId?: string | null) {
+  return visibleCenterIds.filter((requestedCenterId) => resolveFteCenterId({ role, primaryCenterId, requestedCenterId }).ok);
+}
+
 export type FteReportSelection = {
   centerId: string | null;
   weekStart: string | null;

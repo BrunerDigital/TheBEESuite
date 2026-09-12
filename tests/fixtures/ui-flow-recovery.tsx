@@ -19,12 +19,15 @@ const report: FteReportRow = {
 };
 
 function Fixture() {
-  if (view === "fte") return <FteReportForm centers={query.get("single-school") ? centers.filter((center) => center.id === "b") : centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" allowCenterSelect mode={query.get("director") ? "director" : "executive"} />;
+  if (view === "fte") return <FteReportForm centers={query.get("single-school") ? centers.filter((center) => center.id === "b") : centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" allowCenterSelect={!query.get("director")} mode={query.get("director") ? "director" : "executive"} />;
   if (view === "fte-reader") return <FteReportExplorer centers={centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" canEdit={false} />;
   if (view === "teacher") return <TeacherMobileWorkspace teacherName="Fake Teacher" roster={[{
     id: "fake-child", fullName: "Fake Child", ageGroup: "Preschool", enrollmentStatus: "active", photoVideoPermission: true, classroom: { id: "fake-room", name: "Fake Classroom" },
   }]} teacherProfile={{ name: "Fake Teacher", loginEmail: "teacher@example.com", contactEmail: "teacher@example.com", phone: "", title: "Teacher", centerId: "fake-center", centerName: "Fake School", classroomId: "fake-room", hasStaffKioskCode: true }} classroomOptions={[{ id: "fake-room", name: "Fake Classroom", ageGroup: "Preschool" }]} />;
   return <ParentPortalWorkspace {...executiveParentPortalDemo}
+    centerTimeZone={query.get("tz")}
+    dailyReports={query.has("tz") ? executiveParentPortalDemo.dailyReports.map((item, index) => ({ ...item, date: `2026-09-11T${index ? "23" : "14"}:00:00.000Z` })) : executiveParentPortalDemo.dailyReports}
+    media={query.has("tz") ? [] : executiveParentPortalDemo.media}
     activeView={view === "messages" ? "messages" : view === "updates" ? "updates" : view === "children" ? "family" : "home"}
     familySection="children"
     currentGuardianId="exec-demo-guardian-a"

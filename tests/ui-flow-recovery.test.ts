@@ -77,6 +77,7 @@ test("parent update grouping uses the school's day across midnight and daylight 
   for (const time of ["2026-11-01T05:30:00Z", "2026-11-01T06:30:00Z"]) assert.equal(zonedDateKey(time, "America/New_York"), "2026-11-01");
   const source = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
   assert.match(source, /const key = zonedDateKey\(value, timeZone\)/);
+  assert.match(source, /const timeZone = centerTimeZone \|\| workspaceTimeZone/);
   assert.match(source, /\[dailyReports, media, timeZone\]/);
 });
 

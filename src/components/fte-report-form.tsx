@@ -414,7 +414,7 @@ export function FteReportForm({
   }
 
   function setCenter(value: string | null) {
-    if (!value) return;
+    if (!allowCenterSelect || !value || !centers.some((center) => center.id === value)) return;
     if (!confirmDiscard()) return;
     setStatusMessage("");
     setErrorMessage("");
@@ -437,6 +437,7 @@ export function FteReportForm({
   }
 
   function editReport(report: FteReportRow) {
+    if (!centers.some((center) => center.id === report.centerId)) return;
     if (!confirmDiscard()) return;
     setStatusMessage("");
     setErrorMessage("");
@@ -700,7 +701,7 @@ export function FteReportForm({
             <Select
               value={form.centerId}
               onValueChange={setCenter}
-              disabled={centers.length <= 1}
+              disabled={!allowCenterSelect || centers.length <= 1}
             >
               <SelectTrigger id={`${fieldIdPrefix}-school`} className="w-full">
                 <SelectValue placeholder="Choose school">{selectedCenter?.name ?? "Choose school"}</SelectValue>

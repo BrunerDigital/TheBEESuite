@@ -106,7 +106,7 @@ import {
 import { billingFamilyAccountCategory } from "@/lib/prospective-family-billing";
 import { SCHOOL_DASHBOARD_LIST_LIMIT } from "@/lib/dashboard-query-limits";
 import { getFteDueState, isExecutiveFteManager, startOfFteWeek } from "@/lib/fte-report-guardrails";
-import { resolveFteReportSelection } from "@/lib/fte-report-selection";
+import { resolveFteReportSelection, writableFteCenterIds } from "@/lib/fte-report-selection";
 import { invoiceBelongsToFteWeek } from "@/lib/fte-billing-period";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
@@ -1477,6 +1477,7 @@ async function renderLivePage(
 
   if (slug === "fte-reports") {
     const selection = resolveFteReportSelection(visibleCenterIds, firstSearchParam(searchParams.centerId), firstSearchParam(searchParams.weekStart));
+    const writableCenterIds = writableFteCenterIds(visibleCenterIds, user.role, user.primaryCenterId);
     const [recentFteReports, requestedFteReports, fte, ftePrefills] = await Promise.all([
       getFteReports(visibleCenterIds, tenantWide ? executiveFteReportTake(visibleCenterIds.length) : 100),
       !selection.error && selection.weekStart
@@ -1498,6 +1499,7 @@ async function renderLivePage(
           canManageFte: canManageOperations(user),
           canApproveFte: isExecutiveFteManager(user.role),
           selection,
+          writableCenterIds,
           mode: tenantWide ? "executive" : "director",
           centers,
           stats: {
@@ -6241,7 +6243,7 @@ async function renderLivePage(
     return (
       <CenterDashboardPage
         data={{
-          canManageFte: canManageOperations(user),
+          canManageFte: canManageOperations(user) && Boolean(center && writableFteCenterIds(visibleCenterIds, user.role, user.primaryCenterId).includes(center.id)),
           canApproveFte: isExecutiveFteManager(user.role),
           centerId: center?.id ?? null,
           centerName: center?.crmLocationId ?? center?.name ?? "No center assigned",

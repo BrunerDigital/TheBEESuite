@@ -19,20 +19,20 @@ export type PayoutSetupChecklistFlow = {
 export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   {
     id: "login-school-profile",
-    title: "Log in and confirm school profile",
-    description: "Sign in with the school email, reset the password if prompted, and confirm school contact details, hours, timezone, capacity, and launch owner.",
-    href: "/billing-settings?view=setup",
+    title: "Review and confirm the prepared school profile",
+    description: "Review the prefilled school contact details, timezone, and capacity; correct only what changed, then save one explicit confirmation.",
+    href: "/billing-settings?view=setup#school-business-profile",
   },
   {
     id: "classrooms-ratios",
-    title: "Add classrooms, capacity, and ratios",
-    description: "Create every room with age group, licensed capacity, desired capacity, ratio rule, and assigned coverage.",
+    title: "Review classrooms, capacity, and ratios",
+    description: "Review any prepared rooms, then add or correct age groups, licensed capacity, desired capacity, ratio rules, and assigned coverage.",
     href: "/classroom-dashboard",
   },
   {
     id: "teachers-staff",
-    title: "Add teachers and staff",
-    description: "Add active teacher profiles, classroom assignments, schedules, kiosk codes, credentials, background checks, and onboarding documents.",
+    title: "Review teachers and staff",
+    description: "Review prepared or imported staff, then add or correct teacher profiles, classroom assignments, schedules, credentials, background checks, and onboarding documents.",
     href: "/staff",
   },
   {
@@ -50,8 +50,8 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   },
   {
     id: "tuition-billing-rules",
-    title: "Configure tuition, fees, and billing rules",
-    description: "Enter tuition plans, registration fees, deposits, discounts, subsidy/copay rules, opening balance policy, invoice cadence, and fee disclosures.",
+    title: "Review tuition, fees, and billing rules",
+    description: "Review the prepared plans and policies, then confirm or correct tuition, fees, discounts, subsidy/copay rules, opening balances, invoice cadence, and disclosures.",
     href: "/billing-settings",
   },
   {
@@ -75,14 +75,14 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   },
   {
     id: "messages-notifications",
-    title: "Configure messages and notifications",
-    description: "Review templates, broadcast segments, sender rules, email/SMS delivery, notification preferences, and AI draft review expectations.",
+    title: "Review messages and notifications",
+    description: "Review prepared templates and sender rules, then confirm broadcast segments, email/SMS delivery, notification preferences, and AI draft review expectations.",
     href: STAFF_MESSAGING_HREF,
   },
   {
     id: "calendar-fte",
-    title: "Set calendar, closures, and FTE workflow",
-    description: "Add events, holidays, closures, Google Calendar sync, reporting owner, Friday noon FTE cutoff, and Friday reminder/escalation expectations.",
+    title: "Review calendar, closures, and FTE workflow",
+    description: "Review prepared calendar and reporting defaults, then confirm events, closures, sync, the reporting owner, cutoff, and reminder/escalation expectations.",
     href: "/fte-reports",
   },
   {

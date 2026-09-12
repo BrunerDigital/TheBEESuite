@@ -16,6 +16,21 @@ The school only needs to supply or confirm facts that cannot be safely inferred:
 
 Do not put family data, child data, credentials, bank information, or verification codes in setup notes or ordinary email.
 
+## Already-created Kid City locations
+
+An existing Kid City location does not submit the public workspace intake and must not be recreated. An authorized setup-team member, owner, or director selects the existing location once with the global workspace switcher and opens **School Setup**. Every save remains scoped to that selected school.
+
+The shortest setup path is:
+
+1. BEE prepares the school profile, standard configuration, templates, forms, source mapping, and technical checks available from authorized business information.
+2. The school reviews the prefilled business profile, corrects only what changed, and selects **Save & confirm school profile**. This creates a versioned confirmation receipt; a later profile edit makes the confirmation visibly stale until it is reconfirmed.
+3. BEE and the school choose the correct data path for that location. Existing operating schools use the guarded import and verification flow. A genuinely new location can explicitly choose a clean start without fake records.
+4. The setup page routes the first unfinished area and shows the remaining inputs. Evidence-backed items complete automatically; notes cannot substitute for required records.
+5. The owner supplies the small set of protected facts or approvals BEE cannot provide: payout-bank entry on Stripe, source truth for family/child records or unresolved exceptions, exact invitation/message recipients, and activation approval.
+6. BEE runs the role-by-role verification. Launch, invitations, billing, payments, messaging, and prior-system retirement remain separate approvals.
+
+The setup page must always identify itself as an existing school workspace. Saving its business profile cannot change the school identifier, create another location, grant access, send invitations, activate payments, or enter payout-bank details.
+
 ## Workspace intake
 
 The public onboarding flow saves a resumable business-information draft on the current device. Launch notes are intentionally excluded from that browser draft. For multiple locations, paste one complete row per school using spreadsheet tabs, pipes, or commas:
@@ -28,7 +43,7 @@ The submitted row count must exactly equal the requested school count. The works
 
 The owner account receives owner-group access across its schools. This does not invite staff or families, enable parent engagement, activate payments, or complete payout onboarding.
 
-Inside School Setup, an authorized owner or director can correct the selected school's structured name, address, city, state/region, postal code, phone, email, timezone, and licensed capacity. Saving this profile refreshes the preparation receipt and keeps missing fields visible. It does not change location identifiers, access, invitations, payment activation, or payout-bank details.
+Inside School Setup, an authorized setup-team member, owner, or director can correct the selected school's structured name, address, city, state/region, postal code, phone, email, timezone, and licensed capacity. Saving a draft refreshes the prepared values while **Save & confirm school profile** binds the confirmation to that exact profile revision. It does not change location identifiers, access, invitations, payment activation, or payout-bank details.
 
 ## Choose one data starting point per school
 

@@ -50,9 +50,13 @@ test("directors can correct the structured school profile without changing prote
     assert.match(panel, new RegExp(`updateBusinessProfile\\(\\"${field}\\"`));
   }
   assert.match(route, /const businessProfileProvided = hasOwn\(body, "businessProfile"\)/);
+  assert.match(route, /const confirmBusinessProfile = body\?\.confirmBusinessProfile === true/);
   assert.match(route, /where: \{ id: center\.id, updatedAt: center\.updatedAt \}/);
-  assert.match(route, /preparedFields: completedFields[\s\S]*missingBusinessFields/);
-  assert.match(route, /excludedFields: \["payout_bank", "family_data", "child_data"\]/);
+  assert.match(route, /buildSchoolBusinessProfilePreparationReceipt/);
+  assert.match(panel, /Save & confirm school profile/);
+  assert.match(panel, /Existing school workspace/);
+  assert.match(panel, /never creates a duplicate school/);
+  assert.doesNotMatch(route, /schoolProfileNote|needs confirmation/);
   assert.doesNotMatch(panel, /crmLocationId|locationId|livePaymentsEnabled|parentEngagementEnabled/);
 });
 
@@ -82,4 +86,11 @@ test("held import rows remain blocking after safe rows are written", () => {
   assert.match(panel, /batchPersisted[\s\S]*\? heldRowsAfterCommit === 0/);
   assert.match(panel, /Safe rows imported\.[\s\S]*held row\(s\) still need a decision/);
   assert.match(panel, /batchPersisted \? "Resolve Held Rows"/);
+});
+
+test("credentialed director QA includes the existing-school setup route", () => {
+  const runner = readFileSync("scripts/qa-credentialed-role-workflows.ts", "utf8");
+
+  assert.match(runner, /director: \[[\s\S]*?id: "setup", href: "\/billing-settings\?view=setup"[\s\S]*?id: "classrooms"/);
+  assert.match(runner, /const viewports:[\s\S]*?id: "desktop"[\s\S]*?id: "mobile"/);
 });

@@ -89,7 +89,7 @@ test("school dashboard setup steps use current consolidated routes", () => {
   ];
 
   assert.deepEqual(hrefs.filter((href) => legacyAliases.has(href)), []);
-  assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "login-school-profile")?.href, "/billing-settings?view=setup");
+  assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "login-school-profile")?.href, "/billing-settings?view=setup#school-business-profile");
   assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "required-documents")?.href, "/forms?view=documents");
   assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "attendance-kiosk")?.href, "/classroom-dashboard?view=attendance");
   assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "compliance-incidents")?.href, "/forms?view=compliance");

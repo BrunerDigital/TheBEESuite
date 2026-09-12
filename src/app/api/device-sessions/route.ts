@@ -1,31 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessAllCenters, canManageOperations, getCurrentUser, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
+import { teamDeviceSessionWhere } from "@/lib/team-permissions-scope";
 
 export const runtime = "nodejs";
 
-type TargetUserAccess = {
-  staffProfile: { centerId: string | null } | null;
-  accessGrants: Array<{
-    centerId: string | null;
-    ownerGroup: { centers: Array<{ id: string }> } | null;
-  }>;
-};
-
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function targetUserIsVisibleToActor(actor: CurrentUser, targetUser: TargetUserAccess) {
-  if (canAccessAllCenters(actor)) return true;
-  const visibleCenterIds = new Set(actor.centerIds);
-  if (targetUser.staffProfile?.centerId && visibleCenterIds.has(targetUser.staffProfile.centerId)) return true;
-  return targetUser.accessGrants.some((grant) => {
-    if (grant.centerId && visibleCenterIds.has(grant.centerId)) return true;
-    return grant.ownerGroup?.centers.some((center) => visibleCenterIds.has(center.id)) ?? false;
-  });
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -62,59 +45,49 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const now = new Date();
+  const authorizedSessionWhere = teamDeviceSessionWhere({
+    tenantId: user.tenantId, tenantWide: canAccessAllCenters(user), visibleCenterIds: user.centerIds, at: now,
+  });
   const deviceSession = await prisma.deviceSession.findFirst({
-    where: { id: sessionId, tenantId: user.tenantId },
+    where: { AND: [{ id: sessionId }, authorizedSessionWhere] },
     include: {
       user: {
         select: {
           id: true,
           email: true,
           name: true,
-          staffProfile: { select: { centerId: true } },
-          accessGrants: {
-            where: {
-              isActive: true,
-              OR: [{ startsAt: null }, { startsAt: { lte: now } }],
-              AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
-            },
-            select: {
-              centerId: true,
-              ownerGroup: {
-                select: {
-                  centers: { select: { id: true } },
-                },
-              },
-            },
-          },
         },
       },
     },
   });
 
-  if (!deviceSession || !targetUserIsVisibleToActor(user, deviceSession.user)) {
+  if (!deviceSession) {
     return NextResponse.json({ ok: false, error: "Device session was not found." }, { status: 404 });
   }
+  if (deviceSession.revokedAt) return NextResponse.json({ ok: true, revokedAt: deviceSession.revokedAt.toISOString() });
 
-  await prisma.deviceSession.updateMany({
-    where: { id: deviceSession.id, revokedAt: null },
-    data: {
-      revokedAt: now,
-      revokedById: user.id,
-    },
+  const revoked = await prisma.$transaction(async (tx) => {
+    const changed = await tx.deviceSession.updateMany({
+      where: { AND: [{ id: deviceSession.id, revokedAt: null }, authorizedSessionWhere] },
+      data: { revokedAt: now, revokedById: user.id },
+    });
+    if (changed.count !== 1) return false;
+    await writeAuditLog(user, {
+      action: "device_session.revoked",
+      resource: "DeviceSession",
+      resourceId: deviceSession.id,
+      metadata: {
+        targetUserId: deviceSession.user.id,
+        targetEmail: deviceSession.user.email,
+        appMode: deviceSession.appMode,
+        deviceType: deviceSession.deviceType,
+        label: deviceSession.label,
+      },
+    }, tx);
+    return true;
   });
 
-  await writeAuditLog(user, {
-    action: "device_session.revoked",
-    resource: "DeviceSession",
-    resourceId: deviceSession.id,
-    metadata: {
-      targetUserId: deviceSession.user.id,
-      targetEmail: deviceSession.user.email,
-      appMode: deviceSession.appMode,
-      deviceType: deviceSession.deviceType,
-      label: deviceSession.label,
-    },
-  });
+  if (!revoked) return NextResponse.json({ ok: false, error: "The session or its access changed. Refresh the list before trying again." }, { status: 409 });
 
   return NextResponse.json({ ok: true, revokedAt: now.toISOString() });
 }

@@ -1,6 +1,15 @@
 # School UI and workflow readiness — September 12, 2026
 
-## Current baseline (before edits)
+## Current verified release
+
+- PR #352 merged through required checks/review conversations at `7e36706cd4526c3f656c109ab23b696f0db86a32`.
+- Production deployment `dpl_HhnvhBkv2aJiAuLsXZi9dMAHNCFm` is Ready on `thebeesuite.io`, `www.thebeesuite.io`, `the-bee-suite-beta.vercel.app`, `the-bee-suite-brunerdigital.vercel.app`, and the main-branch alias. Build/deployment completed September 12 at 03:52:30 UTC.
+- `/api/health` at 03:55:21 UTC returned `ok: true`, `database: connected`. Scoped error/fatal runtime counts were empty after deployment; this is an observation window, not a guarantee of no future errors.
+- Fresh synthetic-scope checks and authenticated production navigation passed **20/20**: Parent Home, Updates, Messages, Documents, Payments; Teacher Home, roster, quick log, photo, protected profile. Both 390×844 and 1440×1000. Two login and twelve heartbeat requests only; zero product-write attempts, HTTP errors, uncaught client errors, or horizontal overflow. Sanitized evidence and 20 fake-data screenshots: `output/playwright/app-review-production-after-release/`.
+- Final PR-head web CI, CodeQL, Vercel preview, Parent unsigned macOS checks, and Teacher unsigned macOS checks passed. No signing, archive, TestFlight, physical-device, or authenticated native verification is claimed.
+- The matrix and baseline sections below are discovery/history records. The next directory/teacher draft wave is tracked in `UI_UX_DIRECTORY_DRAFT_SAFETY_2026-09-12.md`; billing, automation, older parent records, and broader role verification remain active work.
+
+## Historical baseline (before edits)
 
 This is an active completion record, not a claim that all schools are activated or every feature is verified.
 

@@ -18,6 +18,9 @@ import { CollapsibleCard } from "@/components/workspace-preferences";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import { requestWithNetworkRecovery } from "@/lib/client-request-recovery";
+import { sameTeacherDraftTargets, teacherReportDraftSignature, validateTeacherDraftTargets } from "@/lib/teacher-draft-targets";
+import { MAX_CHILDREN_PER_REPORT_BATCH } from "@/lib/teacher-daily-report";
+import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import {
   CLASSROOM_OFFLINE_QUEUE_KEY,
   classroomOfflineQueueStorageKey,
@@ -294,11 +297,17 @@ export function TeacherMobileWorkspace({
   const [locationOverrides, setLocationOverrides] = useState<Record<string, string>>({});
   const [locationTarget, setLocationTarget] = useState("area:Playground");
   const [locationReason, setLocationReason] = useState("");
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const dailyReportDraft = { reportDate, mood, teacherNote, sendToParent, mealRows, napRows, noNap, diaperRows, activityRows, suppliesNeeded };
+  const [reportDraftBaseline, setReportDraftBaseline] = useState(() => teacherReportDraftSignature(dailyReportDraft));
+  const hasReportDraft = teacherReportDraftSignature(dailyReportDraft) !== reportDraftBaseline;
+  const hasSingleChildDraft = Boolean(photo || photoCaption || incidentDescription || actionTaken || incidentType !== "Minor injury" || locationReason || locationTarget !== "area:Playground");
+  useUnsavedChangesGuard(!previewMode && (hasReportDraft || hasSingleChildDraft), "Leave this page and discard your unsaved classroom drafts?");
   const offlineCredentialsRef = useRef<{ key: string; scopeId: string } | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isPending, startTransition] = useTransition();
 
-  const selectedChild = useMemo(() => roster.find((child) => child.id === selectedChildId) ?? roster[0], [roster, selectedChildId]);
+  const selectedChild = useMemo(() => roster.find((child) => child.id === selectedChildId), [roster, selectedChildId]);
   const selectedCustodyWarning = custodyWarningSummary(selectedChild?.family);
   const ratioByClassroomId = useMemo(() => {
     return new Map(classroomRatios.map((classroom) => [classroom.classroomId, classroom]));
@@ -498,23 +507,43 @@ export function TeacherMobileWorkspace({
   }
 
   function chooseChild(childId: string) {
+    if (isPending || !roster.some((child) => child.id === childId)) return;
+    const nextTargets = selectedDailyReportChildIds.length > 1 ? selectedDailyReportChildIds : [childId];
+    const changesChild = childId !== selectedChildId;
+    const changesReports = !sameTeacherDraftTargets(nextTargets, selectedDailyReportChildIds);
+    if (((changesChild && hasSingleChildDraft) || (changesReports && hasReportDraft))
+      && !window.confirm("Changing children will discard the affected unsaved photo, incident, location, or daily-report drafts. Cancel to finish them for the current children, or confirm to discard and switch.")) return;
+    if (changesChild) clearSingleChildDrafts();
+    if (changesReports) resetDailyReportDrafts({ preserveSettings: true });
     setSelectedChildId(childId);
-    setSelectedDailyReportChildIds((current) => current.length > 1 ? current : [childId]);
+    setSelectedDailyReportChildIds(nextTargets);
   }
 
   function setDailyReportTargets(childIds: string[]) {
-    const rosterIds = new Set(roster.map((child) => child.id));
-    const nextIds = Array.from(new Set(childIds.filter((childId) => rosterIds.has(childId)))).slice(0, 40);
-    setSelectedDailyReportChildIds(nextIds);
-    if (nextIds[0]) setSelectedChildId(nextIds[0]);
+    if (isPending) return;
+    const target = validateTeacherDraftTargets(childIds, roster.map((child) => child.id));
+    if (!target.ok) return showError(target.error);
+    if (sameTeacherDraftTargets(target.ids, selectedDailyReportChildIds)) return;
+    if (hasReportDraft && !window.confirm("Discard the unsaved daily-report entries before changing their recipients? Cancel to keep the draft for the current children.")) return;
+    resetDailyReportDrafts({ preserveSettings: true });
+    setSelectedDailyReportChildIds(target.ids);
   }
 
   function toggleDailyReportTarget(childId: string) {
-    setSelectedDailyReportChildIds((current) => {
-      if (current.includes(childId)) return current.filter((id) => id !== childId);
-      return [...current, childId].slice(0, 40);
-    });
-    setSelectedChildId(childId);
+    setDailyReportTargets(selectedDailyReportChildIds.includes(childId)
+      ? selectedDailyReportChildIds.filter((id) => id !== childId)
+      : [...selectedDailyReportChildIds, childId]);
+  }
+
+  function clearSingleChildDrafts() {
+    setPhoto(null);
+    if (photoInputRef.current) photoInputRef.current.value = "";
+    setPhotoCaption("");
+    setIncidentType("Minor injury");
+    setIncidentDescription("");
+    setActionTaken("");
+    setLocationReason("");
+    setLocationTarget("area:Playground");
   }
 
   function selectPresentDailyReports() {
@@ -616,10 +645,15 @@ export function TeacherMobileWorkspace({
         endpoint: "/api/children/location",
         body: { childId: selectedChild.id, classroomId: isArea ? null : targetValue, areaName: isArea ? targetValue : null, reason: locationReason },
         label: `${selectedChild.fullName} location`,
-        onQueued: () => setLocationOverrides((current) => ({ ...current, [selectedChild.id]: isArea ? targetValue : classroomOptions.find((room) => room.id === targetValue)?.name ?? "Classroom" })),
+        onQueued: () => {
+          setLocationOverrides((current) => ({ ...current, [selectedChild.id]: isArea ? targetValue : classroomOptions.find((room) => room.id === targetValue)?.name ?? "Classroom" }));
+          setLocationReason("");
+          setLocationTarget("area:Playground");
+        },
         onSuccess: () => {
           setLocationOverrides((current) => ({ ...current, [selectedChild.id]: isArea ? targetValue : classroomOptions.find((room) => room.id === targetValue)?.name ?? "Classroom" }));
           setLocationReason("");
+          setLocationTarget("area:Playground");
           showStatus(`${selectedChild.fullName} location updated.`);
         },
       });
@@ -650,14 +684,23 @@ export function TeacherMobileWorkspace({
     setActivityRows((current) => current.length > 1 ? current.filter((row) => row.id !== id) : [createActivityDraft()]);
   }
 
-  function resetDailyReportDrafts() {
+  function resetDailyReportDrafts({ preserveSettings = false }: { preserveSettings?: boolean } = {}) {
+    const next = {
+      reportDate: preserveSettings ? reportDate : dateInputValue(new Date(), timeZone), mood: preserveSettings ? mood : "Happy", teacherNote: "", sendToParent: preserveSettings ? sendToParent : true,
+      mealRows: [createMealDraft()], napRows: [createNapDraft()], noNap: false,
+      diaperRows: [createDiaperDraft(timeZone)], activityRows: [createActivityDraft()], suppliesNeeded: "",
+    };
+    setReportDate(next.reportDate);
+    setMood(next.mood);
+    setSendToParent(next.sendToParent);
     setTeacherNote("");
     setSuppliesNeeded("");
-    setMealRows([createMealDraft()]);
-    setNapRows([createNapDraft()]);
+    setMealRows(next.mealRows);
+    setNapRows(next.napRows);
     setNoNap(false);
-    setDiaperRows([createDiaperDraft(timeZone)]);
-    setActivityRows([createActivityDraft()]);
+    setDiaperRows(next.diaperRows);
+    setActivityRows(next.activityRows);
+    setReportDraftBaseline(teacherReportDraftSignature(next));
   }
 
   function buildDailyReportEntries() {
@@ -794,7 +837,9 @@ export function TeacherMobileWorkspace({
   }
 
   function submitDailyReport() {
-    const targetChildIds = activeDailyReportChildIds;
+    const target = validateTeacherDraftTargets(selectedDailyReportChildIds, roster.map((child) => child.id));
+    if (!target.ok) return showError(target.error);
+    const targetChildIds = target.ids;
     if (!targetChildIds.length) {
       showError("Choose at least one child for the daily report.");
       return;
@@ -823,11 +868,11 @@ export function TeacherMobileWorkspace({
         label: targetLabel,
         onQueued: () => {
           markDailyReportsLocally(targetChildIds, "queued");
-          resetDailyReportDrafts();
+          resetDailyReportDrafts({ preserveSettings: true });
         },
         onSuccess: () => {
           markDailyReportsLocally(targetChildIds, sendToParent ? "sent" : "draft");
-          resetDailyReportDrafts();
+          resetDailyReportDrafts({ preserveSettings: true });
           const reportLabel = targetChildIds.length === 1 ? "Daily report" : `${targetChildIds.length} daily reports`;
           showStatus(sendToParent ? `${reportLabel} saved for parent view.` : `${reportLabel} saved as a staff-only draft${targetChildIds.length === 1 ? "" : "s"}.`);
         },
@@ -836,6 +881,7 @@ export function TeacherMobileWorkspace({
   }
 
   function submitIncident() {
+    if (!selectedChild) return showError("Choose a child in your current roster before saving this incident.");
     startTransition(async () => {
       await postJsonOrQueue({
         endpoint: "/api/teacher/incidents",
@@ -848,10 +894,12 @@ export function TeacherMobileWorkspace({
         },
         label: `${selectedChild?.fullName ?? "Child"} incident report`,
         onQueued: () => {
+          setIncidentType("Minor injury");
           setIncidentDescription("");
           setActionTaken("");
         },
         onSuccess: () => {
+          setIncidentType("Minor injury");
           setIncidentDescription("");
           setActionTaken("");
           showStatus("Incident report sent to the director for review.");
@@ -881,6 +929,7 @@ export function TeacherMobileWorkspace({
       const json = await response.json().catch(() => null) as { error?: string; warning?: string } | null;
       if (!response.ok) return showError(json?.error || "Photo could not be shared.");
       setPhoto(null);
+      if (photoInputRef.current) photoInputRef.current.value = "";
       setPhotoCaption("");
       showStatus(json?.warning || "Photo shared to the parent portal.");
     });
@@ -891,10 +940,13 @@ export function TeacherMobileWorkspace({
     .filter((child): child is ChildOption => Boolean(child));
 
   return (
-    <div
+    <fieldset
+      disabled={isPending}
       className="teacher-mobile-workspace mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-3 sm:gap-4 [&_button]:min-h-11 [&_button]:min-w-11"
       aria-busy={isPending}
     >
+      {(selectedChildId && !selectedChild) || selectedDailyReportChildIds.some((id) => !roster.some((child) => child.id === id)) ? <Alert variant="destructive"><AlertTitle>Review selected children</AlertTitle><AlertDescription>A selected child is no longer in this roster. Your drafts are retained; choose current recipients before continuing. Nothing will be reassigned automatically.</AlertDescription></Alert> : null}
+      {hasReportDraft || hasSingleChildDraft ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-3 text-sm"><span>Unsaved classroom drafts stay with their selected children.</span><Button type="button" variant="outline" size="sm" onClick={() => { if (window.confirm("Discard all unsaved photo, incident, location, and daily-report drafts?")) { clearSingleChildDrafts(); resetDailyReportDrafts(); } }}>Discard classroom drafts</Button></div> : null}
       {appReviewMode ? (
         <details className="group rounded-xl border bg-card px-3 text-sm" data-teacher-review-notice>
           <summary className="flex min-h-11 min-w-0 cursor-pointer list-none items-center gap-2 py-2 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
@@ -959,7 +1011,7 @@ export function TeacherMobileWorkspace({
           ) : null}
         </div>
         <h1 id="teacher-home-heading" className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">Today in your classroom</h1>
-        <dl className="my-3 grid grid-cols-3 gap-2 border-y py-2 text-sm">
+        <dl className="my-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,5rem),1fr))] gap-2 border-y py-2 text-sm">
           <div><dt className="text-xs text-muted-foreground">In your roster</dt><dd className="text-lg font-semibold tabular-nums">{roster.length}</dd></div>
           <div><dt className="text-xs text-muted-foreground">At school</dt><dd className="text-lg font-semibold tabular-nums">{roster.filter((child) => attendanceFor(child).latestLogType === "check_in" || attendanceFor(child).status === "present").length}</dd></div>
           <div><dt className="text-xs text-muted-foreground">Reports sent</dt><dd className="text-lg font-semibold tabular-nums">{roster.filter((child) => dailyReportFor(child).status === "sent").length}</dd></div>
@@ -1185,7 +1237,6 @@ export function TeacherMobileWorkspace({
                               aria-label={`Check in ${child.fullName}`}
                               disabled={isPending || isCheckedIn}
                               onClick={() => {
-                                chooseChild(child.id);
                                 submitAttendance({ childId: child.id, status: "present", logType: "check_in", label: `${child.fullName} checked in.` });
                               }}
                             >
@@ -1199,7 +1250,6 @@ export function TeacherMobileWorkspace({
                               aria-label={`Check out ${child.fullName}`}
                               disabled={isPending || !isCheckedIn}
                               onClick={() => {
-                                chooseChild(child.id);
                                 submitAttendance({ childId: child.id, status: "checked_out", logType: "check_out", label: `${child.fullName} checked out.` });
                               }}
                             >
@@ -1213,7 +1263,6 @@ export function TeacherMobileWorkspace({
                               aria-label={`Mark absent ${child.fullName}`}
                               disabled={isPending || isCheckedIn || attendance.status === "absent"}
                               onClick={() => {
-                                chooseChild(child.id);
                                 submitAttendance({ childId: child.id, status: "absent", logType: "", label: `${child.fullName} marked absent.` });
                               }}
                             >
@@ -1322,6 +1371,7 @@ export function TeacherMobileWorkspace({
               <Label htmlFor="teacher-child-photo">Take or upload photo</Label>
               <Input
                 id="teacher-child-photo"
+                ref={photoInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
@@ -1351,7 +1401,7 @@ export function TeacherMobileWorkspace({
                   Report targets
                 </div>
                 <Badge variant={activeDailyReportChildren.length ? "default" : "destructive"}>
-                  {activeDailyReportChildren.length || 0} selected
+                  {activeDailyReportChildren.length || 0} of {roster.length} selected · max {MAX_CHILDREN_PER_REPORT_BATCH}
                 </Badge>
               </div>
               <div className="flex flex-wrap gap-1">
@@ -1371,7 +1421,7 @@ export function TeacherMobileWorkspace({
               </div>
               <div className="mt-3 space-y-1">
                 <Label htmlFor="daily-report-child">Child</Label>
-                <Select value={selectedChild?.id ?? ""} onValueChange={(value) => { if (value) setDailyReportTargets([value]); }}>
+                <Select value={activeDailyReportChildIds.length === 1 ? activeDailyReportChildIds[0] : ""} onValueChange={(value) => { if (value) setDailyReportTargets([value]); }}>
                   <SelectTrigger id="daily-report-child" className="w-full">
                     <SelectValue placeholder="Choose a child from this class" />
                   </SelectTrigger>
@@ -1399,7 +1449,7 @@ export function TeacherMobileWorkspace({
                   <Users data-icon="inline-start" />
                   All visible
                 </Button>
-                <Button type="button" size="xs" variant="ghost" onClick={() => setSelectedDailyReportChildIds(selectedChild?.id ? [selectedChild.id] : [])}>
+                <Button type="button" size="xs" variant="ghost" onClick={() => setDailyReportTargets(selectedChild?.id ? [selectedChild.id] : [])}>
                   Selected child
                 </Button>
               </div>
@@ -1789,6 +1839,6 @@ export function TeacherMobileWorkspace({
           defaultCollapsed
         />
       ) : null}
-    </div>
+    </fieldset>
   );
 }

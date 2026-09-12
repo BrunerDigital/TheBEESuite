@@ -90,7 +90,9 @@ import {
   type ExecutiveMarketingCenter,
 } from "@/components/executive-marketing-portfolio";
 import { DeveloperSubscriptionConsole, type DeveloperSubscriptionSchool } from "@/components/developer-subscription-console";
-import { DeviceSessionPanel, type DeviceSessionPanelRow } from "@/components/device-session-panel";
+import { StatCard } from "@/components/record-stat-card";
+import { formatRecordLabel } from "@/lib/record-label";
+export { TeamPermissionsPage, type TeamPermissionsData } from "@/components/team-permissions-page";
 import { DirectorPaymentTerminalWorkspace } from "@/components/director-payment-terminal-workspace";
 import { DocumentReviewActions } from "@/components/document-review-actions";
 import { DocumentUploadActions } from "@/components/document-upload-actions";
@@ -243,22 +245,6 @@ function jsonSummary(value: unknown) {
   return String(value);
 }
 
-function formatRecordLabel(value: string | null | undefined) {
-  if (!value) return "Not set";
-  const acronyms = new Set(["FTE", "SMS", "API", "ACH", "ID", "URL", "QR"]);
-  const words = value
-    .replaceAll("_", " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .map((word) => {
-      const upper = word.toLocaleUpperCase();
-      return acronyms.has(upper) ? upper : word.toLocaleLowerCase();
-    })
-    .join(" ");
-
-  return words.replace(/^\w/, (letter) => letter.toLocaleUpperCase());
-}
 
 function localImageSrc(value: string | null | undefined) {
   return value?.startsWith("/") ? value : null;
@@ -303,29 +289,6 @@ function billingRecordHref(family: { id?: string | null; centerId?: string | nul
   return `/billing-invoices?${params.toString()}#billing-workbench`;
 }
 
-function StatCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string | number;
-  detail?: string;
-}) {
-  return (
-    <Card className="border border-border bg-card shadow-none">
-      <CardHeader className="gap-1 pb-1 pt-1">
-        <CardDescription className="text-sm font-medium">{label}</CardDescription>
-        <CardTitle as="div" className="text-2xl font-semibold tabular-nums tracking-tight">{value}</CardTitle>
-      </CardHeader>
-      {detail ? (
-        <CardContent className="pt-1">
-          <p className="text-sm leading-5 text-muted-foreground">{detail}</p>
-        </CardContent>
-      ) : null}
-    </Card>
-  );
-}
 
 function MetricTile({
   label,
@@ -546,113 +509,6 @@ export function AuditLogsPage({ data }: { data: AuditLogsData }) {
   );
 }
 
-export type TeamPermissionsData = {
-  brandName: string;
-  users: Array<{
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    isActive: boolean;
-    mustResetPassword: boolean;
-    accessGrants: Array<{
-      id: string;
-      role: string;
-      scopeType: string;
-      brand: { name: string } | null;
-      organization: { name: string } | null;
-      ownerGroup: { name: string } | null;
-      center: { name: string; crmLocationId: string | null } | null;
-    }>;
-    staffProfile: {
-      title: string;
-      center: { name: string; crmLocationId: string | null } | null;
-    } | null;
-  }>;
-  roleCounts: Array<{ role: string; count: number }>;
-  deviceSessions: DeviceSessionPanelRow[];
-  currentDeviceSessionId: string | null;
-  canManageDeviceSessions: boolean;
-};
-
-export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
-  return (
-    <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
-          <KeyRound data-icon="inline-start" />
-          Role-based access
-        </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Team, Users, and Permissions</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Review team roles, account status, location access, and active device sessions.
-        </p>
-      </section>
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Users available" value={data.users.length} detail="Based on your assigned access" />
-        {data.roleCounts.slice(0, 3).map((role) => (
-          <StatCard key={role.role} label={formatRecordLabel(role.role)} value={role.count} />
-        ))}
-      </div>
-      <DeviceSessionPanel
-        sessions={data.deviceSessions}
-        currentDeviceSessionId={data.currentDeviceSessionId}
-        canManage={data.canManageDeviceSessions}
-      />
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">User Directory</CardTitle>
-          <CardDescription>{data.brandName} accounts and assigned location access</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Center</TableHead>
-                <TableHead>Location access</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="font-medium">{user.name}</div>
-                    <div className="text-xs text-muted-foreground">{user.email}</div>
-                  </TableCell>
-                  <TableCell>{formatRecordLabel(user.role)}</TableCell>
-                  <TableCell>{user.staffProfile?.center?.crmLocationId ?? user.staffProfile?.center?.name ?? "Organization-wide"}</TableCell>
-                  <TableCell>
-                    {user.accessGrants.length ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {user.accessGrants.slice(0, 3).map((grant) => (
-                          <Badge key={grant.id} variant="outline">
-                            {formatRecordLabel(grant.scopeType)}: {grant.center?.crmLocationId ?? grant.center?.name ?? grant.ownerGroup?.name ?? grant.organization?.name ?? grant.brand?.name ?? "All locations"}
-                          </Badge>
-                        ))}
-                        {user.accessGrants.length > 3 ? <Badge variant="outline">+{user.accessGrants.length - 3}</Badge> : null}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Access based on role</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant={user.isActive ? "default" : "outline"}>{user.isActive ? "Active" : "Inactive"}</Badge>
-                      {user.mustResetPassword ? <Badge variant="secondary">Reset required</Badge> : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 export type AgencyAdminData = {
   brandName: string;

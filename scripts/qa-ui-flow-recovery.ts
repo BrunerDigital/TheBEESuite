@@ -2,9 +2,19 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { build } from "esbuild";
 import { chromium } from "playwright";
+import { mkdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import postcss from "postcss";
+import tailwindcss from "@tailwindcss/postcss";
 
 // No credentials or backend: real components, fake props, intercepted requests only.
 async function main() {
+  const evidenceDirectory = path.resolve("output/playwright/ui-flow-recovery");
+  await mkdir(evidenceDirectory, { recursive: true });
+  const stylePath = path.resolve("src/app/globals.css");
+  const style = await postcss([tailwindcss()]).process(await readFile(stylePath, "utf8"), { from: stylePath });
+  const fixtureFont = await readFile(path.resolve("node_modules/next/dist/next-devtools/server/font/geist-latin.woff2"));
+  const fixtureStyle = `${style.css}\n@font-face{font-family:FixtureGeist;src:url('/fixture-font.woff2') format('woff2');font-weight:100 900;font-display:swap} :root{--font-geist-sans:FixtureGeist,Arial,sans-serif;--font-geist-mono:monospace}`;
   const bundle = await build({
     entryPoints: ["tests/fixtures/ui-flow-recovery.tsx"], outfile: "fixture.js", bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
     define: { "process.env": "{}", "process.env.NODE_ENV": '"test"' },
@@ -17,7 +27,8 @@ async function main() {
   });
   const server = createServer((request, response) => {
     if (request.url === "/fixture.js") { response.setHeader("Content-Type", "text/javascript"); response.end(bundle.outputFiles.find((file) => file.path.endsWith(".js"))!.contents); return; }
-    if (request.url === "/fixture.css") { response.setHeader("Content-Type", "text/css"); response.end(bundle.outputFiles.find((file) => file.path.endsWith(".css"))?.contents); return; }
+    if (request.url === "/fixture.css") { response.setHeader("Content-Type", "text/css"); response.end(fixtureStyle); return; }
+    if (request.url === "/fixture-font.woff2") { response.setHeader("Content-Type", "font/woff2"); response.end(fixtureFont); return; }
     response.setHeader("Content-Type", "text/html");
     response.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>');
   });
@@ -28,7 +39,8 @@ async function main() {
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: "Asia/Tokyo", serviceWorkers: "block" });
   const writes: Array<{ path: string; body: string | null }> = [];
-  let outcome: "abort" | "reject" | "success" = "abort";
+  let outcome: "abort" | "reject" | "success" | "hold" | "invalid-success" = "abort";
+  let releaseHeld: (() => void) | undefined;
   await context.route("**/*", async (route) => {
     const request = route.request(), url = new URL(request.url());
     if (url.origin !== base) return route.abort();
@@ -36,7 +48,8 @@ async function main() {
       if (request.method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
       writes.push({ path: url.pathname, body: request.postData() });
       if (outcome === "abort") return route.abort("failed");
-      return route.fulfill({ status: outcome === "reject" ? 403 : 200, contentType: "application/json", body: JSON.stringify(outcome === "reject" ? { error: "Fake test denial" } : { ok: true }) });
+      if (outcome === "hold") await new Promise<void>((resolve) => { releaseHeld = resolve; });
+      return route.fulfill({ status: outcome === "reject" ? 403 : 200, contentType: "application/json", body: JSON.stringify(outcome === "reject" ? { error: "Fake test denial" } : outcome === "invalid-success" ? { ok: false } : { ok: true, ...(url.pathname === "/api/device-sessions" ? { revokedAt: new Date().toISOString() } : {}) }) });
     }
     if (request.method() !== "GET") throw new Error("Unexpected non-API write blocked");
     return route.continue();
@@ -145,8 +158,146 @@ async function main() {
     await page.waitForFunction(() => [...document.querySelectorAll<HTMLButtonElement>("#teacher-photo button")].some((button) => button.textContent?.trim() === "Share Photo" && !button.disabled));
     assert.equal(await page.getByRole("button", { name: "Share Photo", exact: true }).isEnabled(), true);
     assert.equal(writes.length, 5, "Exactly one request per explicit action; no automatic retries");
+    await page.locator("#teacher-daily-report").getByRole("button", { expanded: false }).first().click();
+    await page.locator("#teacher-incident").getByRole("button", { expanded: false }).first().click();
+    await page.getByLabel("Teacher note for parents", { exact: true }).fill("Fake report for original child");
+    await page.getByLabel("Objective incident description", { exact: true }).fill("Fake incident for original child");
+    await page.getByLabel("Action taken after incident", { exact: true }).fill("Fake action for original child");
+    await page.locator("#photo-child").click();
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await page.getByRole("option", { name: /^Fake Child 2/ }).click();
+    assert.match(await page.locator("#photo-child").innerText(), /Fake Child/);
+    assert.doesNotMatch(await page.locator("#photo-child").innerText(), /Fake Child 2/);
+    assert.equal(await page.getByLabel("Teacher note for parents", { exact: true }).inputValue(), "Fake report for original child");
+    assert.equal(await page.getByLabel("Objective incident description", { exact: true }).inputValue(), "Fake incident for original child");
+    assert.equal(await page.getByLabel("Take or upload photo", { exact: true }).evaluate((element: HTMLInputElement) => element.files?.[0]?.name), "fake-photo.png");
+    await page.locator("#photo-child").click();
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("option", { name: /^Fake Child 2/ }).click();
+    assert.match(await page.locator("#photo-child").innerText(), /Fake Child 2/);
+    for (const label of ["Teacher note for parents", "Objective incident description", "Action taken after incident", "Photo caption for parents"]) assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), "");
+    assert.equal(await page.getByLabel("Take or upload photo", { exact: true }).evaluate((element: HTMLInputElement) => element.files?.length), 0);
+
+    await page.getByLabel("Photo caption for parents", { exact: true }).fill("Fake caption bound to child two");
+    await page.getByLabel("Teacher note for parents", { exact: true }).fill("Fake report bound to child two");
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await page.getByRole("button", { name: "All visible", exact: true }).click();
+    assert.equal(await page.getByLabel("Teacher note for parents", { exact: true }).inputValue(), "Fake report bound to child two");
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "All visible", exact: true }).click();
+    assert.equal(await page.getByLabel("Teacher note for parents", { exact: true }).inputValue(), "");
+    assert.equal(await page.getByLabel("Photo caption for parents", { exact: true }).inputValue(), "Fake caption bound to child two", "Report target changes cannot reassign or erase a separate photo draft");
+    await page.locator("#teacher-roster").getByRole("button", { expanded: false }).first().click();
+    outcome = "hold";
+    await page.getByRole("button", { name: "Check in Fake Child", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector<HTMLInputElement>("#teacher-child-photo")?.matches(":disabled"));
+    assert.equal(await page.getByLabel("Photo caption for parents", { exact: true }).isDisabled(), true);
+    assert.match(await page.locator("#photo-child").innerText(), /Fake Child 2/, "Attendance for another child does not change draft selection");
+    assert.equal(writes.length, 6);
+    assert.equal(JSON.parse(writes[5].body!).childId, "fake-child");
+    assert.ok(releaseHeld);
+    releaseHeld();
+    await page.waitForFunction(() => !document.querySelector<HTMLInputElement>("#teacher-child-photo")?.matches(":disabled"));
+    assert.equal(await page.getByLabel("Photo caption for parents", { exact: true }).inputValue(), "Fake caption bound to child two");
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.goto(`${base}/?view=teacher&large-roster=1`);
+    await page.locator("#teacher-daily-report").waitFor();
+    const collapsedReport = page.locator("#teacher-daily-report").getByRole("button", { expanded: false }).first();
+    if (await collapsedReport.count()) await collapsedReport.click();
+    await page.getByRole("button", { name: "All visible", exact: true }).click();
+    await page.getByText(/Choose no more than 40 children per report batch/).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Save daily report", exact: true }).count(), 1, "An oversized batch leaves the initial one-child selection intact");
+    const collapsedRoster = page.locator("#teacher-roster").getByRole("button", { expanded: false }).first();
+    if (await collapsedRoster.count()) await collapsedRoster.click();
+    for (let index = 2; index <= 40; index += 1) await page.getByRole("checkbox", { name: `Include Fake Child ${index} in daily report batch`, exact: true }).check();
+    await page.getByRole("checkbox", { name: "Include Fake Child 41 in daily report batch", exact: true }).click();
+    assert.equal(await page.getByRole("checkbox", { name: "Include Fake Child 41 in daily report batch", exact: true }).isChecked(), false);
+    assert.equal(await page.getByRole("button", { name: "Save 40 daily reports", exact: true }).count(), 1);
+    assert.equal(writes.length, 6, "Draft switching and batch selection never submit content");
+    outcome = "success";
+    await page.getByLabel("Report date", { exact: true }).fill("2026-09-09");
+    await page.getByLabel("Mood", { exact: true }).fill("Calm");
+    await page.getByRole("checkbox", { name: "Send to parent portal", exact: true }).uncheck();
+    await page.getByLabel("Teacher note for parents", { exact: true }).fill("Fake staff-only backdated report");
+    await page.getByRole("button", { name: "Save 40 daily reports", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector<HTMLInputElement>("#daily-report-date")?.matches(":disabled") === false && document.querySelector<HTMLTextAreaElement>("#teacher-note-for-parents")?.value === "");
+    assert.equal(await page.getByLabel("Report date", { exact: true }).inputValue(), "2026-09-09");
+    assert.equal(await page.getByLabel("Mood", { exact: true }).inputValue(), "Calm");
+    assert.equal(await page.getByRole("checkbox", { name: "Send to parent portal", exact: true }).isChecked(), false);
+    await page.getByRole("button", { name: "Selected child", exact: true }).click();
+    const photoClosed = page.locator("#teacher-photo").getByRole("button", { expanded: false }).first();
+    if (await photoClosed.count()) await photoClosed.click();
+    await page.locator("#photo-child").click();
+    await page.getByRole("option", { name: /^Fake Child 2 / }).click();
+    assert.equal(await page.getByLabel("Report date", { exact: true }).inputValue(), "2026-09-09", "Ordinary child changes preserve saved report settings");
+    assert.equal(await page.getByRole("checkbox", { name: "Send to parent portal", exact: true }).isChecked(), false);
+    const locationClosed = page.locator("#teacher-location").getByRole("button", { expanded: false }).first();
+    if (await locationClosed.count()) await locationClosed.click();
+    await page.getByRole("combobox", { name: "Move to", exact: true }).click();
+    await page.getByRole("option", { name: "Gym", exact: true }).click();
+    await page.locator("#photo-child").click();
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await page.getByRole("option", { name: /^Fake Child 3 / }).click();
+    assert.match(await page.locator("#photo-child").innerText(), /Fake Child 2/);
+    assert.match(await page.locator("#teacher-location-target").innerText(), /Gym/);
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Discard classroom drafts", exact: true }).click();
+    assert.match(await page.locator("#teacher-location-target").innerText(), /Playground/);
+    assert.equal(writes.length, 7, "Only the explicit fake report save added a request");
+
+    await page.goto(`${base}/?view=team`);
+    await page.getByRole("heading", { name: "Team, users, and permissions", exact: true }).waitFor();
+    assert.equal(await page.getByRole("link", { name: "Previous users", exact: true }).first().getAttribute("href"), "/staff?view=permissions&q=Fake&peoplePage=5&sessionPage=3#user-directory");
+    assert.equal(await page.getByRole("link", { name: "Previous sessions", exact: true }).first().getAttribute("href"), "/staff?view=permissions&q=Fake&peoplePage=6&sessionPage=2#device-sessions");
+    assert.equal(await page.getByText("251–251 of 251 users", { exact: true }).count(), 2);
+    assert.equal(await page.getByText("101–101 of 101 sessions", { exact: true }).count(), 2);
+    await page.getByText("All 5 role totals", { exact: true }).press("Enter");
+    await page.getByText("Show 2 more assignments", { exact: true }).press("Enter");
+    assert.equal(await page.getByText("Includes your assigned schools", { exact: false }).count(), 5);
+    assert.equal(await page.getByRole("button", { name: /^Revoke / }).count(), 0);
+    assert.equal(await page.getByText("Read only", { exact: true }).count(), 1);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const zoom of [1, 2]) {
+        await page.evaluate((scale) => { document.documentElement.style.fontSize = `${scale * 100}%`; }, zoom);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `Directory ${width}px at ${zoom * 100}% must not overflow`);
+        await page.screenshot({ path: path.join(evidenceDirectory, `team-directory-${width}-${zoom * 100}.png`), fullPage: true });
+      }
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "100%"; });
+    await page.getByLabel("Find a user", { exact: true }).fill("Fake Director");
+    await Promise.all([page.waitForURL(/\/staff\?/), page.getByRole("button", { name: "Search", exact: true }).click()]);
+    const searched = new URL(page.url());
+    assert.equal(searched.pathname, "/staff");
+    assert.equal(searched.searchParams.get("view"), "permissions");
+    assert.equal(searched.searchParams.get("q"), "Fake Director");
+    assert.equal(searched.searchParams.get("sessionPage"), "3");
+    assert.equal(searched.searchParams.get("peoplePage"), null);
+    assert.equal(searched.hash, "#user-directory");
+    await page.goto(`${base}/?view=team&manage=1&current-device=1`);
+    await page.getByText("Use Sign out", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: /^Revoke / }).count(), 0);
+    await page.goto(`${base}/?view=team&manage=1`);
+    outcome = "abort";
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Revoke Fake classroom tablet", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "could not confirm whether this session ended" }).waitFor();
+    assert.equal(writes.length, 8);
+    outcome = "invalid-success";
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Revoke Fake classroom tablet", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "could not confirm whether this session ended" }).waitFor();
+    assert.equal(await page.getByText("Ended", { exact: true }).count(), 0, "A malformed HTTP 200 must not end the visible session");
+    assert.equal(writes.length, 9);
+    outcome = "success";
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Revoke Fake classroom tablet", exact: true }).click();
+    await page.getByRole("status").filter({ hasText: "Device session ended" }).waitFor();
+    assert.equal(writes.length, 10);
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ passed: true, checks: ["exact historical school/week", "saved zero retained", "uncertain save preserves draft", "no automatic retry", "discard cancel/confirm", "approved director locked", "auditor read-only", "earlier announcements keyboard disclosure", "reply context preserves draft and attachment", "acknowledgment reject/success with refresh held", "teacher profile failure retains inputs", "teacher photo failure retains selection and caption"], interceptedWrites: writes.length }));
+    console.log(JSON.stringify({ passed: true, checks: ["exact historical school/week", "saved zero retained", "uncertain save preserves draft", "no automatic retry", "discard cancel/confirm", "approved director locked", "auditor read-only", "family school timezone", "earlier announcements keyboard disclosure", "reply context preserves draft and attachment", "acknowledgment reject/success with refresh held", "teacher profile failure retains inputs", "teacher photo failure retains selection and caption", "teacher recipient discard guards", "attendance never retargets drafts", "pending controls locked", "report batches never silently truncate", "staff-only backdate settings survive save and child changes", "destination-only location draft guarded", "directory and session totals and paging", "directory canonical search and role disclosure", "read-only and current-device explanations", "session recovery and success announcement"], interceptedWrites: writes.length }));
   } finally { await browser.close(); await new Promise<void>((done) => server.close(() => done())); }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

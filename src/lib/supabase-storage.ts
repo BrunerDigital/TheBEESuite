@@ -633,6 +633,12 @@ export async function uploadMessageAttachmentBuffer({
   };
 }
 
+/** Delete only a newly uploaded message attachment after a proven rolled-back write. */
+export async function deleteMessageAttachmentObject(storageKey: string) {
+  const { error } = await getSupabaseStorageClient().storage.from(MESSAGE_ATTACHMENT_BUCKET).remove([storageKey]);
+  if (error) throw new Error(error.message);
+}
+
 export async function createMessageAttachmentSignedUrl(
   storageKey: string,
   expiresIn = MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS,

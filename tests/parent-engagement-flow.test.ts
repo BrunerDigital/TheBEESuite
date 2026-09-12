@@ -5,6 +5,7 @@ import test from "node:test";
 const workspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
 const parentPage = readFileSync("src/app/[slug]/page.tsx", "utf8");
 const messageRoute = readFileSync("src/app/api/communications/messages/route.ts", "utf8");
+const parentRecipients = readFileSync("src/lib/parent-message-recipients.ts", "utf8");
 
 test("parent daily reports are complete, concise, and visible without expansion", () => {
   const start = workspace.indexOf('{activeView === "updates" ? (');
@@ -26,5 +27,8 @@ test("parents can choose only teachers from their children's current classrooms"
   assert.match(workspace, /Choose message recipient/);
   assert.match(workspace, /assignedToId: !replyToMessageId/);
   assert.match(messageRoute, /Teacher is not assigned to your child’s current classroom/);
-  assert.match(messageRoute, /role: UserRole\.TEACHER/);
+  assert.match(messageRoute, /currentParentMessageTeacherWhere\(/);
+  assert.match(parentRecipients, /role: UserRole\.TEACHER/);
+  assert.match(parentRecipients, /child\.classroom\?\.centerId === centerId/);
+  assert.match(parentRecipients, /currentlyEnrolledChildWhere\(\)/);
 });

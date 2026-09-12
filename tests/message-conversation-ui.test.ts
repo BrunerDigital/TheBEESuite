@@ -96,7 +96,9 @@ test("director send and suggestion APIs enforce the same primary-school scope as
   assert.match(sendRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
   assert.match(sendRoute, /family\.centerId && messageCenterIds\.includes\(family\.centerId\)/);
   assert.doesNotMatch(sendRoute, /const hasCenterAccess = canAccessAllCenters\(user\)/);
-  assert.match(sendRoute, /children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
+  assert.match(sendRoute, /children: \{ some: familyChildWhere \}/);
+  assert.match(sendRoute, /classroom: \{ centerId: \{ in: messageCenterIds \}/);
+  assert.match(sendRoute, /user\.role === UserRole\.PLATFORM_OWNER \? \{\} : \{ center: \{ organization: \{ tenantId: user.tenantId \}/);
   assert.match(sendRoute, /requestedCenterIds\.some\(\(centerId\) => !messageCenterIds\.includes\(centerId\)\)/);
   assert.match(sendRoute, /centerId: \{ in: scopedCenterIds\.length \? scopedCenterIds : \["__no_authorized_center__"\] \}/);
   assert.match(suggestionsRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
@@ -110,7 +112,7 @@ test("parent portal presents messaging as one responsive school conversation", (
   assert.match(parentPortal, /styles\.parentWorkspace/);
   assert.match(parentPortal, /Messages with \$\{centerName \?\? "your school"\}/);
   assert.match(parentPortal, /data-message-origin=\{isFromFamily \? "family" : "school"\}/);
-  assert.match(parentPortal, /messages\s*\.slice\(0, 20\)\s*\.reverse\(\)/);
+  assert.match(parentPortal, /messageHistory\.messages\s*\.slice\(\)\s*\.reverse\(\)/);
   assert.match(parentPortal, /Only your family and school can see this conversation\./);
   assert.match(parentPortal, /router\.refresh\(\)/);
   assert.match(parentPortal, /ref=\{messageTimelineRef\}/);
@@ -121,15 +123,18 @@ test("parent portal presents messaging as one responsive school conversation", (
   assert.match(parentPortal, /style=\{\{ width: 1, height: 1,/);
   assert.match(conversationStyles, /\.parentTimeline\s*\{[^}]*height: clamp\(12rem, calc\(100dvh[^}]*min-height: 12rem;[^}]*flex: none/);
   assert.match(conversationStyles, /\.parentComposer\s*\{\s*position: relative/);
-  assert.match(conversationStyles, /min-height: 2\.75rem/);
+  assert.match(conversationStyles, /grid-template-columns: 44px minmax\(0, 1fr\) 44px/);
+  assert.match(conversationStyles, /min-height: 44px/);
   assert.match(conversationStyles, /field-sizing: content/);
   assert.doesNotMatch(parentPortal, /id="recent-messages"/);
 });
 
 test("parent message direction comes from the family-scoped server query", () => {
-  assert.match(routePage, /prisma\.message\.findMany\(\{[\s\S]*?where: \{ familyId: parentPortalContentFamilyId \}/);
+  const query = readFileSync("src/lib/parent-message-query.ts", "utf8");
+  assert.match(routePage, /prisma\.message\.findMany\(\{\s*where: parentMessageWhere/);
+  assert.match(routePage, /const parentMessageWhere:[\s\S]*?familyId: parentPortalContentFamilyId/);
   assert.match(routePage, /paymentContinuityAccess \? "__payment_continuity__" : familyId/);
-  assert.match(routePage, /sender: \{ select: \{ name: true, role: true \} \}/);
-  assert.match(routePage, /isFromFamily: message\.sender\?\.role === UserRole\.PARENT_GUARDIAN/);
+  assert.match(query, /sender: \{ select: \{ name: true, role: true \} \}/);
+  assert.match(query, /isFromFamily: message\.sender\?\.role === "PARENT_GUARDIAN"/);
   assert.match(routePage, /centerName=\{familyCenter \? formatCenterName\(familyCenter\)/);
 });

@@ -17,7 +17,7 @@ function clean(value?: string | null) {
 
 export function replySubject(subject?: string | null) {
   const value = clean(subject) || "Portal message";
-  return /^re:/i.test(value) ? value : `Re: ${value}`;
+  return (/^re:/i.test(value) ? value : `Re: ${value}`).slice(0, 200);
 }
 
 export function buildMessageReplyPath({

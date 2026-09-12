@@ -178,6 +178,9 @@ import {
 } from "@/lib/billing-workflows";
 import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { signMessageAttachmentsFromMetadata } from "@/lib/message-attachments";
+import { parentMessageFamilyWhere, parentMessageOrder, parentMessagePageRows, parentMessageSelect, parentMessageViews } from "@/lib/parent-message-query";
+import { PARENT_MESSAGE_PAGE_SIZE } from "@/lib/parent-message-history";
+import { parentMessageCenterId } from "@/lib/parent-message-recipients";
 import { buildMessageReplyPath } from "@/lib/message-reply-routing";
 import { staffMessagingHref } from "@/lib/messaging-navigation";
 import { buildVisibleMessageWhere } from "@/lib/message-visibility";
@@ -2491,6 +2494,9 @@ async function renderLivePage(
     const paymentContinuityAccess = Boolean(family && family.children.length === 0);
     const resolvedParentPortalView = paymentContinuityAccess ? "payments" : parentPortalView;
     const parentPortalContentFamilyId = paymentContinuityAccess ? "__payment_continuity__" : familyId;
+    const parentMessageWhere: Prisma.MessageWhereInput = { familyId: parentPortalContentFamilyId, family: user.role === UserRole.PARENT_GUARDIAN
+      ? parentMessageFamilyWhere({ familyId: parentPortalContentFamilyId, userId: user.id, tenantId: user.tenantId, tenantCenterIds: parentPortalTenantCenterIds })
+      : { id: parentPortalContentFamilyId, children: { some: parentCurrentChildScope(user.tenantId) } } };
     const parentClassroomIds = Array.from(new Set(
       family?.children.map((child) => child.classroomId).filter((id): id is string => Boolean(id)) ?? [],
     ));
@@ -2628,19 +2634,10 @@ async function renderLivePage(
         select: parentIncidentSelect,
       }),
       prisma.message.findMany({
-        where: { familyId: parentPortalContentFamilyId },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        select: {
-          id: true,
-          senderId: true,
-          subject: true,
-          body: true,
-          channel: true,
-          createdAt: true,
-          metadata: true,
-          sender: { select: { name: true, role: true } },
-        },
+        where: parentMessageWhere,
+        orderBy: parentMessageOrder,
+        take: PARENT_MESSAGE_PAGE_SIZE + 1,
+        select: parentMessageSelect,
       }),
       prisma.childMedia.findMany({
         where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sharedWithParents: true, status: "shared" },
@@ -2731,18 +2728,11 @@ async function renderLivePage(
       classroomNames: teacher.staffProfile?.classroom?.name ? [teacher.staffProfile.classroom.name] : [],
     }));
 
+    const messagePage = parentMessagePageRows(messages);
     const [signedDocuments, signedMedia, signedMessages, signedLinkedDocuments] = await Promise.all([
       signDocumentRecords(documents),
       signChildMediaRecords(media),
-      Promise.all(messages.map(async (message) => ({
-        ...message,
-        sender: message.sender
-          ? { ...message.sender, name: userViewText(message.sender.name) }
-          : null,
-        isFromFamily: message.sender?.role === UserRole.PARENT_GUARDIAN || message.sender?.role === UserRole.AUTHORIZED_PICKUP,
-        canReport: Boolean(message.senderId && message.senderId !== user.id),
-        attachments: await signMessageAttachmentsFromMetadata(message.metadata),
-      }))),
+      parentMessageViews(messagePage.items, user.id, userViewText),
       signDocumentRecords(parentDocuments.linkedDocument && !documents.some((document) => document.id === parentDocuments.linkedDocument?.id) ? [parentDocuments.linkedDocument] : []),
     ]);
     const reportAttendanceLogs = dailyReports.length
@@ -3119,7 +3109,10 @@ async function renderLivePage(
       parentCenterFields.stripeConnectMigrationPayoutReleaseStatus !== "released",
     );
     const parentReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
-    const parentReplySubject = firstSearchParam(searchParams.subject) || "";
+    // Resolve deep replies independently of the newest page; URL subjects are never authoritative.
+    const parentReplyTarget = parentReplyToMessageId && !paymentContinuityAccess
+      ? await prisma.message.findFirst({ where: { AND: [parentMessageWhere, { id: parentReplyToMessageId }] }, select: { id: true, subject: true } })
+      : null;
     const pendingAchCreditCents = provisionalAchCreditCents(activeParentPaymentRows);
     const parentBalanceCents = billingAccount
       ? visibleBalanceAfterProvisionalAchCredit(parentVisibleBillingBalanceCents({
@@ -3153,7 +3146,7 @@ async function renderLivePage(
       : false;
     return (
       <ParentPortalWorkspace
-        key={parentReplyToMessageId || "parent-portal"}
+        key={parentReplyTarget?.id || "parent-portal"}
         activeView={resolvedParentPortalView}
         familySection={parentFamilySection}
         family={parentPortalFamily}
@@ -3193,6 +3186,9 @@ async function renderLivePage(
         paymentActivitySummary={{ pendingCount: billingAccount?._count.payments ?? 0, provisionalCreditCents: pendingAchCreditCents }}
         accountPaymentBlocker={accountPaymentBlocker}
         messages={paymentContinuityAccess ? [] : signedMessages}
+        messageHistoryNextCursor={!paymentContinuityAccess && user.role === UserRole.PARENT_GUARDIAN ? messagePage.nextCursor : null}
+        messageSchoolUnavailable={Boolean(family && !paymentContinuityAccess && !parentMessageCenterId(family))}
+        requestedReplyUnavailable={Boolean(parentReplyToMessageId && !parentReplyTarget && !paymentContinuityAccess)}
         centerName={familyCenter ? formatCenterName(familyCenter) : parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
         centerEin={familyCenter ? readSchoolEin(familyCenter.customFields) : parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
         centerTimeZone={familyCenter ? readCenterLocationTimeZone(familyCenter) : parentServiceDay.timeZone}
@@ -3210,10 +3206,10 @@ async function renderLivePage(
         kioskCredentials={paymentContinuityAccess ? [] : kioskCredentials}
         notificationPreferences={notificationPreferences}
         accountDeletionRequest={paymentContinuityAccess ? null : accountDeletionRequest}
-        replyDraft={!paymentContinuityAccess && parentReplyToMessageId
+        replyDraft={parentReplyTarget
           ? {
-              replyToMessageId: parentReplyToMessageId,
-              subject: parentReplySubject || null,
+              replyToMessageId: parentReplyTarget.id,
+              subject: parentReplyTarget.subject,
             }
           : null}
         availableFamilies={linkedParentFamilies.map((item) => ({

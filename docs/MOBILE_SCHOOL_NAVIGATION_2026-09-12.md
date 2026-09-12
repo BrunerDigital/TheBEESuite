@@ -30,3 +30,13 @@ Focused regression tests pass 38/38. Native store-readiness passes; no native so
 Tablet closeout: Chromium and WebKit additionally pass 16 cases each at 768×1024 and 100/200% text across all eight roles. Together with 32 phone and eight selected-school cases, shared navigation passes 56 cases per engine. Evidence: `output/playwright/wave12-tablet-chromium/results.json` and `wave12-tablet-webkit/results.json`. No API/write/off-origin requests or client errors occurred.
 
 Broader management-role authenticated production coverage remains limited by the previously reported general QA credential issue. Current reserved Parent/Teacher accounts work. Older parent-history continuation and the other documented school-readiness work remain actionable, not completed or human-only blocked.
+
+## Protected release and current production evidence
+
+PR #365 merged September 12 at 18:59:55 UTC: reviewed head `e4b389f1ee3ac08973429d02f387f23eaf1ad40c`, exact main `3f396ffcd28059bb099d6ca96163995e43f0b840`. Required validate run `34712560891` and CodeQL `34712559149` succeeded with no open review conversations. Exact-head preview `dpl_ENJKHT86F7ZjLEZnaTVxZNNGNEe6` was Ready before merge.
+
+Production `dpl_HvJQxK67qv9gAgBaDjYTrJQSkiBX` is Ready on that exact main commit. All five aliases were verified: `thebeesuite.io`, `www.thebeesuite.io`, `the-bee-suite-beta.vercel.app`, `the-bee-suite-brunerdigital.vercel.app`, and `the-bee-suite-git-main-brunerdigital.vercel.app`. Deployment completed at 19:02:21 UTC. Health at 19:06:40 UTC returned `ok: true`, database connected; build errors and scoped post-release error/fatal/5xx counts were empty in the observed window.
+
+Fresh strict fake-account production verification completed at 19:05:44 UTC. It passed 20 navigation, 52 Home-fit, eight shared-shell and four teacher-task cases, plus Parent home/layout/document/report/shortcut/unsent-history checks. Parent read-only payment observation returned private/no-store 200; Teacher received 403. Six explicitly permitted empty-body billing probes were denied. Only two login and 52 heartbeat POSTs accompanied those denial probes; zero product, financial, media, profile, message or identity writes, blocked requests, HTTP errors or client exceptions. Evidence: `output/playwright/app-review-production-after-mobile-school-navigation/results.json`.
+
+The ten-page printable fake-data browser packet `output/pdf/BEE_Suite_Current_Mobile_UI_2026-09-12_PR365.pdf` uses fresh production captures from 15:03–15:05 America/New_York. All ten rendered pages were visually inspected. It identifies empty Messages, historical synthetic Updates and intentionally disabled demo Payments; it is not native, physical-device or App Store screenshot evidence.

@@ -1,4 +1,5 @@
 import { createMessageAttachmentSignedUrl } from "@/lib/supabase-storage";
+import { safeMessageDownloadUrl } from "./parent-message-history";
 
 export type StoredMessageAttachment = {
   id: string;
@@ -13,7 +14,7 @@ export type StoredMessageAttachment = {
   uploadedById: string;
 };
 
-export type MessageAttachmentView = StoredMessageAttachment & {
+export type MessageAttachmentView = Pick<StoredMessageAttachment, "id" | "filename" | "size" | "kind"> & {
   downloadUrl: string | null;
 };
 
@@ -69,21 +70,22 @@ export function messageAttachmentsFromMetadata(metadata: unknown): StoredMessage
   });
 }
 
+export function messageAttachmentView(attachment: StoredMessageAttachment, downloadUrl: unknown): MessageAttachmentView {
+  return { id: attachment.id, filename: attachment.filename, size: attachment.size, kind: attachment.kind, downloadUrl: safeMessageDownloadUrl(downloadUrl) };
+}
+
 export async function signMessageAttachmentsFromMetadata(metadata: unknown): Promise<MessageAttachmentView[]> {
   const attachments = messageAttachmentsFromMetadata(metadata);
   return Promise.all(
     attachments.map(async (attachment) => {
       try {
-        return {
-          ...attachment,
-          downloadUrl: await createMessageAttachmentSignedUrl(
+        return messageAttachmentView(attachment, await createMessageAttachmentSignedUrl(
             attachment.storageKey,
             undefined,
             attachment.bucket,
-          ),
-        };
+          ));
       } catch {
-        return { ...attachment, downloadUrl: attachment.url.startsWith("http") ? attachment.url : null };
+        return messageAttachmentView(attachment, attachment.url);
       }
     }),
   );

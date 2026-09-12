@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { useParentPaymentRecovery, type ParentPaymentRecovery } from "@/components/use-parent-payment-recovery";
+import { useParentMessageHistory } from "@/components/use-parent-message-history";
+import type { ParentMessageView } from "@/lib/parent-message-history";
 import { isServerCheckoutReceipt, paymentResponseNeedsConfirmation } from "@/lib/parent-payment-observation";
 import { isInternalSignatureRequest as requiresDocumentSignature, isParentDocumentSubmissionReceipt, optimisticParentDocumentIds, parentDocumentState, parentDocumentStatusLabel } from "@/lib/parent-document-state";
 import type { RecordPagination } from "@/lib/record-pagination";
@@ -73,7 +75,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuardianKioskCredential } from "@/lib/kiosk-credentials";
-import type { MessageAttachmentView } from "@/lib/message-attachments";
 import { replySubject } from "@/lib/message-reply-routing";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { isParentVisiblePayment } from "@/lib/parent-billing-visibility";
@@ -385,17 +386,10 @@ type Props = {
   attentionSummary?: { openInvoiceCount: number; unacknowledgedIncidentCount: number };
   paymentActivitySummary?: { pendingCount: number; provisionalCreditCents: number };
   accountPaymentBlocker?: ParentAccountPaymentBlocker | null;
-  messages: Array<{
-    id: string;
-    subject: string | null;
-    body: string;
-    channel?: string;
-    createdAt: string | Date;
-    sender?: { name: string; role?: string } | null;
-    isFromFamily?: boolean;
-    canReport?: boolean;
-    attachments?: MessageAttachmentView[];
-  }>;
+  messages: ParentMessageView[];
+  messageHistoryNextCursor?: string | null;
+  requestedReplyUnavailable?: boolean;
+  messageSchoolUnavailable?: boolean;
   documents: Array<{
     id: string;
     name: string;
@@ -719,6 +713,9 @@ function ParentPortalWorkspaceView({
   dailyReports,
   incidents,
   messages,
+  messageHistoryNextCursor = null,
+  requestedReplyUnavailable = false,
+  messageSchoolUnavailable = false,
   documents,
   documentPagination,
   documentSummary,
@@ -803,6 +800,8 @@ function ParentPortalWorkspaceView({
   const [messageAttachments, setMessageAttachments] = useState<File[]>([]);
   const [messageAttachmentInputKey, setMessageAttachmentInputKey] = useState(0);
   const messageTimelineRef = useRef<HTMLOListElement | null>(null);
+  const messageHistory = useParentMessageHistory({ familyId: family?.id ?? "", messages, nextCursor: messageHistoryNextCursor,
+    enabled: Boolean(family && !paymentContinuityAccess), timeline: messageTimelineRef, request: parentPortalRequest });
   const [requestDetails, setRequestDetails] = useState("");
   const [requestEntity, setRequestEntity] = useState<
     "emergency_contact" | "authorized_pickup"
@@ -889,7 +888,7 @@ function ParentPortalWorkspaceView({
     if (activeView !== "messages") return;
     const timeline = messageTimelineRef.current;
     if (timeline) timeline.scrollTop = timeline.scrollHeight;
-  }, [activeView, messages.length]);
+  }, [activeView, messages]);
 
   function workspaceHref(
     view: ParentPortalView,
@@ -1264,6 +1263,7 @@ function ParentPortalWorkspaceView({
   function sendMessage() {
     if (previewOnly()) return;
     if (!family) return;
+    if (messageSchoolUnavailable) return showError("Your family's current school needs confirmation. Contact your school office before sending. Your draft is unchanged.");
     startTransition(async () => {
       const body = {
         familyId: family.id,
@@ -3940,11 +3940,11 @@ function ParentPortalWorkspaceView({
           id="messages"
           className={`${styles.parentWorkspace} ${previewMode ? styles.parentWorkspacePreview : ""} scroll-mt-28 gap-0 py-0 shadow-none`}
         >
-          <CardHeader className={`${styles.smokedHeader} border-b px-4 py-3`}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
+          <CardHeader className={`${styles.smokedHeader} ${styles.parentChatHeader} border-b`}>
+            <div className={styles.parentChatIdentity}>
+              <div className={styles.parentChatSchool}>
                 <span
-                  className="flex size-11 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background"
+                  className={`${styles.parentSchoolAvatar} rounded-full bg-foreground text-sm font-semibold text-background`}
                   aria-hidden="true"
                 >
                   {(centerName ?? "School")
@@ -3955,31 +3955,40 @@ function ParentPortalWorkspaceView({
                     .toUpperCase()}
                 </span>
                 <div className="min-w-0">
-                  <CardTitle as="h2" className="truncate">
+                  <CardTitle as="h2" className="whitespace-normal [overflow-wrap:anywhere]">
                     {centerName ?? "Your school"}
                   </CardTitle>
-                  <CardDescription className="truncate">
+                  <CardDescription className="whitespace-normal [overflow-wrap:anywhere]">
                     Typically replies during school hours
                   </CardDescription>
                 </div>
               </div>
-              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-500/10" role="img" aria-label="Private family conversation"><span className="size-2.5 rounded-full bg-emerald-600" aria-hidden="true" /></span>
+              <span className={styles.parentPrivacyIcon} role="img" aria-label="Private family conversation"><ShieldCheck aria-hidden="true" /></span>
             </div>
           </CardHeader>
           <CardContent className={`${styles.parentChatContent} p-0`}>
+            {messageSchoolUnavailable ? <p role="alert" className="px-4 py-2 text-sm text-destructive">Your family’s current school needs confirmation. You can read messages here, but contact your school office before sending a new one.</p> : null}
+            {requestedReplyUnavailable ? <p role="alert" className="px-4 py-2 text-sm text-destructive">That reply is not available in this family conversation. Choose a visible message to reply, or start a new message below.</p> : null}
+            <p role="status" aria-live="polite" aria-atomic="true" className={messageHistory.notice ? "px-4 py-2 text-sm text-muted-foreground" : "sr-only"}>{messageHistory.notice}</p>
             <ol
               ref={messageTimelineRef}
               className={styles.parentTimeline}
               aria-label={`Messages with ${centerName ?? "your school"}`}
             >
-              {messages
-                .slice(0, 20)
+              {messageHistoryNextCursor ? <li className="flex justify-center px-3 py-2">
+                <Button type="button" variant="outline" className="min-h-11 h-auto max-w-full whitespace-normal" aria-busy={messageHistory.loading} disabled={messageHistory.loading || !messageHistory.nextCursor} onClick={() => void messageHistory.loadEarlier()}>
+                  {messageHistory.nextCursor ? "Load earlier messages" : "Start of conversation"}
+                </Button>
+              </li> : null}
+              {messageHistory.messages
+                .slice()
                 .reverse()
                 .map((item) => {
                   const isFromFamily = Boolean(item.isFromFamily);
                   return (
                     <li
                       key={item.id}
+                      data-message-id={item.id}
                       className={`${styles.parentMessageRow} ${isFromFamily ? styles.parentMessageRowSelf : ""}`}
                     >
                       <article
@@ -3991,7 +4000,7 @@ function ParentPortalWorkspaceView({
                             {item.sender?.name ??
                               (isFromFamily ? "You" : (centerName ?? "School"))}
                           </span>
-                          <span>{formatTime(item.createdAt)}</span>
+                          <time dateTime={new Date(item.createdAt).toISOString()}>{formatDate(item.createdAt)} · {formatTime(item.createdAt)}</time>
                         </div>
                         {item.subject ? (
                           <div className="mt-1 text-sm font-semibold">
@@ -4069,7 +4078,7 @@ function ParentPortalWorkspaceView({
                     </li>
                   );
                 })}
-              {!messages.length ? (
+              {!messageHistory.messages.length ? (
                 <li className="flex min-h-64 flex-col items-center justify-center px-6 text-center text-muted-foreground">
                   <MessageSquare className="mb-3 size-8" aria-hidden="true" />
                   <div className="font-medium text-foreground">
@@ -4113,7 +4122,7 @@ function ParentPortalWorkspaceView({
                   <Reply className="size-4 shrink-0 text-primary" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-medium">Replying to school</span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block whitespace-normal text-xs text-muted-foreground [overflow-wrap:anywhere]">
                       {replyingToSubject || "Selected message"}
                     </span>
                   </span>
@@ -4137,17 +4146,16 @@ function ParentPortalWorkspaceView({
                   {messageAttachments.map((file, index) => (
                     <span
                       key={`${file.name}-${file.size}-${index}`}
-                      className="inline-flex min-h-11 max-w-[15rem] shrink-0 items-center gap-2 rounded-full border bg-card px-3 text-xs"
+                      className={`${styles.parentSelectedAttachment} rounded-xl border bg-card text-xs`}
                     >
                       <Paperclip className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-                      <span className="truncate">{file.name || "attachment"}</span>
+                      <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{file.name || "attachment"}</span>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
                         onClick={() => removeMessageAttachment(index)}
                         aria-label={`Remove ${file.name || "attachment"}`}
-                        className="-mr-2"
                       >
                         <X className="size-3.5" aria-hidden="true" />
                       </Button>
@@ -4194,7 +4202,7 @@ function ParentPortalWorkspaceView({
                   size="icon"
                   className={styles.parentSendButton}
                   disabled={
-                    isPending || (!message.trim() && !messageAttachments.length)
+                    isPending || messageSchoolUnavailable || (!message.trim() && !messageAttachments.length)
                   }
                   aria-label={isPending ? "Sending message" : "Send message"}
                 >

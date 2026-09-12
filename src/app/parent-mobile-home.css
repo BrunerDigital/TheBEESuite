@@ -134,6 +134,30 @@
       gap: 8px;
     }
 
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-account {
+      padding: 12px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-account :is([data-account-icon], [data-account-icon] svg, [data-account-chevron]) {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-account [data-account-icon] {
+      width: 36px;
+      height: 36px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-account :is(a, div.flex) {
+      gap: 8px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-account [data-slot="button"] {
+      min-height: 44px;
+      padding-inline: 12px;
+    }
+
     /* Icons need a stable hit area; they must not consume the header at text zoom. */
     .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .app-header button {
       width: 44px;

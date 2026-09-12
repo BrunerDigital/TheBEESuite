@@ -57,7 +57,7 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
   const activeView = normalizeParentPortalView(screen);
   const singleChildReview = scenario === "single-review";
   const schoolContext = scenario === "school-context";
-  const quietHome = scenario === "quiet-home";
+  const quietHome = scenario === "quiet-home" || scenario?.startsWith("account-") === true;
   const longContent = scenario === "long-content";
   const featureStress = scenario === "feature-stress";
   const absentHome = scenario === "absent-home";
@@ -124,12 +124,22 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
       {...(scenario === "empty" ? { documents: [], dailyReports: [], media: [] } : {})}
       {...(quietHome ? {
         billingAccount: { ...executiveParentPortalDemo.billingAccount, balanceCents: 0 },
+        attentionSummary: { openInvoiceCount: 0, unacknowledgedIncidentCount: 0 },
+        paymentActivitySummary: { pendingCount: 0, provisionalCreditCents: 0 },
         invoices: [],
         documents: [],
         incidents: [],
         announcements: [],
         ledgerEntries: [],
       } : {})}
+      {...(scenario === "account-missing" ? { billingAccount: null } : {})}
+      {...(scenario === "account-pending" ? { paymentActivitySummary: { pendingCount: 21, provisionalCreditCents: 0 } } : {})}
+      {...(scenario === "account-ach" ? { paymentActivitySummary: { pendingCount: 1, provisionalCreditCents: 15000 } } : {})}
+      {...(scenario === "account-open" ? { attentionSummary: { openInvoiceCount: 21, unacknowledgedIncidentCount: 0 } } : {})}
+      {...(scenario === "account-credit" ? { billingAccount: { ...executiveParentPortalDemo.billingAccount, balanceCents: -2500 } } : {})}
+      {...(scenario === "account-review" ? { parentBalanceReviewRequired: true } : {})}
+      {...(scenario === "account-reauthorize" ? { paymentMethodReauthorizationRequired: true } : {})}
+      {...(scenario === "account-transition" ? { paymentTransitionActive: true } : {})}
       {...(longContent ? {
         announcements: executiveParentPortalDemo.announcements.map((announcement) => ({
           ...announcement,

@@ -121,7 +121,7 @@ export function SetupChecklistPanel({
           ) : null}
         </>
       )}
-      headerAfter={<Progress value={progress} />}
+      headerAfter={<Progress value={progress} aria-label={`${title} progress: ${progress}%`} />}
     >
         {tasks.map((task, index) => {
           const automatic = automaticIds.has(task.id);

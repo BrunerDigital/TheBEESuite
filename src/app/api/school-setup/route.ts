@@ -15,6 +15,14 @@ import {
   type SchoolDataSetup,
 } from "@/lib/school-data-setup";
 import { loadSchoolDataReviewEvidence } from "@/lib/school-data-setup-server";
+import {
+  buildSchoolBusinessProfilePreparationReceipt,
+  missingSchoolBusinessProfileFields,
+  normalizeSchoolBusinessProfile,
+  readSchoolBusinessProfileConfirmation,
+  schoolBusinessProfileFieldLabel,
+  type SchoolBusinessProfile,
+} from "@/lib/school-business-profile";
 import { isValidEinInput, normalizeEin, schoolEinCustomFields } from "@/lib/school-tax-id";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -44,39 +52,6 @@ function cleanSections(value: unknown) {
   ) as SchoolOnboardingSetupInput;
 }
 
-type SchoolBusinessProfile = {
-  name: string;
-  address: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  phone: string;
-  email: string;
-  timezone: string;
-  licensedCapacity: number;
-};
-
-function cleanText(value: unknown, maxLength = 500) {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maxLength) : "";
-}
-
-function normalizeBusinessProfile(value: unknown): SchoolBusinessProfile {
-  const input = record(value);
-  const capacityText = cleanText(input.licensedCapacity, 20);
-  const capacity = capacityText && !/^\d+$/.test(capacityText) ? Number.NaN : Number(capacityText || 0);
-  return {
-    name: cleanText(input.name, 200),
-    address: cleanText(input.address, 300),
-    city: cleanText(input.city, 150),
-    state: cleanText(input.state, 100).toUpperCase(),
-    postalCode: cleanText(input.postalCode, 30),
-    phone: cleanText(input.phone, 50),
-    email: cleanText(input.email, 320).toLowerCase(),
-    timezone: cleanText(input.timezone, 100),
-    licensedCapacity: Number.isInteger(capacity) && capacity >= 0 && capacity <= 10_000 ? capacity : Number.NaN,
-  };
-}
-
 function validEmail(value: string) {
   return !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
@@ -89,12 +64,6 @@ function validTimeZone(value: string) {
   } catch {
     return false;
   }
-}
-
-const businessProfileFields = ["name", "address", "city", "state", "postalCode", "phone", "email", "timezone", "licensedCapacity"] as const;
-
-function completedBusinessProfileFields(profile: SchoolBusinessProfile) {
-  return businessProfileFields.filter((field) => field === "licensedCapacity" ? profile.licensedCapacity > 0 : Boolean(profile[field]));
 }
 
 function responseSections(setup: ReturnType<typeof normalizeSchoolOnboardingSetup>) {
@@ -144,7 +113,11 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "School EIN must be 9 digits." }, { status: 400 });
   }
   const businessProfileProvided = hasOwn(body, "businessProfile");
-  const businessProfile = businessProfileProvided ? normalizeBusinessProfile(body?.businessProfile) : null;
+  const confirmBusinessProfile = body?.confirmBusinessProfile === true;
+  if (confirmBusinessProfile && !businessProfileProvided) {
+    return NextResponse.json({ ok: false, error: "Review the school profile before confirming it." }, { status: 400 });
+  }
+  const businessProfile = businessProfileProvided ? normalizeSchoolBusinessProfile(body?.businessProfile) : null;
   if (businessProfile && !businessProfile.name) {
     return NextResponse.json({ ok: false, error: "School name is required." }, { status: 400 });
   }
@@ -161,6 +134,7 @@ async function POSTHandler(request: NextRequest) {
   let savedCenterId: string | null = null;
   let savedCustomFields: Record<string, unknown> | null = null;
   let savedBusinessProfile: SchoolBusinessProfile | null = null;
+  let businessProfileConfirmationCurrent = false;
   let dataReviewConfirmed = false;
   let dataReviewConfirmationStale = false;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -200,10 +174,7 @@ async function POSTHandler(request: NextRequest) {
         expectedOwner: "school_director",
       };
     }
-    const effectiveBusinessProfile = businessProfile ? {
-      ...businessProfile,
-      timezone: businessProfile.timezone || center.timezone,
-    } : {
+    const previousBusinessProfile = normalizeSchoolBusinessProfile({
       name: center.name,
       address: center.address ?? "",
       city: center.city ?? "",
@@ -213,7 +184,18 @@ async function POSTHandler(request: NextRequest) {
       email: center.email ?? "",
       timezone: center.timezone ?? "",
       licensedCapacity: center.licensedCapacity,
-    };
+    });
+    const effectiveBusinessProfile = businessProfile ? {
+      ...businessProfile,
+      timezone: businessProfile.timezone || center.timezone,
+    } : previousBusinessProfile;
+    const missingBusinessFields = missingSchoolBusinessProfileFields(effectiveBusinessProfile);
+    if (confirmBusinessProfile && missingBusinessFields.length) {
+      return NextResponse.json({
+        ok: false,
+        error: `Add ${missingBusinessFields.map(schoolBusinessProfileFieldLabel).join(", ")} before confirming the school profile.`,
+      }, { status: 409 });
+    }
     if (businessProfileProvided) {
       const existingBusinessInformation = record(customFields.businessInformation);
       customFields.businessInformation = {
@@ -227,34 +209,24 @@ async function POSTHandler(request: NextRequest) {
         lastReviewedByUserId: user.id,
       };
     }
-    if (setup || businessProfileProvided) {
-      const completedFields = completedBusinessProfileFields(effectiveBusinessProfile);
-      const missingBusinessFields = businessProfileFields.filter((field) => !completedFields.includes(field));
-      const storedSchoolSetup = record(customFields.schoolOnboardingSetup);
-      const storedSchoolSections = record(storedSchoolSetup.sections);
-      const storedSchoolProfile = record(storedSchoolSections.schoolProfile);
-      const schoolProfileNote = typeof storedSchoolProfile.value === "string" ? storedSchoolProfile.value.trim() : "";
-      const schoolProfileReviewed = Boolean(schoolProfileNote && !schoolProfileNote.toLowerCase().includes("needs confirmation"));
-      const preparationReceipt = record(customFields.setupPreparationReceipt);
-      const profileConfirmed = missingBusinessFields.length === 0 && schoolProfileReviewed;
-      customFields.setupPreparationReceipt = {
-        ...preparationReceipt,
-        version: 1,
-        source: preparationReceipt.source ?? "authorized_business_information",
-        preparedAt: preparationReceipt.preparedAt ?? savedAt,
-        preparedFields: completedFields,
-        missingBusinessFields,
-        excludedFields: ["payout_bank", "family_data", "child_data"],
-        status: profileConfirmed ? "school_confirmed" : "awaiting_school_confirmation",
-        confirmedAt: profileConfirmed ? savedAt : null,
-        confirmedByEmail: profileConfirmed ? user.email : null,
-        confirmedByUserId: profileConfirmed ? user.id : null,
-      };
+    if (setup || businessProfileProvided || confirmBusinessProfile) {
+      customFields.setupPreparationReceipt = buildSchoolBusinessProfilePreparationReceipt({
+        existingReceipt: customFields.setupPreparationReceipt,
+        previousProfile: previousBusinessProfile,
+        nextProfile: effectiveBusinessProfile,
+        confirm: confirmBusinessProfile,
+        savedAt,
+        savedByEmail: user.email,
+        savedByUserId: user.id,
+        savedByRole: user.role,
+      });
+      const profileConfirmation = readSchoolBusinessProfileConfirmation(customFields, effectiveBusinessProfile);
+      businessProfileConfirmationCurrent = profileConfirmation.confirmationCurrent;
       const businessInformation = record(customFields.businessInformation);
       if (Object.keys(businessInformation).length) {
         customFields.businessInformation = {
           ...businessInformation,
-          reviewRequired: !profileConfirmed,
+          reviewRequired: !profileConfirmation.confirmationCurrent,
         };
       }
     }
@@ -376,6 +348,8 @@ async function POSTHandler(request: NextRequest) {
       sectionsUpdated: sectionsProvided,
       schoolEinUpdated: schoolEinProvided,
       businessProfileUpdated: businessProfileProvided,
+      businessProfileConfirmationRequested: confirmBusinessProfile,
+      businessProfileConfirmationCurrent,
       dataSetupUpdated: dataSetupProvided,
       dataSetupPath: dataSetupInput?.path ?? null,
       dataReviewConfirmed,
@@ -398,6 +372,18 @@ async function POSTHandler(request: NextRequest) {
     setup,
     sections: setup ? responseSections(setup) : undefined,
     businessProfile: savedBusinessProfile,
+    businessProfileConfirmation: savedBusinessProfile
+      ? (() => {
+          const confirmation = readSchoolBusinessProfileConfirmation(savedCustomFields, savedBusinessProfile);
+          return {
+            complete: confirmation.complete,
+            confirmationCurrent: confirmation.confirmationCurrent,
+            missingFields: confirmation.missingFields.map(schoolBusinessProfileFieldLabel),
+            confirmedAt: confirmation.confirmedAt,
+            confirmedByEmail: confirmation.confirmedByEmail,
+          };
+        })()
+      : null,
     dataSetup: readSchoolDataSetup(savedCustomFields),
     schoolEin: normalizeEin(savedCustomFields.schoolEin),
     savedAt,

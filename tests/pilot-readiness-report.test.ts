@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildModuleGates, isArchivedCenterlessFamily, needsCurrentClassroomAssignment, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
+import { buildModuleGates, isArchivedCenterlessFamily, isConfirmedIntentionalEmptySchoolStart, needsCurrentClassroomAssignment, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
 
 test("pilot readiness args enable machine-readable rollout reports", () => {
   assert.deepEqual(parsePilotReadinessArgs([]), {
@@ -36,6 +36,41 @@ test("classroom readiness applies only to currently enrolled children", () => {
   assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "waitlisted", classroomId: null }), false);
   assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "withdrawn", classroomId: null }), false);
   assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "enrolled", classroomId: "room-1" }), false);
+});
+
+test("a confirmed intentional empty start satisfies setup data presence without activating family workflows", () => {
+  const setup = {
+    version: 1 as const,
+    path: "start_clean" as const,
+    sourceSystem: null,
+    noCurrentFamiliesExpected: true,
+    notes: "",
+    selectedAt: "2026-09-12T00:00:00.000Z",
+    selectedByUserId: "user_1",
+    selectedByEmail: "director@example.com",
+    reviewConfirmation: {
+      revision: "revision_1",
+      path: "start_clean" as const,
+      sourceSystem: null,
+      noCurrentFamiliesExpected: true,
+      confirmedAt: "2026-09-12T00:01:00.000Z",
+      confirmedByUserId: "user_1",
+      confirmedByEmail: "director@example.com",
+      latestImportBatchId: null,
+      familyCount: 0,
+      childCount: 0,
+      guardianCount: 0,
+    },
+  };
+
+  assert.equal(isConfirmedIntentionalEmptySchoolStart({ setup, familyCount: 0, childCount: 0, guardianCount: 0 }), true);
+  assert.equal(isConfirmedIntentionalEmptySchoolStart({ setup, familyCount: 1, childCount: 0, guardianCount: 0 }), false);
+  assert.equal(isConfirmedIntentionalEmptySchoolStart({
+    setup: { ...setup, reviewConfirmation: null },
+    familyCount: 0,
+    childCount: 0,
+    guardianCount: 0,
+  }), false);
 });
 
 test("centerless archived and merged families preserve history without blocking readiness", () => {

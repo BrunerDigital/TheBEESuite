@@ -182,6 +182,8 @@ import { buildVisibleMessageWhere } from "@/lib/message-visibility";
 import { extractFamilyTags } from "@/lib/message-segmentation";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "@/lib/onboarding-setup";
 import { roleLabel } from "@/lib/notification-preferences";
+import { normalizeTeamSearch, searchedTeamUserWhere, teamAccessGrantWhere, teamDeviceSessionWhere, teamStaffProfileWhere, teamUserWhere } from "@/lib/team-permissions-scope";
+import { recordPagination, teamPermissionsHref } from "@/lib/record-pagination";
 import { resolveClassroomRatioRule } from "@/lib/classroom-ratios";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere, visibleNotificationWhere } from "@/lib/notification-policy";
@@ -5564,44 +5566,41 @@ async function renderLivePage(
   }
 
   if (slug === "team-permissions") {
-    const scopedActiveGrantWhere: Prisma.UserAccessGrantListRelationFilter = {
-      some: {
-        isActive: true,
-        AND: [
-          { OR: [{ startsAt: null }, { startsAt: { lte: today } }] },
-          { OR: [{ endsAt: null }, { endsAt: { gte: today } }] },
-          {
-            OR: [
-              { scopeType: "CENTER", centerId: scopedCenterIds },
-              { scopeType: "OWNER_GROUP", ownerGroup: { centers: { some: { id: scopedCenterIds } } } },
-            ],
-          },
-        ],
-      },
+    const teamScope = { tenantId: user.tenantId, tenantWide, visibleCenterIds, at: today };
+    const query = normalizeTeamSearch(firstSearchParam(searchParams.q));
+    const authorizedUsers = teamUserWhere(teamScope);
+    const where = searchedTeamUserWhere(teamScope, query);
+    const sessionScope = teamDeviceSessionWhere(teamScope);
+    const deviceSessionCutoff = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sessionWhere: Prisma.DeviceSessionWhereInput = {
+      AND: [sessionScope, { OR: [{ revokedAt: null }, { lastSeenAt: { gte: deviceSessionCutoff } }] }],
     };
-    const where: Prisma.UserWhereInput = tenantWide
-      ? { tenantId: user.tenantId }
-      : {
-          tenantId: user.tenantId,
-          OR: [
-            { staffProfile: { centerId: scopedCenterIds } },
-            { accessGrants: scopedActiveGrantWhere },
-          ],
-        };
-    const [users, roleCounts] = await Promise.all([
+    const signedInWhere: Prisma.DeviceSessionWhereInput = { AND: [sessionScope, { revokedAt: null }] };
+    const [totalAuthorized, totalFiltered, totalSessions, roleCounts, signedIn, kiosk, teacherAndParent, idle] = await Promise.all([
+      prisma.user.count({ where: authorizedUsers }),
+      prisma.user.count({ where }),
+      prisma.deviceSession.count({ where: sessionWhere }),
+      prisma.user.groupBy({ by: ["role"], where: authorizedUsers, _count: { _all: true }, orderBy: { role: "asc" } }),
+      prisma.deviceSession.count({ where: signedInWhere }),
+      prisma.deviceSession.count({ where: { AND: [signedInWhere, { appMode: "kiosk" }] } }),
+      prisma.deviceSession.count({ where: { AND: [signedInWhere, { appMode: { in: ["teacher", "parent"] } }] } }),
+      prisma.deviceSession.count({ where: { AND: [signedInWhere, { lastSeenAt: { lt: new Date(today.getTime() - 15 * 60 * 1000) } }] } }),
+    ]);
+    const peoplePage = recordPagination(firstSearchParam(searchParams.peoplePage), totalFiltered);
+    const sessionPage = recordPagination(firstSearchParam(searchParams.sessionPage), totalSessions);
+    const [users, deviceSessions] = await Promise.all([
       prisma.user.findMany({
         where,
-        orderBy: [{ role: "asc" }, { name: "asc" }],
-        take: 250,
-        include: {
+        orderBy: [{ role: "asc" }, { name: "asc" }, { email: "asc" }, { id: "asc" }],
+        skip: peoplePage.skip,
+        take: peoplePage.pageSize,
+        select: {
+          id: true, name: true, email: true, role: true, isActive: true, mustResetPassword: true,
           accessGrants: {
-            where: {
-              isActive: true,
-              OR: [{ startsAt: null }, { startsAt: { lte: today } }],
-              AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: today } }] }],
-            },
-            orderBy: [{ scopeType: "asc" }, { createdAt: "asc" }],
-            include: {
+            where: teamAccessGrantWhere(teamScope),
+            orderBy: [{ scopeType: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true, role: true, scopeType: true,
               brand: { select: { name: true } },
               organization: { select: { name: true } },
               ownerGroup: { select: { name: true } },
@@ -5609,6 +5608,7 @@ async function renderLivePage(
             },
           },
           staffProfile: {
+            where: teamStaffProfileWhere(teamScope),
             select: {
               title: true,
               center: {
@@ -5621,78 +5621,62 @@ async function renderLivePage(
           },
         },
       }),
-      prisma.user.groupBy({
-        by: ["role"],
-        where,
-        _count: { _all: true },
-        orderBy: { role: "asc" },
-      }),
-    ]);
-    const visibleUserIds = users.map((visibleUser) => visibleUser.id);
-    const deviceSessionCutoff = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const deviceSessions = visibleUserIds.length
-      ? await prisma.deviceSession.findMany({
-          where: {
-            tenantId: user.tenantId,
-            userId: { in: visibleUserIds },
-            OR: [
-              { revokedAt: null },
-              { lastSeenAt: { gte: deviceSessionCutoff } },
-            ],
-          },
-          orderBy: { lastSeenAt: "desc" },
-          take: 300,
+      prisma.deviceSession.findMany({
+          where: sessionWhere,
+          orderBy: [{ revokedAt: { sort: "asc", nulls: "first" } }, { lastSeenAt: "desc" }, { id: "asc" }],
+          skip: sessionPage.skip,
+          take: sessionPage.pageSize,
           select: {
             id: true,
             label: true,
             deviceType: true,
             appMode: true,
-            userAgent: true,
-            ipAddress: true,
             lastSeenAt: true,
             revokedAt: true,
-            createdAt: true,
             user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                role: true,
-              },
-            },
-            revokedBy: {
               select: {
                 name: true,
                 email: true,
               },
             },
           },
-        }).catch(() => [])
-      : [];
+        }),
+    ]);
 
     return (
       <TeamPermissionsPage
         data={{
           brandName: user.branding.name,
-          users,
+          users: users.map((account) => ({ ...account, accessGrants: account.accessGrants.map((grant) => ({
+            ...grant,
+            brand: grant.scopeType === "BRAND" ? grant.brand : null,
+            organization: grant.scopeType === "ORGANIZATION" ? grant.organization : null,
+            ownerGroup: grant.scopeType === "OWNER_GROUP" ? (tenantWide ? grant.ownerGroup : { name: "Includes your assigned schools" }) : null,
+            center: grant.scopeType === "CENTER" ? grant.center : null,
+          })) })),
+          directory: {
+            ...peoplePage, query, totalAuthorized,
+            previousHref: peoplePage.page > 1 ? teamPermissionsHref(query, peoplePage.page - 1, sessionPage.page, "user-directory") : null,
+            nextHref: peoplePage.page < peoplePage.totalPages ? teamPermissionsHref(query, peoplePage.page + 1, sessionPage.page, "user-directory") : null,
+          },
+          sessionPagination: {
+            ...sessionPage,
+            previousHref: sessionPage.page > 1 ? teamPermissionsHref(query, peoplePage.page, sessionPage.page - 1, "device-sessions") : null,
+            nextHref: sessionPage.page < sessionPage.totalPages ? teamPermissionsHref(query, peoplePage.page, sessionPage.page + 1, "device-sessions") : null,
+          },
+          sessionSummary: { signedIn, kiosk, teacherAndParent, idle },
           roleCounts: roleCounts.map((role) => ({ role: role.role, count: role._count._all })),
           deviceSessions: deviceSessions.map((session) => ({
             id: session.id,
             label: session.label,
             deviceType: session.deviceType,
             appMode: session.appMode,
-            userAgent: session.userAgent,
-            ipAddress: session.ipAddress,
             lastSeenAt: session.lastSeenAt.toISOString(),
             revokedAt: session.revokedAt?.toISOString() ?? null,
-            createdAt: session.createdAt.toISOString(),
             user: {
-              id: session.user.id,
               name: session.user.name,
               email: session.user.email,
-              role: session.user.role,
             },
-            revokedBy: session.revokedBy,
           })),
           currentDeviceSessionId: user.deviceSessionId,
           canManageDeviceSessions: canManageOperations(user),

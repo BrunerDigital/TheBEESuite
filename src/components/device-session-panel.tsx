@@ -8,28 +8,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { deviceAppModeLabel, isRecentDeviceSession } from "@/lib/device-sessions";
+import { RecordPaginationNav } from "@/components/record-pagination";
+import type { LinkedRecordPagination } from "@/lib/record-pagination";
+import { requestWithNetworkRecovery } from "@/lib/client-request-recovery";
 
 export type DeviceSessionPanelRow = {
   id: string;
   label: string;
   deviceType: string;
   appMode: string;
-  userAgent: string | null;
-  ipAddress: string | null;
   lastSeenAt: string;
   revokedAt: string | null;
-  createdAt: string;
   user: {
-    id: string;
     name: string;
     email: string;
-    role: string;
   };
-  revokedBy: {
-    name: string;
-    email: string;
-  } | null;
 };
+
+export type DeviceSessionSummary = { signedIn: number; kiosk: number; teacherAndParent: number; idle: number };
 
 function DeviceIcon({ deviceType }: { deviceType: string }) {
   if (deviceType === "tablet") return <Tablet data-icon="inline-start" />;
@@ -59,15 +55,20 @@ function statusFor(row: DeviceSessionPanelRow) {
 
 export function DeviceSessionPanel({
   sessions,
+  summary,
+  pagination,
   currentDeviceSessionId,
   canManage,
 }: {
   sessions: DeviceSessionPanelRow[];
+  summary: DeviceSessionSummary;
+  pagination: LinkedRecordPagination;
   currentDeviceSessionId: string | null;
   canManage: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [revokedSessionIds, setRevokedSessionIds] = useState<Set<string>>(() => new Set());
   const [isPending, startTransition] = useTransition();
@@ -84,55 +85,65 @@ export function DeviceSessionPanel({
         }),
     [revokedSessionIds, sessions],
   );
-  const activeRows = rows.filter((row) => !row.revokedAt);
-  const recentRows = activeRows.filter((row) => isRecentDeviceSession(new Date(row.lastSeenAt)));
-  const staleRows = activeRows.length - recentRows.length;
-  const classroomRows = activeRows.filter((row) => row.appMode === "teacher").length;
-  const parentRows = activeRows.filter((row) => row.appMode === "parent").length;
-  const kioskRows = activeRows.filter((row) => row.appMode === "kiosk").length;
+  const locallyRevoked = sessions.filter((row) => !row.revokedAt && revokedSessionIds.has(row.id));
+  const totals = {
+    signedIn: Math.max(0, summary.signedIn - locallyRevoked.length),
+    kiosk: Math.max(0, summary.kiosk - locallyRevoked.filter((row) => row.appMode === "kiosk").length),
+    teacherAndParent: Math.max(0, summary.teacherAndParent - locallyRevoked.filter((row) => ["teacher", "parent"].includes(row.appMode)).length),
+    idle: Math.max(0, summary.idle - locallyRevoked.filter((row) => !isRecentDeviceSession(new Date(row.lastSeenAt))).length),
+  };
 
   function revokeSession(sessionId: string) {
+    if (isPending || !canManage || !window.confirm("End this device session? The user will need to sign in again on that device. Their account and other devices will remain available.")) return;
     setError("");
+    setStatus("Ending device session…");
     setPendingSessionId(sessionId);
     startTransition(async () => {
-      const response = await fetch("/api/device-sessions", {
+      const response = await requestWithNetworkRecovery("/api/device-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "revoke", sessionId }),
-      });
-      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      }, "We could not confirm whether this session ended. Refresh the list to check before trying again.");
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; revokedAt?: string; error?: string } | null;
       setPendingSessionId(null);
       if (!response.ok) {
+        setStatus("");
         setError(data?.error ?? "Unable to revoke this device session.");
         return;
       }
+      if (data?.ok !== true || typeof data.revokedAt !== "string" || !Number.isFinite(Date.parse(data.revokedAt))) {
+        setStatus("");
+        setError("We could not confirm whether this session ended. Refresh the list to check before trying again.");
+        return;
+      }
       setRevokedSessionIds((current) => new Set([...current, sessionId]));
+      setStatus("Device session ended. The user will need to sign in again on that device.");
       router.refresh();
     });
   }
 
   return (
-    <Card className="glass-panel">
+    <Card id="device-sessions" className="glass-panel scroll-mt-24">
       <CardHeader>
         <CardTitle as="h2">App and Device Sessions</CardTitle>
-        <CardDescription>Installed app, tablet kiosk, classroom, family, and browser sessions connected to this account.</CardDescription>
+        <CardDescription>Sessions for accounts included in this directory, independent of its search filter. Includes signed-in devices and sessions seen in the past 30 days.{!canManage ? " Your access is read only." : " Use Sign out to end your current device session."}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2">
           <div className="rounded-lg border bg-background/60 p-3">
-            <div className="text-2xl font-semibold">{activeRows.length}</div>
+            <div className="text-2xl font-semibold">{totals.signedIn}</div>
             <div className="text-xs text-muted-foreground">Signed-in devices</div>
           </div>
           <div className="rounded-lg border bg-background/60 p-3">
-            <div className="text-2xl font-semibold">{kioskRows}</div>
+            <div className="text-2xl font-semibold">{totals.kiosk}</div>
             <div className="text-xs text-muted-foreground">Kiosk sessions</div>
           </div>
           <div className="rounded-lg border bg-background/60 p-3">
-            <div className="text-2xl font-semibold">{classroomRows + parentRows}</div>
+            <div className="text-2xl font-semibold">{totals.teacherAndParent}</div>
             <div className="text-xs text-muted-foreground">Teacher and parent apps</div>
           </div>
           <div className="rounded-lg border bg-background/60 p-3">
-            <div className="text-2xl font-semibold">{staleRows}</div>
+            <div className="text-2xl font-semibold">{totals.idle}</div>
             <div className="text-xs text-muted-foreground">Idle over 15 minutes</div>
           </div>
         </div>
@@ -141,6 +152,8 @@ export function DeviceSessionPanel({
             {error}
           </div>
         ) : null}
+        <div role="status" aria-live="polite" className={status ? "rounded-lg border p-3 text-sm" : "sr-only"}>{status}</div>
+        <RecordPaginationNav pagination={pagination} label="Sessions" />
         <Table>
           <TableHeader>
             <TableRow>
@@ -181,6 +194,10 @@ export function DeviceSessionPanel({
                   <TableCell className="text-right">
                     {row.revokedAt ? (
                       <span className="text-xs text-muted-foreground">Ended</span>
+                    ) : !canManage ? (
+                      <span className="text-xs text-muted-foreground">Read only</span>
+                    ) : isCurrent ? (
+                      <span className="text-xs text-muted-foreground">Use Sign out</span>
                     ) : (
                       <Button
                         size="sm"
@@ -190,7 +207,7 @@ export function DeviceSessionPanel({
                         aria-label={`Revoke ${row.label}`}
                       >
                         {pendingSessionId === row.id ? <RefreshCw className="animate-spin" data-icon="inline-start" /> : <Ban data-icon="inline-start" />}
-                        Revoke
+                        {pendingSessionId === row.id ? "Ending…" : "Revoke"}
                       </Button>
                     )}
                   </TableCell>
@@ -206,6 +223,7 @@ export function DeviceSessionPanel({
             ) : null}
           </TableBody>
         </Table>
+        {pagination.totalPages > 1 ? <RecordPaginationNav pagination={pagination} label="Sessions" /> : null}
       </CardContent>
     </Card>
   );

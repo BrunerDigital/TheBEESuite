@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { formatRecordLabel } from "../src/lib/record-label";
 
 function source(path: string) {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
@@ -11,13 +12,14 @@ const teacher = source("src/components/teacher-mobile-workspace.tsx");
 const kiosk = source("src/components/kiosk-check-in.tsx");
 const admin = source("src/components/executive-admin-console.tsx");
 const liveOps = source("src/components/live-ops-pages.tsx");
+const team = source("src/components/team-permissions-page.tsx");
 const workspaceNav = source("src/components/consolidated-workspace-nav.tsx");
 const errorPage = source("src/app/error.tsx");
 const globalErrorPage = source("src/app/global-error.tsx");
 const notFoundPage = source("src/app/not-found.tsx");
 
 test("staff and administrative surfaces do not expose implementation or prototype copy", () => {
-  const surfaces = [shell, teacher, kiosk, admin, liveOps, workspaceNav, errorPage, globalErrorPage, notFoundPage].join("\n");
+  const surfaces = [shell, teacher, kiosk, admin, liveOps, team, workspaceNav, errorPage, globalErrorPage, notFoundPage].join("\n");
 
   assert.doesNotMatch(
     surfaces,
@@ -64,7 +66,11 @@ test("administrative copy formats display labels without changing stored values"
   assert.doesNotMatch(admin, /must choose a private password before signing in|required to replace the password before signing in|Password resets also require the user to replace credentials/);
   assert.match(liveOps, /formatRecordLabel\(invoice\.status\)/);
   assert.match(liveOps, /formatRecordLabel\(payment\.status\)/);
-  assert.match(liveOps, /new Set\(\["FTE", "SMS", "API", "ACH", "ID", "URL", "QR"\]\)/);
+  assert.match(liveOps, /import \{ formatRecordLabel \} from "@\/lib\/record-label"/);
+  assert.match(team, /import \{ formatRecordLabel \} from "@\/lib\/record-label"/);
+  for (const acronym of ["FTE", "SMS", "API", "ACH", "ID", "URL", "QR"]) assert.equal(formatRecordLabel(`${acronym}_status`), `${acronym} status`);
+  assert.equal(formatRecordLabel("READ_ONLY_AUDITOR"), "Read only auditor");
+  assert.equal(formatRecordLabel(null), "Not set");
   assert.match(liveOps, /formatRecordLabel\(item\.priority\)/);
   assert.match(liveOps, /Review incident details, parent notification, and acknowledgment status/);
   assert.match(liveOps, /Delivery did not complete\. Review the destination and try again\./);

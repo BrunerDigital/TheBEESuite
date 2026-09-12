@@ -39,3 +39,11 @@ Implementation and verification evidence will follow. This finding is not eviden
 - Initial provider test failed because its fake connected-account request omitted the required existing 1% fee; the fixture was corrected, not the fee guard. A new natural-language idempotent-key test found an overly narrow classifier; production code now recognizes both idempotent and idempotency wording. Initial final gate also caught a test-harness environment typing error; fixed before rerun. Failure logs are retained locally.
 
 Remaining separate actionable work: dormant parent product-order creation still needs an explicit client/server purchase-retry key; it is not activated by this change. Parent pending-payment UI currently under-represents some shared blockers and is the next UI wave. This release does not authorize charges, refunds, signed-link sends, identity changes, provider configuration or school activation.
+
+## Protected-preview follow-up
+
+PR #362's first preview failed before the optimized build: three nested fake route tests inherited production mode without a signing key. The child now always runs in production mode with its own ephemeral random fixture key. Production signing requirements and provider environment were not changed. Both failure and local reproduction evidence are retained.
+
+Automated review also identified that a definitive Customer-creation rejection unnecessarily held an unsubmitted invoice forever. Such a rejection now marks only the untouched, still-DRAFT preparation FAILED, allowing a later corrected attempt. Existing unknown outcomes, concurrent Customer/Checkout progress, newer metadata and PAID records remain protected. Nine added cases verify definitive 400/401/403/422 recovery after the old retry window, unknown preservation and concurrent-progress races; the three focused suites now pass **58 tests**. The final integrated gate and a new Ready preview remain required before merge.
+
+The review-corrected final `npm run vercel-build` passed: Prisma, lint (same pre-existing warning only), types, **2,109 tests with no skips**, and optimized build. Independent review reran all 58 focused cases successfully. Protected CI/Ready deployment and production verification are still separate release gates.

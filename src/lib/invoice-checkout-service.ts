@@ -155,7 +155,27 @@ export async function startInvoiceCheckout(input: {
     // the signed-link recipient or request-specific source.
     const customerKey = `invoice-customer:${createHash("sha256").update(JSON.stringify([topology.tenantId, billingAccountId, topology.connectedAccountId])).digest("hex")}`;
     const response = await reconcileIdempotentStripeSubmission(() => submitCustomer({ ...customer, idempotencyKey: customerKey }));
-    if (!response.resolved || !response.value.ok || !response.value.id?.startsWith("cus_")) { await markUnknown(); return pending(payment.id); }
+    if (!response.resolved) { await markUnknown(); return pending(payment.id); }
+    if (!response.value.ok) {
+      const failed = await withDraft(async (tx, fresh) => {
+        const saved = jsonRecord(fresh.customFields);
+        // A definitive Customer rejection happened before Checkout. Release
+        // only that untouched claim, never a prior unknown outcome or a
+        // concurrent request that has already advanced toward a Session.
+        if (saved.status !== "checkout_pending" || saved.checkoutAttemptV1
+          || saved.stripeCustomerId || saved.stripeCheckoutSessionId) return false;
+        await tx.payment.update({ where: { id: fresh.id }, data: { status: PaymentStatus.FAILED,
+          externalIdPlaceholder: "stripe_customer_failed", customFields: jsonInput({ ...saved,
+            status: "checkout_failed", stripeProviderStatus: response.value.providerStatus ?? null,
+            checkoutFailedAt: now().toISOString() }) } });
+        await tx.center.update({ where: { id: topology.centerId }, data: { updatedAt: now() } });
+        return true;
+      });
+      return failed ? { ok: false, statusCode: response.value.configured ? 502 : 503,
+        configured: response.value.configured, error: "Payment setup could not be completed. Contact your school before trying again.", paymentId: payment.id }
+        : pending(payment.id);
+    }
+    if (!response.value.id?.startsWith("cus_")) { await markUnknown(); return pending(payment.id); }
     const customerId = response.value.id;
     const mapping = await withDraft(async (tx) => {
       const account = await tx.billingAccount.findUniqueOrThrow({ where: { id: billingAccountId } });

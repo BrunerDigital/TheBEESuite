@@ -138,6 +138,45 @@ test("lost Checkout response retries the identical payload and key", async () =>
   assert.equal(result.ok, true); assert.equal(attempts, 2); assert.deepEqual(requests[0], requests[1]); assert.equal(f.state.payments.length, 1);
 });
 
+for (const providerStatus of [400, 401, 403, 422]) test(`definitive Customer ${providerStatus} releases only the unsubmitted claim and allows recovery`, async () => {
+  const f = fixture();
+  const result = await startInvoiceCheckout({ ...f.base, submitCustomer: async () => ({ ok: false, provider: "stripe", configured: true,
+    providerStatus, error: "fake private provider error" }) });
+  assert.equal(result.statusCode, 502); assert.doesNotMatch(JSON.stringify(result), /fake private/);
+  assert.equal(f.state.payments[0].status, PaymentStatus.FAILED); assert.equal(f.state.payments[0].externalIdPlaceholder, "stripe_customer_failed");
+  assert.equal(f.state.payments[0].customFields.status, "checkout_failed"); assert.equal(f.checkoutCalls.length, 0);
+  assert.equal(f.state.refreshes, 1); assert.equal(f.state.audits.length, 0);
+  f.setClock(new Date(instant.getTime() + INVOICE_CHECKOUT_RETRY_MS + 1000));
+  assert.equal((await startInvoiceCheckout(f.base)).ok, true);
+  assert.equal(f.state.payments.length, 2); assert.equal(f.state.payments[0].status, PaymentStatus.FAILED);
+  assert.equal(f.checkoutCalls.length, 1); assert.equal(f.checkoutCalls[0].idempotencyKey, "checkout:fake-payment-2");
+});
+
+test("a later definitive Customer rejection does not release an earlier unknown claim", async () => {
+  const f = fixture();
+  await startInvoiceCheckout({ ...f.base, submitCustomer: async () => ({ ok: false, provider: "stripe", configured: true, providerStatus: 500 }) });
+  const preparation = clone(f.state.payments[0].customFields.checkoutPreparationV1);
+  const result = await startInvoiceCheckout({ ...f.base, submitCustomer: async () => ({ ok: false, provider: "stripe", configured: true, providerStatus: 400 }) });
+  assert.equal(result.status, "confirmation_pending"); assert.equal(f.state.payments[0].status, PaymentStatus.DRAFT);
+  assert.equal(f.state.payments[0].customFields.status, "checkout_submission_unknown");
+  assert.deepEqual(f.state.payments[0].customFields.checkoutPreparationV1, preparation); assert.equal(f.checkoutCalls.length, 0);
+});
+
+for (const winner of ["paid", "customer", "attempt", "session"]) test(`late definitive Customer rejection preserves concurrent ${winner}`, async () => {
+  const f = fixture();
+  const result = await startInvoiceCheckout({ ...f.base, submitCustomer: async () => {
+    const payment = f.state.payments[0];
+    if (winner === "paid") payment.status = PaymentStatus.PAID;
+    if (winner === "customer") payment.customFields.stripeCustomerId = "cus_winner";
+    if (winner === "attempt") payment.customFields.checkoutAttemptV1 = { changed: true };
+    if (winner === "session") payment.customFields.stripeCheckoutSessionId = "cs_winner";
+    payment.customFields.freshEvidence = true;
+    return { ok: false, provider: "stripe", configured: true, providerStatus: 400 };
+  } });
+  assert.equal(result.status, "confirmation_pending"); assert.notEqual(f.state.payments[0].status, PaymentStatus.FAILED);
+  assert.equal(f.state.payments[0].customFields.freshEvidence, true); assert.equal(f.state.refreshes, 0); assert.equal(f.checkoutCalls.length, 0);
+});
+
 test("ambiguous outcomes remain DRAFT and retry within the original 23-hour window only", async () => {
   const f = fixture(); const unknown = async (): Promise<IntegrationSendResult> => ({ ok: false, configured: true, provider: "stripe", providerStatus: 500, error: "fake private provider error" });
   const first = await startInvoiceCheckout({ ...f.base, submitCheckout: unknown });

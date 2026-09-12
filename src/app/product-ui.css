@@ -579,6 +579,14 @@
     scroll-margin-top: calc(var(--bee-app-header-height, 4.75rem) + 1rem);
   }
 
+  @media (max-height: 640px) and (max-width: 1023px) {
+    /* The short-screen header is in document flow, so task arrival and keyboard
+       focus must not reserve its former sticky height above the form. */
+    .bee-app-frame:has(.app-bottom-navigation) .teacher-mobile-workspace :is([data-collapsible-card="true"], #teacher-quick-log, #teacher-home-heading, a, button, input, textarea, [role="combobox"]) {
+      scroll-margin-block-start: 12px;
+    }
+  }
+
   .teacher-mobile-workspace nav[aria-label="Teacher task shortcuts"] > div:last-child {
     /* Two phone columns, at most three wider columns; enlarged text may use one. */
     grid-template-columns: repeat(auto-fit, minmax(min(100%, max(7rem, calc((100% - 1rem) / 3))), 1fr));

@@ -65,6 +65,7 @@
 }
 
 .targets svg,
+.picker svg,
 .options svg {
   width: 20px;
   height: 20px;

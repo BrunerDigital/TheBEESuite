@@ -8,6 +8,8 @@ import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { useParentPaymentRecovery, type ParentPaymentRecovery } from "@/components/use-parent-payment-recovery";
 import { useParentMessageHistory } from "@/components/use-parent-message-history";
+import { useParentUpdatesHistory } from "@/components/use-parent-updates-history";
+import { isParentUpdateDay, type ParentUpdatesPage } from "@/lib/parent-updates-history";
 import type { ParentMessageView } from "@/lib/parent-message-history";
 import { isServerCheckoutReceipt, paymentResponseNeedsConfirmation } from "@/lib/parent-payment-observation";
 import { isInternalSignatureRequest as requiresDocumentSignature, isParentDocumentSubmissionReceipt, optimisticParentDocumentIds, parentDocumentState, parentDocumentStatusLabel } from "@/lib/parent-document-state";
@@ -16,8 +18,9 @@ import { remainingParentIncidentCount } from "@/lib/parent-attention";
 import { canCompactParentAccount } from "@/lib/parent-home-account";
 import { parentActivePaymentSummary, parentPaymentStatusMessage, parentPaymentStatusTitle, type ParentAccountPaymentBlocker, type ParentPendingPayment } from "@/lib/parent-payment-status";
 import { activeItemScrollDelta } from "@/lib/horizontal-active-item";
+import { revealFocusedPortalControl } from "@/lib/focused-portal-control";
 import { InvoicePrintButton, PaymentReceiptPrintButton } from "@/components/billing-print-actions";
-import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
+import { formatZonedDateTime, zonedDateKey, zonedDateInputToUtc } from "@/lib/zoned-date-time";
 import {
   AlertCircle,
   ArrowRight,
@@ -249,11 +252,13 @@ type PortalFamily = {
 
 type ParentMedia = {
   id: string;
-  url: string;
+  url: string | null;
   caption: string | null;
-  createdAt: string | Date;
+  takenAt: string | Date;
   child: { fullName: string };
 };
+const NO_UPDATE_REPORTS: DailyReport[] = [];
+const NO_UPDATE_PHOTOS: ParentMedia[] = [];
 
 type ClassroomTeacherRecipient = {
   id: string;
@@ -382,6 +387,13 @@ type Props = {
     hasNext: boolean;
   };
   dailyReports: DailyReport[];
+  updatesHistory?: ParentUpdatesPage | null;
+  updatesHistoryEnabled?: boolean;
+  updatesHistoryUnavailable?: boolean;
+  homeUpdatesUnavailable?: boolean;
+  homeUpdateDay?: string | null;
+  requestedUpdateDay?: string | null;
+  latestSharedReport?: Pick<DailyReport, "id" | "date" | "child"> | null;
   incidents: Incident[];
   attentionSummary?: { openInvoiceCount: number; unacknowledgedIncidentCount: number };
   paymentActivitySummary?: { pendingCount: number; provisionalCreditCents: number };
@@ -711,6 +723,13 @@ function ParentPortalWorkspaceView({
   latestLedgerEntry = null,
   ledgerPagination,
   dailyReports,
+  updatesHistory = null,
+  updatesHistoryEnabled = false,
+  updatesHistoryUnavailable = false,
+  homeUpdatesUnavailable = false,
+  homeUpdateDay = null,
+  requestedUpdateDay = null,
+  latestSharedReport,
   incidents,
   messages,
   messageHistoryNextCursor = null,
@@ -802,6 +821,12 @@ function ParentPortalWorkspaceView({
   const messageTimelineRef = useRef<HTMLOListElement | null>(null);
   const messageHistory = useParentMessageHistory({ familyId: family?.id ?? "", messages, nextCursor: messageHistoryNextCursor,
     enabled: Boolean(family && !paymentContinuityAccess), timeline: messageTimelineRef, request: parentPortalRequest });
+  const updateTimelineRef = useRef<HTMLDivElement | null>(null);
+  const canLoadUpdateHistory = updatesHistoryEnabled && !paymentContinuityAccess && !previewMode && !demoMode;
+  const updateHistory = useParentUpdatesHistory({ familyId: family?.id ?? "", initial: updatesHistory,
+    enabled: canLoadUpdateHistory, request: parentPortalRequest, timeline: updateTimelineRef });
+  const updateReports = updatesHistoryEnabled ? updateHistory.page?.reports ?? NO_UPDATE_REPORTS : dailyReports;
+  const updatePhotos = updatesHistoryEnabled ? updateHistory.page?.photos ?? NO_UPDATE_PHOTOS : media;
   const [requestDetails, setRequestDetails] = useState("");
   const [requestEntity, setRequestEntity] = useState<
     "emergency_contact" | "authorized_pickup"
@@ -860,7 +885,12 @@ function ParentPortalWorkspaceView({
     "single" | "bundle_5"
   >(uniformProducts[0]?.purchaseOption ?? "single");
   const [uniformQuantity, setUniformQuantity] = useState(1);
-  const [selectedUpdateDayKey, setSelectedUpdateDayKey] = useState("");
+  const [selectedUpdateDayKey, setSelectedUpdateDayKey] = useState(requestedUpdateDay ?? "");
+  const [updateDateDraft, setUpdateDateDraft] = useState({ source: updatesHistory, requested: requestedUpdateDay, value: updatesHistory?.day ?? requestedUpdateDay });
+  const updateDateChanged = updateDateDraft.source !== updatesHistory || updateDateDraft.requested !== requestedUpdateDay;
+  if (updateDateChanged) setUpdateDateDraft({ source: updatesHistory, requested: requestedUpdateDay, value: updatesHistory?.day ?? requestedUpdateDay });
+  const updateDateInput = updateDateChanged ? updatesHistory?.day ?? requestedUpdateDay : updateDateDraft.value;
+  const setUpdateDateInput = (value: string) => setUpdateDateDraft({ source: updatesHistory, requested: requestedUpdateDay, value });
   const [tuitionCadenceDrafts, setTuitionCadenceDrafts] = useState<
     Record<string, string>
   >({});
@@ -898,6 +928,7 @@ function ParentPortalWorkspaceView({
       hash?: string | null;
       documentsPage?: number;
       documentId?: string | null;
+      updateDay?: string | null;
     } = {},
   ) {
     return parentPortalWorkspaceHref({
@@ -1090,31 +1121,35 @@ function ParentPortalWorkspaceView({
       return created;
     };
 
-    for (const report of dailyReports) {
+    for (const report of updateReports) {
       const day = ensureDay(report.date);
       if (!day) continue;
       day.reports.push(report);
     }
-    for (const item of media) {
-      ensureDay(item.createdAt)?.media.push(item);
+    for (const item of updatePhotos) {
+      ensureDay(item.takenAt)?.media.push(item);
     }
 
     return Array.from(days.values())
       .map((day) => ({
         ...day,
-        reports: sortDailyReportsChronologically(day.reports),
+        reports: updatesHistoryEnabled ? day.reports : sortDailyReportsChronologically(day.reports),
         media: day.media.toSorted(
           (left, right) =>
-            dateTimestamp(right.createdAt) - dateTimestamp(left.createdAt),
+            dateTimestamp(right.takenAt) - dateTimestamp(left.takenAt),
         ),
         totalItems: day.reports.length + day.media.length,
       }))
       .toSorted((left, right) => right.key.localeCompare(left.key));
-  }, [dailyReports, media, timeZone]);
-  const selectedUpdateDay =
-    dailyUpdateDays.find((day) => day.key === selectedUpdateDayKey) ??
-    dailyUpdateDays[0] ??
-    null;
+  }, [updateReports, updatePhotos, timeZone, updatesHistoryEnabled]);
+  const activeUpdateDayKey = updatesHistoryEnabled ? updateHistory.page?.day ?? null : selectedUpdateDayKey || dailyUpdateDays[0]?.key || null;
+  const selectedUpdateDay = activeUpdateDayKey ? dailyUpdateDays.find(day => day.key === activeUpdateDayKey) ?? {
+    key: activeUpdateDayKey, date: zonedDateInputToUtc(activeUpdateDayKey, timeZone) ?? activeUpdateDayKey,
+    reports: [], media: [], totalItems: 0,
+  } : null;
+  const earlierUpdateDay = updatesHistoryEnabled ? updateHistory.page?.earlierDay : dailyUpdateDays.find(day => activeUpdateDayKey && day.key < activeUpdateDayKey)?.key;
+  const laterUpdateDay = updatesHistoryEnabled ? updateHistory.page?.laterDay : dailyUpdateDays.toReversed().find(day => activeUpdateDayKey && day.key > activeUpdateDayKey)?.key;
+  const editableUpdateDay = updateDateInput ?? activeUpdateDayKey ?? "";
   const loadedDocuments = linkedDocument && !documents.some((document) => document.id === linkedDocument.id) ? [linkedDocument, ...documents] : documents;
   const submittedDocumentIds = optimisticParentDocumentIds(loadedDocuments, submittedDocumentSnapshots);
   const displayDocuments = loadedDocuments
@@ -1863,7 +1898,7 @@ function ParentPortalWorkspaceView({
     );
   }
 
-  const latestReport = dailyUpdateDays[0]?.reports[0] ?? null;
+  const latestReport = latestSharedReport === undefined ? dailyReports.toSorted((left, right) => dateTimestamp(right.date) - dateTimestamp(left.date) || right.id.localeCompare(left.id))[0] ?? null : latestSharedReport;
   const guardianName =
     currentGuardian?.fullName ?? family.guardians[0]?.fullName ?? null;
   const homeGreetingName = guardianFirstName(guardianName);
@@ -2147,11 +2182,11 @@ function ParentPortalWorkspaceView({
                     "Message School",
                   ],
                   [
-                    workspaceHref("updates", { familyId: family.id }),
+                    workspaceHref("updates", { familyId: family.id, updateDay: latestReport ? zonedDateKey(latestReport.date, timeZone) : null, hash: latestReport ? "daily-reports" : null }),
                     "Photos & Daily Reports",
                     latestReport
                       ? `${latestReport.child.fullName} · ${formatDate(latestReport.date)}`
-                      : "See shared classroom moments",
+                      : homeUpdatesUnavailable ? "Update status unavailable · open to try again" : "See shared classroom moments",
                     Camera,
                     "Photos & Reports",
                   ],
@@ -2184,6 +2219,7 @@ function ParentPortalWorkspaceView({
             </div>
           </section>
           {homeAttentionCount ? homeAttentionPanel : null}
+          {homeUpdatesUnavailable ? <p className="rounded-xl border bg-muted/25 px-3 py-2 text-sm" role="status">Daily update status is unavailable. <ParentPortalDocumentLink className="inline-flex min-h-11 items-center font-medium underline" href={workspaceHref("home", { familyId: family.id })}>Try again</ParentPortalDocumentLink></p> : null}
           <section
             id="today"
             className="parent-portal-feature scroll-mt-28 overflow-hidden rounded-[1.5rem] border bg-card"
@@ -2293,14 +2329,14 @@ function ParentPortalWorkspaceView({
                         <div>
                           <dt className="text-xs font-medium text-muted-foreground">Daily update</dt>
                           <dd className="mt-1 font-medium">
-                            {child.today?.dailyReportShared ? "Ready to view in Updates" : "Not shared yet"}
+                            {homeUpdatesUnavailable ? "Update status unavailable. Open Updates to try again." : child.today?.dailyReportShared ? "Ready to view in Updates" : "Not shared yet"}
                           </dd>
                         </div>
                       </dl>
                     </details>
-                    {child.today?.dailyReportShared ? (
+                    {!homeUpdatesUnavailable && child.today?.dailyReportShared ? (
                       <ParentPortalDocumentLink
-                        href={workspaceHref("updates", { familyId: family.id })}
+                        href={workspaceHref("updates", { familyId: family.id, updateDay: homeUpdateDay, hash: "daily-reports" })}
                         className="mb-3 flex min-h-11 items-center justify-between gap-3 rounded-xl bg-primary/[0.06] px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <span>Daily report ready<span className="sr-only"> for {child.preferredName || child.fullName}</span></span>
@@ -2479,42 +2515,42 @@ function ParentPortalWorkspaceView({
       {activeView === "updates" ? (
         <section
           id="daily-updates"
-          className="scroll-mt-28 rounded-2xl border bg-card p-4 sm:p-6"
+          className="scroll-mt-28 rounded-2xl border bg-card p-[12px] sm:p-6"
         >
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b pb-5">
-            <div className="w-full sm:w-80">
+          <div className="mb-3 grid min-w-0 gap-2 border-b pb-3">
+            <div className="min-w-0">
               <Label htmlFor="parent-update-day">Date</Label>
-              <Select
-                value={selectedUpdateDay?.key ?? ""}
-                onValueChange={(value) => setSelectedUpdateDayKey(value ?? "")}
-                disabled={!dailyUpdateDays.length}
-              >
-                <SelectTrigger
-                  id="parent-update-day"
-                  className="mt-2 w-full"
-                  aria-label="Choose update day"
-                >
-                  <CalendarDays data-icon="inline-start" />
-                  <SelectValue placeholder="No updates yet" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {dailyUpdateDays.map((day) => (
-                    <SelectItem key={day.key} value={day.key}>
-                      {formatDate(day.date)} · {day.totalItems} update
-                      {day.totalItems === 1 ? "" : "s"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                <Input id="parent-update-day" type="date" autoComplete="off" aria-label="Choose update day" aria-describedby="parent-update-date-help"
+                  className="min-h-11 min-w-0 max-w-full flex-1 basis-36 px-[10px]" value={editableUpdateDay}
+                  onFocus={event => { const control = event.currentTarget; requestAnimationFrame(() => requestAnimationFrame(() => revealFocusedPortalControl(control))); }}
+                  onChange={event => setUpdateDateInput(event.target.value)} />
+                {updatesHistoryEnabled && isParentUpdateDay(editableUpdateDay) ? (
+                  <ParentPortalDocumentLink href={workspaceHref("updates", { familyId: family?.id, updateDay: editableUpdateDay, hash: "daily-updates" })}
+                    className={buttonVariants({ variant: "outline", className: "min-h-11 h-auto whitespace-normal" })}>View date</ParentPortalDocumentLink>
+                ) : <Button type="button" variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={!isParentUpdateDay(editableUpdateDay) || updatesHistoryEnabled}
+                  onClick={() => setSelectedUpdateDayKey(editableUpdateDay)}>View date</Button>}
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {selectedUpdateDay
-                ? `${selectedUpdateDay.totalItems} update${selectedUpdateDay.totalItems === 1 ? "" : "s"}`
-                : "No updates yet"}
+            <p id="parent-update-date-help" className="text-xs text-muted-foreground">Dates use your school’s local time. Earlier and Later skip dates without shared updates.</p>
+            <nav aria-label="Update dates" className="flex flex-wrap gap-2">
+              {([["Earlier", earlierUpdateDay], ["Later", laterUpdateDay]] as const).map(([label, day]) => day ? updatesHistoryEnabled ? (
+                <ParentPortalDocumentLink key={label} href={workspaceHref("updates", { familyId: family?.id, updateDay: day, hash: "daily-updates" })}
+                  className={buttonVariants({ variant: "outline", className: "min-h-11 h-auto whitespace-normal flex-1" })}>{label}</ParentPortalDocumentLink>
+              ) : <Button key={label} type="button" variant="outline" className="min-h-11 h-auto whitespace-normal flex-1" onClick={() => { setSelectedUpdateDayKey(day); setUpdateDateInput(day); }}>{label}</Button> : null)}
+              {updatesHistoryEnabled && (requestedUpdateDay || updatesHistoryUnavailable) ? <ParentPortalDocumentLink href={workspaceHref("updates", { familyId: family?.id, hash: "daily-updates" })}
+                className={buttonVariants({ variant: "ghost", className: "min-h-11 h-auto whitespace-normal" })}>{updatesHistoryUnavailable ? "Try latest updates" : "Latest"}</ParentPortalDocumentLink> : null}
+            </nav>
+            <p className="text-sm text-muted-foreground" data-parent-update-summary>
+              {selectedUpdateDay ? `${formatDate(selectedUpdateDay.date)} · ${selectedUpdateDay.reports.length} report${selectedUpdateDay.reports.length === 1 ? "" : "s"} · ${selectedUpdateDay.media.length} photo${selectedUpdateDay.media.length === 1 ? "" : "s"} loaded` : "No updates loaded"}
             </p>
           </div>
 
-          {!selectedUpdateDay ? (
+          {updatesHistoryUnavailable ? <Alert><AlertCircle aria-hidden="true" /><AlertTitle>Updates could not be loaded</AlertTitle>
+            <AlertDescription>Check the date and try again. If your access changed, contact the school office. Your other portal sections are still available.</AlertDescription>
+          </Alert> : null}
+          <p role="status" aria-live="polite" aria-atomic="true" className="text-sm text-muted-foreground">{updateHistory.notice}</p>
+          {!selectedUpdateDay && !updatesHistoryUnavailable ? (
             <div className="rounded-2xl border border-dashed bg-muted/20 px-5 py-8 text-center">
               <h2 className="font-semibold">No daily updates yet</h2>
               <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
@@ -2523,16 +2559,17 @@ function ParentPortalWorkspaceView({
             </div>
           ) : null}
 
-          <div role="group" className="divide-y" aria-label="Updates for the selected date">
+          <div ref={updateTimelineRef} role="group" className="divide-y" aria-label="Updates for the selected date">
             {(selectedUpdateDay?.reports ?? []).map((report, reportIndex) => {
               const timedCareEvents = dailyReportTimedCareEvents(report);
               return (
                 <article
                   key={report.id}
                   id={reportIndex === 0 ? "daily-reports" : `daily-report-${report.id}`}
-                  className="py-4 first:pt-1"
+                  className="scroll-mt-40 py-3 first:pt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  data-update-id={report.id} tabIndex={-1}
                 >
-                  <div className="rounded-2xl border bg-background/55 p-4">
+                  <div className="rounded-xl border bg-background/55 p-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <h2 className="font-semibold">Daily report · {report.child.fullName}</h2>
@@ -2561,7 +2598,9 @@ function ParentPortalWorkspaceView({
                     {report.suppliesNeeded ? (
                       <p className="mt-3 text-sm font-medium">Please bring: {report.suppliesNeeded}</p>
                     ) : null}
-                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                    {(report.meals?.length || timedCareEvents.length || report.activities?.length) ? <details className="mt-3 rounded-xl border bg-background">
+                    <summary className="min-h-11 cursor-pointer px-3 py-2.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Meals, naps, care &amp; activities</summary>
+                    <dl className="grid gap-2 px-3 pb-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                       {report.meals?.map((meal) => (
                         <div key={meal.id} className="rounded-xl border bg-background p-3">
                           <dt className="text-xs text-muted-foreground">{displayTokenLabel(meal.mealType)}</dt>
@@ -2586,18 +2625,22 @@ function ParentPortalWorkspaceView({
                         </div>
                       ))}
                     </dl>
+                    </details> : null}
                   </div>
                 </article>
               );
             })}
 
+            {canLoadUpdateHistory && updateHistory.page?.nextReportCursor ? <div className="py-3"><Button type="button" variant="outline" className="min-h-11 h-auto w-full whitespace-normal aria-disabled:opacity-50"
+              aria-disabled={Boolean(updateHistory.loading)} onClick={event => void updateHistory.loadMore("reports", event.currentTarget)}>{updateHistory.loading === "reports" ? "Loading reports…" : "Load more reports for this date"}</Button></div> : null}
             {(selectedUpdateDay?.media ?? []).map((item, index) => {
               const imageSrc = renderableImageSrc(item.url);
               return (
                 <article
                   key={item.id}
                   id={index === 0 ? "photos" : undefined}
-                  className="grid gap-4 py-6 sm:grid-cols-[3rem_minmax(0,1fr)]"
+                  className="scroll-mt-40 grid gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[3rem_minmax(0,1fr)]"
+                  data-update-id={item.id} tabIndex={-1}
                 >
                   <span className="grid size-11 place-items-center rounded-full bg-primary/12 text-primary">
                     <Camera className="size-5" aria-hidden="true" />
@@ -2606,7 +2649,7 @@ function ParentPortalWorkspaceView({
                     <div>
                       <h2 className="font-semibold">Photo · {item.child.fullName}</h2>
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.caption || "A classroom moment shared by your school."}</p>
-                      <time className="mt-2 block text-xs text-muted-foreground">{formatTime(item.createdAt)}</time>
+                      <time className="mt-2 block text-xs text-muted-foreground">{formatTime(item.takenAt)}</time>
                     </div>
                     <a
                       href={imageSrc && !previewMode ? imageSrc : undefined}
@@ -2639,6 +2682,8 @@ function ParentPortalWorkspaceView({
                 </article>
               );
             })}
+            {canLoadUpdateHistory && updateHistory.page?.nextPhotoCursor ? <div className="py-3"><Button type="button" variant="outline" className="min-h-11 h-auto w-full whitespace-normal aria-disabled:opacity-50"
+              aria-disabled={Boolean(updateHistory.loading)} onClick={event => void updateHistory.loadMore("photos", event.currentTarget)}>{updateHistory.loading === "photos" ? "Loading photos…" : "Load more photos for this date"}</Button></div> : null}
 
             {selectedUpdateDay && !selectedUpdateDay.totalItems ? (
               <div className="py-12 text-center">

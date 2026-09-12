@@ -19,10 +19,16 @@ test("the parent portal scopes shared photos to linked children and signs privat
 
   assert.match(
     parentPage,
-    /prisma\.childMedia\.findMany\(\{[\s\S]*?childId: \{ in: childIds\.length \? childIds : \["__none__"\] \}[\s\S]*?sharedWithParents: true[\s\S]*?status: "shared"/,
+    /prisma\.childMedia\.findMany\(\{[\s\S]*?childId: \{ in: parentHistoryEnabled \? \[\] : childIds \}[\s\S]*?sharedWithParents: true[\s\S]*?status: "shared"/,
   );
-  assert.match(parentPage, /signChildMediaRecords\(media\)/);
-  assert.match(parentPage, /media=\{signedMedia\}/);
+  assert.match(parentPage, /parentPhotoViews\(media\)/);
+  assert.match(parentPage, /media=\{parentHistoryEnabled \? parentUpdates\?\.photos \?\? \[\] : signedMedia\}/);
+  const query = readFileSync("src/lib/parent-updates-query.ts", "utf8");
+  assert.match(query, /parentMessageFamilyWhere\(actor\)/);
+  assert.match(query, /child, sharedWithParents: true, status: "shared"/);
+  assert.match(query, /createChildMediaSignedUrl\(row.storageKey\)/);
+  assert.match(query, /familyId: actor.familyId, family: familyWhere/);
+  assert.match(query, /classroom: \{ centerId, center: \{ organization: \{ tenantId: actor.tenantId \}/);
 });
 
 test("the parent workspace renders signed classroom photos with a safe unavailable state", () => {

@@ -227,7 +227,11 @@ test("parent updates expose the full attendance window and openable photos", () 
   assert.match(page, /reportAttendanceByChildDay/);
   assert.match(page, /log\.type === "check_in"/);
   assert.match(page, /log\.type === "check_out"/);
-  assert.match(page, /dailyReports=\{parentDailyReports\}/);
+  assert.match(page, /dailyReports=\{parentHistoryEnabled \? parentUpdates\?\.reports \?\? \[\] : parentDailyReports\}/);
+  assert.match(page, /readParentUpdatesRows\(tx, context/);
+  const updates = readFileSync("src/lib/parent-updates-query.ts", "utf8");
+  assert.match(updates, /checkInOutLog\.groupBy/);
+  assert.match(updates, /_min: \{ occurredAt: true \}, _max: \{ occurredAt: true \}/);
   assert.match(workspace, /Check-in: \{report\.checkInAt/);
   assert.match(workspace, /Check-out: \{report\.checkOutAt/);
   assert.match(workspace, /href=\{imageSrc && !previewMode \? imageSrc : undefined\}/);

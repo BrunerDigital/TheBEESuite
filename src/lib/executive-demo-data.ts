@@ -301,7 +301,7 @@ export const executiveParentPortalDemo = {
     id: "exec-demo-parent-photo",
     url: "/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png",
     caption: "Classroom learning and play update",
-    createdAt: isoWithOffset(0, 15, 5),
+    takenAt: isoWithOffset(0, 15, 5),
     child: { fullName: "Mia Rivera" },
   }],
   incidents: [

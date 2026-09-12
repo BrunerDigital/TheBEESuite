@@ -1,6 +1,11 @@
 # School UI and workflow readiness — September 12, 2026
 
-## Current verified release — refreshed September 12, 20:25 UTC
+## Current verified release — refreshed September 12, 20:55 UTC
+
+- Latest verified release is protected PR #368, main `8ee717d5df8b66a0d0dfec7c3925d57717b44fc3`, Vercel `dpl_9FQkjXB12hyBHrHBzy3MgNXtns23` Ready on all five canonical aliases. Health/database connected and post-ready build/error/fatal/5xx checks clear. Fresh guarded fake-account verification passed at 20:54:58 UTC, including 16 new individual-selector checks and all previous report-target, route, shell and parent-fit checks. Local full production gate: 2,169 passing tests. Detailed current evidence is in `TEACHER_INDIVIDUAL_TARGETS_2026-09-12.md`.
+- Active wave #16 finishes Parent daily report/photo history, compact date navigation and care details, full-day pagination, safe retry and school-day correctness. Product-order retry integrity, legacy family-payment finalization and wider management-role verification remain actionable. No claim of complete school activation, signed native readiness or human-only remaining work is made.
+
+### Previous verified release #367 — historical
 
 - Latest verified release is protected PR #367, main `8687feaf040718af614496e1dbc7aa460901a31c`, Vercel `dpl_F9T8mLieVBcqDjiuBDMz7JvpNUhq` Ready on all five canonical aliases. Health/database connected at 20:23:34 UTC; build and post-ready error/fatal/5xx checks clear. Fresh fake-account production verification completed at 20:25:50 UTC with all existing route/layout/scope checks plus 12 new report-recipient checks passed. Zero product writes or client/HTTP errors. Full corrected production gate: 2,161 tests passed. Evidence: `TEACHER_REPORT_TARGETS_2026-09-12.md` and `output/playwright/app-review-production-after-teacher-report-targets/results.json`.
 - Current in-progress wave adds shared guarded child pickers to Teacher Photo, Incident and Location, including short-screen arrival and post-selection keyboard visibility fixes. Older Parent report/photo history, product-order retry integrity, legacy family-payment finalization and broader management-role verification remain actionable, not human-only gates. The refreshed 12-page PR #367 browser PDF is a fake-data production snapshot; it is not native/device evidence.

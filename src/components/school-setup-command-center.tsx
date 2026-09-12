@@ -54,6 +54,17 @@ export type SchoolSetupCommandCenterData = {
   blockingSections: number;
   lastCapturedAt: string | null;
   schoolEin: string | null;
+  businessProfile: {
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    phone: string;
+    email: string;
+    timezone: string;
+    licensedCapacity: string;
+  };
   stats: Array<{
     label: string;
     value: string;
@@ -68,6 +79,7 @@ export type SchoolSetupCommandCenterData = {
 };
 
 const emptySections: SchoolSetupCommandSection[] = [];
+const businessProfileFields = ["name", "address", "city", "state", "postalCode", "phone", "email", "timezone", "licensedCapacity"] as const;
 
 function statusLabel(status: SchoolSetupStatus) {
   if (status === "complete") return "Ready";
@@ -105,16 +117,19 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
     Object.fromEntries(sections.map((section) => [section.field, section.value])),
   );
   const [schoolEin, setSchoolEin] = useState(data.schoolEin ?? "");
+  const [businessProfile, setBusinessProfile] = useState(data.businessProfile);
   const [savedValues, setSavedValues] = useState(() =>
     Object.fromEntries(sections.map((section) => [section.field, section.value])),
   );
   const [savedSchoolEin, setSavedSchoolEin] = useState(data.schoolEin ?? "");
+  const [savedBusinessProfile, setSavedBusinessProfile] = useState(data.businessProfile);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const activeSection = sections.find((section) => section.id === activeId) ?? sections[0];
   const groups = useMemo(() => Array.from(new Set(sections.map((section) => section.group))), [sections]);
   const hasUnsavedChanges = schoolEin !== savedSchoolEin
+    || businessProfileFields.some((field) => businessProfile[field] !== savedBusinessProfile[field])
     || sections.some((section) => (values[section.field] ?? "") !== (savedValues[section.field] ?? ""));
 
   function displayedStatus(section: SchoolSetupCommandSection): SchoolSetupStatus {
@@ -124,6 +139,10 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
 
   function updateValue(field: string, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateBusinessProfile(field: (typeof businessProfileFields)[number], value: string) {
+    setBusinessProfile((current) => ({ ...current, [field]: value }));
   }
 
   function saveSetup() {
@@ -138,6 +157,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
             centerId: data.centerId,
             sections: values,
             schoolEin,
+            businessProfile,
           }),
         });
         const json = await response.json().catch(() => null) as {
@@ -145,6 +165,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
           error?: string;
           sections?: Record<string, string>;
           schoolEin?: string | null;
+          businessProfile?: SchoolSetupCommandCenterData["businessProfile"] & { licensedCapacity?: string | number };
           savedAt?: string;
         } | null;
         if (!response.ok || !json?.ok) {
@@ -152,11 +173,16 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
         }
         const canonicalValues = json.sections ?? values;
         const canonicalEin = json.schoolEin ?? "";
+        const canonicalBusinessProfile = json.businessProfile
+          ? { ...json.businessProfile, licensedCapacity: String(json.businessProfile.licensedCapacity ?? "") }
+          : businessProfile;
         setValues(canonicalValues);
         setSavedValues(canonicalValues);
         setSchoolEin(canonicalEin);
         setSavedSchoolEin(canonicalEin);
-        setMessage("School setup notes saved.");
+        setBusinessProfile(canonicalBusinessProfile);
+        setSavedBusinessProfile(canonicalBusinessProfile);
+        setMessage("School profile and setup details saved.");
         router.refresh();
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : "School setup could not be saved.");
@@ -206,10 +232,41 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
         </div>
       </section>
 
+      <CollapsibleCard
+        id="school-business-profile"
+        className="glass-panel"
+        contentClassName="space-y-4"
+        title="School business profile"
+        description="Confirm or correct the actual school record. These fields drive receipts, scheduling, compliance, and location-specific operations."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <EditableDisplayField id="school-profile-name" label="School name" value={businessProfile.name} onChange={(value) => updateBusinessProfile("name", value)} emptyLabel="Required" />
+          <EditableDisplayField id="school-profile-address" label="Street address" value={businessProfile.address} onChange={(value) => updateBusinessProfile("address", value)} emptyLabel="Required before launch" />
+          <EditableDisplayField id="school-profile-city" label="City" value={businessProfile.city} onChange={(value) => updateBusinessProfile("city", value)} emptyLabel="Required before launch" />
+          <EditableDisplayField id="school-profile-state" label="State or region" value={businessProfile.state} onChange={(value) => updateBusinessProfile("state", value)} emptyLabel="Required before launch" />
+          <EditableDisplayField id="school-profile-postal-code" label="Postal code" value={businessProfile.postalCode} onChange={(value) => updateBusinessProfile("postalCode", value)} emptyLabel="Required before launch" />
+          <EditableDisplayField id="school-profile-phone" label="Main phone" inputMode="tel" value={businessProfile.phone} onChange={(value) => updateBusinessProfile("phone", value)} emptyLabel="Required before launch" />
+          <EditableDisplayField id="school-profile-email" label="School email" inputMode="email" value={businessProfile.email} onChange={(value) => updateBusinessProfile("email", value)} emptyLabel="Required before launch" />
+          <EditableDisplayField id="school-profile-timezone" label="Timezone" value={businessProfile.timezone} onChange={(value) => updateBusinessProfile("timezone", value)} placeholder="America/New_York" emptyLabel="Required before launch" />
+          <EditableDisplayField id="school-profile-capacity" label="Licensed capacity" inputMode="numeric" value={businessProfile.licensedCapacity} onChange={(value) => updateBusinessProfile("licensedCapacity", value)} emptyLabel="Required before launch" />
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Button onClick={saveSetup} disabled={isPending || !data.centerId || !hasUnsavedChanges}>
+            {isPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}
+            Save school profile
+          </Button>
+          <p className="text-xs leading-5 text-muted-foreground">Location IDs, access, invitations, payment activation, and payout bank details are not changed here.</p>
+        </div>
+      </CollapsibleCard>
+
+      {message ? <div role="status" aria-live="polite" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</div> : null}
+      {error ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
+
       <SchoolDataSetupPanel key={data.dataSetup.assessment.revision} data={data.dataSetup} />
 
       <SetupChecklistPanel
         checklistKey="director_launch"
+        centerId={data.centerId}
         title="School setup checklist"
         description="Verified items complete automatically. Only mark steps that require the school’s confirmation."
         tasks={data.directorChecklistTasks ?? directorLaunchChecklistTasks}
@@ -323,8 +380,6 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                     </Button>
                   ) : null}
                 </div>
-                {message ? <div role="status" aria-live="polite" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</div> : null}
-                {error ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
             </CollapsibleCard>
           ) : null}
 

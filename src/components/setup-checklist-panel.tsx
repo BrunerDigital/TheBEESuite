@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   checklistKey: SetupChecklistKey;
+  centerId?: string | null;
   title: string;
   description: string;
   tasks: SetupChecklistTask[];
@@ -25,6 +26,7 @@ type Props = {
 
 export function SetupChecklistPanel({
   checklistKey,
+  centerId,
   title,
   description,
   tasks,
@@ -57,6 +59,7 @@ export function SetupChecklistPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             key: checklistKey,
+            centerId,
             completedIds: Array.from(nextIds),
           }),
         });

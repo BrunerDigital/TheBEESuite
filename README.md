@@ -135,6 +135,7 @@ Primary rollout checklist: [docs/KIDCITY_CORPORATE_ROLLOUT_CHECKLIST_2026-07-07.
 - Production release checklist: [docs/PRODUCTION_RELEASE_CHECKLIST.md](docs/PRODUCTION_RELEASE_CHECKLIST.md)
 - Security/privacy operations: [docs/SECURITY_PRIVACY_OPERATIONS.md](docs/SECURITY_PRIVACY_OPERATIONS.md)
 - ProCare migration: [docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md](docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md)
+- School data onboarding and clean-start setup: [docs/SCHOOL_DATA_ONBOARDING_AND_SETUP.md](docs/SCHOOL_DATA_ONBOARDING_AND_SETUP.md)
 - ProCare export validation: [docs/PROCARE_EXPORT_VALIDATION_2026-07-24.md](docs/PROCARE_EXPORT_VALIDATION_2026-07-24.md)
 - SOP library: [docs/sops/README.md](docs/sops/README.md)
 - Current branded team-share packet: [output/pdf/TEAM_SHARE_GUIDES_CURRENT/README.md](output/pdf/TEAM_SHARE_GUIDES_CURRENT/README.md)

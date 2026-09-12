@@ -30,6 +30,8 @@ type CenterOption = {
   name: string;
 };
 
+type SchoolImportSourceAdapter = "procare" | "bee_flat_file_v1";
+
 type ImportResponse = {
   dryRun?: boolean;
   partial?: boolean;
@@ -50,6 +52,7 @@ type PriorImportBatch = {
   unresolvedRows: number;
   disposedRows: number;
   hasRefinedSourceInventory: boolean;
+  sourceAdapter: SchoolImportSourceAdapter;
 };
 
 function uploadImport(formData: FormData, onProgress: (percent: number, uploaded: boolean) => void) {
@@ -72,6 +75,7 @@ function uploadImport(formData: FormData, onProgress: (percent: number, uploaded
 }
 
 type ImportPreview = {
+  sourceAdapter?: SchoolImportSourceAdapter;
   rows: number;
   totalRows?: number;
   readyRows: number;
@@ -265,6 +269,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const router = useRouter();
   const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
   const [csv, setCsv] = useState("");
+  const [sourceAdapter, setSourceAdapter] = useState<SchoolImportSourceAdapter>("procare");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [duplicateMatchMode, setDuplicateMatchMode] = useState("review");
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
@@ -340,9 +345,11 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
 
   function addSelectedFiles(files: FileList | null) {
     const addedFiles = Array.from(files ?? []);
+    const acceptedFiles = sourceAdapter === "procare" ? addedFiles : addedFiles.slice(0, 1);
     setSelectedFiles((current) => {
+      if (sourceAdapter === "bee_flat_file_v1") return acceptedFiles;
       const merged = new Map(current.map((file) => [selectedFileIdentity(file), file]));
-      for (const file of addedFiles) merged.set(selectedFileIdentity(file), file);
+      for (const file of acceptedFiles) merged.set(selectedFileIdentity(file), file);
       return [...merged.values()];
     });
     clearPreview();
@@ -411,6 +418,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       try {
         const formData = new FormData();
         formData.set("centerId", centerId);
+        formData.set("sourceAdapter", sourceAdapter);
         formData.set("dryRun", String(dryRun));
         formData.set("duplicateMatchMode", duplicateMatchMode);
         formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
@@ -503,7 +511,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setSelectedFiles([]);
         } else {
           setPreview(completedSummary);
-          setActiveWorkflowStep(5);
+          setActiveWorkflowStep(4);
           setPreviewDialogOpen(false);
         }
         setLastImportSummary(completedSummary);
@@ -515,7 +523,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         setPriorBatchesRefresh((current) => current + 1);
         setProgressPhase("complete");
         setProgressPercent(100);
-        setProgressMessage("Upload and import complete.");
+        setProgressMessage(unresolved
+          ? `Safe rows imported. ${unresolved.toLocaleString()} held row(s) still need a decision.`
+          : "Upload and import complete.");
         setStatus(
           `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "the reviewed source package"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.${unresolved ? ` ${unresolved} row(s) were safely retained below for mapping or disposal.` : ""}`,
         );
@@ -555,15 +565,20 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         setError(json?.error || "The unresolved source data could not be disposed.");
         return;
       }
+      const disposed = json?.disposed ?? rowNumbers.length;
+      const remaining = Math.max((preview?.unresolved ?? 0) - disposed, 0);
       setPreview((current) => current ? {
         ...current,
-        unresolved: Math.max((current.unresolved ?? 0) - (json?.disposed ?? rowNumbers.length), 0),
-        warningRows: Math.max(current.warningRows - (json?.disposed ?? rowNumbers.length), 0),
+        unresolved: Math.max((current.unresolved ?? 0) - disposed, 0),
+        warningRows: Math.max(current.warningRows - disposed, 0),
         rowResults: current.rowResults?.filter((row) => !rowNumbers.includes(row.rowNumber)),
       } : current);
+      if (!remaining) setActiveWorkflowStep(5);
       setResolutionReason("");
       setResolutionEvidenceReference("");
-      setStatus(`${json?.disposed ?? rowNumbers.length} unresolved source row(s) were excluded with reviewer and evidence details.`);
+      setStatus(remaining
+        ? `${disposed} unresolved source row(s) were excluded with reviewer and evidence details. ${remaining} remain held.`
+        : `${disposed} unresolved source row(s) were excluded with reviewer and evidence details. No held rows remain.`);
     });
   }
 
@@ -606,11 +621,15 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const duplicateSourceRowsRemovedTotal = duplicateSourceRowsRemoved
     ? duplicateSourceRowsRemovedDetails.reduce((total, [, count]) => total + count, 0)
     : 0;
-  const importCommitted = progressPhase === "complete" && Boolean(lastBatchId);
+  const batchPersisted = progressPhase === "complete" && Boolean(lastBatchId);
+  const heldRowsAfterCommit = batchPersisted
+    ? Number(preview?.unresolved ?? lastImportSummary?.unresolved ?? 0)
+    : 0;
+  const importCommitted = batchPersisted && heldRowsAfterCommit === 0;
   const selectedPriorBatch = priorImportBatches.find((batch) => batch.id === selectedPriorBatchId) ?? null;
   const needsSourceInventoryConfirmation = Boolean(preview);
-  const sourceInventoryReady = !needsSourceInventoryConfirmation || sourceInventoryConfirmed || importCommitted;
-  const hasReviewedImport = hasCompletedPreview || importCommitted;
+  const sourceInventoryReady = !needsSourceInventoryConfirmation || sourceInventoryConfirmed || batchPersisted;
+  const hasReviewedImport = hasCompletedPreview || batchPersisted;
   const commitBlockedReason = noCentersAvailable
     ? "This account needs an active school assignment before importing."
     : !centerId
@@ -639,29 +658,33 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   )) ?? [];
   const workflowStages = [
     {
-      label: "Upload reports",
-      detail: "Choose the full previous-system report folder or ZIP for this school.",
-      complete: hasImportSource || Boolean(preview) || importCommitted,
+      label: sourceAdapter === "procare" ? "Upload reports" : "Upload source file",
+      detail: sourceAdapter === "procare"
+        ? "Choose the full previous-system report folder or ZIP for this school."
+        : "Choose or paste one canonical mapped flat file for this school.",
+      complete: hasImportSource || Boolean(preview) || batchPersisted,
     },
     {
       label: "Parse and match",
       detail: "Review detected files, stable IDs, mappings, and duplicate candidates.",
-      complete: Boolean(preview) || importCommitted,
+      complete: Boolean(preview) || batchPersisted,
     },
     {
       label: "Families and children",
       detail: "Confirm each household, child, guardian relationship, enrollment, and classroom.",
-      complete: (hasReviewedImport && !missingCorrelationSections.some((section) => /family|child|guardian|relationship|classroom/i.test(section.title))) || importCommitted,
+      complete: (hasReviewedImport && !missingCorrelationSections.some((section) => /family|child|guardian|relationship|classroom/i.test(section.title))) || batchPersisted,
     },
     {
       label: "Balances and tuition",
       detail: "Confirm one opening family balance and the weekly rate for every enrolled child.",
-      complete: (hasReviewedImport && sourceInventoryReady && Boolean(preview?.migrationReview?.currentChildren) && !preview?.migrationReview?.blockedRows) || importCommitted,
+      complete: (hasReviewedImport && sourceInventoryReady && Boolean(preview?.migrationReview?.currentChildren) && !preview?.migrationReview?.blockedRows) || batchPersisted,
     },
     {
       label: "Exceptions",
       detail: "Correct, match, exclude, or hold every unresolved and warning row.",
-      complete: (hasReviewedImport && !sumCounts(preview?.unresolved, preview?.warningRows) && (!duplicateReviewRows || duplicateReviewConfirmed)) || importCommitted,
+      complete: batchPersisted
+        ? heldRowsAfterCommit === 0
+        : hasReviewedImport && !sumCounts(preview?.unresolved, preview?.warningRows) && (!duplicateReviewRows || duplicateReviewConfirmed),
     },
     {
       label: "Confirm package",
@@ -691,7 +714,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const setupClassroomCount = setupSummary ? bestCount(setupSummary.classroomsReferenced, setupSummary.createdClassrooms) : 0;
   const setupBillingRows = setupSummary ? sumCounts(setupSummary.balanceRows, setupSummary.invoiceRows, setupSummary.ledgerRows) : 0;
   const setupAttendanceRows = setupSummary ? sumCounts(setupSummary.attendanceRows, setupSummary.checkLogRows) : 0;
-  const setupOpenIssueRows = setupSummary ? sumCounts(setupSummary.unresolved, setupSummary.warningRows, setupSummary.migrationReview?.blockedRows) : 0;
+  const setupOpenIssueRows = setupSummary ? bestCount(setupSummary.unresolved, setupSummary.warningRows, setupSummary.migrationReview?.blockedRows) : 0;
   const setupSourceCount = setupSummary?.datasetCoverage?.sourceInventory?.filter((source) => source.reportKind !== "ignored").length ?? 0;
   const setupReadinessStages: Array<{ title: string; detail: string; status: SetupReadinessStatus; href?: string }> = setupSummary ? [
     {
@@ -752,7 +775,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       <CardHeader>
         <CardTitle as="h2">Guided school migration setup</CardTitle>
         <CardDescription>
-          Bring an established school into BEE Suite with its families, children, guardians, classrooms, schedules, balances, tuition evidence, staff, and operating history intact. BEE Suite converts supported previous-system exports into a reviewable school dataset, identifies anything incomplete or conflicting, and holds every unresolved record for confirmation before import.
+          Bring an established school into BEE Suite with its families, children, guardians, classrooms, schedules, balances, tuition evidence, staff, and operating history intact. Use the supported full-package workflow or map a reviewed flat file from another system. BEE Suite identifies incomplete or conflicting records and holds every unresolved row for confirmation before import.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -760,7 +783,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           <AlertCircle className="size-4" />
           <AlertTitle>Accuracy before launch</AlertTitle>
           <AlertDescription>
-            Every family relationship and balance must remain tied to stable source evidence. Names can help reviewers locate a record, but they never silently establish identity, household ownership, or financial responsibility. Exports from another provider require their own reviewed source adapter.
+            Every family relationship and balance must remain tied to stable source evidence. Names can help reviewers locate a record, but they never silently establish identity, household ownership, or financial responsibility. Other systems can use the BEE flat-file adapter when their columns are mapped and stable source IDs are retained.
           </AlertDescription>
         </Alert>
         <div className="space-y-4 rounded-xl border border-primary/25 bg-primary/5 p-4">
@@ -812,7 +835,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 <Badge variant="outline">{selectedPriorBatch.importedRows.toLocaleString()} imported</Badge>
                 <Badge variant={selectedPriorBatch.unresolvedRows ? "destructive" : "outline"}>{selectedPriorBatch.unresolvedRows.toLocaleString()} unresolved</Badge>
                 <Badge variant="outline">{selectedPriorBatch.disposedRows.toLocaleString()} evidenced exclusions</Badge>
-                <Badge variant={selectedPriorBatch.hasRefinedSourceInventory ? "outline" : "secondary"}>{selectedPriorBatch.hasRefinedSourceInventory ? "Refined inventory attached" : "Legacy source inventory"}</Badge>
+                <Badge variant="outline">{selectedPriorBatch.sourceAdapter === "bee_flat_file_v1" ? "BEE flat file" : "Supported source package"}</Badge>
+                <Badge variant={selectedPriorBatch.hasRefinedSourceInventory ? "outline" : "secondary"}>{selectedPriorBatch.hasRefinedSourceInventory ? "Refined inventory attached" : "Standalone or legacy inventory"}</Badge>
               </div>
               {!selectedPriorBatch.hasRefinedSourceInventory ? (
                 <p className="text-xs leading-5 text-muted-foreground">This older batch can still use current-state reconciliation. Its verification packet will identify source-inventory evidence that must be added or confirmed; existing BEE Suite records are not re-imported.</p>
@@ -994,9 +1018,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               <Button variant="outline" onClick={() => setPreviewDialogOpen(false)}>
                 Close Review
               </Button>
-              <Button disabled={busy || importCommitted || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
+              <Button disabled={busy || batchPersisted || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
                 <Upload data-icon="inline-start" />
-                {importCommitted ? "Import Complete" : importWorking ? "Working…" : "Commit Import"}
+                {importCommitted ? "Import Complete" : batchPersisted ? "Resolve Held Rows" : importWorking ? "Working…" : "Commit Import"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1127,7 +1151,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             </AlertDescription>
           </Alert>
         ) : null}
-        <div className="grid gap-3 md:grid-cols-[18rem_1fr]">
+        <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-1">
             <Label htmlFor="procare-center">Center</Label>
             <Select value={centerId} onValueChange={(value) => {
@@ -1151,12 +1175,36 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             ) : null}
           </div>
           <div className="space-y-1">
-            <div id="procare-source-files-label" className="text-sm font-medium">Supported previous-system export folder or files</div>
+            <Label htmlFor="school-import-source-adapter">Source format</Label>
+            <Select value={sourceAdapter} onValueChange={(value) => {
+              if (value !== "procare" && value !== "bee_flat_file_v1") return;
+              setSourceAdapter(value);
+              setSelectedFiles([]);
+              setCsv("");
+              setFieldMapping({});
+              clearPreview();
+            }}>
+              <SelectTrigger id="school-import-source-adapter"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="procare">Supported previous-system package</SelectItem>
+                <SelectItem value="bee_flat_file_v1">Another system / mapped flat file</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {sourceAdapter === "procare"
+                ? "Use the unchanged supported report package so all applicable domains can be reconciled together."
+                : "Use one CSV, TSV, spreadsheet, or pasted table. Map its columns below and include stable family, child, and guardian IDs whenever those records apply."}
+            </p>
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <div id="procare-source-files-label" className="text-sm font-medium">{sourceAdapter === "procare" ? "Supported previous-system export folder or files" : "Reviewed source table"}</div>
             <div className="flex flex-wrap gap-2" aria-labelledby="procare-source-files-label">
-              <Button type="button" variant="outline" onClick={() => folderRef.current?.click()}>
-                <Upload data-icon="inline-start" />
-                Choose one folder
-              </Button>
+              {sourceAdapter === "procare" ? (
+                <Button type="button" variant="outline" onClick={() => folderRef.current?.click()}>
+                  <Upload data-icon="inline-start" />
+                  Choose one folder
+                </Button>
+              ) : null}
               <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
                 <Upload data-icon="inline-start" />
                 Choose individual files
@@ -1172,7 +1220,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               }}
               id="procare-folder"
               type="file"
-              multiple
+              multiple={sourceAdapter === "procare"}
               onChange={(event) => {
                 addSelectedFiles(event.target.files);
                 event.target.value = "";
@@ -1184,7 +1232,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               ref={fileRef}
               id="procare-file"
               type="file"
-              multiple
+              multiple={sourceAdapter === "procare"}
               onChange={(event) => {
                 addSelectedFiles(event.target.files);
                 event.target.value = "";
@@ -1218,7 +1266,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </div>
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
-              Choose one folder containing any combination of the supported previous-system reports, choose individual files, or choose one ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Do not submit exports from another provider through this importer. Browser review supports up to {MAX_PROCARE_SOURCE_FILES.toLocaleString()} files and {MAX_PROCARE_SOURCE_LABEL} of source data; ZIP larger source folders without changing their contents, or use the file-only preflight outside the browser.
+              {sourceAdapter === "procare"
+                ? <>Choose one folder containing the supported reports, individual files, or one ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Browser review supports up to {MAX_PROCARE_SOURCE_FILES.toLocaleString()} files and {MAX_PROCARE_SOURCE_LABEL} of source data; ZIP larger source folders without changing their contents, or use the file-only preflight outside the browser.</>
+                : <>Choose one reviewed canonical flat file or paste one canonical table below. The preview requires explicit column mapping, duplicate review, unchanged-source hashing, and stable source evidence before commit. A full migration file must include every applicable family, child, relationship, classroom, balance, safety, tuition, and staff domain; request setup help if the source exports need to be combined first.</>}
             </p>
             {selectedSourceTooLarge || selectedFileCountTooLarge ? (
               <Alert variant="destructive" role="alert">
@@ -1622,24 +1672,24 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               View Review Table
             </Button>
           ) : null}
-          <Button disabled={busy || importCommitted || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
+          <Button disabled={busy || batchPersisted || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
-            {importCommitted ? "Import Complete" : importWorking ? "Importing…" : "Import Data"}
+            {importCommitted ? "Import Complete" : batchPersisted ? "Resolve Held Rows" : importWorking ? "Importing…" : "Import Data"}
           </Button>
           <Button disabled={busy || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
             <Download data-icon="inline-start" />
             Download Latest Backup
           </Button>
         </div>
-        {!importCommitted && commitBlockedReason ? (
+        {!batchPersisted && commitBlockedReason ? (
           <p className="text-xs text-muted-foreground">{commitBlockedReason}</p>
         ) : null}
         {preview?.warningRows ? (
           <p className="text-xs text-muted-foreground">
             {blockingWarningRows
-              ? "Resolve or remove non-duplicate warning rows before committing. This prevents partially mapped source data from being written to live school records."
+              ? "Non-duplicate warning rows will remain held. Only safe rows are written; fix or evidence-exclude each held row before final confirmation."
               : duplicateReviewRows && !duplicateReviewConfirmed
-                ? "Review and confirm the duplicate match candidates before committing this data import."
+                ? "Unconfirmed duplicate candidates will remain held. Review each match before final confirmation."
                 : "Duplicate-review rows are confirmed. The API will still block the import if the uploaded file changes and new cleanup warnings appear."}
           </p>
         ) : null}

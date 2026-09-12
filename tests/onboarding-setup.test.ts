@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "../src/lib/onboarding-setup";
-import { directorLaunchChecklistTasks, directorLaunchChecklistTasksForPayoutSetup, teacherProfileChecklistTasks } from "../src/lib/setup-checklists";
+import { directorLaunchChecklistTasks, directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklistIds, teacherProfileChecklistTasks } from "../src/lib/setup-checklists";
 
 function completeSetupInput(overrides: SchoolOnboardingSetupInput = {}) {
   return {
@@ -102,4 +102,24 @@ test("school dashboard setup steps use current consolidated routes", () => {
 test("teacher setup links stay within teacher-accessible workspaces", () => {
   const scheduleTask = teacherProfileChecklistTasks.find((task) => task.id === "schedule-coverage");
   assert.equal(scheduleTask?.href, "/teacher-portal");
+});
+
+test("director checklist progress is isolated by school with primary-school legacy fallback", () => {
+  const customFields = {
+    setupChecklists: {
+      director_launch: {
+        completedIds: ["legacy-primary"],
+        centers: {
+          school_a: { completedIds: ["classrooms-ratios"] },
+          school_b: { completedIds: ["teachers-staff"] },
+        },
+      },
+      teacher_profile: { completedIds: ["teacher-login"] },
+    },
+  };
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "director_launch", { centerId: "school_a" }), ["classrooms-ratios"]);
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "director_launch", { centerId: "school_b" }), ["teachers-staff"]);
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "director_launch", { centerId: "school_c" }), []);
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "director_launch", { centerId: "school_c", allowLegacyFallback: true }), ["legacy-primary"]);
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "teacher_profile"), ["teacher-login"]);
 });

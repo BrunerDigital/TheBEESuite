@@ -60,7 +60,8 @@ test("later ProCare imports preserve reconciled invoices and redirect archived c
   );
   assert.match(procareImportSource, /activeProcareClassroomMatches\(rawMatches, centerId, db\)/);
   assert.match(procareImportSource, /mergedIntoClassroomId[\s\S]*activeClassroomWhere\(\{ centerId, id: \{ in: mergedIntoIds \} \}\)/);
-  assert.match(procareImportSource, /redirectedFromArchived[\s\S]*\? \{\}[\s\S]*: \{ name, sourceSystem: "procare", externalId: classroomExternalId \}/);
+  assert.match(procareImportSource, /redirectedFromArchived[\s\S]*\? \{\}[\s\S]*providedClassroomExternalId[\s\S]*\? \{ sourceSystem, externalId: providedClassroomExternalId \}[\s\S]*: \{\}/);
+  assert.doesNotMatch(procareImportSource, /providedClassroomExternalId\s*\|\|\s*name/);
 });
 
 test("family intake and child writes cannot reuse archived classrooms", () => {

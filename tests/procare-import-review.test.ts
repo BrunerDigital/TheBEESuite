@@ -105,7 +105,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /billing-settings\?view=setup/);
   assert.match(panel, /Import does not activate the school by itself/);
   assert.match(panel, /Supported previous-system export folder or files/);
-  assert.match(panel, /Exports from another provider require their own reviewed source adapter/);
+  assert.match(panel, /Other systems can use the BEE flat-file adapter when their columns are mapped and stable source IDs are retained/);
   assert.match(panel, /Enrollment, ParentInfo, Relationships, and ChildInfo/);
   assert.match(panel, /Parent invitations, kiosk\/PIN credentials, billing\/payment activation, previous-system cutover, and source-file archival each stay held off/);
   assert.match(panel, /useRouter/);

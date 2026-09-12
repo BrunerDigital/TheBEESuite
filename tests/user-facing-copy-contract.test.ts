@@ -80,7 +80,7 @@ test("authored import and setup UI copy omits the legacy vendor name", () => {
   assert.match(importPanel, /Guided school migration setup/);
   assert.match(importPanel, /families, children, guardians, classrooms, schedules, balances, tuition evidence, staff, and operating history intact/);
   assert.match(importPanel, /Every family relationship and balance must remain tied to stable source evidence/);
-  assert.match(importPanel, /Exports from another provider require their own reviewed source adapter/);
+  assert.match(importPanel, /Other systems can use the BEE flat-file adapter when their columns are mapped and stable source IDs are retained/);
 });
 
 test("stored values, lookup keys, and import provenance remain exact", () => {
@@ -103,12 +103,13 @@ test("stored values, lookup keys, and import provenance remain exact", () => {
   assert.match(dataReadinessCenter, /TabsTrigger value="procare"[^\n]+Start migration/);
   assert.match(dataReadinessCenter, /TabsTrigger value="procare"[^\n]+Import and parse/);
 
-  assert.match(route, /sourceSystem:\s*"procare"/);
-  assert.match(route, /filename: "pasted-procare-import\.csv"/);
-  assert.match(route, /notes: "Imported from ProCare export\."/);
+  assert.match(route, /sourceSystem:\s*sourceAdapter/);
+  assert.match(route, /batchSourceSystem:\s*SchoolImportSourceAdapter/);
+  assert.match(route, /sourceAdapter === "procare" \? "pasted-procare-import\.csv" : "pasted-bee-flat-file\.csv"/);
+  assert.match(route, /notes: sourceAdapter === "procare" \? "Imported from ProCare export\." : "Imported from reviewed BEE flat-file source\."/);
   assert.match(route, /center: autoMap \? "Auto-mapped from source data" : defaultCenter/);
-  assert.match(route, /center: autoMap \? "Auto-mapped from ProCare export" : center/);
-  assert.match(route, /note: rows\.length < 2 \? "No data rows were found\." : "No supported ProCare import columns were recognized\."/);
+  assert.match(route, /center: autoMap \? "Auto-mapped from source export" : center/);
+  assert.match(route, /note: rows\.length < 2 \? "No data rows were found\." : "No supported school-data import columns were recognized\."/);
   assert.match(multiReport, /retainedAs: "procare relationship source records and procare relationship records\[\]\.sourceFields"/);
   assert.match(renderedReport, /`ProCare \$\{accountId\}`/);
   const importPanel = source("src/components/procare-import-panel.tsx");
@@ -127,6 +128,8 @@ test("limited-rollout values and accurate AI labels remain intact", () => {
 
   assert.match(onboarding, /value="Multi-location pilot - all features included">Multi-location plan - all features included/);
   assert.match(onboarding, /value="Enterprise pilot configuration">Enterprise launch configuration/);
+  assert.match(onboarding, /\["Software plan", onboardingDisplayValue\(form\.softwarePlan\)\]/);
+  assert.match(onboarding, /\["Add-ons", onboardingDisplayValue\(form\.addOnBundle\) \|\| "Missing"\]/);
   assert.match(tenantControls, /value="pilot">Limited rollout/);
   assert.match(tenantControls, /row\.rollout === "disabled" \? "pilot"/);
   assert.match(aiSurfaces, /Generate AI summary/);

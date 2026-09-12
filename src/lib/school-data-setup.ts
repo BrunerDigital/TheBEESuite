@@ -14,6 +14,8 @@ export type SchoolDataSetupInput = {
 export type SchoolDataReviewConfirmation = {
   revision: string;
   path: SchoolDataSetupPath;
+  sourceSystem?: SchoolDataSourceSystem | null;
+  noCurrentFamiliesExpected?: boolean;
   confirmedAt: string;
   confirmedByUserId: string | null;
   confirmedByEmail: string | null;
@@ -21,6 +23,20 @@ export type SchoolDataReviewConfirmation = {
   familyCount: number;
   childCount: number;
   guardianCount: number;
+  relevantFamilyCount?: number;
+  relevantChildCount?: number;
+  domainFingerprints?: Record<string, string>;
+  domainMetrics?: Record<string, number>;
+  sourceEvidenceReceipt?: {
+    batchId: string;
+    filename: string;
+    sourceSha256: string;
+    reviewFingerprint: string;
+    sourceAdapter?: "procare" | "bee_flat_file_v1";
+    retainedRowCount: number;
+    recordedAt: string;
+    status: "recoverable_backup_available";
+  } | null;
 };
 
 export type SchoolDataSetup = {
@@ -36,13 +52,24 @@ export type SchoolDataSetup = {
 };
 
 export type SchoolDataReviewEvidence = {
+  centerStatus: string | null;
   dataFingerprint: string | null;
   importTargetFingerprint: string | null;
+  domainFingerprints: Record<string, string>;
+  domainMetrics: Record<string, number>;
   familyCount: number;
   childCount: number;
   guardianCount: number;
+  relevantFamilyCount: number;
+  relevantChildCount: number;
+  prospectiveFamilyCount: number;
+  prospectiveChildCount: number;
+  familiesMissingChildCount: number;
+  childrenNeedingEnrollmentStatusReviewCount: number;
   familiesMissingGuardianCount: number;
   childrenMissingClassroomCount: number;
+  childrenMissingScheduleCount: number;
+  familiesMissingEmergencyContactCount: number;
   guardiansMissingContactCount: number;
   importBatchCount: number;
   latestRecordUpdatedAt: string | null;
@@ -58,6 +85,7 @@ export type SchoolDataReviewEvidence = {
     errorRows: number;
     sourceSha256: string | null;
     reviewFingerprint: string | null;
+    sourceAdapter: "procare" | "bee_flat_file_v1";
   } | null;
   latestFleetVerification: {
     batchId: string;
@@ -86,6 +114,10 @@ export type SchoolDataReviewAssessment = {
   confirmationCurrent: boolean;
   revision: string;
   blockedReason: string | null;
+  baselineFrozen: boolean;
+  changedSinceConfirmation: boolean;
+  changedDomains: string[];
+  changeDeltas: string[];
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -124,9 +156,45 @@ function reviewConfirmation(value: unknown): SchoolDataReviewConfirmation | null
   const revision = clean(input.revision, 2_000);
   const confirmedAt = clean(input.confirmedAt, 100);
   if (!path || !revision || !confirmedAt) return null;
+  const rawDomainFingerprints = record(input.domainFingerprints);
+  const domainFingerprints = Object.fromEntries(
+    Object.entries(rawDomainFingerprints)
+      .filter(([, entry]) => typeof entry === "string" && entry.length > 0)
+      .map(([key, entry]) => [key, clean(entry, 200)]),
+  );
+  const domainMetrics = Object.fromEntries(
+    Object.entries(record(input.domainMetrics))
+      .filter(([, entry]) => typeof entry === "number" && Number.isFinite(entry))
+      .map(([key, entry]) => [key, finiteCount(entry)]),
+  );
+  const rawReceipt = record(input.sourceEvidenceReceipt);
+  const receiptBatchId = clean(rawReceipt.batchId, 500);
+  const receiptFilename = clean(rawReceipt.filename, 500);
+  const receiptSourceSha256 = clean(rawReceipt.sourceSha256, 200);
+  const receiptReviewFingerprint = clean(rawReceipt.reviewFingerprint, 500);
+  const receiptRecordedAt = clean(rawReceipt.recordedAt, 100);
+  const sourceEvidenceReceipt = receiptBatchId
+    && receiptFilename
+    && receiptSourceSha256
+    && receiptReviewFingerprint
+    && receiptRecordedAt
+    && rawReceipt.status === "recoverable_backup_available"
+    ? {
+        batchId: receiptBatchId,
+        filename: receiptFilename,
+        sourceSha256: receiptSourceSha256,
+        reviewFingerprint: receiptReviewFingerprint,
+        sourceAdapter: rawReceipt.sourceAdapter === "bee_flat_file_v1" ? "bee_flat_file_v1" as const : "procare" as const,
+        retainedRowCount: finiteCount(rawReceipt.retainedRowCount),
+        recordedAt: receiptRecordedAt,
+        status: "recoverable_backup_available" as const,
+      }
+    : null;
   return {
     revision,
     path,
+    sourceSystem: path === "import_existing" ? normalizedSourceSystem(input.sourceSystem) : null,
+    noCurrentFamiliesExpected: path === "start_clean" && input.noCurrentFamiliesExpected === true,
     confirmedAt,
     confirmedByUserId: nullableText(input.confirmedByUserId),
     confirmedByEmail: nullableText(input.confirmedByEmail),
@@ -134,6 +202,11 @@ function reviewConfirmation(value: unknown): SchoolDataReviewConfirmation | null
     familyCount: finiteCount(input.familyCount),
     childCount: finiteCount(input.childCount),
     guardianCount: finiteCount(input.guardianCount),
+    relevantFamilyCount: finiteCount(input.relevantFamilyCount),
+    relevantChildCount: finiteCount(input.relevantChildCount),
+    domainFingerprints,
+    domainMetrics,
+    sourceEvidenceReceipt,
   };
 }
 
@@ -163,13 +236,24 @@ export function readSchoolDataSetup(customFields: unknown): SchoolDataSetup {
 
 export function emptySchoolDataReviewEvidence(): SchoolDataReviewEvidence {
   return {
+    centerStatus: null,
     dataFingerprint: null,
     importTargetFingerprint: null,
+    domainFingerprints: {},
+    domainMetrics: {},
     familyCount: 0,
     childCount: 0,
     guardianCount: 0,
+    relevantFamilyCount: 0,
+    relevantChildCount: 0,
+    prospectiveFamilyCount: 0,
+    prospectiveChildCount: 0,
+    familiesMissingChildCount: 0,
+    childrenNeedingEnrollmentStatusReviewCount: 0,
     familiesMissingGuardianCount: 0,
     childrenMissingClassroomCount: 0,
+    childrenMissingScheduleCount: 0,
+    familiesMissingEmergencyContactCount: 0,
     guardiansMissingContactCount: 0,
     importBatchCount: 0,
     latestRecordUpdatedAt: null,
@@ -187,18 +271,30 @@ export function schoolDataReviewRevision(
     path: setup.path,
     sourceSystem: setup.sourceSystem,
     noCurrentFamiliesExpected: setup.noCurrentFamiliesExpected,
+    centerStatus: evidence.centerStatus,
     dataFingerprint: evidence.dataFingerprint,
     importTargetFingerprint: setup.path === "import_existing" ? evidence.importTargetFingerprint : null,
+    domainFingerprints: evidence.domainFingerprints,
+    domainMetrics: evidence.domainMetrics,
     familyCount: evidence.familyCount,
     childCount: evidence.childCount,
     guardianCount: evidence.guardianCount,
+    relevantFamilyCount: evidence.relevantFamilyCount,
+    relevantChildCount: evidence.relevantChildCount,
+    prospectiveFamilyCount: evidence.prospectiveFamilyCount,
+    prospectiveChildCount: evidence.prospectiveChildCount,
+    familiesMissingChildCount: evidence.familiesMissingChildCount,
+    childrenNeedingEnrollmentStatusReviewCount: evidence.childrenNeedingEnrollmentStatusReviewCount,
     familiesMissingGuardianCount: evidence.familiesMissingGuardianCount,
     childrenMissingClassroomCount: evidence.childrenMissingClassroomCount,
+    childrenMissingScheduleCount: evidence.childrenMissingScheduleCount,
+    familiesMissingEmergencyContactCount: evidence.familiesMissingEmergencyContactCount,
     guardiansMissingContactCount: evidence.guardiansMissingContactCount,
     latestRecordUpdatedAt: evidence.latestRecordUpdatedAt,
     latestImportBatchId: evidence.latestImportBatch?.id ?? null,
     latestImportBatchStatus: evidence.latestImportBatch?.status ?? null,
     latestImportReviewFingerprint: evidence.latestImportBatch?.reviewFingerprint ?? null,
+    latestImportSourceAdapter: evidence.latestImportBatch?.sourceAdapter ?? null,
     latestImportTotalRows: evidence.latestImportBatch?.totalRows ?? 0,
     latestImportImportedRows: evidence.latestImportBatch?.importedRows ?? 0,
     latestImportUnresolvedRows: evidence.latestImportBatch?.unresolvedRows ?? 0,
@@ -215,6 +311,7 @@ export function schoolDataReviewRevision(
 export function schoolDataImportVerificationRevision(batch: NonNullable<SchoolDataReviewEvidence["latestImportBatch"]>) {
   return JSON.stringify({
     version: 1,
+    sourceAdapter: batch.sourceAdapter,
     batchId: batch.id,
     batchStatus: batch.status,
     sourceSha256: batch.sourceSha256,
@@ -242,7 +339,53 @@ function assessment(
     canConfirm: options.canConfirm ?? false,
     confirmationCurrent: options.confirmationCurrent ?? false,
     blockedReason: options.blockedReason ?? null,
+    baselineFrozen: false,
+    changedSinceConfirmation: false,
+    changedDomains: [],
+    changeDeltas: [],
   };
+}
+
+const domainLabels: Record<string, string> = {
+  roster: "family, child, or guardian records",
+  safety: "safety, pickup, emergency-contact, or schedule records",
+  classrooms: "classrooms, capacity, or ratios",
+  staff: "staff, credentials, or schedules",
+  billing: "opening balances or ledger records",
+};
+
+const domainMetricLabels: Record<string, string> = {
+  totalFamilies: "All family records",
+  totalChildren: "All child records",
+  guardians: "Guardian records",
+  authorizedPickups: "Authorized pickups",
+  emergencyContacts: "Emergency contacts",
+  medicalNotes: "Medical notes",
+  allergies: "Allergy records",
+  currentChildrenMissingSchedule: "Current children missing schedules",
+  classrooms: "Classrooms",
+  staff: "Staff profiles",
+  staffSchedules: "Staff schedules",
+  certifications: "Staff certifications",
+  openingBalanceInvoices: "Opening-balance invoices",
+  openingBalanceLedgerEntries: "Opening-balance ledger entries",
+};
+
+function changedConfirmationDomains(setup: SchoolDataSetup, evidence: SchoolDataReviewEvidence) {
+  const confirmed = setup.reviewConfirmation?.domainFingerprints ?? {};
+  return Object.entries(evidence.domainFingerprints)
+    .filter(([key, value]) => confirmed[key] && confirmed[key] !== value)
+    .map(([key]) => domainLabels[key] ?? key);
+}
+
+function changedConfirmationMetrics(setup: SchoolDataSetup, evidence: SchoolDataReviewEvidence) {
+  const confirmed = setup.reviewConfirmation?.domainMetrics ?? {};
+  return Object.entries(evidence.domainMetrics).flatMap(([key, current]) => {
+    const prior = confirmed[key];
+    if (typeof prior !== "number" || prior === current) return [];
+    const difference = current - prior;
+    return [`${domainMetricLabels[key] ?? key}: ${difference > 0 ? "+" : ""}${difference.toLocaleString()} (${prior.toLocaleString()} to ${current.toLocaleString()})`];
+  });
 }
 
 export function assessSchoolDataSetup(
@@ -256,13 +399,62 @@ export function assessSchoolDataSetup(
     && setup.reviewConfirmation.revision === revision,
   );
   if (confirmationCurrent) {
-    return assessment(
-      "confirmed",
-      "Data review confirmed",
-      "The confirmation matches this school’s current setup path and data evidence.",
-      revision,
-      { confirmationCurrent: true },
-    );
+    return {
+      ...assessment(
+        "confirmed",
+        "Data review confirmed",
+        "The confirmation matches this school’s current setup path and data evidence.",
+        revision,
+        { confirmationCurrent: true },
+      ),
+      baselineFrozen: evidence.centerStatus === "active",
+    };
+  }
+
+  const baselineFrozen = Boolean(
+    setup.reviewConfirmation
+    && setup.reviewConfirmation.path === setup.path
+    && setup.reviewConfirmation.sourceSystem === setup.sourceSystem
+    && setup.reviewConfirmation.noCurrentFamiliesExpected === setup.noCurrentFamiliesExpected
+    && evidence.centerStatus === "active",
+  );
+  const expectedAdapter = setup.sourceSystem === "other" ? "bee_flat_file_v1" : "procare";
+  const baselineBatch = evidence.latestImportBatch;
+  const baselineFleet = evidence.latestFleetVerification;
+  const importedLaunchSourceStillValid = setup.path !== "import_existing" || Boolean(
+    setup.sourceSystem
+    && baselineBatch
+    && baselineBatch.sourceAdapter === expectedAdapter
+    && setup.reviewConfirmation?.latestImportBatchId === baselineBatch.id
+    && (!setup.reviewConfirmation.sourceEvidenceReceipt || (
+      setup.reviewConfirmation.sourceEvidenceReceipt.batchId === baselineBatch.id
+      && setup.reviewConfirmation.sourceEvidenceReceipt.sourceSha256 === baselineBatch.sourceSha256
+      && setup.reviewConfirmation.sourceEvidenceReceipt.reviewFingerprint === baselineBatch.reviewFingerprint
+      && setup.reviewConfirmation.sourceEvidenceReceipt.sourceAdapter === baselineBatch.sourceAdapter
+    ))
+    && baselineFleet?.batchId === baselineBatch.id
+    && baselineFleet.status === "READY_FOR_DIRECTOR_REVIEW"
+    && baselineFleet.blockerCount === 0
+    && baselineFleet.verificationRevision === schoolDataImportVerificationRevision(baselineBatch),
+  );
+  if (baselineFrozen && importedLaunchSourceStillValid) {
+    const changedDomains = changedConfirmationDomains(setup, evidence);
+    const changeDeltas = changedConfirmationMetrics(setup, evidence);
+    return {
+      ...assessment(
+        "confirmed",
+        "Launch data baseline preserved",
+        changedDomains.length
+          ? `The approved launch baseline remains preserved. Normal operations changed ${changedDomains.join(", ")} after confirmation.`
+          : "The approved launch baseline remains preserved while the school operates.",
+        revision,
+        { confirmationCurrent: true },
+      ),
+      baselineFrozen: true,
+      changedSinceConfirmation: changedDomains.length > 0 || setup.reviewConfirmation?.revision !== revision,
+      changedDomains,
+      changeDeltas,
+    };
   }
 
   if (!setup.path) {
@@ -286,15 +478,6 @@ export function assessSchoolDataSetup(
         { blockedReason: "Choose the source system before uploading records." },
       );
     }
-    if (setup.sourceSystem === "other") {
-      return assessment(
-        staleConfirmation ? "stale" : "needs_data",
-        "BEE source mapping needed",
-        "The starting point is saved. The BEE setup team must prepare and validate a school-specific source adapter before the director is asked to review or upload anything.",
-        revision,
-        { blockedReason: "BEE setup team: prepare the reviewed source adapter for this school." },
-      );
-    }
     const batch = evidence.latestImportBatch;
     if (!batch) {
       return assessment(
@@ -303,6 +486,18 @@ export function assessSchoolDataSetup(
         "Upload the complete school-scoped source package and submit it for review.",
         revision,
         { blockedReason: "No reviewed import batch exists for this school." },
+      );
+    }
+    const requiredAdapter = setup.sourceSystem === "other" ? "bee_flat_file_v1" : "procare";
+    if (batch.sourceAdapter !== requiredAdapter) {
+      return assessment(
+        staleConfirmation ? "stale" : "needs_data",
+        "Review the selected source format",
+        setup.sourceSystem === "other"
+          ? "The latest batch used the ProCare adapter. Run a reviewed BEE flat-file import for this school, or change the saved source system."
+          : "The latest batch used the BEE flat-file adapter. Run a reviewed ProCare import for this school, or change the saved source system.",
+        revision,
+        { blockedReason: "The saved source system does not match the latest reviewed import batch." },
       );
     }
     if (batch.status === "processing") {
@@ -360,7 +555,26 @@ export function assessSchoolDataSetup(
     );
   }
 
-  const noRosterYet = evidence.familyCount === 0 && evidence.childCount === 0 && evidence.guardianCount === 0;
+  if (evidence.familiesMissingChildCount > 0) {
+    return assessment(
+      staleConfirmation ? "stale" : "needs_review",
+      "Finish incomplete family records",
+      `${evidence.familiesMissingChildCount.toLocaleString()} family record${evidence.familiesMissingChildCount === 1 ? " has" : "s have"} no child relationship and must be completed or intentionally removed before confirmation.`,
+      revision,
+      { blockedReason: "Resolve family records that do not contain a child relationship." },
+    );
+  }
+  if (evidence.childrenNeedingEnrollmentStatusReviewCount > 0) {
+    return assessment(
+      staleConfirmation ? "stale" : "needs_review",
+      "Review child enrollment statuses",
+      `${evidence.childrenNeedingEnrollmentStatusReviewCount.toLocaleString()} child record${evidence.childrenNeedingEnrollmentStatusReviewCount === 1 ? " has" : "s have"} a missing or unrecognized enrollment status.`,
+      revision,
+      { blockedReason: "Assign a recognized current, pipeline, break, or closed enrollment status to every child." },
+    );
+  }
+
+  const noRosterYet = evidence.relevantFamilyCount === 0 && evidence.relevantChildCount === 0 && evidence.guardianCount === 0;
   if (noRosterYet) {
     if (!setup.noCurrentFamiliesExpected) {
       return assessment(
@@ -380,23 +594,25 @@ export function assessSchoolDataSetup(
     );
   }
 
-  if (!evidence.familyCount || !evidence.childCount || !evidence.guardianCount) {
+  if (!evidence.relevantFamilyCount || !evidence.relevantChildCount || !evidence.guardianCount) {
     return assessment(
       staleConfirmation ? "stale" : "needs_data",
       "Complete the first household",
-      "Each current child needs a family and at least one reviewed guardian before the clean-start roster can be confirmed.",
+      "Each current or prospective child needs a family and at least one reviewed guardian before the clean-start roster can be confirmed.",
       revision,
-      { blockedReason: "Complete the current family, child, and guardian records." },
+      { blockedReason: "Complete the current or prospective family, child, and guardian records." },
     );
   }
   const reviewGaps = evidence.familiesMissingGuardianCount
     + evidence.childrenMissingClassroomCount
+    + evidence.childrenMissingScheduleCount
+    + evidence.familiesMissingEmergencyContactCount
     + evidence.guardiansMissingContactCount;
   if (reviewGaps > 0) {
     return assessment(
       staleConfirmation ? "stale" : "needs_review",
       "Finish clean-start record review",
-      "Resolve missing guardians, reachable contacts, and classroom assignments before confirming the roster.",
+      "Resolve missing guardians, reachable contacts, emergency contacts, schedules, and required classroom assignments before confirming the roster.",
       revision,
       { blockedReason: "Resolve the listed clean-start record gaps before final confirmation." },
     );
@@ -404,7 +620,7 @@ export function assessSchoolDataSetup(
   return assessment(
     staleConfirmation ? "stale" : "ready_to_confirm",
     staleConfirmation ? "Review changed data again" : "Ready for director confirmation",
-    "The current clean-start households have guardians, reachable contact details, and classroom assignments. Complete the final school-scoped review and confirm.",
+    "Current and prospective clean-start households have reviewed relationships, reachable contacts, emergency contacts, schedules, and required classroom assignments. Complete the final school-scoped safety review and confirm.",
     revision,
     { canConfirm: true },
   );

@@ -169,6 +169,7 @@ export async function loadDataReadinessWorkspace(
       errorRows: Math.max(batch._count.rows - importedRows, 0),
       sourceSha256: text(summary.sourceSha256) || null,
       reviewFingerprint: text(summary.reviewFingerprint) || null,
+      sourceAdapter: summary.sourceAdapter === "bee_flat_file_v1" ? "bee_flat_file_v1" : "procare",
     });
   };
 

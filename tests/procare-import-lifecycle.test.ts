@@ -86,6 +86,19 @@ test("classrooms without a ProCare room ID reuse the same school classroom name"
   assert.match(classroomSync, /activeProcareClassroomMatches\(rawMatches, centerId, db\)/);
 });
 
+test("fallback matches retain their existing source identity when the import has no stable ID", () => {
+  const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");
+  const classroomSync = section(route, "async function findOrCreateClassroom", "type ImportCenter");
+
+  assert.doesNotMatch(classroomSync, /providedClassroomExternalId\s*\|\|\s*name/);
+  assert.match(classroomSync, /providedClassroomExternalId\s*\?\s*\{ sourceSystem, externalId: providedClassroomExternalId \}\s*:\s*\{\}/);
+  assert.match(postHandler, /employeeExternalId\s*\?\s*\{ sourceSystem: sourceAdapter, externalId: employeeExternalId \}\s*:\s*\{\}/);
+  assert.match(postHandler, /accountExternalId\s*\?\s*\{ sourceSystem: sourceAdapter, externalId: accountExternalId \}\s*:\s*\{\}/);
+  assert.match(postHandler, /childExternalId\s*\?\s*\{ sourceSystem: sourceAdapter, externalId: childExternalId \}\s*:\s*\{\}/);
+  assert.match(postHandler, /contactExternalId\s*\?\s*\{ sourceSystem: sourceAdapter, externalId: contactExternalId \}\s*:\s*\{\}/);
+  assert.match(postHandler, /pickupExternalId\s*\?\s*\{ sourceSystem: sourceAdapter, externalId: pickupExternalId \}\s*:\s*\{\}/);
+});
+
 test("all resolved ProCare payer records are synchronized as guardians", () => {
   const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");
   assert.match(route, /procare account person records/);
@@ -148,10 +161,10 @@ test("each family row commits atomically and complete relationship reports remov
   assert.match(familyWrite, /prisma\.guardian\.deleteMany/);
   assert.match(familyWrite, /prisma\.emergencyContact\.deleteMany/);
   assert.match(familyWrite, /prisma\.authorizedPickup\.deleteMany/);
-  assert.match(familyWrite, /sourceSystem:\s*["']procare["']/);
+  assert.match(familyWrite, /sourceSystem:\s*sourceAdapter/);
   assert.match(familyWrite, /staleGuardianExternalIds[\s\S]*?desiredRelationships\.guardians\.size[\s\S]*?\{\s*not:\s*null\s*\}/);
   assert.match(familyWrite, /prisma\.guardian\.findFirst\([\s\S]*?checkLogs:\s*\{\s*some:\s*\{\s*\}\s*\}[\s\S]*?dataDeletionRequests:\s*\{\s*some:\s*\{\s*\}\s*\}/);
-  assert.match(familyWrite, /stale ProCare guardian has retained check-in or privacy-request history/);
+  assert.match(familyWrite, /stale imported guardian has retained check-in or privacy-request history/);
   assert.doesNotMatch(familyWrite, /sourceSystem:\s*\{\s*not:/);
 });
 
@@ -163,8 +176,8 @@ test("relationship reconciliation counts all ProCare-owned external-ID rows acro
   assert.match(route, /if \(!centerIds\.size\) centerIds\.add\(batch\.centerId\)/);
 
   assert.match(reconciliation, /procareRelationshipRowsAcrossSourceFamilies/);
-  assert.match(reconciliation, /family:\s*\{\s*centerId,\s*sourceSystem:\s*["']procare["'],\s*externalId\s*\}/);
-  assert.match(reconciliation, /sourceSystem:\s*["']procare["']/);
+  assert.match(reconciliation, /family:\s*\{\s*centerId,\s*sourceSystem:\s*batchSourceSystem,\s*externalId\s*\}/);
+  assert.match(reconciliation, /sourceSystem:\s*batchSourceSystem/);
   assert.match(reconciliation, /externalId:\s*\{\s*not:\s*null\s*\}/);
   assert.match(reconciliation, /prisma\.guardian\.count\(\{\s*where:\s*\{\s*OR:\s*procareRelationshipRowsAcrossSourceFamilies/);
   assert.match(reconciliation, /prisma\.emergencyContact\.count\(\{\s*where:\s*\{\s*OR:\s*procareRelationshipRowsAcrossSourceFamilies/);

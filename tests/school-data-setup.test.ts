@@ -33,6 +33,8 @@ function importReadyEvidence(overrides: Partial<SchoolDataReviewEvidence> = {}):
     familyCount: 12,
     childCount: 18,
     guardianCount: 20,
+    relevantFamilyCount: 12,
+    relevantChildCount: 18,
     importBatchCount: 1,
     latestRecordUpdatedAt: "2026-09-11T12:00:00.000Z",
     latestImportBatch: {
@@ -47,6 +49,7 @@ function importReadyEvidence(overrides: Partial<SchoolDataReviewEvidence> = {}):
       errorRows: 0,
       sourceSha256: "source-hash",
       reviewFingerprint: "review-fingerprint",
+      sourceAdapter: "procare",
     },
     latestFleetVerification: {
       batchId: "batch_1",
@@ -145,7 +148,22 @@ test("a non-ProCare source cannot inherit an older ProCare batch verification", 
 
   assert.equal(assessment.status, "needs_data");
   assert.equal(assessment.canConfirm, false);
-  assert.match(assessment.blockedReason ?? "", /reviewed source adapter/i);
+  assert.match(assessment.blockedReason ?? "", /saved source system/i);
+});
+
+test("a reviewed BEE flat-file source uses the same guarded verification path", () => {
+  const selected = setup({ path: "import_existing", sourceSystem: "other" });
+  const evidence = importReadyEvidence({
+    latestImportBatch: {
+      ...importReadyEvidence().latestImportBatch!,
+      sourceAdapter: "bee_flat_file_v1",
+    },
+  });
+  evidence.latestFleetVerification!.verificationRevision = schoolDataImportVerificationRevision(evidence.latestImportBatch!);
+
+  const assessment = assessSchoolDataSetup(selected, evidence);
+  assert.equal(assessment.status, "ready_to_confirm");
+  assert.equal(assessment.canConfirm, true);
 });
 
 test("data confirmation is bound to the current school evidence revision", () => {
@@ -158,6 +176,8 @@ test("data confirmation is bound to the current school evidence revision", () =>
     reviewConfirmation: {
       revision: ready.revision,
       path: "import_existing",
+      sourceSystem: "procare",
+      noCurrentFamiliesExpected: false,
       confirmedAt: "2026-09-11T13:00:00.000Z",
       confirmedByUserId: "user_1",
       confirmedByEmail: "director@example.com",
@@ -194,12 +214,130 @@ test("clean-start confirmation blocks incomplete household relationships", () =>
     familyCount: 2,
     childCount: 2,
     guardianCount: 1,
+    relevantFamilyCount: 2,
+    relevantChildCount: 2,
     familiesMissingGuardianCount: 1,
     childrenMissingClassroomCount: 1,
   });
   assert.equal(assessment.status, "needs_review");
   assert.equal(assessment.canConfirm, false);
   assert.match(assessment.blockedReason ?? "", /clean-start record gaps/i);
+});
+
+test("clean-start confirmation blocks orphan families and unrecognized enrollment states", () => {
+  const orphanFamily = assessSchoolDataSetup(setup({ path: "start_clean" }), {
+    ...emptySchoolDataReviewEvidence(),
+    familiesMissingChildCount: 1,
+  });
+  assert.equal(orphanFamily.status, "needs_review");
+  assert.equal(orphanFamily.canConfirm, false);
+  assert.match(orphanFamily.blockedReason ?? "", /child relationship/i);
+
+  const unknownEnrollment = assessSchoolDataSetup(setup({ path: "start_clean" }), {
+    ...emptySchoolDataReviewEvidence(),
+    childrenNeedingEnrollmentStatusReviewCount: 1,
+  });
+  assert.equal(unknownEnrollment.status, "needs_review");
+  assert.equal(unknownEnrollment.canConfirm, false);
+  assert.match(unknownEnrollment.blockedReason ?? "", /recognized current, pipeline, break, or closed/i);
+});
+
+test("clean-start review includes prospective families, schedules, and emergency contacts", () => {
+  const assessment = assessSchoolDataSetup(setup({ path: "start_clean" }), {
+    ...emptySchoolDataReviewEvidence(),
+    guardianCount: 1,
+    relevantFamilyCount: 1,
+    relevantChildCount: 1,
+    prospectiveFamilyCount: 1,
+    prospectiveChildCount: 1,
+    childrenMissingScheduleCount: 1,
+    familiesMissingEmergencyContactCount: 1,
+  });
+
+  assert.equal(assessment.status, "needs_review");
+  assert.match(assessment.detail, /emergency contacts, schedules/i);
+});
+
+test("an active school preserves its approved launch baseline and reports changed domains", () => {
+  const evidence = importReadyEvidence({
+    centerStatus: "active",
+    domainMetrics: { totalFamilies: 12, totalChildren: 18, guardians: 20 },
+  });
+  const selected = setup({ path: "import_existing", sourceSystem: "procare" });
+  const ready = assessSchoolDataSetup(selected, evidence);
+  const confirmed = setup({
+    path: "import_existing",
+    sourceSystem: "procare",
+    reviewConfirmation: {
+      revision: ready.revision,
+      path: "import_existing",
+      sourceSystem: "procare",
+      noCurrentFamiliesExpected: false,
+      confirmedAt: "2026-09-11T13:00:00.000Z",
+      confirmedByUserId: "user_1",
+      confirmedByEmail: "director@example.com",
+      latestImportBatchId: "batch_1",
+      familyCount: 12,
+      childCount: 18,
+      guardianCount: 20,
+      relevantFamilyCount: 12,
+      relevantChildCount: 18,
+      domainFingerprints: { ...evidence.domainFingerprints, roster: "approved-roster" },
+      domainMetrics: { totalFamilies: 11, totalChildren: 18, guardians: 20 },
+    },
+  });
+
+  const assessment = assessSchoolDataSetup(confirmed, {
+    ...evidence,
+    domainFingerprints: { ...evidence.domainFingerprints, roster: "current-roster" },
+  });
+  assert.equal(assessment.status, "confirmed");
+  assert.equal(assessment.baselineFrozen, true);
+  assert.equal(assessment.changedSinceConfirmation, true);
+  assert.deepEqual(assessment.changedDomains, ["family, child, or guardian records"]);
+  assert.deepEqual(assessment.changeDeltas, ["All family records: +1 (11 to 12)"]);
+});
+
+test("a replacement import invalidates an active school's frozen launch baseline", () => {
+  const originalEvidence = importReadyEvidence({ centerStatus: "active" });
+  const selected = setup({ path: "import_existing", sourceSystem: "procare" });
+  const ready = assessSchoolDataSetup(selected, originalEvidence);
+  const confirmed = setup({
+    path: "import_existing",
+    sourceSystem: "procare",
+    reviewConfirmation: {
+      revision: ready.revision,
+      path: "import_existing",
+      sourceSystem: "procare",
+      noCurrentFamiliesExpected: false,
+      confirmedAt: "2026-09-11T13:00:00.000Z",
+      confirmedByUserId: "user_1",
+      confirmedByEmail: "director@example.com",
+      latestImportBatchId: "batch_1",
+      familyCount: 12,
+      childCount: 18,
+      guardianCount: 20,
+    },
+  });
+  const replacementEvidence = importReadyEvidence({
+    centerStatus: "active",
+    latestImportBatch: {
+      ...originalEvidence.latestImportBatch!,
+      id: "batch_2",
+      sourceSha256: "replacement-source-hash",
+      reviewFingerprint: "replacement-review-fingerprint",
+    },
+    latestFleetVerification: {
+      ...originalEvidence.latestFleetVerification!,
+      batchId: "batch_2",
+      verificationRevision: null,
+    },
+  });
+
+  const assessment = assessSchoolDataSetup(confirmed, replacementEvidence);
+  assert.equal(assessment.status, "stale");
+  assert.equal(assessment.baselineFrozen, false);
+  assert.equal(assessment.canConfirm, true);
 });
 
 test("stored school data setup rejects invalid paths and incomplete confirmations", () => {

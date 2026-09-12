@@ -210,14 +210,34 @@ export function setupChecklistTasksForKey(key: SetupChecklistKey) {
   return key === "director_launch" ? directorLaunchChecklistTasks : teacherProfileChecklistTasks;
 }
 
-export function readCompletedSetupChecklistIds(customFields: unknown, key: SetupChecklistKey) {
+export function readCompletedSetupChecklistIds(
+  customFields: unknown,
+  key: SetupChecklistKey,
+  options: { centerId?: string | null; allowLegacyFallback?: boolean } = {},
+) {
   if (!customFields || typeof customFields !== "object" || Array.isArray(customFields)) return [];
   const fields = customFields as Record<string, unknown>;
   const setupChecklists = fields.setupChecklists;
   if (!setupChecklists || typeof setupChecklists !== "object" || Array.isArray(setupChecklists)) return [];
   const entry = (setupChecklists as Record<string, unknown>)[key];
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-  const completedIds = (entry as Record<string, unknown>).completedIds;
+  const entryRecord = entry as Record<string, unknown>;
+  const centerEntries = entryRecord.centers;
+  const centerEntry = key === "director_launch"
+    && options.centerId
+    && centerEntries
+    && typeof centerEntries === "object"
+    && !Array.isArray(centerEntries)
+      ? (centerEntries as Record<string, unknown>)[options.centerId]
+      : null;
+  const centerCompletedIds = centerEntry && typeof centerEntry === "object" && !Array.isArray(centerEntry)
+    ? (centerEntry as Record<string, unknown>).completedIds
+    : null;
+  const completedIds = Array.isArray(centerCompletedIds)
+    ? centerCompletedIds
+    : options.allowLegacyFallback || key === "teacher_profile"
+      ? entryRecord.completedIds
+      : [];
   return Array.isArray(completedIds)
     ? completedIds.filter((value): value is string => typeof value === "string")
     : [];

@@ -1,36 +1,22 @@
 import { directorLaunchChecklistTasks } from "@/lib/setup-checklists";
 
 export type DirectorLaunchAutoCompletionInput = {
-  centerCount?: number;
   schoolProfileReady?: boolean;
-  classroomCount?: number;
-  teacherStaffCount?: number;
-  importedFamilyCount?: number;
-  importedChildCount?: number;
+  classroomsReady?: boolean;
+  staffReady?: boolean;
   schoolDataReady?: boolean;
-  documentCount?: number;
-  tuitionPlanCount?: number;
-  productCount?: number;
-  billingAccountCount?: number;
-  invoiceCount?: number;
+  documentsReady?: boolean;
+  tuitionBillingReady?: boolean;
   payoutReady?: boolean;
-  guardianLoginCount?: number;
-  attendanceRecordCount?: number;
-  staffClockRecordCount?: number;
-  messageTemplateCount?: number;
-  parentMessageCount?: number;
-  calendarEventCount?: number;
-  fteReportCount?: number;
-  licensingReady?: boolean;
-  complianceTaskCount?: number;
-  incidentReviewCount?: number;
-  leadCount?: number;
-  dashboardConfigured?: boolean;
+  parentPortalReady?: boolean;
+  attendanceReady?: boolean;
+  communicationsReady?: boolean;
+  calendarFteReady?: boolean;
+  complianceReady?: boolean;
+  enrollmentReady?: boolean;
+  reportsReady?: boolean;
+  launchSmokeTestReady?: boolean;
 };
-
-function positive(value: number | undefined) {
-  return (value ?? 0) > 0;
-}
 
 function knownTaskIds() {
   return new Set(directorLaunchChecklistTasks.map((task) => task.id));
@@ -42,25 +28,21 @@ export function deriveDirectorLaunchAutoCompletedIds(input: DirectorLaunchAutoCo
     if (ready) ids.add(id);
   };
 
-  add("login-school-profile", Boolean(input.schoolProfileReady) || positive(input.centerCount));
-  add("classrooms-ratios", positive(input.classroomCount));
-  add("teachers-staff", positive(input.teacherStaffCount));
-  add(
-    "procare-import",
-    input.schoolDataReady === undefined
-      ? positive(input.importedFamilyCount) && positive(input.importedChildCount)
-      : input.schoolDataReady,
-  );
-  add("required-documents", positive(input.documentCount));
-  add("tuition-billing-rules", positive(input.tuitionPlanCount) || positive(input.productCount) || positive(input.billingAccountCount) || positive(input.invoiceCount));
+  add("login-school-profile", Boolean(input.schoolProfileReady));
+  add("classrooms-ratios", Boolean(input.classroomsReady));
+  add("teachers-staff", Boolean(input.staffReady));
+  add("procare-import", Boolean(input.schoolDataReady));
+  add("required-documents", Boolean(input.documentsReady));
+  add("tuition-billing-rules", Boolean(input.tuitionBillingReady));
   add("payout-bank-account", Boolean(input.payoutReady));
-  add("parent-portal", positive(input.guardianLoginCount));
-  add("attendance-kiosk", positive(input.attendanceRecordCount) || positive(input.staffClockRecordCount));
-  add("messages-notifications", positive(input.messageTemplateCount) || positive(input.parentMessageCount));
-  add("calendar-fte", positive(input.calendarEventCount) || positive(input.fteReportCount));
-  add("compliance-incidents", Boolean(input.licensingReady) || positive(input.complianceTaskCount) || positive(input.incidentReviewCount));
-  add("enrollment-registration", positive(input.leadCount));
-  add("reports-dashboard", Boolean(input.dashboardConfigured));
+  add("parent-portal", Boolean(input.parentPortalReady));
+  add("attendance-kiosk", Boolean(input.attendanceReady));
+  add("messages-notifications", Boolean(input.communicationsReady));
+  add("calendar-fte", Boolean(input.calendarFteReady));
+  add("compliance-incidents", Boolean(input.complianceReady));
+  add("enrollment-registration", Boolean(input.enrollmentReady));
+  add("reports-dashboard", Boolean(input.reportsReady));
+  add("launch-smoke-test", Boolean(input.launchSmokeTestReady));
 
   const allowedIds = knownTaskIds();
   return Array.from(ids).filter((id) => allowedIds.has(id));

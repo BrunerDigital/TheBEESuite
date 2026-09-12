@@ -17,6 +17,8 @@ import { CollapsiblePanel } from "@/components/workspace-preferences";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import type { FteReportRow } from "@/components/fte-report-form";
 import { aggregateFteWeeks, fteDateKey, latestFteReportsByCenter, latestFteReportsByCenterWeek } from "@/lib/fte-report-rollups";
+import { requestWithNetworkRecovery } from "@/lib/client-request-recovery";
+import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 
 const ALL = "all";
 
@@ -32,6 +34,9 @@ export type FteExplorerCenter = {
 type Props = {
   centers: FteExplorerCenter[];
   reports: FteReportRow[];
+  canEdit?: boolean;
+  initialCenterId?: string | null;
+  initialWeekStart?: string | null;
 };
 
 type InlineCorrectionState = {
@@ -134,7 +139,7 @@ function correctionFromReport(report: FteReportRow): InlineCorrectionState {
     threeDayCount: inputOptionalNumber(report.threeDayCount),
     fourDayCount: inputOptionalNumber(report.fourDayCount),
     fiveDayCount: inputOptionalNumber(report.fiveDayCount),
-    fteCount: report.fteCount ? String(report.fteCount) : "",
+    fteCount: String(report.fteCount),
     licenseCapacity: inputOptionalNumber(report.licenseCapacity),
     occupancyPercent: inputOptionalNumber(report.occupancyPercent),
     payrollAmount: inputOptionalNumber(report.payrollAmount),
@@ -153,22 +158,24 @@ function correctionFromReport(report: FteReportRow): InlineCorrectionState {
   };
 }
 
-export function FteReportExplorer({ centers, reports }: Props) {
+export function FteReportExplorer({ centers, reports, canEdit = false, initialCenterId, initialWeekStart }: Props) {
   const timeZone = useSchoolTimeZone();
   const fieldIdPrefix = useId();
   const searchParams = useSearchParams();
-  const requestedCenterId = searchParams.get("centerId") || ALL;
-  const requestedWeekStart = searchParams.get("weekStart") || ALL;
+  const requestedCenterId = initialCenterId || ALL;
+  const requestedWeekStart = initialWeekStart || ALL;
   const requestedQuery = searchParams.get("q") || "";
-  const initialCenterId = requestedCenterId !== ALL && centers.some((center) => center.id === requestedCenterId) ? requestedCenterId : ALL;
   const centerMap = useMemo(() => new Map(centers.map((center) => [center.id, center])), [centers]);
-  const [centerId, setCenterId] = useState(initialCenterId);
+  const [centerId, setCenterId] = useState(requestedCenterId);
   const [state, setState] = useState(ALL);
   const [ownerGroup, setOwnerGroup] = useState(ALL);
   const [weekStart, setWeekStart] = useState(requestedWeekStart);
   const [status, setStatus] = useState(ALL);
   const [query, setQuery] = useState(requestedQuery);
   const [correction, setCorrection] = useState<InlineCorrectionState | null>(null);
+  const originalCorrectionReport = correction ? reports.find((report) => report.id === correction.id) : undefined;
+  const correctionDirty = Boolean(correction && originalCorrectionReport && JSON.stringify(correction) !== JSON.stringify(correctionFromReport(originalCorrectionReport)));
+  useUnsavedChangesGuard(correctionDirty, "Leave this page and discard your unsaved FTE correction?");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -177,9 +184,9 @@ export function FteReportExplorer({ centers, reports }: Props) {
   const options = useMemo(() => ({
     states: uniqueSorted(centers.map((center) => center.state ?? "Unassigned")),
     ownerGroups: uniqueSorted(centers.map((center) => ownerLabel(center))),
-    weeks: uniqueSorted(reports.map((report) => dateKey(report.weekStart))).reverse(),
+    weeks: uniqueSorted([...reports.map((report) => dateKey(report.weekStart)), ...(initialWeekStart ? [initialWeekStart] : [])]).reverse(),
     statuses: uniqueSorted(reports.map((report) => report.status)),
-  }), [centers, reports]);
+  }), [centers, reports, initialWeekStart]);
 
   const locationFilteredCenters = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -309,6 +316,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
   }
 
   function startCorrection(report: FteReportRow) {
+    if (!canEdit || (correctionDirty && !window.confirm("Discard your unsaved correction and open this report?"))) return;
     setStatusMessage("");
     setErrorMessage("");
     setCorrection(correctionFromReport(report));
@@ -326,16 +334,16 @@ export function FteReportExplorer({ centers, reports }: Props) {
   }
 
   function saveCorrection() {
-    if (!correction) return;
+    if (!correction || !canEdit) return;
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
 
-      const response = await fetch("/api/fte-reports", {
+      const response = await requestWithNetworkRecovery("/api/fte-reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(correction),
-      });
+      }, "We could not confirm whether this correction was saved. Your entries are still here. Reconnect and check the report history before trying again.");
       const json = await response.json().catch(() => null) as { error?: string; report?: { centerName?: string } } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "FTE correction could not be saved.");
@@ -734,7 +742,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
                 <TableHead>Preregistered</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Updated</TableHead>
-                <TableHead>Correction</TableHead>
+                <TableHead>{canEdit ? "Correction" : "Access"}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -757,7 +765,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
                       <TableCell><Badge variant="outline">{report.status.replaceAll("_", " ")}</Badge></TableCell>
                       <TableCell>{formatDate(report.updatedAt)}</TableCell>
                       <TableCell>
-                        <Button
+                        {canEdit ? <Button
                           variant="outline"
                           size="sm"
                           className="min-h-10"
@@ -765,7 +773,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
                           onClick={() => startCorrection(report)}
                         >
                           Correct
-                        </Button>
+                        </Button> : <span className="text-sm text-muted-foreground">Read-only</span>}
                       </TableCell>
                     </TableRow>
                     {correction?.id === report.id ? (
@@ -849,7 +857,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
                                 <Save data-icon="inline-start" />
                                 {isPending ? "Saving correction..." : "Save correction"}
                               </Button>
-                              <Button variant="outline" disabled={isPending} onClick={() => setCorrection(null)}>
+                              <Button variant="outline" disabled={isPending} onClick={() => { if (!correctionDirty || window.confirm("Discard your unsaved FTE correction?")) setCorrection(null); }}>
                                 Cancel
                               </Button>
                             </div>

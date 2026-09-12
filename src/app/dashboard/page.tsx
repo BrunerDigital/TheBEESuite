@@ -852,14 +852,14 @@ export default async function DashboardPage() {
     requestedAt: request.requestedAt.toISOString(),
     failureReason: request.failureReason,
   }));
-  type DashboardNotificationRow = { widgetId: DashboardWidgetId; text: string };
+  type DashboardNotificationRow = { widgetId: DashboardWidgetId; text: string; href?: string };
   const dashboardNotificationRows: Array<DashboardNotificationRow | null> = [
     unreadMessages ? { widgetId: "familyCommunication" as const, text: `${unreadMessages.toLocaleString()} parent messages need a response` } : null,
     expiringDocuments ? { widgetId: "complianceQueue" as const, text: `${expiringDocuments.toLocaleString()} documents expire within 30 days` } : null,
     totalOpenSeats ? { widgetId: "classroomCapacity" as const, text: `${totalOpenSeats.toLocaleString()} open seats across visible centers` } : null,
-    pendingIncidents ? { widgetId: "complianceQueue" as const, text: `${pendingIncidents.toLocaleString()} incident reports need review` } : null,
+    pendingIncidents ? { widgetId: "complianceQueue" as const, text: `${pendingIncidents.toLocaleString()} incident reports need review`, href: "/classroom-dashboard?view=incidents" } : null,
     highIntentLeadCount ? { widgetId: "enrollmentPipeline" as const, text: `${highIntentLeadCount.toLocaleString()} high-fit leads should be prioritized` } : null,
-    openTasks ? { widgetId: "toursAndTasks" as const, text: `${openTasks.toLocaleString()} enrollment follow-up tasks are open` } : null,
+    openTasks ? { widgetId: "toursAndTasks" as const, text: `${openTasks.toLocaleString()} enrollment follow-up tasks are open`, href: "/crm-leads" } : null,
     toursToday ? { widgetId: "toursAndTasks" as const, text: `${toursToday.toLocaleString()} tours are scheduled today` } : null,
   ];
   const dashboardNotifications = dashboardNotificationRows.filter((item): item is DashboardNotificationRow => Boolean(item));

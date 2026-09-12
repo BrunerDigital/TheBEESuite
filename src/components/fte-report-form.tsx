@@ -22,6 +22,8 @@ import {
   startOfFteWeek,
 } from "@/lib/fte-report-guardrails";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { requestWithNetworkRecovery } from "@/lib/client-request-recovery";
+import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 
 export type FteReportCenterOption = {
   id: string;
@@ -114,6 +116,8 @@ type Props = {
   description?: string;
   allowCenterSelect?: boolean;
   mode?: "director" | "executive";
+  initialCenterId?: string | null;
+  initialWeekStart?: string | null;
 };
 
 type FormState = {
@@ -174,8 +178,7 @@ function defaultValuesForCenter(centerId: string, prefills: FteReportPrefill[] =
   return Array.isArray(prefills) ? prefills.find((item) => item.centerId === centerId) : undefined;
 }
 
-function emptyForm(centerId = "", prefill?: FteReportPrefill, center?: FteReportCenterOption): FormState {
-  const weekStart = defaultWeekStart();
+function emptyForm(centerId = "", prefill?: FteReportPrefill, center?: FteReportCenterOption, weekStart = defaultWeekStart()): FormState {
   return {
     id: "",
     centerId,
@@ -241,6 +244,49 @@ function formatPercent(value?: number | null) {
   return value === null || value === undefined ? "Not set" : `${value.toLocaleString()}%`;
 }
 
+function formFromReport(report: FteReportRow, mode: "director" | "executive"): FormState {
+  const hasBillingBreakdown = report.selfPayerBillAmount !== null && report.selfPayerBillAmount !== undefined
+    || report.subsidyBillAmount !== null && report.subsidyBillAmount !== undefined
+    || report.externalAgencyBillAmount !== null && report.externalAgencyBillAmount !== undefined;
+  return {
+    id: report.id,
+    centerId: report.centerId,
+    weekStart: dateInput(report.weekStart),
+    weekEnd: dateInput(report.weekEnd) || defaultWeekEnd(dateInput(report.weekStart)),
+    locationData: report.locationData ?? "",
+    accountReceivableAmount: asOptionalInput(report.accountReceivableAmount),
+    selfPayerBillAmount: asOptionalInput(report.selfPayerBillAmount),
+    subsidyBillAmount: asOptionalInput(report.subsidyBillAmount),
+    externalAgencyBillAmount: asOptionalInput(report.externalAgencyBillAmount),
+    totalBilledAmount: hasBillingBreakdown ? "" : asOptionalInput(report.totalBilledAmount),
+    enrolledCount: asInput(report.enrolledCount),
+    fullTimeCount: asInput(report.fullTimeCount),
+    partTimeCount: asInput(report.partTimeCount),
+    twoDayCount: report.twoDayCount === null || report.twoDayCount === undefined ? "" : asInput(report.twoDayCount),
+    threeDayCount: report.threeDayCount === null || report.threeDayCount === undefined ? "" : asInput(report.threeDayCount),
+    fourDayCount: report.fourDayCount === null || report.fourDayCount === undefined ? "" : asInput(report.fourDayCount),
+    fiveDayCount: report.fiveDayCount === null || report.fiveDayCount === undefined ? "" : asInput(report.fiveDayCount),
+    scheduledDayBreakdown: [report.twoDayCount, report.threeDayCount, report.fourDayCount, report.fiveDayCount]
+      .some((value) => value !== null && value !== undefined),
+    fteCount: String(report.fteCount),
+    licenseCapacity: asOptionalInput(report.licenseCapacity),
+    occupancyPercent: asOptionalInput(report.occupancyPercent),
+    payrollAmount: asOptionalInput(report.payrollAmount),
+    payrollPercent: report.payrollPercent === null || report.payrollPercent === undefined ? "" : String(report.payrollPercent),
+    newStarts: asOptionalInput(report.newStarts),
+    withdrawals: asOptionalInput(report.withdrawals),
+    preregisteredChildren: asOptionalInput(report.preregisteredChildren),
+    infants: asInput(report.infants),
+    toddlers: asInput(report.toddlers),
+    twos: asInput(report.twos),
+    preschool: asInput(report.preschool),
+    preK: asInput(report.preK),
+    schoolAge: asInput(report.schoolAge),
+    status: mode === "executive" ? report.status : "submitted",
+    notes: report.notes ?? "",
+  };
+}
+
 export function FteReportForm({
   centers,
   reports,
@@ -249,13 +295,21 @@ export function FteReportForm({
   description = "Submit or edit the weekly full-time-equivalent report for the selected school.",
   allowCenterSelect = false,
   mode = allowCenterSelect ? "executive" : "director",
+  initialCenterId,
+  initialWeekStart,
 }: Props) {
   const router = useRouter();
   const timeZone = useSchoolTimeZone();
   const fieldIdPrefix = useId();
-  const defaultCenterId = centers[0]?.id ?? "";
-  const defaultCenter = centers[0];
-  const [form, setForm] = useState<FormState>(() => emptyForm(defaultCenterId, defaultValuesForCenter(defaultCenterId, prefills), defaultCenter));
+  const defaultCenterId = initialCenterId ?? (centers.length === 1 ? centers[0].id : "");
+  function formForTarget(centerId: string, weekStart: string): FormState {
+    const center = centers.find((item) => item.id === centerId);
+    const report = center ? reports.find((item) => item.centerId === centerId && dateInput(item.weekStart) === weekStart) : undefined;
+    if (report) return formFromReport(report, mode);
+    return emptyForm(center?.id ?? "", weekStart === defaultWeekStart() ? defaultValuesForCenter(centerId, prefills) : undefined, center, weekStart);
+  }
+  const [form, setForm] = useState<FormState>(() => formForTarget(defaultCenterId, initialWeekStart ?? defaultWeekStart()));
+  const [savedFormSnapshot, setSavedFormSnapshot] = useState(() => JSON.stringify(form));
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -294,8 +348,9 @@ export function FteReportForm({
     schoolAge: Number(form.schoolAge || 0),
   }), [form.infants, form.toddlers, form.twos, form.preschool, form.preK, form.schoolAge]);
   const selectedCenter = centers.find((center) => center.id === form.centerId);
-  const selectedPrefill = defaultValuesForCenter(form.centerId, prefills);
+  const selectedPrefill = form.weekStart === defaultWeekStart() ? defaultValuesForCenter(form.centerId, prefills) : undefined;
   const formSnapshot = JSON.stringify(form);
+  useUnsavedChangesGuard(formSnapshot !== savedFormSnapshot, "Leave this page and discard your unsaved FTE changes?");
   const calculatedOccupancyPercent = useMemo(() => {
     const enrolled = Number(form.enrolledCount || 0);
     const capacity = Number(form.licenseCapacity || selectedPrefill?.licensedCapacity || selectedCenter?.licensedCapacity || 0);
@@ -309,6 +364,8 @@ export function FteReportForm({
   const currentWeekReport = reports.find((report) => (
     report.centerId === form.centerId && dateInput(report.weekStart) === form.weekStart
   ));
+  const isReportLocked = currentWeekReport?.status === "approved" && mode !== "executive";
+  const hasBillingInputs = [form.selfPayerBillAmount, form.subsidyBillAmount, form.externalAgencyBillAmount].some((value) => value.trim() !== "");
   const isHistoricalReportingWeek = form.weekStart !== defaultWeekStart();
 
   useEffect(() => {
@@ -352,21 +409,20 @@ export function FteReportForm({
   }
 
   function setWeekStart(value: string) {
-    setForm((current) => ({
-      ...current,
-      weekStart: value,
-      weekEnd: defaultWeekEnd(value),
-    }));
+    if (!confirmDiscard()) return;
+    loadForm(formForTarget(form.centerId, value));
   }
 
   function setCenter(value: string | null) {
-    if (!value) return;
+    if (!allowCenterSelect || !value || !centers.some((center) => center.id === value)) return;
+    if (!confirmDiscard()) return;
     setStatusMessage("");
     setErrorMessage("");
-    setForm(emptyForm(value, defaultValuesForCenter(value, prefills), centers.find((center) => center.id === value)));
+    loadForm(formForTarget(value, form.weekStart));
   }
 
   function applyPrefill() {
+    if (isHistoricalReportingWeek || !confirmDiscard()) return;
     const prefill = defaultValuesForCenter(form.centerId, prefills);
     if (!prefill) return;
     const next = emptyForm(form.centerId, prefill, selectedCenter);
@@ -381,51 +437,32 @@ export function FteReportForm({
   }
 
   function editReport(report: FteReportRow) {
+    if (!centers.some((center) => center.id === report.centerId)) return;
+    if (!confirmDiscard()) return;
     setStatusMessage("");
     setErrorMessage("");
-    const hasBillingBreakdown = report.selfPayerBillAmount !== null && report.selfPayerBillAmount !== undefined
-      || report.subsidyBillAmount !== null && report.subsidyBillAmount !== undefined
-      || report.externalAgencyBillAmount !== null && report.externalAgencyBillAmount !== undefined;
-    setForm({
-      id: report.id,
-      centerId: report.centerId,
-      weekStart: dateInput(report.weekStart),
-      weekEnd: dateInput(report.weekEnd) || defaultWeekEnd(dateInput(report.weekStart)),
-      locationData: report.locationData ?? "",
-      accountReceivableAmount: asOptionalInput(report.accountReceivableAmount),
-      selfPayerBillAmount: asOptionalInput(report.selfPayerBillAmount),
-      subsidyBillAmount: asOptionalInput(report.subsidyBillAmount),
-      externalAgencyBillAmount: asOptionalInput(report.externalAgencyBillAmount),
-      totalBilledAmount: hasBillingBreakdown ? "" : asOptionalInput(report.totalBilledAmount),
-      enrolledCount: asInput(report.enrolledCount),
-      fullTimeCount: asInput(report.fullTimeCount),
-      partTimeCount: asInput(report.partTimeCount),
-      twoDayCount: report.twoDayCount === null || report.twoDayCount === undefined ? "" : asInput(report.twoDayCount),
-      threeDayCount: report.threeDayCount === null || report.threeDayCount === undefined ? "" : asInput(report.threeDayCount),
-      fourDayCount: report.fourDayCount === null || report.fourDayCount === undefined ? "" : asInput(report.fourDayCount),
-      fiveDayCount: report.fiveDayCount === null || report.fiveDayCount === undefined ? "" : asInput(report.fiveDayCount),
-      scheduledDayBreakdown: [report.twoDayCount, report.threeDayCount, report.fourDayCount, report.fiveDayCount]
-        .some((value) => value !== null && value !== undefined),
-      fteCount: report.fteCount ? String(report.fteCount) : "",
-      licenseCapacity: asOptionalInput(report.licenseCapacity),
-      occupancyPercent: asOptionalInput(report.occupancyPercent),
-      payrollAmount: asOptionalInput(report.payrollAmount),
-      payrollPercent: report.payrollPercent === null || report.payrollPercent === undefined ? "" : String(report.payrollPercent),
-      newStarts: asOptionalInput(report.newStarts),
-      withdrawals: asOptionalInput(report.withdrawals),
-      preregisteredChildren: asOptionalInput(report.preregisteredChildren),
-      infants: asInput(report.infants),
-      toddlers: asInput(report.toddlers),
-      twos: asInput(report.twos),
-      preschool: asInput(report.preschool),
-      preK: asInput(report.preK),
-      schoolAge: asInput(report.schoolAge),
-      status: mode === "executive" ? report.status : "submitted",
-      notes: report.notes ?? "",
-    });
+    loadForm(formFromReport(report, mode));
   }
 
+  function loadForm(next: FormState) {
+    setForm(next);
+    setSavedFormSnapshot(JSON.stringify(next));
+  }
+
+  function confirmDiscard() {
+    return formSnapshot === savedFormSnapshot || window.confirm("Discard your unsaved FTE changes and open the selected school or reporting week?");
+  }
+
+
   function submit() {
+    if (!selectedCenter) {
+      setErrorMessage("Choose an authorized school before submitting a report.");
+      return;
+    }
+    if (currentWeekReport?.status === "approved" && mode !== "executive") {
+      setErrorMessage("This report is approved and locked. Ask an executive to make a correction.");
+      return;
+    }
     if (isRefreshingLiveData) {
       setStatusMessage("");
       setErrorMessage("Wait for the live school data refresh to finish before submitting.");
@@ -447,7 +484,7 @@ export function FteReportForm({
       setStatusMessage("");
       setErrorMessage("");
 
-      const response = await fetch("/api/fte-reports", {
+      const response = await requestWithNetworkRecovery("/api/fte-reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -463,13 +500,13 @@ export function FteReportForm({
             : form.partTimeCount,
           status: mode === "executive" ? form.status : undefined,
           fteCount: form.fteCount || (hasScheduledDayBreakdown ? calculatedFte : ""),
-          totalBilledAmount: form.totalBilledAmount || calculatedTotalBilled || "",
+          totalBilledAmount: form.totalBilledAmount || (hasBillingInputs ? String(calculatedTotalBilled) : ""),
           licenseCapacity: form.licenseCapacity || selectedPrefill?.licensedCapacity || selectedCenter?.licensedCapacity || "",
           occupancyPercent: form.occupancyPercent || calculatedOccupancyPercent || "",
           payrollPercent: form.payrollPercent || calculatedPayrollPercent || "",
           source: form.id ? "manual_correction" : "prefilled_director_review",
         }),
-      });
+      }, "We could not confirm whether this FTE report was saved. Your entries are still here. Reconnect and check the selected school's reporting history before trying again.");
       const json = await response.json().catch(() => null) as { error?: string; report?: { centerName?: string; weekStart?: string } } | null;
 
       if (!response.ok) {
@@ -481,8 +518,7 @@ export function FteReportForm({
         `FTE report saved${json?.report?.centerName ? ` for ${json.report.centerName}` : ""}`
         + `${json?.report?.weekStart ? ` for the selected week of ${dateInput(json.report.weekStart)}` : ""}.`,
       );
-      const nextCenterId = form.centerId || defaultCenterId;
-      setForm(emptyForm(nextCenterId, defaultValuesForCenter(nextCenterId, prefills), centers.find((center) => center.id === nextCenterId)));
+      setSavedFormSnapshot(JSON.stringify(form));
       window.setTimeout(() => window.location.reload(), 750);
     });
   }
@@ -510,7 +546,7 @@ export function FteReportForm({
         <h2>Current Entry Summary</h2>
         <table>
           <tbody>
-            <tr><th>This week</th><td>{currentWeekReport ? "Submitted" : "Not submitted"}</td></tr>
+            <tr><th>Selected week</th><td>{currentWeekReport ? "Submitted" : "Not submitted"}</td></tr>
             <tr><th>Calculated FTE</th><td>{calculatedFte.toLocaleString()}</td></tr>
             <tr><th>Scheduled days</th><td>2-day: {scheduledDayCounts.twoDayCount}; 3-day: {scheduledDayCounts.threeDayCount}; 4-day: {scheduledDayCounts.fourDayCount}; 5-day: {scheduledDayCounts.fiveDayCount}</td></tr>
             <tr><th>Age group total</th><td>{ageGroupCount.toLocaleString()}</td></tr>
@@ -573,7 +609,7 @@ export function FteReportForm({
         {statusMessage ? (
           <Alert>
             <CheckCircle2 className="size-4" />
-            <AlertTitle>Saved</AlertTitle>
+            <AlertTitle>Report update</AlertTitle>
             <AlertDescription>{statusMessage}</AlertDescription>
           </Alert>
         ) : null}
@@ -591,7 +627,7 @@ export function FteReportForm({
             <div className="mt-1 text-sm font-semibold">{selectedCenter?.name ?? "Choose school"}</div>
           </div>
           <div className="rounded-xl border bg-background/50 p-4">
-            <div className="text-xs text-muted-foreground">This week</div>
+            <div className="text-xs text-muted-foreground">Selected week</div>
             <div className="mt-1 text-sm font-semibold">{currentWeekReport ? "Submitted" : "Not submitted"}</div>
           </div>
           <div className="rounded-xl border bg-background/50 p-4">
@@ -612,12 +648,14 @@ export function FteReportForm({
           </div>
         </div>
 
+        {isHistoricalReportingWeek ? <Alert><AlertTitle>Historical reporting week</AlertTitle><AlertDescription>{currentWeekReport ? "This form contains the saved report for the selected school and week." : "No saved report was found for this school and week. Current enrollment and billing totals have not been copied into this historical report."}</AlertDescription></Alert> : null}
+        {currentWeekReport?.status === "approved" && mode !== "executive" ? <Alert><AlertTitle>Approved report · read-only</AlertTitle><AlertDescription>This report is locked. An executive must make any corrections.</AlertDescription></Alert> : null}
         {selectedPrefill ? (
           <Alert>
             <CheckCircle2 className="size-4" />
-            <AlertTitle>Prefilled from current school records</AlertTitle>
+            <AlertTitle>{form.id ? "Saved report · live school data available" : "Prefilled from current school records"}</AlertTitle>
             <AlertDescription>
-              Enrollment, age groups, weekly billing, receivables, payroll estimates, and enrollment movement were prefilled from live school records for {selectedCenter?.name ?? "this school"}.
+              {form.id ? "The saved report is loaded. Refresh or reset only if you want to replace its values with current school records." : `Enrollment, age groups, weekly billing, receivables, payroll estimates, and enrollment movement were prefilled from live school records for ${selectedCenter?.name ?? "this school"}.`}
               Licensed capacity is {selectedPrefill.licensedCapacity ?? selectedCenter?.licensedCapacity ?? "not set"}.
               {selectedPrefill.unknownScheduleCount
                 ? ` ${selectedPrefill.unknownScheduleCount} child schedule(s) need an exact 2–5 day weekly schedule, so verify the day counts before submitting.`
@@ -634,7 +672,7 @@ export function FteReportForm({
                 variant="outline"
                 size="sm"
                 className="mt-3"
-                disabled={isRefreshingLiveData || isHistoricalReportingWeek}
+                disabled={isRefreshingLiveData || isHistoricalReportingWeek || isReportLocked}
                 onClick={refreshLiveSchoolData}
                 title={isHistoricalReportingWeek ? "Live data refresh is available only for the current reporting week." : undefined}
               >
@@ -681,14 +719,16 @@ export function FteReportForm({
           </div>
           <div className="space-y-1">
             <Label htmlFor={`${fieldIdPrefix}-week-end`}>Week end</Label>
-            <Input id={`${fieldIdPrefix}-week-end`} type="date" value={form.weekEnd} onChange={(event) => setField("weekEnd", event.target.value)} />
+            <Input id={`${fieldIdPrefix}-week-end`} type="date" value={form.weekEnd} disabled={isReportLocked} onChange={(event) => setField("weekEnd", event.target.value)} />
           </div>
           <div className="space-y-1 lg:col-span-2">
             <Label htmlFor={`${fieldIdPrefix}-location-data`}>Location data</Label>
-            <Input id={`${fieldIdPrefix}-location-data`} value={form.locationData} onChange={(event) => setField("locationData", event.target.value)} placeholder="ABee Schools, franchised location, owner group..." />
+            <Input id={`${fieldIdPrefix}-location-data`} value={form.locationData} disabled={isReportLocked} onChange={(event) => setField("locationData", event.target.value)} placeholder="ABee Schools, franchised location, owner group..." />
           </div>
         </div>
 
+        <fieldset disabled={isReportLocked} className="space-y-5">
+        <legend className="sr-only">FTE report values</legend>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <div className="space-y-1">
             <Label htmlFor={`${fieldIdPrefix}-enrolled-count`}>Enrolled children</Label>
@@ -860,8 +900,9 @@ export function FteReportForm({
           </div>
         </div>
 
+        </fieldset>
         <div className="flex flex-wrap items-center gap-3">
-          <Button aria-busy={isPending} disabled={isPending || isRefreshingLiveData || !form.centerId || !form.weekStart} onClick={submit}>
+          <Button aria-busy={isPending} disabled={isPending || isRefreshingLiveData || !form.centerId || !form.weekStart || (currentWeekReport?.status === "approved" && mode !== "executive")} onClick={submit}>
             <Save data-icon="inline-start" />
             {isPending ? "Saving FTE report..." : form.id ? "Save FTE Correction" : "Submit FTE Report"}
           </Button>
@@ -869,15 +910,14 @@ export function FteReportForm({
             <Button
               variant="outline"
               onClick={() => {
-                const nextCenterId = form.centerId || defaultCenterId;
-                setForm(emptyForm(nextCenterId, defaultValuesForCenter(nextCenterId, prefills), centers.find((center) => center.id === nextCenterId)));
+                if (confirmDiscard()) loadForm(formForTarget(form.centerId, form.weekStart));
               }}
             >
-              Cancel edit
+              Restore saved report
             </Button>
           ) : null}
           {selectedPrefill ? (
-            <Button variant="outline" onClick={applyPrefill}>Reset to school data</Button>
+            <Button variant="outline" disabled={isReportLocked} onClick={applyPrefill}>Reset to school data</Button>
           ) : null}
           <span className="text-xs text-muted-foreground">
             Prefilled values are editable. Calculated FTE uses scheduled days ÷ 5 unless manually overridden. Directors can only submit for their assigned school.

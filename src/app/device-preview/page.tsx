@@ -137,6 +137,11 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
         })),
       } : {})}
       currentGuardianId="exec-demo-guardian-a"
+      {...(featureStress ? { announcements: [
+        ...executiveParentPortalDemo.announcements,
+        { id: "preview-announcement-2", title: "Picture day reminder", body: "Classroom pictures are next Wednesday. Send a labeled change of clothes; participation is optional.", sendAt: "2026-09-08T14:00:00.000Z" },
+        { id: "preview-announcement-3", title: "Welcome to our family reading week", body: "Bring a favorite story to share with the classroom. Please write your child's name inside the cover so it can come home safely.", sendAt: "2026-09-07T14:00:00.000Z" },
+      ] } : {})}
       kioskCredentials={[{
         guardianId: "exec-demo-guardian-a",
         guardianName: "Jordan Rivera",

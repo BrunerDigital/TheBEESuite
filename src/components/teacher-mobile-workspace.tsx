@@ -17,6 +17,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { CollapsibleCard } from "@/components/workspace-preferences";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
+import { requestWithNetworkRecovery } from "@/lib/client-request-recovery";
 import {
   CLASSROOM_OFFLINE_QUEUE_KEY,
   classroomOfflineQueueStorageKey,
@@ -551,7 +552,7 @@ export function TeacherMobileWorkspace({
     startTransition(async () => {
       setStatus("");
       setError("");
-      const response = await fetch("/api/teacher/profile", {
+      const response = await requestWithNetworkRecovery("/api/teacher/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -562,7 +563,7 @@ export function TeacherMobileWorkspace({
           classroomId: profileClassroomId === "none" ? null : profileClassroomId,
           staffKioskPin: profileKioskPin || null,
         }),
-      });
+      }, "We could not confirm whether your profile was saved. Your entries are still here. Reconnect and check your saved profile before trying again.");
       const json = await response.json().catch(() => null) as {
         error?: string;
         profile?: {
@@ -875,7 +876,8 @@ export function TeacherMobileWorkspace({
       formData.set("caption", photoCaption);
       formData.set("photo", photo);
       formData.set("sharedWithParents", "true");
-      const response = await fetch("/api/teacher/media", { method: "POST", body: formData });
+      const response = await requestWithNetworkRecovery("/api/teacher/media", { method: "POST", body: formData },
+        "We could not confirm whether the photo was shared. Your photo and caption are still selected. Reconnect and check the child's photos before uploading again to avoid a duplicate.");
       const json = await response.json().catch(() => null) as { error?: string; warning?: string } | null;
       if (!response.ok) return showError(json?.error || "Photo could not be shared.");
       setPhoto(null);

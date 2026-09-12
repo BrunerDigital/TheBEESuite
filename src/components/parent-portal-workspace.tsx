@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { InvoicePrintButton, PaymentReceiptPrintButton } from "@/components/billing-print-actions";
-import { formatZonedDateTime } from "@/lib/zoned-date-time";
+import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 import {
   AlertCircle,
   ArrowRight,
@@ -705,16 +705,6 @@ function todayStatusVariant(
   return "outline" as const;
 }
 
-function localDateKey(value: string | Date | null | undefined) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function dateTimestamp(value: string | Date | null | undefined) {
   if (!value) return 0;
   const timestamp = new Date(value).getTime();
@@ -806,7 +796,8 @@ function ParentPortalWorkspaceView({
   paymentCheckoutMethod,
   setPaymentCheckoutMethod,
 }: ParentPortalWorkspaceViewProps) {
-  const timeZone = useSchoolTimeZone();
+  const workspaceTimeZone = useSchoolTimeZone();
+  const timeZone = centerTimeZone || workspaceTimeZone;
   const formatDate = (value: string | Date | null) =>
     formatDateInTimeZone(value, timeZone);
   const formatTime = (value: string | Date | null) =>
@@ -827,6 +818,7 @@ function ParentPortalWorkspaceView({
     : undefined;
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [acknowledgedIncidentIds, setAcknowledgedIncidentIds] = useState<ReadonlySet<string>>(() => new Set());
   const [subject, setSubject] = useState(
     replyDraft?.replyToMessageId
       ? replySubject(replyDraft.subject)
@@ -1116,7 +1108,7 @@ function ParentPortalWorkspaceView({
   const dailyUpdateDays = useMemo<DailyUpdateDay[]>(() => {
     const days = new Map<string, Omit<DailyUpdateDay, "totalItems">>();
     const ensureDay = (value: string | Date) => {
-      const key = localDateKey(value);
+      const key = zonedDateKey(value, timeZone);
       if (!key) return null;
       const existing = days.get(key);
       if (existing) return existing;
@@ -1150,7 +1142,7 @@ function ParentPortalWorkspaceView({
         totalItems: day.reports.length + day.media.length,
       }))
       .toSorted((left, right) => right.key.localeCompare(left.key));
-  }, [dailyReports, media]);
+  }, [dailyReports, media, timeZone]);
   const selectedUpdateDay =
     dailyUpdateDays.find((day) => day.key === selectedUpdateDayKey) ??
     dailyUpdateDays[0] ??
@@ -1163,7 +1155,7 @@ function ParentPortalWorkspaceView({
     );
   });
   const incidentsNeedingReceipt = incidents.filter(
-    (incident) => !incident.parentAcknowledgedAt,
+    (incident) => !incident.parentAcknowledgedAt && !acknowledgedIncidentIds.has(incident.id),
   );
   const homeAttentionCount =
     documentsNeedingAction.length +
@@ -1322,10 +1314,13 @@ function ParentPortalWorkspaceView({
 
   function startMessageReply(item: { id: string; subject: string | null }) {
     const nextSubject = item.subject || "Portal message";
+    const hasDraft = Boolean(message.trim() || messageAttachments.length);
+    if (hasDraft && item.id !== replyToMessageId
+      && !window.confirm(`Keep your unsent message and attachments and switch the reply to “${nextSubject}”? Cancel keeps your current reply.`)) return;
     setReplyToMessageId(item.id);
     setReplyingToSubject(nextSubject);
     setSubject(replySubject(nextSubject));
-    setMessage("");
+    if (hasDraft) showStatus("Your unsent message and attachments were kept. Review the reply before sending.");
     document.getElementById("portal-message")?.focus({ preventScroll: true });
   }
 
@@ -1380,6 +1375,8 @@ function ParentPortalWorkspaceView({
       if (!response.ok)
         return showError(json?.error || "Incident could not be acknowledged.");
       showStatus("Incident acknowledgment recorded.");
+      setAcknowledgedIncidentIds((current) => new Set([...current, incidentId]));
+      router.refresh();
     });
   }
 
@@ -2414,6 +2411,23 @@ function ParentPortalWorkspaceView({
                   No new announcements from your school.
                 </p>
               )}
+              {announcements.length > 1 ? (
+                <details className="group mt-4 border-t pt-2" data-earlier-announcements>
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <span className="min-w-0 flex-1">Earlier announcements ({announcements.length - 1})</span>
+                    <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
+                  </summary>
+                  <div className="space-y-4 pb-2 pt-3">
+                    {announcements.slice(1).map((announcement) => (
+                      <article key={announcement.id} className="rounded-xl border p-3 [overflow-wrap:anywhere]">
+                        <h3 className="font-semibold">{announcement.title}</h3>
+                        {announcement.sendAt ? <p className="mt-1 text-xs text-muted-foreground">{formatDate(announcement.sendAt)}</p> : null}
+                        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted-foreground">{announcement.body}</p>
+                      </article>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </section>
           </div>
         </>
@@ -2841,8 +2855,8 @@ function ParentPortalWorkspaceView({
                         {formatDate(incident.occurredAt)}
                       </div>
                     </div>
-                    {incident.parentAcknowledgedAt ? (
-                      <Badge>Acknowledged</Badge>
+                    {incident.parentAcknowledgedAt || acknowledgedIncidentIds.has(incident.id) ? (
+                      <Badge role="status">Acknowledged</Badge>
                     ) : (
                       <Button
                         disabled={isPending}

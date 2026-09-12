@@ -46,3 +46,11 @@ Protected release and production verification remain required. General managemen
 - Final correction gate `npm run vercel-build` passed: Prisma, lint, typecheck, **2,034 tests**, and optimized production build. Both mobile store checks and final independent critical review passed. Log: `output/wave6-vercel-build-review-corrections.log`.
 
 Parent home-fit work is safely retained separately and is not part of this candidate. PR #359 must complete fresh protected checks and exact production verification before being described as live.
+
+## Protected release and production evidence
+
+- PR #359 merged September 12 at 16:01:17 UTC: main `9e6f84366932edfa20e44018f057c17945a2b1e6`; candidate `1ba11eedf20febf06589a547edc935cef45c00ae`. CI `34703716232`, CodeQL `34703714227`, preview and resolved review conversations passed.
+- Production `dpl_E8hdkPjzhzD6ChjCTq3NtQWcEbxw` was explicitly **READY**, exact main SHA, all five canonical aliases. Build-error filter reported no errors. Health at 16:08:20 UTC returned `ok: true`, `database: connected`. Post-flow error/fatal and 5xx counts were empty for this deployment.
+- Fresh isolated fake graph proved at 16:06:17 UTC; guarded authenticated checks completed at 16:07:36 UTC. Parent/Teacher 20 navigation cases, two read-only profile cases, two report-control cases, four document checks, eight narrow/zoomed layouts, four Home attention checks and six teacher shortcuts passed. The shared Back-navigation guard separately retained an unsent parent draft, cancelled exactly one expected dialog, restored the existing history entry and left history length unchanged.
+- Only two reserved-account login POSTs and 26 ordinary session heartbeats were permitted. Zero product writes, blocked unexpected requests, HTTP/client errors or downloads. Evidence: `output/playwright/app-review-production-after-pr359/results.json` and fake-data screenshots. No real messages were sent.
+- The management-only workflow editor was verified with source/transaction tests and local fake transport, **not an authenticated management production session**; its approved general-QA credentials still need secure restoration. Parent/Teacher success does not substitute for that role-specific gate.

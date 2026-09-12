@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
+import { assertPackagedPrivacyManifest } from "./ios-privacy-manifest.mjs";
 
 // A fresh iOS 26 simulator performs OS data migration before SpringBoard is ready.
 export const SIMULATOR_BOOT_TIMEOUT_MS = 12 * 60 * 1000;
@@ -171,6 +172,13 @@ export async function verifyNative(role) {
       assert.equal(info.ITSAppUsesNonExemptEncryption, false);
       assertPackagedConfiguration(JSON.parse(readFileSync(path.join(app, "capacitor.config.json"), "utf8")), target);
       assert.ok(existsSync(path.join(app, "PrivacyInfo.xcprivacy")), "Privacy manifest must be in compiled resources");
+      const sourcePrivacyPath = `${role === "parent" ? "ios" : "ios-teacher"}/App/App/PrivacyInfo.xcprivacy`;
+      const sourcePrivacy = JSON.parse(run("plutil", ["-convert", "json", "-o", "-", sourcePrivacyPath]));
+      const compiledPrivacy = JSON.parse(run("plutil", ["-convert", "json", "-o", "-", path.join(app, "PrivacyInfo.xcprivacy")]));
+      assertPackagedPrivacyManifest(compiledPrivacy, sourcePrivacy, role);
+      report.privacyManifests ??= {};
+      report.privacyManifests[sdk] = { matchesReviewedSource: true, collectedCategoryCount: compiledPrivacy.NSPrivacyCollectedDataTypes.length,
+        privateMessagingDeclared: true, tracking: false };
       for (const file of ["index.html", "offline.html"]) {
         assert.equal(readFileSync(path.join(app, "public", file), "utf8").replaceAll("\r\n", "\n"),
           readFileSync(`native/${role}-shell/${file}`, "utf8").replaceAll("\r\n", "\n"));

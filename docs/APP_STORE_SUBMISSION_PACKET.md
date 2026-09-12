@@ -250,7 +250,9 @@ Final answers must be confirmed against the production app, native SDKs, Vercel 
 Likely data collected and linked to the user:
 
 - Contact Info: name, email address, phone number, family/contact details.
-- User Content: messages, uploaded documents, photos, message attachments, typed signatures, support requests.
+- User Content — Emails or Text Messages: private in-app message subject, sender, recipients and contents. Collected, linked to the user, App Functionality, not tracking (inventory corrected September 12, 2026).
+- User Content — Photos or Videos: uploaded photos and visual message attachments. Collected, linked to the user, App Functionality, not tracking.
+- User Content — Other User Content: uploaded documents, typed signatures and school submissions. Collected, linked to the user, App Functionality, not tracking.
 - Financial Info: invoices, balances, payment status, payment method category, Stripe checkout/payment identifiers. Raw card and bank credentials should stay with Stripe.
 - Purchase History: tuition, uniform, fee, and payment records if visible in the parent portal.
 - Identifiers: internal user ID, guardian ID, family ID, session/device identifiers.

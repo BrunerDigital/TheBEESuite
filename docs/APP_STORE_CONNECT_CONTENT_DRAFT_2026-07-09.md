@@ -199,7 +199,9 @@ Final answers must be reconciled with production vendors and SDKs.
 | Apple data type | Likely collected | Linked to user | Purpose |
 | --- | --- | --- | --- |
 | Contact Info | Yes | Yes | Account, communication, school records, support |
-| User Content | Yes | Yes | Messages, uploads, documents, photos, signatures, support |
+| Emails or Text Messages (User Content) | Yes | Yes | App Functionality: private in-app subject, sender, recipients and contents; not tracking |
+| Photos or Videos (User Content) | Yes | Yes | App Functionality: photos and visual attachments; not tracking |
+| Other User Content | Yes | Yes | App Functionality: documents, signatures and school submissions; not tracking |
 | Financial Info | Yes | Yes | Invoices, balances, payment status, payment provider identifiers |
 | Purchase History | Yes if billing enabled | Yes | Tuition/fee/payment records |
 | Identifiers | Yes | Yes | User IDs, guardian IDs, family IDs, session/device identifiers |
@@ -219,6 +221,8 @@ No tracking, unless a vendor is added that tracks users across apps or websites 
 ```
 
 Privacy manifest status:
+
+September 12, 2026 inventory correction: private messages have their own Emails or Text Messages category in the Parent manifest; do not subsume them under Other User Content. See `IOS_PRIVACY_MANIFEST_RECONCILIATION_2026-09-12.md`. Final archive/vendor/disclosure review is still required before upload approval.
 
 ```text
 An app-level PrivacyInfo.xcprivacy file is included in the iOS target resources. It declares tracking as false, no tracking domains, and conservative collection categories for contact info, identifiers, user content, financial/payment records, sensitive childcare records, product interaction, crash data, and performance data. Generate the Xcode privacy report from the final archive and reconcile it with App Store Connect before submission.

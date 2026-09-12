@@ -6,6 +6,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import postcss from "postcss";
 import tailwindcss from "@tailwindcss/postcss";
+import { withFixtureBrowser } from "./qa-fixture-browser";
 
 // No credentials or backend: real components, fake props, intercepted requests only.
 async function main() {
@@ -39,7 +40,7 @@ async function main() {
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   const base = `http://127.0.0.1:${address.port}`;
-  const browser = await (browserEngine === "webkit" ? webkit : chromium).launch();
+  await withFixtureBrowser(server, () => (browserEngine === "webkit" ? webkit : chromium).launch(), async browser => {
 
   const errors: string[] = [], blocked: string[] = [], results: Record<string, unknown>[] = [];
   const context = await browser.newContext({ serviceWorkers: "block", reducedMotion: "reduce" });
@@ -79,7 +80,6 @@ async function main() {
     assert.equal(await page.getByRole("combobox", { name: "Report targets", exact: true }).count(), 1);
     return geometry;
   };
-  try {
     for (const width of [320,390]) for (const zoom of [100,200]) for (const count of [0,1,8,9,40,42]) {
       const page = await open(width, zoom, count);
       try {
@@ -143,6 +143,6 @@ async function main() {
     assert.deepEqual(errors,[]);assert.deepEqual(blocked,[]);
     await writeFile(path.join(evidenceDirectory,"results.json"),JSON.stringify({engine:browserEngine,passed:true,cases:results.length,results,errors,blocked,writes:0},null,2));
     console.log(JSON.stringify({engine:browserEngine,passed:true,cases:results.length,writes:0}));
-  } finally {await browser.close();await new Promise<void>(done=>server.close(()=>done()));}
+  });
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

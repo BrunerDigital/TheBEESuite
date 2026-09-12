@@ -37,8 +37,11 @@ const orderedDocuments = fixtureDocuments.toSorted((a, b) => Number(parentDocume
 const documentPage = recordPagination(query.get("documentsPage"), fixtureDocuments.length, 20);
 const requestedDocumentId = query.get("documentId") || undefined;
 const linkedDocument = orderedDocuments.find((document) => document.id === requestedDocumentId) ?? null;
-const teacherRoster = Array.from({ length: query.has("large-roster") ? 42 : 2 }, (_, index) => ({
-  id: index ? `fake-child-${index + 1}` : "fake-child", fullName: index ? `Fake Child ${index + 1}` : "Fake Child", ageGroup: "Preschool", enrollmentStatus: "active", photoVideoPermission: true, classroom: { id: "fake-room", name: "Fake Classroom" },
+const requestedTeacherCount = query.has("teacher-count") ? Number(query.get("teacher-count")) : null;
+const teacherCount = requestedTeacherCount !== null && Number.isInteger(requestedTeacherCount) && requestedTeacherCount >= 0 && requestedTeacherCount <= 42 ? requestedTeacherCount : query.has("large-roster") ? 42 : 2;
+const teacherRoster = Array.from({ length: teacherCount }, (_, index) => ({
+  id: index ? `fake-child-${index + 1}` : "fake-child", fullName: query.has("teacher-long-names") ? `Fake Child ${index + 1} Alexandra Gabriella Montgomery-Santiago` : index ? `Fake Child ${index + 1}` : "Fake Child", ageGroup: "Preschool", enrollmentStatus: "active", photoVideoPermission: true, classroom: { id: "fake-room", name: "Fake Classroom" },
+  ...(query.has("teacher-present") ? { attendance: { status: index < Number(query.get("teacher-present")) ? "present" : "absent", latestLogType: index < Number(query.get("teacher-present")) ? "check_in" : null, latestLogAt: null, lastMarkedAt: null } } : {}),
 }));
 const centers = ["a", "b"].map((id) => ({ id, name: `Fake School ${id.toUpperCase()}`, licensedCapacity: 80, crmLocationId: null, city: null, state: null, ownerGroup: null }));
 const report: FteReportRow = {
@@ -97,7 +100,7 @@ function Fixture() {
   if (view === "automation") return <AutomationFixture />;
   if (view === "fte") return <FteReportForm centers={query.get("single-school") ? centers.filter((center) => center.id === "b") : centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" allowCenterSelect={!query.get("director")} mode={query.get("director") ? "director" : "executive"} />;
   if (view === "fte-reader") return <FteReportExplorer centers={centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" canEdit={false} />;
-  if (view === "teacher") return <><a href="?view=home">Leave fake teacher</a><TeacherMobileWorkspace teacherName="Fake Teacher" roster={teacherRoster} teacherProfile={{ id: "fake-teacher", name: "Fake Teacher", loginEmail: "teacher@example.com", contactEmail: "teacher@example.com", phone: "", title: "Teacher", centerId: "fake-center", centerName: "Fake School", classroomId: "fake-room", hasStaffKioskCode: true }} classroomOptions={[{ id: "fake-room", name: "Fake Classroom", ageGroup: "Preschool" }]} /></>;
+  if (view === "teacher") return <><a href="?view=home">Leave fake teacher</a><TeacherMobileWorkspace previewMode={query.has("teacher-layout-only")} previewHistoryGuard={query.has("teacher-layout-only")} teacherName="Fake Teacher" roster={teacherRoster} teacherProfile={{ id: "fake-teacher", name: "Fake Teacher", loginEmail: "teacher@example.com", contactEmail: "teacher@example.com", phone: "", title: "Teacher", centerId: "fake-center", centerName: "Fake School", classroomId: "fake-room", hasStaffKioskCode: true }} classroomOptions={[{ id: "fake-room", name: "Fake Classroom", ageGroup: "Preschool" }]} /></>;
   return <ParentFixture />;
 }
 

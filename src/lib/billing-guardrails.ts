@@ -13,6 +13,7 @@ export function isActiveStripeCheckoutPayment(payment: {
   const fields = jsonRecord(payment.customFields);
   return fields.status === "checkout_pending"
     || fields.status === "checkout_created"
+    || fields.status === "checkout_submission_unknown"
     || fields.status === "paid_processing";
 }
 

@@ -1,4 +1,4 @@
-import { PaymentStatus, Prisma } from "@prisma/client";
+import { PaymentStatus, Prisma, type PrismaClient } from "@prisma/client";
 import {
   activeStripeCheckoutPaymentMessage,
   activeStripeCheckoutPaymentSummary,
@@ -21,6 +21,7 @@ type StripeCheckoutDraftPayment = {
   provider: string;
   externalIdPlaceholder?: string | null;
   customFields?: unknown;
+  billingAccountId?: string;
 };
 
 function jsonInput(value: Record<string, unknown>): Prisma.InputJsonObject {
@@ -129,7 +130,8 @@ export function stripeCheckoutDraftClearReason(
   now = new Date(),
   staleOpenAfterMs = STALE_OPEN_STRIPE_CHECKOUT_MS,
 ) {
-  if (session.status === "expired") return "expired" as const;
+  if (session.status === "expired" && session.paymentStatus === "unpaid"
+    && (!session.paymentIntentId || ["requires_payment_method", "canceled"].includes(session.paymentIntentStatus ?? ""))) return "expired" as const;
   const ageMs = millisecondsSince(session.createdAt, now);
   const isStaleOpen =
     session.status === "open" &&
@@ -140,7 +142,7 @@ export function stripeCheckoutDraftClearReason(
   if (isStaleOpen) return "stale_open" as const;
   if (
     session.status === "complete" &&
-    session.paymentStatus !== "paid" &&
+    session.paymentStatus === "unpaid" &&
     (session.paymentIntentStatus === "requires_payment_method" || session.paymentIntentStatus === "canceled")
   ) {
     return "failed_intent" as const;
@@ -158,6 +160,11 @@ export async function resolveStripeCheckoutDraftBlocker({
   expectedCheckoutTotalCents,
   expectedFeeDisclosureVersion,
   now = new Date(),
+  database = prisma,
+  retrieve = retrieveStripeCheckoutSession,
+  expire = expireStripeCheckoutSession,
+  validateSession,
+  canResumeSession,
 }: {
   payment: StripeCheckoutDraftPayment;
   connectedAccountId?: string | null;
@@ -168,13 +175,26 @@ export async function resolveStripeCheckoutDraftBlocker({
   expectedCheckoutTotalCents?: number | null;
   expectedFeeDisclosureVersion?: string | null;
   now?: Date;
+  database?: Pick<PrismaClient, "payment">;
+  retrieve?: typeof retrieveStripeCheckoutSession;
+  expire?: typeof expireStripeCheckoutSession;
+  validateSession?: (session: StripeCheckoutSessionSnapshot) => boolean;
+  canResumeSession?: (session: StripeCheckoutSessionSnapshot) => boolean;
 }) {
   const pendingPayment = activeStripeCheckoutPaymentSummary(payment);
   const sessionId = pendingPayment.stripeCheckoutSessionId;
   // A draft can outlive a Connect cutover. Stripe sessions must be managed on
   // the account where they were created, not the school's current account.
   const draftConnectedAccountId = stripeCheckoutDraftConnectedAccountId(payment, connectedAccountId);
-  if (!sessionId) {
+  const changed = () => ({ blocked: true as const, pendingPayment,
+    message: "This payment needs confirmation. Refresh to review its current status before continuing." });
+  // Full JSON compare-and-set prevents any late read/expire response from
+  // overwriting a webhook result, another reconciliation, or newer metadata.
+  const unchangedDraft = { id: payment.id, status: PaymentStatus.DRAFT, provider: payment.provider,
+    ...(payment.billingAccountId ? { billingAccountId: payment.billingAccountId } : {}),
+    ...(payment.externalIdPlaceholder !== undefined ? { externalIdPlaceholder: payment.externalIdPlaceholder } : {}),
+    customFields: { equals: payment.customFields == null ? Prisma.DbNull : jsonInput(jsonRecord(payment.customFields)) } };
+  if (!sessionId || payment.status !== PaymentStatus.DRAFT) {
     return {
       blocked: true as const,
       pendingPayment,
@@ -182,7 +202,7 @@ export async function resolveStripeCheckoutDraftBlocker({
     };
   }
 
-  const retrieved = await retrieveStripeCheckoutSession({
+  const retrieved = await retrieve({
     sessionId,
     connectedAccountId: draftConnectedAccountId,
     tenantId,
@@ -197,6 +217,7 @@ export async function resolveStripeCheckoutDraftBlocker({
   }
 
   let session = retrieved.session;
+  if (session.id !== sessionId || (validateSession && !validateSession(session))) return changed();
   const clearReason = stripeCheckoutDraftClearReason(session, now);
   const replacementReason = clearReason ? null : stripeCheckoutDraftReplacementReason({
     session,
@@ -207,7 +228,7 @@ export async function resolveStripeCheckoutDraftBlocker({
     expectedFeeDisclosureVersion,
   });
   if (clearReason === "stale_open" || replacementReason) {
-    const expired = await expireStripeCheckoutSession({
+    const expired = await expire({
       sessionId,
       connectedAccountId: draftConnectedAccountId,
       tenantId,
@@ -221,6 +242,8 @@ export async function resolveStripeCheckoutDraftBlocker({
       };
     }
     session = expired.session;
+    if (session.id !== sessionId || stripeCheckoutDraftClearReason(session, now) !== "expired"
+      || (validateSession && !validateSession(session))) return changed();
   }
 
   const finalClearReason = replacementReason || (clearReason === "stale_open"
@@ -235,8 +258,8 @@ export async function resolveStripeCheckoutDraftBlocker({
     finalClearReason === "superseded_fee_policy" ||
     finalClearReason === "superseded_payment_method"
   ) {
-    await prisma.payment.update({
-      where: { id: payment.id },
+    const updated = await database.payment.updateMany({
+      where: unchangedDraft,
       data: {
         status: PaymentStatus.VOID,
         externalIdPlaceholder: session.id,
@@ -251,12 +274,13 @@ export async function resolveStripeCheckoutDraftBlocker({
         }),
       },
     });
+    if (updated.count !== 1) return changed();
     return { blocked: false as const, cleared: true as const, clearReason: finalClearReason };
   }
 
   if (finalClearReason === "failed_intent") {
-    await prisma.payment.update({
-      where: { id: payment.id },
+    const updated = await database.payment.updateMany({
+      where: unchangedDraft,
       data: {
         status: PaymentStatus.FAILED,
         externalIdPlaceholder: session.paymentIntentId || session.id,
@@ -273,6 +297,7 @@ export async function resolveStripeCheckoutDraftBlocker({
         }),
       },
     });
+    if (updated.count !== 1) return changed();
     return { blocked: false as const, cleared: true as const, clearReason: finalClearReason };
   }
 
@@ -287,13 +312,14 @@ export async function resolveStripeCheckoutDraftBlocker({
   if (session.status === "complete" && session.paymentStatus === "unpaid" && session.paymentIntentStatus === "processing") {
     refreshedFields.status = fields.status === "paid_processing" ? "paid_processing" : "checkout_pending";
   }
-  await prisma.payment.update({
-    where: { id: payment.id },
+  const updated = await database.payment.updateMany({
+    where: unchangedDraft,
     data: { customFields: jsonInput(refreshedFields) },
   });
+  if (updated.count !== 1) return changed();
 
   const refreshedPayment = { ...payment, customFields: refreshedFields };
-  if (isRecoverableOpenUnpaidDraftSession(session) && session.url) {
+  if (isRecoverableOpenUnpaidDraftSession(session) && session.url && (!canResumeSession || canResumeSession(session))) {
     return {
       blocked: false as const,
       resumed: true as const,

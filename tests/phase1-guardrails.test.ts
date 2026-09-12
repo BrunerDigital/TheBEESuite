@@ -1680,12 +1680,13 @@ test("reserved App Review identities cannot initiate financial provider mutation
   for (const route of tokenGuardedRoutes) {
     const reservedGuard = route.indexOf("appReviewReservedIdentityKind(payload.email)");
     const familyGraphGuard = route.indexOf("appReviewFamilyContainsReservedIdentity(family)");
+    const mutationBoundary = route.includes("startInvoiceCheckout({") ? route.indexOf("startInvoiceCheckout({") : route.indexOf("createStripeCustomer({");
     assert.ok(
-      reservedGuard >= 0 && reservedGuard < route.indexOf("createStripeCustomer({"),
+      reservedGuard >= 0 && reservedGuard < mutationBoundary,
       "signed-link payment routes must reject reserved identities before any Stripe customer mutation",
     );
     assert.ok(
-      familyGraphGuard >= 0 && familyGraphGuard < route.indexOf("createStripeCustomer({"),
+      familyGraphGuard >= 0 && familyGraphGuard < mutationBoundary,
       "signed-link payment routes must revalidate every current family identity before any Stripe customer mutation",
     );
     assert.match(route, /guardians:[\s\S]*user: \{ select: \{ email: true \} \}/);

@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentStatus, Prisma } from "@prisma/client";
+import { PaymentStatus } from "@prisma/client";
 import {
   appReviewFamilyContainsReservedIdentity,
   appReviewReservedIdentityKind,
 } from "@/lib/app-review-targeting";
+import { jsonRecord } from "@/lib/billing-guardrails";
 import {
-  activeStripeCheckoutPaymentMessage,
-  activeStripeCheckoutPaymentSummary,
-  isActiveStripeCheckoutPayment,
-  jsonRecord,
-} from "@/lib/billing-guardrails";
-import {
-  createStripeCheckoutSession,
-  createStripeCustomer,
   getStripeCheckoutAmounts,
   getStripePaymentMethodConfigurationId,
   getStripeSecretKey,
@@ -41,11 +34,11 @@ import {
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
-import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
-import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import { stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
-import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
+import { startInvoiceCheckout } from "@/lib/invoice-checkout-service";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
@@ -77,11 +70,8 @@ function appendRawQuery(path: string, key: string, rawValue: string) {
   return `${base}${separator}${encodeURIComponent(key)}=${rawValue}${hash ? `#${hash}` : ""}`;
 }
 
-function jsonInput(value: Record<string, unknown>): Prisma.InputJsonObject {
-  return value as Prisma.InputJsonObject;
-}
-
 async function POSTHandler(request: NextRequest) {
+  if (!hasTrustedMutationOrigin(request)) return NextResponse.json({ ok: false, error: "Untrusted request origin." }, { status: 403 });
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const token = clean(body.token);
   const validation = validatePaymentMethodRequestToken(token);
@@ -333,19 +323,8 @@ async function POSTHandler(request: NextRequest) {
     }
     const readiness = stripeConnectReadinessFromSnapshot(accountStatus.account);
     schoolPaysStripeFeesDirectly = stripeConnectedAccountPaysFeesDirectly(accountStatus.account);
-    await prisma.center.update({
-      where: { id: center.id },
-      data: {
-        customFields: {
-          ...jsonRecord(center.customFields),
-          ...stripeConnectCustomFieldPatch(readiness),
-          stripeMerchantCapabilityStatus: accountStatus.account.merchantCapabilityStatus || null,
-          stripeRecipientTransferStatus: accountStatus.account.recipientTransferStatus || null,
-          stripeFeesCollector: accountStatus.account.feesCollector || null,
-          stripeLossesCollector: accountStatus.account.lossesCollector || null,
-        },
-      },
-    });
+    // Collection reads provider readiness without overwriting school configuration.
+
     if (!readiness.canAcceptParentPayments) {
       return NextResponse.json(
         {
@@ -377,97 +356,6 @@ async function POSTHandler(request: NextRequest) {
       { status: 400 },
     );
   }
-  const billingAccountFields = jsonRecord(billingAccount.customFields);
-  let stripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
-  if (!stripeCustomerId) {
-    const customer = await createStripeCustomer({
-      email: payload.email,
-      name: family.name,
-      metadata: {
-        tenantId: payload.tenantId,
-        billingAccountId: billingAccount.id,
-        familyId: family.id,
-        centerId: center.id,
-        stripeConnectedAccountId: connectedAccountId || "",
-        setupSource: PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
-        recipientEmail: payload.email,
-        environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
-      },
-      connectedAccountId,
-      tenantId: payload.tenantId,
-    });
-    if (!customer.ok || !customer.id) {
-      return NextResponse.json(
-        {
-          ok: false,
-          configured: customer.configured,
-          error: paymentServiceError({
-            parentFacing: true,
-            providerError: customer.error || "Family payment profile could not be created.",
-            fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
-          }),
-        },
-        { status: customer.configured ? 502 : 503 },
-      );
-    }
-    stripeCustomerId = customer.id;
-    await prisma.billingAccount.update({
-      where: { id: billingAccount.id },
-      data: {
-        customFields: {
-          ...billingAccountFields,
-          ...stripeCustomerCustomFieldPatch(billingAccountFields, stripeCustomerId, connectedAccountId),
-        },
-      },
-    });
-  }
-
-  const draftStripePayments = await prisma.payment.findMany({
-    where: {
-      billingAccountId: invoice.billingAccountId,
-      provider: "stripe",
-      status: PaymentStatus.DRAFT,
-    },
-    select: { id: true, amountCents: true, status: true, provider: true, externalIdPlaceholder: true, customFields: true },
-  });
-  const activePayment = draftStripePayments.find((item) =>
-    isActiveStripeCheckoutPayment(item) && jsonRecord(item.customFields).invoiceId === invoice.id,
-  );
-  if (activePayment) {
-    const blocker = await resolveStripeCheckoutDraftBlocker({
-      payment: activePayment,
-      connectedAccountId,
-      tenantId: payload.tenantId,
-      scope: "invoice",
-      requestedPaymentMethodCategory,
-      expectedAmountCents: invoice.totalCents,
-      expectedCheckoutTotalCents: invoice.totalCents,
-      expectedFeeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
-    });
-    if (!blocker.blocked && blocker.url) {
-      return NextResponse.json({
-        ok: true,
-        url: blocker.url,
-        status: "checkout_session_reused",
-        paymentId: activePayment.id,
-        stripeSessionId: blocker.pendingPayment?.stripeCheckoutSessionId,
-        feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
-        feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
-      });
-    }
-    if (blocker.blocked) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: blocker.message || activeStripeCheckoutPaymentMessage(activePayment, "invoice"),
-          paymentId: activePayment.id,
-          pendingPayment: blocker.pendingPayment || activeStripeCheckoutPaymentSummary(activePayment),
-        },
-        { status: 409 },
-      );
-    }
-  }
-
   const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
     tenantSlug: center.organization.tenant.slug,
     tenantName: center.organization.tenant.name,
@@ -479,26 +367,6 @@ async function POSTHandler(request: NextRequest) {
     waiveBeeSuitePaymentOperationsFee,
     schoolPaysStripeFeesDirectly,
   });
-  const payment = await prisma.payment.create({
-    data: {
-      billingAccountId: invoice.billingAccountId,
-      amountCents: invoice.totalCents,
-      status: PaymentStatus.DRAFT,
-      provider: "stripe",
-      externalIdPlaceholder: "checkout_session_pending",
-      customFields: jsonInput({
-        invoiceId: invoice.id,
-        invoiceAmountCents: invoice.totalCents,
-        stripeCustomerId,
-        stripeCustomerConnectedAccountId: connectedAccountId || null,
-        paymentRequestTokenFamilyId: family.id,
-        paymentRequestRecipientEmail: payload.email,
-        bankAccountVerificationMethod,
-        status: "checkout_pending",
-      }),
-    },
-  });
-
   const baseUrl = getSecurePaymentAppBaseUrl(request.url);
   const formPath = `/payment-method-form/${encodeURIComponent(token)}`;
   const centerLabel = center.crmLocationId ?? center.name;
@@ -508,13 +376,23 @@ async function POSTHandler(request: NextRequest) {
     "{CHECKOUT_SESSION_ID}",
   );
   const cancelPath = appendQuery(appendQuery(formPath, "payment", "cancelled"), "invoice", invoice.id);
-  const session = await createStripeCheckoutSession({
+  const result = await startInvoiceCheckout({
+    topology: { tenantId: payload.tenantId, familyId: family.id, centerId: center.id, connectedAccountId },
+    billingAccountId: billingAccount.id, invoiceId: invoice.id, invoiceTotalCents: invoice.totalCents,
+    keyPrefix: "payment-request-checkout",
+    customer: {
+      email: family.billingEmail, name: family.name,
+      metadata: { tenantId: payload.tenantId, billingAccountId: billingAccount.id, familyId: family.id,
+        centerId: center.id, stripeConnectedAccountId: connectedAccountId || "",
+        environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development" },
+      connectedAccountId, tenantId: payload.tenantId,
+    },
+    request: {
     amountCents: amounts.checkoutTotalCents,
     invoiceAmountCents: amounts.invoiceAmountCents,
     parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
     invoiceNumber: invoice.number,
     centerName: center.name,
-    customerId: stripeCustomerId,
     customerEmail: payload.email,
     successUrl: `${baseUrl}${successPath}`,
     cancelUrl: `${baseUrl}${cancelPath}`,
@@ -522,11 +400,9 @@ async function POSTHandler(request: NextRequest) {
       source: PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
       tenantId: payload.tenantId,
       invoiceId: invoice.id,
-      paymentId: payment.id,
       familyId: family.id,
       centerId: center.id,
       stripeConnectedAccountId: connectedAccountId || "",
-      stripeCustomerId,
       stripeChargeType: connectedAccountId ? "direct" : "platform",
       invoiceAmountCents: String(amounts.invoiceAmountCents),
       parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
@@ -550,85 +426,39 @@ async function POSTHandler(request: NextRequest) {
     paymentMethodCategory: requestedPaymentMethodCategory,
     bankAccountVerificationMethod,
     onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
-    idempotencyKey: `payment-request-checkout:${payment.id}`,
     checkoutBranding: buildPaymentMethodRequestCheckoutBranding({
       centerLabel,
       familyName: family.name,
       intent: requestedPaymentMethodCategory === "link_bank" ? "instant_bank_verification" : "payment_steps",
     }),
     tenantId: payload.tenantId,
-  });
-
-  if (!session.ok || !session.url) {
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: PaymentStatus.FAILED,
-        externalIdPlaceholder: session.error || "stripe_checkout_failed",
-        customFields: jsonInput({
-          invoiceId: invoice.id,
-          invoiceAmountCents: amounts.invoiceAmountCents,
-          requestedPaymentMethodCategory,
-          paymentMethodCategory: amounts.paymentMethodCategory,
-          checkoutTotalCents: amounts.checkoutTotalCents,
-          stripeCustomerId,
-          stripeCustomerConnectedAccountId: connectedAccountId || null,
-          bankAccountVerificationMethod,
-          stripeError: session.error || "stripe_checkout_failed",
-          status: "checkout_failed",
-        }),
-      },
-    });
-    await prisma.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
-    return NextResponse.json(
-      {
-        ok: false,
-        configured: session.configured,
-        error: paymentServiceError({
-          parentFacing: true,
-          providerError: session.error || "Payment checkout could not be created.",
-          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
-        }),
-      },
-      { status: session.configured ? 502 : 503 },
-    );
-  }
-
-  await prisma.payment.update({
-    where: { id: payment.id },
-    data: {
-      externalIdPlaceholder: session.id,
-      customFields: jsonInput({
-        invoiceId: invoice.id,
-        invoiceAmountCents: amounts.invoiceAmountCents,
-        parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
-        parentProcessingRecoveryAmountCents: amounts.parentProcessingRecoveryAmountCents,
-        schoolProcessingFeeAmountCents: amounts.schoolProcessingFeeAmountCents,
-        beeSuitePaymentOperationsFeeAmountCents: amounts.beeSuitePaymentOperationsFeeAmountCents,
-        beeSuitePaymentOperationsFeeWaived: waiveBeeSuitePaymentOperationsFee,
-        requestedPaymentMethodCategory,
-        paymentMethodCategory: amounts.paymentMethodCategory,
-        paymentMethodConfigurationMissing: usesSpecificFeePolicy && !paymentMethodConfigurationId,
-        checkoutTotalCents: amounts.checkoutTotalCents,
-        applicationFeeAmountCents: amounts.applicationFeeAmountCents,
-        stripeCheckoutSessionId: session.id,
-        stripeCheckoutSessionCreatedAt: session.createdAt ?? null,
-        stripeCheckoutSessionExpiresAt: session.expiresAt ?? null,
-        stripeCheckoutSessionStatus: session.status ?? null,
-        stripeCheckoutPaymentStatus: session.paymentStatus ?? null,
-        stripeConnectedAccountId: connectedAccountId || null,
-        stripeCustomerId,
-        stripeCustomerConnectedAccountId: connectedAccountId || null,
-        bankAccountVerificationMethod,
-        paymentRequestTokenFamilyId: family.id,
-        paymentRequestRecipientEmail: payload.email,
-        stripeChargeType: connectedAccountId ? "direct" : "platform",
-        status: "checkout_created",
-      }),
+  },
+    fields: {
+      invoiceAmountCents: amounts.invoiceAmountCents,
+      parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
+      parentProcessingRecoveryAmountCents: amounts.parentProcessingRecoveryAmountCents,
+      schoolProcessingFeeAmountCents: amounts.schoolProcessingFeeAmountCents,
+      beeSuitePaymentOperationsFeeAmountCents: amounts.beeSuitePaymentOperationsFeeAmountCents,
+      beeSuitePaymentOperationsFeeWaived: waiveBeeSuitePaymentOperationsFee,
+      requestedPaymentMethodCategory, paymentMethodCategory: amounts.paymentMethodCategory,
+      paymentMethodConfigurationMissing: usesSpecificFeePolicy && !paymentMethodConfigurationId,
+      checkoutTotalCents: amounts.checkoutTotalCents, applicationFeeAmountCents: amounts.applicationFeeAmountCents,
+      feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
+      bankAccountVerificationMethod, paymentRequestTokenFamilyId: family.id, paymentRequestRecipientEmail: payload.email,
+      stripeChargeType: connectedAccountId ? "direct" : "platform",
     },
-  });
-
-  await prisma.auditLog.create({
+    authorize: async tx => {
+      if (!validatePaymentMethodRequestToken(token).ok) return false;
+      const freshFamily = await tx.family.findFirst({
+        where: { id: family.id, centerId: center.id, billingAccount: { id: billingAccount.id } },
+        select: { billingEmail: true, guardians: { select: { id: true, fullName: true, email: true, userId: true,
+          user: { select: { email: true } } } } },
+      });
+      return Boolean(freshFamily && !appReviewFamilyContainsReservedIdentity(freshFamily)
+        && paymentMethodRequestRecipientOptions(freshFamily).some(recipient => recipient.email === payload.email));
+    },
+    audit: async (tx, paymentId, session) => {
+      await tx.auditLog.create({
     data: {
       tenantId: payload.tenantId,
       centerId: center.id,
@@ -636,7 +466,7 @@ async function POSTHandler(request: NextRequest) {
       resource: "Invoice",
       resourceId: invoice.id,
       metadata: {
-        paymentId: payment.id,
+        paymentId,
         familyId: family.id,
         recipientEmail: payload.email,
         stripeSessionId: session.id,
@@ -645,16 +475,14 @@ async function POSTHandler(request: NextRequest) {
       },
     },
   });
-  await prisma.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
-
-  return NextResponse.json({
-    ok: true,
-    url: session.url,
-    paymentId: payment.id,
-    stripeSessionId: session.id,
-    feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
-    feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
+  await tx.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
+    },
   });
+  const { statusCode, ...response } = result;
+  return NextResponse.json({
+    ...response,
+    ...(result.ok ? { feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION } : {}),
+  }, { status: statusCode });
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

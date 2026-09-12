@@ -1,4 +1,4 @@
-import { PaymentStatus, Prisma } from "@prisma/client";
+import { PaymentStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { allocateAccountCreditToInvoice, availableAccountCreditCents } from "@/lib/account-credit-autopay";
 import {
   activeStripeAccountCreditReservationCents,
@@ -10,6 +10,10 @@ import {
   jsonRecord,
 } from "@/lib/billing-guardrails";
 import { prisma } from "@/lib/prisma";
+import { readStripeConnectAccountId } from "@/lib/stripe-connect-readiness";
+import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
+import { retrySerialization } from "@/lib/retry-serialization";
 
 export type StripePaymentClaimScope = "family_balance" | "invoice_collection";
 
@@ -57,6 +61,10 @@ export async function createStripePaymentClaim({
   existingPaymentId,
   expectedInvoiceTotalCents,
   expectedAccountCreditAppliedCents,
+  accountCreditPolicy = "apply",
+  expectedTopology,
+  authorize,
+  database = prisma,
   paymentData,
 }: {
   billingAccountId: string;
@@ -65,14 +73,36 @@ export async function createStripePaymentClaim({
   existingPaymentId?: string | null;
   expectedInvoiceTotalCents?: number | null;
   expectedAccountCreditAppliedCents?: number | null;
+  accountCreditPolicy?: "apply" | "preserve";
+  expectedTopology?: { tenantId: string; familyId: string; centerId: string; connectedAccountId: string | null };
+  authorize?: (tx: Prisma.TransactionClient) => Promise<boolean>;
+  database?: Pick<PrismaClient, "$transaction">;
   paymentData: Omit<Prisma.PaymentUncheckedCreateInput, "billingAccountId">;
 }) {
-  return prisma.$transaction(async (tx) => {
+  return retrySerialization(() => database.$transaction(async (tx) => {
     const lockedAccounts = await tx.$queryRaw<Array<{ id: string; balanceCents: number }>>(
       Prisma.sql`SELECT "id", "balanceCents" FROM "BillingAccount" WHERE "id" = ${billingAccountId} FOR UPDATE`,
     );
     if (lockedAccounts.length !== 1) {
       return { created: false as const, reason: "billing_account_not_found" as const, blockingPaymentId: null };
+    }
+
+    if (expectedTopology) {
+      const account = await tx.billingAccount.findUnique({ where: { id: billingAccountId }, select: { familyId: true, family: { select: { centerId: true } } } });
+      const center = expectedTopology.tenantId && expectedTopology.centerId
+        ? await tx.center.findFirst({ where: { id: expectedTopology.centerId, organization: { tenantId: expectedTopology.tenantId } }, select: { customFields: true, name: true } })
+        : null;
+      if (!account || !center || account.familyId !== expectedTopology.familyId || account.family.centerId !== expectedTopology.centerId
+        || readStripeConnectAccountId(center.customFields) !== expectedTopology.connectedAccountId) {
+        return { created: false as const, reason: "payment_topology_changed" as const, blockingPaymentId: null };
+      }
+      if (!stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name }).approved
+        || !stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name }).canAcceptParentPayments) {
+        return { created: false as const, reason: "payment_authority_changed" as const, blockingPaymentId: null };
+      }
+    }
+    if (authorize && !await authorize(tx)) {
+      return { created: false as const, reason: "payment_authority_changed" as const, blockingPaymentId: null };
     }
 
     const draftPayments = await tx.payment.findMany({
@@ -139,7 +169,9 @@ export async function createStripePaymentClaim({
       }, 0);
       const freshAllocation = allocateAccountCreditToInvoice({
         invoiceTotalCents: invoice.totalCents,
-        availableCreditCents: availableAccountCreditCents({
+        // Hosted one-time Checkout preserves account credit. Existing autopay
+        // and Terminal callers retain their default credit-first policy.
+        availableCreditCents: accountCreditPolicy === "preserve" ? 0 : availableAccountCreditCents({
           balanceCents: lockedAccounts[0].balanceCents,
           openInvoiceTotalCents: openInvoiceTotal._sum.totalCents ?? 0,
           reservedCreditCents,
@@ -160,7 +192,7 @@ export async function createStripePaymentClaim({
       data: { ...paymentData, billingAccountId },
     });
     return { created: true as const, payment };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
 
 type StripeSubmissionResult = {
@@ -170,7 +202,7 @@ type StripeSubmissionResult = {
 };
 
 export function isAmbiguousStripeSubmissionResult(result: StripeSubmissionResult) {
-  return !result.ok && (result.acceptanceUnknown === true || (result.providerStatus ?? 0) >= 500);
+  return !result.ok && (result.acceptanceUnknown === true || result.providerStatus === 409 || (result.providerStatus ?? 0) >= 500);
 }
 
 export async function reconcileIdempotentStripeSubmission<T extends StripeSubmissionResult>(submit: () => Promise<T>) {

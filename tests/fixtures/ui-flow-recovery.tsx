@@ -14,7 +14,7 @@ import { FamilyLedgerCard } from "../../src/components/family-ledger-card";
 import { billingSelectionKey } from "../../src/lib/billing-family-selection";
 import { parentDocumentState } from "../../src/lib/parent-document-state";
 import { prioritizeParentAttentionRecords } from "../../src/lib/parent-attention";
-import { useEffect, useState } from "react";
+import { type ComponentProps, useEffect, useState } from "react";
 import { CollapsibleCard } from "../../src/components/workspace-preferences";
 
 const query = new URLSearchParams(location.search);
@@ -93,7 +93,7 @@ function Fixture() {
 }
 
 function ParentFixture() {
-  const [currentDocuments, setCurrentDocuments] = useState(orderedDocuments);
+  const [currentDocuments, setCurrentDocuments] = useState<ComponentProps<typeof ParentPortalWorkspace>["documents"]>(orderedDocuments);
   useEffect(() => {
     function refreshDocuments(event: Event) {
       const detail = (event as CustomEvent<{ id: string; status: string }>).detail;

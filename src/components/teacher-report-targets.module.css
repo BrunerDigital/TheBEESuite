@@ -1,0 +1,115 @@
+.targets {
+  min-width: 0;
+  padding: 12px;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.count {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.picker {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  height: auto !important;
+  padding: 8px 12px;
+  gap: 8px;
+  white-space: normal;
+}
+
+.picker :global([data-slot="select-value"]) {
+  display: block;
+  min-width: 0;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: unset;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.toolbar button {
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 100%;
+  height: auto;
+  padding: 8px;
+  gap: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.targets svg,
+.options svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.options {
+  width: min(448px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+}
+
+.options :global([data-slot="select-item"]) {
+  min-height: 44px;
+  padding: 8px 36px 8px 10px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.optionText {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.recipients {
+  margin-top: 4px;
+}
+
+.recipients summary {
+  min-height: 44px;
+  padding: 10px 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.recipients summary:hover {
+  background: var(--muted);
+}
+
+.recipients ul {
+  display: grid;
+  gap: 6px;
+  padding: 4px 8px 8px 24px;
+  list-style: disc;
+  overflow-wrap: anywhere;
+}

@@ -35,6 +35,7 @@ import {
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { teacherProfileChecklistTasks } from "@/lib/setup-checklists";
 import { formatZonedDateTime, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
+import targetStyles from "./teacher-report-targets.module.css";
 
 type ChildOption = {
   id: string;
@@ -1404,65 +1405,55 @@ export function TeacherMobileWorkspace({
           contentClassName="space-y-5"
           defaultCollapsed
         >
-            <section id="teacher-quick-log" tabIndex={-1} className="scroll-mt-28 rounded-xl border bg-background/40 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                  <Users className="size-4" />
+            <section id="teacher-quick-log" tabIndex={-1} className={`${targetStyles.targets} scroll-mt-28 rounded-xl border bg-background/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}>
+              <div className={targetStyles.header}>
+                <Label htmlFor="daily-report-child" className={`${targetStyles.label} text-sm font-medium`}>
+                  <Users aria-hidden="true" />
                   Report targets
-                </div>
-                <Badge variant={activeDailyReportChildren.length ? "default" : "destructive"}>
+                </Label>
+                <Badge className={targetStyles.count} variant={activeDailyReportChildren.length ? "default" : "destructive"}>
                   {activeDailyReportChildren.length || 0} of {roster.length} selected · max {MAX_CHILDREN_PER_REPORT_BATCH}
                 </Badge>
               </div>
-              <div className="flex flex-wrap gap-1">
-                {activeDailyReportChildren.slice(0, 8).map((child) => (
-                  <button
-                    key={child.id}
-                    type="button"
-                    className="min-h-10 rounded-md border bg-card px-3 py-2 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={() => chooseChild(child.id)}
-                  >
-                    {child.fullName}
-                  </button>
-                ))}
-                {activeDailyReportChildren.length > 8 ? (
-                  <Badge variant="secondary">+{activeDailyReportChildren.length - 8}</Badge>
-                ) : null}
-              </div>
-              <div className="mt-3 space-y-1">
-                <Label htmlFor="daily-report-child">Child</Label>
-                <Select value={activeDailyReportChildIds.length === 1 ? activeDailyReportChildIds[0] : ""} onValueChange={(value) => { if (value) setDailyReportTargets([value]); }}>
-                  <SelectTrigger id="daily-report-child" className="w-full">
-                    <SelectValue placeholder="Choose a child from this class" />
+                <Select disabled={!roster.length} value={activeDailyReportChildIds.length === 1 ? activeDailyReportChildIds[0] : ""} onValueChange={(value) => { if (value) setDailyReportTargets([value]); }}>
+                  <SelectTrigger id="daily-report-child" className={targetStyles.picker}>
+                    <SelectValue placeholder="Choose one child">{activeDailyReportChildren.length === 1 ? activeDailyReportChildren[0].fullName : activeDailyReportChildren.length > 1 ? `${activeDailyReportChildren.length} children selected` : undefined}</SelectValue>
                   </SelectTrigger>
-                  <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
+                  <SelectContent align="start" className={targetStyles.options}>
                     {byClassroom.map((classroom) => (
                       <SelectGroup key={classroom.id ?? "unassigned"}>
                         <SelectLabel>{classroom.name}</SelectLabel>
                         {classroom.children.map((child) => (
-                          <SelectItem key={child.id} value={child.id}>
-                            <span className="truncate">{child.fullName}</span>
-                            <span className="text-xs text-muted-foreground">{child.ageGroup}</span>
+                          <SelectItem key={child.id} value={child.id} aria-label={`${child.fullName} · ${child.ageGroup}`}>
+                            <span className={targetStyles.optionText}>
+                              <span>{child.fullName}</span>
+                              <span className="text-xs text-muted-foreground">{child.ageGroup}</span>
+                            </span>
                           </SelectItem>
                         ))}
                       </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" size="xs" variant="outline" onClick={selectPresentDailyReports}>
+              {!roster.length ? <p className="mt-2 text-sm text-muted-foreground">No children are on your roster. Ask your school office to confirm your classroom.</p> : null}
+              <div className={targetStyles.toolbar}>
+                <Button type="button" size="xs" variant="outline" disabled={!roster.length} onClick={selectPresentDailyReports}>
                   <ClipboardCheck data-icon="inline-start" />
                   Present children
                 </Button>
-                <Button type="button" size="xs" variant="outline" onClick={() => setDailyReportTargets(roster.map((child) => child.id))}>
+                <Button type="button" size="xs" variant="outline" disabled={!roster.length} onClick={() => setDailyReportTargets(roster.map((child) => child.id))}>
                   <Users data-icon="inline-start" />
                   All visible
                 </Button>
-                <Button type="button" size="xs" variant="ghost" onClick={() => setDailyReportTargets(selectedChild?.id ? [selectedChild.id] : [])}>
-                  Selected child
-                </Button>
               </div>
+              {activeDailyReportChildren.length > 1 ? (
+                <details className={targetStyles.recipients} data-report-recipients>
+                  <summary className="rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">View selected children</summary>
+                  <ul aria-label="Selected report recipients" className="text-sm">
+                    {activeDailyReportChildren.map((child) => <li key={child.id}>{child.fullName}</li>)}
+                  </ul>
+                </details>
+              ) : null}
             </section>
 
             <section className="rounded-xl border bg-background/40 p-3">

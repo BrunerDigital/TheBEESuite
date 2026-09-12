@@ -133,8 +133,8 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
         ledgerEntries: [],
       } : {})}
       {...(scenario === "account-missing" ? { billingAccount: null } : {})}
-      {...(scenario === "account-pending" ? { paymentActivitySummary: { pendingCount: 21, provisionalCreditCents: 0 } } : {})}
-      {...(scenario === "account-ach" ? { paymentActivitySummary: { pendingCount: 1, provisionalCreditCents: 15000 } } : {})}
+      {...(scenario === "account-pending" ? { paymentActivitySummary: { pendingCount: 21, provisionalCreditCents: 0 }, accountPaymentBlocker: { count: 1, phase: "confirmation_unknown" as const, method: "card" as const, blocksInvoicePayments: false } } : {})}
+      {...(scenario === "account-ach" ? { paymentActivitySummary: { pendingCount: 1, provisionalCreditCents: 15000 }, accountPaymentBlocker: { count: 1, phase: "ach_processing" as const, method: "ach" as const, blocksInvoicePayments: true } } : {})}
       {...(scenario === "account-open" ? { attentionSummary: { openInvoiceCount: 21, unacknowledgedIncidentCount: 0 } } : {})}
       {...(scenario === "account-credit" ? { billingAccount: { ...executiveParentPortalDemo.billingAccount, balanceCents: -2500 } } : {})}
       {...(scenario === "account-review" ? { parentBalanceReviewRequired: true } : {})}

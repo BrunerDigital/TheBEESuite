@@ -109,9 +109,11 @@ test("director payment attempts explain ACH settlement without claiming zero sub
 test("parent paid-processing badges require Stripe-confirmed ACH processing", async () => {
   const source = await readFile("src/components/parent-portal-workspace.tsx", "utf8");
   assert.match(source, /function isConfirmedAchPendingPayment/);
-  assert.match(source, /status\.endsWith\("_processing"\) && stripeStatus === "processing"/);
+  assert.match(source, /return payment\?\.phase === "ach_processing"/);
   assert.match(source, /isConfirmedAchPendingPayment\(invoice\.pendingPayment\)/);
-  assert.match(source, /ACH submission is pending/);
+  const status = await readFile("src/lib/parent-payment-status.ts", "utf8");
+  assert.match(status, /isAchPaymentProcessing\(payment\) \? "ach_processing"/);
+  assert.match(status, /ACH submission is pending/);
 });
 
 test("director ACH settling count uses the complete draft payment scope", async () => {
@@ -132,5 +134,5 @@ test("parent provisional balance uses the complete active ACH set, not the recen
   const source = await readFile("src/app/[slug]/page.tsx", "utf8");
   assert.match(source, /const \[billingAccount, activeParentPaymentRows,/);
   assert.match(source, /provisionalAchCreditCents\(activeParentPaymentRows\)/);
-  assert.match(source, /for \(const payment of activeParentPaymentRows\)/);
+  assert.match(source, /parentPaymentStatus\(activeParentPaymentRows\)/);
 });

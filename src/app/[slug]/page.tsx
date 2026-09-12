@@ -140,11 +140,10 @@ import { getKidCitySoftwareInvoiceSnapshot, getSchoolSoftwareFeePolicyForCenter,
 import { countCenterBillableUsers } from "@/lib/school-software-subscriptions";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
 import {
-  activeStripeCheckoutPaymentSummary,
   isActiveStripeAutopayPayment,
-  isActiveStripeCheckoutPayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
+import { parentPaymentStatus } from "@/lib/parent-payment-status";
 import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
 import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import { activeClassroomWhere } from "@/lib/classroom-status";
@@ -2576,22 +2575,8 @@ async function renderLivePage(
       prisma.payment.findMany({
         where: {
           billingAccount: { familyId },
-          provider: "stripe",
+          provider: { in: ["stripe", "stripe_terminal"] },
           status: PaymentStatus.DRAFT,
-          OR: [
-            { customFields: { path: ["status"], equals: "checkout_created" } },
-            { customFields: { path: ["status"], equals: "checkout_pending" } },
-            { customFields: { path: ["status"], equals: "paid_processing" } },
-            { customFields: { path: ["status"], equals: "autopay_pending" } },
-            { customFields: { path: ["status"], equals: "autopay_processing" } },
-            { customFields: { path: ["status"], equals: "autopay_succeeded_pending_webhook" } },
-            { customFields: { path: ["status"], equals: "stored_method_pending" } },
-            { customFields: { path: ["status"], equals: "stored_method_processing" } },
-            { customFields: { path: ["status"], equals: "stored_method_succeeded_pending_webhook" } },
-            { customFields: { path: ["status"], equals: "director_saved_method_pending" } },
-            { customFields: { path: ["status"], equals: "director_saved_method_processing" } },
-            { customFields: { path: ["status"], equals: "director_saved_method_succeeded_pending_webhook" } },
-          ],
         },
         orderBy: [{ paidAt: "desc" }, { id: "desc" }],
         select: {
@@ -2599,7 +2584,6 @@ async function renderLivePage(
           amountCents: true,
           status: true,
           provider: true,
-          externalIdPlaceholder: true,
           customFields: true,
         },
       }),
@@ -3008,31 +2992,7 @@ async function renderLivePage(
               : "Family account payment",
       };
     });
-    const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
-    for (const payment of activeParentPaymentRows) {
-      if (
-        !isActiveStripeCheckoutPayment(payment)
-        && !isActiveStripeAutopayPayment(payment)
-        && !isAchPaymentProcessing(payment)
-      ) continue;
-      const fields = jsonRecord(payment.customFields);
-      const invoiceId = stringField(fields.invoiceId);
-      if (!invoiceId || pendingPaymentByInvoiceId.has(invoiceId)) continue;
-      const summary = activeStripeCheckoutPaymentSummary(payment);
-      pendingPaymentByInvoiceId.set(invoiceId, {
-        id: summary.id,
-        status: summary.status,
-        paymentMethodCategory: summary.paymentMethodCategory,
-        requestedPaymentMethodCategory: summary.requestedPaymentMethodCategory,
-        bankAccountVerificationMethod: summary.bankAccountVerificationMethod,
-        stripeCheckoutSessionId: summary.stripeCheckoutSessionId,
-        stripePaymentIntentId: summary.stripePaymentIntentId,
-        stripePaymentIntentStatus: summary.stripePaymentIntentStatus,
-        stripePaymentStatus: summary.stripePaymentStatus,
-        checkoutTotalCents: summary.checkoutTotalCents,
-        feeDisclosureVersion: summary.feeDisclosureVersion,
-      });
-    }
+    const { accountPaymentBlocker, byInvoiceId: pendingPaymentByInvoiceId } = parentPaymentStatus(activeParentPaymentRows);
     const parentInvoiceDocuments = new Map(invoices.map((invoice) => {
       const separated = responsibilitySeparatedBillingAmounts({
         invoiceTotalCents: invoice.totalCents,
@@ -3231,6 +3191,7 @@ async function renderLivePage(
         incidents={incidents}
         attentionSummary={{ openInvoiceCount, unacknowledgedIncidentCount }}
         paymentActivitySummary={{ pendingCount: billingAccount?._count.payments ?? 0, provisionalCreditCents: pendingAchCreditCents }}
+        accountPaymentBlocker={accountPaymentBlocker}
         messages={paymentContinuityAccess ? [] : signedMessages}
         centerName={familyCenter ? formatCenterName(familyCenter) : parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
         centerEin={familyCenter ? readSchoolEin(familyCenter.customFields) : parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}

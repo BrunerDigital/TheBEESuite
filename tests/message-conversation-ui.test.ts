@@ -96,7 +96,9 @@ test("director send and suggestion APIs enforce the same primary-school scope as
   assert.match(sendRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
   assert.match(sendRoute, /family\.centerId && messageCenterIds\.includes\(family\.centerId\)/);
   assert.doesNotMatch(sendRoute, /const hasCenterAccess = canAccessAllCenters\(user\)/);
-  assert.match(sendRoute, /children: \{ some: parentCurrentChildScope\(user\.tenantId\) \}/);
+  assert.match(sendRoute, /children: \{ some: familyChildWhere \}/);
+  assert.match(sendRoute, /classroom: \{ centerId: \{ in: messageCenterIds \}/);
+  assert.match(sendRoute, /user\.role === UserRole\.PLATFORM_OWNER \? \{\} : \{ center: \{ organization: \{ tenantId: user.tenantId \}/);
   assert.match(sendRoute, /requestedCenterIds\.some\(\(centerId\) => !messageCenterIds\.includes\(centerId\)\)/);
   assert.match(sendRoute, /centerId: \{ in: scopedCenterIds\.length \? scopedCenterIds : \["__no_authorized_center__"\] \}/);
   assert.match(suggestionsRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);

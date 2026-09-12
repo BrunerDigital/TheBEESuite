@@ -18,7 +18,7 @@ import { getParentPortalFamilyScope, getParentPortalTenantCenterIds } from "@/li
 import { parentMessageFamilyWhere } from "@/lib/parent-message-query";
 import { parentCurrentChildScope } from "@/lib/parent-document-query";
 import { createParentFamilyMessage, ParentMessageScopeChanged } from "@/lib/parent-message-commit";
-import { currentParentMessageLeadership, currentParentMessageTeacherWhere, parentMessageCenterId } from "@/lib/parent-message-recipients";
+import { currentParentMessageLeadership, currentParentMessageReplyRecipientWhere, currentParentMessageTeacherWhere, parentMessageCenterId } from "@/lib/parent-message-recipients";
 import { messageContentSafetyMetadata, screenMessageContent } from "@/lib/message-content-safety";
 import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
 import {
@@ -877,6 +877,13 @@ async function POSTHandler(request: NextRequest) {
   let family: MessageFamilyForDelivery | null = null;
   let familyCenter: MessageCenterContext | null = null;
   let familyMessageCenterId: string | null = null;
+  // Platform owners may deliberately select another tenant's authorized school.
+  // Every staff child still has to belong to the actor's current message-school scope.
+  const familyChildWhere: Prisma.ChildWhereInput = senderIsParent ? parentCurrentChildScope(user.tenantId) : {
+    ...currentlyEnrolledChildWhere(), classroom: { centerId: { in: messageCenterIds },
+      ...(user.role === UserRole.PLATFORM_OWNER ? {} : { center: { organization: { tenantId: user.tenantId } } }),
+    },
+  };
   let parentFamilyWhere: Prisma.FamilyWhereInput | null = null;
   if (senderIsParent && familyId) {
     const scope = await getParentPortalFamilyScope(user.id, user.tenantId, familyId);
@@ -885,11 +892,11 @@ async function POSTHandler(request: NextRequest) {
   }
   if (familyId) {
     family = await prisma.family.findFirst({
-      where: parentFamilyWhere ?? { id: familyId, children: { some: parentCurrentChildScope(user.tenantId) } },
+      where: parentFamilyWhere ?? { id: familyId, children: { some: familyChildWhere } },
       include: {
         guardians: { select: { userId: true, email: true, fullName: true, phone: true, preferredCommunication: true } },
         children: {
-          where: parentCurrentChildScope(user.tenantId),
+          where: familyChildWhere,
           select: {
             fullName: true,
             classroomId: true,
@@ -1110,10 +1117,10 @@ async function POSTHandler(request: NextRequest) {
     ? await prisma.user.findMany({
         where: {
           id: { in: directStaffRecipientIds },
-          tenantId: user.tenantId,
           isActive: true,
-          role: { notIn: [UserRole.PARENT_GUARDIAN, UserRole.AUTHORIZED_PICKUP] },
-          ...(senderIsParent ? currentParentMessageTeacherWhere(user.tenantId, familyId ?? "__none__", familyMessageCenterId, family?.children ?? []) : {}),
+          ...(senderIsParent
+            ? currentParentMessageReplyRecipientWhere(user.tenantId, familyId ?? "__none__", familyMessageCenterId, family?.children ?? [])
+            : { tenantId: user.tenantId, role: { notIn: [UserRole.PARENT_GUARDIAN, UserRole.AUTHORIZED_PICKUP] } }),
         },
         select: {
           id: true,

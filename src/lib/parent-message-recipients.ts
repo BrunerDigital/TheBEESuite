@@ -18,15 +18,37 @@ export function currentParentMessageTeacherWhere(tenantId: string, familyId: str
 }
 
 export async function currentParentMessageLeadership(db: PrismaClient, tenantId: string, centerId: string, excludeUserId: string, at = new Date()) {
+  const { where, grantWhere } = currentParentMessageLeadershipScope(tenantId, centerId, at);
+  const users = await db.user.findMany({ where: { ...where, id: { not: excludeUserId } },
+    select: { id: true, email: true, role: true, staffProfile: { select: { phone: true } }, accessGrants: { where: grantWhere, select: { role: true }, take: 1 } } });
+  return users.map(user => ({ id: user.id, email: user.email, role: user.accessGrants[0]?.role ?? user.role, phone: user.staffProfile?.phone ?? null }));
+}
+
+function currentParentMessageLeadershipScope(tenantId: string, centerId: string, at: Date) {
   const roles = [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR];
   const grantWhere: Prisma.UserAccessGrantWhereInput = { tenantId, centerId, scopeType: "CENTER", isActive: true, role: { in: roles },
     center: { organization: { tenantId } }, AND: [
       { OR: [{ startsAt: null }, { startsAt: { lte: at } }] },
       { OR: [{ endsAt: null }, { endsAt: { gte: at } }] },
     ] };
-  const users = await db.user.findMany({ where: { tenantId, isActive: true, id: { not: excludeUserId }, OR: [
+  const where: Prisma.UserWhereInput = { tenantId, isActive: true,
+    role: { in: [UserRole.PLATFORM_OWNER, UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER, ...roles] }, OR: [
     { accessGrants: { some: grantWhere } },
     { role: { in: roles }, staffProfile: { centerId, center: { organization: { tenantId } } } },
-  ] }, select: { id: true, email: true, role: true, staffProfile: { select: { phone: true } }, accessGrants: { where: grantWhere, select: { role: true }, take: 1 } } });
-  return users.map(user => ({ id: user.id, email: user.email, role: user.accessGrants[0]?.role ?? user.role, phone: user.staffProfile?.phone ?? null }));
+  ] };
+  return { where, grantWhere };
+}
+
+/** Only historical direct recipients are considered; this never broadcasts to all operations users.
+ * Mirrors auth.ts: active platform owners are platform-wide; current brand/regional roles are
+ * tenant-wide. A selected workspace is not a revocation of their other authorized schools.
+ */
+export function currentParentMessageReplyRecipientWhere(tenantId: string, familyId: string, centerId: string | null, children: CurrentClass[], at = new Date()): Prisma.UserWhereInput {
+  if (!centerId) return { id: "__no_confirmed_message_school__" };
+  return { isActive: true, OR: [
+    currentParentMessageTeacherWhere(tenantId, familyId, centerId, children),
+    currentParentMessageLeadershipScope(tenantId, centerId, at).where,
+    { tenantId, role: { in: [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER] } },
+    { role: UserRole.PLATFORM_OWNER },
+  ] };
 }

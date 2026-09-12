@@ -51,7 +51,7 @@ const prisma = {
 };
 mock.module("@/lib/prisma", { namedExports: { prisma } });
 mock.module("@/lib/auth", { namedExports: { async getCurrentUser() { return user?.isActive ? user : null; }, isParentGuardian(value) { return value.role === "PARENT_GUARDIAN"; },
-  canManageOperations(value) { return value.role === "CENTER_DIRECTOR"; }, canManageClassroomTasks(value) { return value.role === "TEACHER"; }, canAccessAllCenters() { return false; }, messageCenterIdsForUser() { return ["fake-school"]; } } });
+  canManageOperations(value) { return ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"].includes(value.role); }, canManageClassroomTasks(value) { return value.role === "TEACHER"; }, canAccessAllCenters() { return false; }, messageCenterIdsForUser(value) { return value.centerIds ?? ["fake-school"]; } } });
 mock.module("@/lib/supabase-storage", { namedExports: {
   contentTypeForDocumentFile(file) { return file.type; }, async uploadMessageAttachmentBuffer(input) { uploads.push(input); return { bucket: "message-files", storageKey: `message-attachments/fake-${uploads.length}`, recordUrl: "supabase://message-files/fake", signedUrl: "https://files.example.test/fake" }; },
   async deleteMessageAttachmentObject(key) { removed.push(key); }, async createMessageAttachmentSignedUrl() { throw new Error("Signing not used during send"); },
@@ -123,6 +123,35 @@ test("actual parent message sends preserve scope and canonical replies before si
     reset(); user.role = "CENTER_DIRECTOR"; assert.equal((await post({ targetMode: "broadcast" }, true)).status, 400); assert.equal(uploads.length, 0);
     reset(); user.role = "CENTER_DIRECTOR"; assert.equal((await post({ subject: "Edited staff family subject" })).status, 201); assert.equal(created[0].subject, "Edited staff family subject");
   });
+  await t.test("platform-owner family sends preserve authorized cross-tenant school scope without opening ordinary staff access", async () => {
+    reset(); user.role = "PLATFORM_OWNER"; user.id = "fake-owner"; user.tenantId = "platform-identity-tenant"; user.centerIds = ["fake-school"];
+    assert.equal((await post({ subject: "Authorized owner family message" }, true)).status, 201); assert.equal(created.length, 1); assert.equal(uploads[0].centerId, "fake-school");
+    reset(); user.role = "PLATFORM_OWNER"; user.id = "fake-owner"; user.tenantId = "platform-identity-tenant"; user.centerIds = ["another-school"];
+    assert.equal((await post({}, true)).status, 404); assert.deepEqual([uploads.length, created.length, deliveries.length], [0, 0, 0]);
+    for (const role of ["CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "BRAND_ADMIN", "REGIONAL_MANAGER", "TEACHER"]) {
+      reset(); user.role = role; user.id = "fake-other-actor"; user.tenantId = "another-tenant"; user.centerIds = ["fake-school"];
+      assert.equal((await post({}, true)).status, 404); assert.deepEqual([uploads.length, created.length, deliveries.length], [0, 0, 0]);
+    }
+  });
+  await t.test("historical operations recipients retain only their current authorized role and tenant scope", async () => {
+    for (const role of ["BRAND_ADMIN", "REGIONAL_MANAGER", "PLATFORM_OWNER"]) {
+      reset(); teacher.role = role; teacher.staffProfile = null;
+      if (role === "PLATFORM_OWNER") teacher.tenantId = "platform-identity-tenant";
+      assert.equal((await post()).status, 201); assert.deepEqual(deliveries[0].recipients.map(item => item.userId), ["fake-teacher"]);
+      reset(); teacher.role = role; teacher.isActive = false;
+      assert.equal((await post()).status, 201); assert.deepEqual(deliveries[0].recipients, []);
+    }
+    for (const role of ["BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "READ_ONLY_AUDITOR", "BILLING_ADMIN", "PARENT_GUARDIAN", "AUTHORIZED_PICKUP"]) {
+      reset(); teacher.role = role; teacher.tenantId = "foreign-tenant";
+      assert.equal((await post()).status, 201); assert.deepEqual(deliveries[0].recipients, []);
+    }
+    reset(); teacher.role = "READ_ONLY_AUDITOR";
+    assert.equal((await post()).status, 201); assert.deepEqual(deliveries[0].recipients, []);
+    reset(); teacher.role = "CENTER_DIRECTOR";
+    assert.equal((await post()).status, 201); assert.deepEqual(deliveries[0].recipients.map(item => item.userId), ["fake-teacher"]);
+    reset(); teacher.role = "CENTER_DIRECTOR"; teacher.staffProfile.centerId = "moved-school";
+    assert.equal((await post()).status, 201); assert.deepEqual(deliveries[0].recipients, []);
+  });
   await t.test("leadership notifications require current dated same-tenant school authority", async () => {
     reset();
     const grant = { tenantId: actor.tenantId, centerId: "fake-school", scopeType: "CENTER", isActive: true, role: "CENTER_DIRECTOR", startsAt: null, endsAt: null, center: { organization: { tenantId: actor.tenantId } } };
@@ -133,6 +162,8 @@ test("actual parent message sends preserve scope and canonical replies before si
       { ...leader, id: "foreign", tenantId: "foreign-tenant" },
       { ...leader, id: "wrong-school", accessGrants: [{ ...grant, centerId: "fake-other-school" }] },
       { ...leader, id: "inactive", isActive: false },
+      { ...leader, id: "downgraded-parent", role: "PARENT_GUARDIAN" },
+      { ...leader, id: "downgraded-teacher", role: "TEACHER" },
     ];
     assert.equal((await post()).status, 201);
     assert.deepEqual(deliveries[0].recipients.map(item => item.userId).sort(), ["fake-leader", "fake-teacher"]);

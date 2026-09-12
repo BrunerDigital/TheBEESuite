@@ -130,6 +130,45 @@
   backdrop-filter: none;
 }
 
+/* Keep decorative space fixed while the user's text can grow and wrap. */
+.parentChatHeader {
+  padding: 12px !important;
+}
+
+.parentChatIdentity,
+.parentChatSchool {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.parentChatSchool {
+  flex: 1;
+}
+
+.parentSchoolAvatar {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  place-items: center;
+}
+
+.parentPrivacyIcon {
+  display: grid;
+  width: 24px;
+  height: 32px;
+  flex: 0 0 24px;
+  place-items: center;
+  color: var(--muted-foreground);
+}
+
+.parentPrivacyIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
 .parentWorkspacePreview .parentTimeline {
   height: clamp(12rem, calc(100dvh - 23rem), 32rem);
 }
@@ -192,8 +231,10 @@
   position: relative;
   z-index: 2;
   display: grid;
-  gap: 0.5rem;
-  padding: 0.65rem 0.75rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid color-mix(in oklch, var(--border) 86%, var(--primary) 14%);
   background: var(--card);
   box-shadow: 0 -10px 24px color-mix(in oklch, black 5%, transparent);
@@ -201,24 +242,34 @@
 }
 
 .parentComposerRow {
-  display: flex;
+  display: grid;
   min-width: 0;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: flex-end;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .parentAttachButton,
 .parentSendButton {
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
-  min-width: 2.75rem;
-  min-height: 2.75rem;
-  flex: 0 0 2.75rem;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 44px;
+  padding: 0;
   cursor: pointer;
   place-items: center;
   border-radius: 999px;
   touch-action: manipulation;
+}
+
+.parentAttachButton svg,
+.parentSendButton svg,
+.parentReplyContext > svg,
+.parentSelectedAttachment > svg {
+  width: 20px;
+  height: 20px;
 }
 
 .parentAttachButton {
@@ -239,40 +290,63 @@
 .parentMessageInput {
   field-sizing: content;
   min-width: 0;
-  min-height: 2.75rem !important;
+  min-height: 44px !important;
   max-height: 7.5rem;
   flex: 1;
   resize: none;
   overflow-y: auto;
   border-radius: 1.4rem;
-  padding: 0.65rem 0.9rem;
+  padding: 10px 12px;
   line-height: 1.4;
 }
 
 .parentAttachmentTray {
   display: flex;
   min-width: 0;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.125rem;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 2px;
 }
 
-.parentAttachmentTray::-webkit-scrollbar {
-  display: none;
+.parentSelectedAttachment {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  flex: 0 0 auto;
+  grid-template-columns: 20px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
 }
 
 .parentReplyContext {
-  display: flex;
-  min-height: 2.75rem;
+  display: grid;
+  min-width: 0;
+  min-height: 44px;
+  grid-template-columns: 20px minmax(0, 1fr) 44px;
   align-items: center;
-  gap: 0.6rem;
+  gap: 8px;
   border-left: 3px solid var(--primary);
   border-radius: 0.75rem;
   background: color-mix(in oklch, var(--background) 72%, transparent);
-  padding: 0.35rem 0.4rem 0.35rem 0.75rem;
+  padding: 6px 8px;
+}
+
+.parentReplyContext button,
+.parentSelectedAttachment button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 44px;
+  padding: 0;
+}
+
+.parentReplyContext button svg,
+.parentSelectedAttachment button svg {
+  width: 20px;
+  height: 20px;
 }
 
 @media (max-width: 63.99rem) {
@@ -305,7 +379,7 @@
   }
 
   .parentComposer {
-    padding-bottom: 0.65rem;
+    padding-bottom: 10px;
   }
 }
 

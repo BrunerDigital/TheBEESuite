@@ -13,7 +13,12 @@ import {
   shouldNotifyLeadershipOfFamilyMessage,
   uniqueMessageNotificationUsers,
 } from "@/lib/message-notification-recipients";
-import { appendInAppMessageReplyInstructions, buildAbsoluteMessageReplyUrl } from "@/lib/message-reply-routing";
+import { appendInAppMessageReplyInstructions, buildAbsoluteMessageReplyUrl, replySubject } from "@/lib/message-reply-routing";
+import { getParentPortalFamilyScope, getParentPortalTenantCenterIds } from "@/lib/parent-portal-family-scope";
+import { parentMessageFamilyWhere } from "@/lib/parent-message-query";
+import { parentCurrentChildScope } from "@/lib/parent-document-query";
+import { createParentFamilyMessage, ParentMessageScopeChanged } from "@/lib/parent-message-commit";
+import { currentParentMessageLeadership, currentParentMessageTeacherWhere, parentMessageCenterId } from "@/lib/parent-message-recipients";
 import { messageContentSafetyMetadata, screenMessageContent } from "@/lib/message-content-safety";
 import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
 import {
@@ -31,7 +36,7 @@ import {
 } from "@/lib/notification-delivery";
 import type { NotificationPreferenceRecord } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
-import { contentTypeForDocumentFile, uploadMessageAttachmentBuffer } from "@/lib/supabase-storage";
+import { contentTypeForDocumentFile, deleteMessageAttachmentObject, uploadMessageAttachmentBuffer } from "@/lib/supabase-storage";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
 import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
@@ -871,17 +876,25 @@ async function POSTHandler(request: NextRequest) {
 
   let family: MessageFamilyForDelivery | null = null;
   let familyCenter: MessageCenterContext | null = null;
+  let familyMessageCenterId: string | null = null;
+  let parentFamilyWhere: Prisma.FamilyWhereInput | null = null;
+  if (senderIsParent && familyId) {
+    const scope = await getParentPortalFamilyScope(user.id, user.tenantId, familyId);
+    if (!scope.ok || scope.familyId !== familyId) return NextResponse.json({ ok: false, error: "This family conversation is not available to your account." }, { status: 403 });
+    parentFamilyWhere = parentMessageFamilyWhere({ familyId, userId: user.id, tenantId: user.tenantId, tenantCenterIds: await getParentPortalTenantCenterIds(user.tenantId) });
+  }
   if (familyId) {
     family = await prisma.family.findFirst({
-      where: { id: familyId, children: { some: currentlyEnrolledChildWhere() } },
+      where: parentFamilyWhere ?? { id: familyId, children: { some: parentCurrentChildScope(user.tenantId) } },
       include: {
         guardians: { select: { userId: true, email: true, fullName: true, phone: true, preferredCommunication: true } },
         children: {
+          where: parentCurrentChildScope(user.tenantId),
           select: {
             fullName: true,
             classroomId: true,
             enrollmentStatus: true,
-            classroom: { select: { name: true } },
+            classroom: { select: { name: true, centerId: true } },
           },
         },
       },
@@ -913,12 +926,29 @@ async function POSTHandler(request: NextRequest) {
     if (!accessGuard.ok) {
       return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
     }
-    familyCenter = family.centerId
+    familyMessageCenterId = parentMessageCenterId(family);
+    if (senderIsParent && !familyMessageCenterId) return NextResponse.json({ ok: false, error: "Your family's current school could not be confirmed. Contact your school office before sending this message. Your draft has not been sent." }, { status: 409 });
+    const familyContextCenterId = senderIsParent ? familyMessageCenterId : family.centerId;
+    familyCenter = familyContextCenterId
       ? await prisma.center.findUnique({
-          where: { id: family.centerId },
+          where: { id: familyContextCenterId },
           select: { name: true, email: true, phone: true },
         })
       : null;
+  }
+
+  let replyTargetMessage: { id: string; senderId: string | null; assignedToId: string | null; subject: string | null } | null = null;
+  if (replyToMessageId) {
+    replyTargetMessage = await prisma.message.findFirst({
+      where: { id: replyToMessageId, ...(familyId
+        ? { familyId, ...(parentFamilyWhere ? { family: parentFamilyWhere } : {}) }
+        : { familyId: null, threadKey: `internal:${user.primaryCenterId ?? user.tenantId}` }) },
+      select: { id: true, senderId: true, assignedToId: true, subject: true },
+    });
+    if (!replyTargetMessage) return NextResponse.json({ ok: false, error: "Reply target message is not available." }, { status: 400 });
+    if (senderIsParent && input.subject && input.subject !== replySubject(replyTargetMessage.subject)) {
+      return NextResponse.json({ ok: false, error: "The reply subject has changed. Select the message again before sending. Your draft has not been sent." }, { status: 409 });
+    }
   }
 
   let selectedTemplateCategory: string | undefined;
@@ -960,6 +990,7 @@ async function POSTHandler(request: NextRequest) {
   });
   subject = renderMessageTemplate(subject, templateContext);
   message = renderMessageTemplate(message, templateContext);
+  if (senderIsParent && replyTargetMessage) subject = replySubject(replyTargetMessage.subject);
   const renderedContentSafety = screenMessageContent(subject, message);
   if (!renderedContentSafety.allowed) {
     return NextResponse.json({
@@ -969,12 +1000,6 @@ async function POSTHandler(request: NextRequest) {
     }, { status: 422 });
   }
 
-  const currentFamilyClassroomIds = family?.children
-    .filter((child) => ["enrolled", "active", "current"].includes((child.enrollmentStatus ?? "").toLowerCase()))
-    .map((child) => child.classroomId)
-    .filter((id): id is string => Boolean(id)) ?? [];
-  const familyMessageCenterId = family?.centerId ?? family?.children.find((child) => child.classroom?.centerId)?.classroom?.centerId ?? null;
-
   if (assignedToId) {
     const assignee = await prisma.user.findFirst({
       where: {
@@ -982,17 +1007,9 @@ async function POSTHandler(request: NextRequest) {
         tenantId: user.tenantId,
         isActive: true,
         ...(senderIsParent
-          ? {
-              role: UserRole.TEACHER,
-              staffProfile: {
-                centerId: familyMessageCenterId ?? "__none__",
-                classroomId: {
-                  in: currentFamilyClassroomIds.length ? currentFamilyClassroomIds : ["__none__"],
-                },
-              },
-            }
+          ? currentParentMessageTeacherWhere(user.tenantId, familyId ?? "__none__", familyMessageCenterId, family?.children ?? [])
           : {}),
-        ...(family?.centerId && !canAccessAllCenters(user)
+        ...(!senderIsParent && family?.centerId && !canAccessAllCenters(user)
           ? {
               OR: [
                 { staffProfile: { centerId: family.centerId } },
@@ -1008,24 +1025,12 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
-  let replyTargetMessage: { id: string; senderId: string | null; assignedToId: string | null } | null = null;
-  if (replyToMessageId) {
-    const parentMessage = await prisma.message.findFirst({
-      where: { id: replyToMessageId, ...(familyId ? { familyId } : {}) },
-      select: { id: true, senderId: true, assignedToId: true },
-    });
-    if (!parentMessage) {
-      return NextResponse.json({ ok: false, error: "Reply target message is not available." }, { status: 400 });
-    }
-    replyTargetMessage = parentMessage;
-  }
-
   let attachments: StoredMessageAttachment[] = [];
   try {
     attachments = await uploadMessageAttachments({
       files: input.files,
       user,
-      centerId: family?.centerId ?? user.primaryCenterId,
+      centerId: senderIsParent ? familyMessageCenterId : family?.centerId ?? user.primaryCenterId,
       familyId,
       threadKey: familyId ? `family:${familyId}` : `internal:${user.primaryCenterId ?? user.tenantId}`,
       appReviewDemo: Boolean(appReviewKind),
@@ -1037,8 +1042,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const created = await prisma.message.create({
-    data: {
+  const messageData: Prisma.MessageUncheckedCreateInput = {
       familyId,
       senderId: user.id,
       assignedToId,
@@ -1066,15 +1070,32 @@ async function POSTHandler(request: NextRequest) {
         } : {}),
         contentSafety: messageContentSafetyMetadata(renderedContentSafety),
       }, attachments),
-    },
-  });
+  };
+  const created = await (async () => {
+    try {
+      return senderIsParent && familyId
+        ? await createParentFamilyMessage(prisma, { userId: user.id, tenantId: user.tenantId, familyId, expectedCenterId: familyMessageCenterId, data: messageData })
+        : await prisma.message.create({ data: messageData });
+    } catch (error) {
+      const knownRollback = error instanceof ParentMessageScopeChanged || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034");
+      if (!knownRollback) throw error; // Unknown commit outcome: retain recoverable attachment objects.
+      for (const attachment of attachments) {
+        if (attachment.storageKey.startsWith("inline-demo-upload")) continue;
+        try { await deleteMessageAttachmentObject(attachment.storageKey); }
+        catch { console.error("parent_message_uncommitted_attachment_cleanup_failed"); }
+      }
+      return null;
+    }
+  })();
+  if (!created) return NextResponse.json({ ok: false, error: "Your family access or reply changed while this message was being prepared. It was not sent. Refresh the conversation and try again." }, { status: 409 });
 
   const shouldNotifyLeadership = shouldNotifyLeadershipOfFamilyMessage({
     senderIsParent,
     senderRole: user.role,
   });
-  const directors = shouldNotifyLeadership && family?.centerId
-    ? await getCenterLeadershipUsers({
+  const directors = senderIsParent && familyMessageCenterId
+    ? await currentParentMessageLeadership(prisma, user.tenantId, familyMessageCenterId, user.id)
+    : shouldNotifyLeadership && family?.centerId ? await getCenterLeadershipUsers({
         centerId: family.centerId,
         excludeUserId: user.id,
         roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
@@ -1092,6 +1113,7 @@ async function POSTHandler(request: NextRequest) {
           tenantId: user.tenantId,
           isActive: true,
           role: { notIn: [UserRole.PARENT_GUARDIAN, UserRole.AUTHORIZED_PICKUP] },
+          ...(senderIsParent ? currentParentMessageTeacherWhere(user.tenantId, familyId ?? "__none__", familyMessageCenterId, family?.children ?? []) : {}),
         },
         select: {
           id: true,
@@ -1211,7 +1233,7 @@ async function POSTHandler(request: NextRequest) {
   const delivery = family && !appReviewKind
     ? await deliverNotificationExternalChannels({
         tenantId: user.tenantId,
-        centerId: family.centerId,
+        centerId: senderIsParent ? familyMessageCenterId : family.centerId,
         messageId: created.id,
         type: "messages",
         title: emailSubject,
@@ -1231,7 +1253,7 @@ async function POSTHandler(request: NextRequest) {
     : emptyDeliverySummary({ emailRequested: sendEmailCopy, smsRequested: sendSmsCopy });
 
   await writeAuditLog(user, {
-    centerId: family?.centerId ?? user.primaryCenterId,
+    centerId: senderIsParent ? familyMessageCenterId : family?.centerId ?? user.primaryCenterId,
     action: "message.created",
     resource: "Message",
     resourceId: created.id,
@@ -1256,7 +1278,7 @@ async function POSTHandler(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    message: created,
+    message: senderIsParent ? { id: created.id } : created,
     email: delivery.email,
     sms: delivery.sms,
     push: {

@@ -131,7 +131,10 @@ export function stripeCheckoutDraftClearReason(
   staleOpenAfterMs = STALE_OPEN_STRIPE_CHECKOUT_MS,
 ) {
   if (session.status === "expired" && session.paymentStatus === "unpaid"
-    && (!session.paymentIntentId || ["requires_payment_method", "canceled"].includes(session.paymentIntentStatus ?? ""))) return "expired" as const;
+    // Stripe declares an expired Session unable to process further. These
+    // unsubmitted/action-required intent states are safe to abandon, but
+    // processing, captured funds and authorization holds remain fail-closed.
+    && (!session.paymentIntentId || ["requires_payment_method", "requires_action", "requires_confirmation", "canceled"].includes(session.paymentIntentStatus ?? ""))) return "expired" as const;
   const ageMs = millisecondsSince(session.createdAt, now);
   const isStaleOpen =
     session.status === "open" &&

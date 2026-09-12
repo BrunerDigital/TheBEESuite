@@ -3,7 +3,7 @@ import test from "node:test";
 import { PaymentStatus, UserRole, type Prisma } from "@prisma/client";
 import { startInvoiceCheckout } from "@/lib/invoice-checkout-service";
 import { INVOICE_CHECKOUT_RETRY_MS, invoiceCheckoutAttemptMatches, invoiceCheckoutRequestDigest, invoiceCheckoutTenant } from "@/lib/invoice-checkout-attempt";
-import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
+import { resolveStripeCheckoutDraftBlocker, stripeCheckoutDraftClearReason } from "@/lib/stripe-checkout-drafts";
 import { stripeBillingApprovalCustomFieldPatch } from "@/lib/stripe-billing-approval";
 import type { CurrentUser } from "@/lib/auth";
 import type { IntegrationSendResult, StripeCheckoutSessionSnapshot } from "@/lib/integrations";
@@ -375,4 +375,51 @@ test("legacy known session with expanded unpaid intent can expire and be replace
   }) });
   assert.equal(result.ok, true); assert.equal(f.state.payments.length, 2); assert.equal(f.state.payments[0].status, PaymentStatus.VOID);
   assert.equal(f.checkoutCalls.length, 2); assert.notEqual(f.checkoutCalls[0].idempotencyKey, f.checkoutCalls[1].idempotencyKey);
+});
+
+for (const intentStatus of ["requires_action", "requires_confirmation"]) {
+  test(`provider-expired unpaid ${intentStatus} can be replaced after verified identity without an extra expiry call`, async () => {
+    const f = fixture(); await startInvoiceCheckout(f.base); f.setClock(new Date(instant.getTime() + INVOICE_CHECKOUT_RETRY_MS + 1000));
+    const result = await startInvoiceCheckout({ ...f.base, resolveDraft: args => resolveStripeCheckoutDraftBlocker({ ...args,
+      retrieve: async () => {
+        const original = f.session(), raw = original.raw as Record<string, unknown>;
+        return { ok: true, configured: true, provider: "stripe", session: { ...original, status: "expired", url: null,
+          paymentIntentId: "pi_fake", paymentIntentStatus: intentStatus, raw: { ...raw, payment_intent: {
+            id: "pi_fake", object: "payment_intent", status: intentStatus, currency: "usd", amount: 10000, customer: "cus_fake", metadata: raw.metadata } } } };
+      }, expire: async () => { throw new Error("An already-expired Session must not be expired again"); },
+    }) });
+    assert.equal(result.ok, true); assert.equal(f.state.payments[0].status, PaymentStatus.VOID);
+    assert.equal(f.state.payments[0].customFields.staleDraftClearReason, "expired"); assert.equal(f.state.payments.length, 2);
+    assert.equal(f.checkoutCalls.length, 2); assert.notEqual(f.checkoutCalls[0].idempotencyKey, f.checkoutCalls[1].idempotencyKey);
+  });
+}
+
+for (const intentStatus of ["processing", "succeeded", "requires_capture", "unexpected_provider_state", null]) {
+  test(`expired Session cannot release ${intentStatus ?? "unknown"} intent state`, () => {
+    const session: StripeCheckoutSessionSnapshot = { id: "cs_fake", status: "expired", paymentStatus: "unpaid", paymentIntentId: "pi_fake", paymentIntentStatus: intentStatus };
+    assert.equal(stripeCheckoutDraftClearReason(session), null);
+  });
+}
+
+test("action-required recovery is restricted to provider-expired unpaid Sessions", () => {
+  for (const status of ["open", "complete", null]) for (const intent of ["requires_action", "requires_confirmation"]) {
+    assert.equal(stripeCheckoutDraftClearReason({ id: "cs_fake", status, paymentStatus: "unpaid", paymentIntentId: "pi_fake", paymentIntentStatus: intent, createdAt: "2000-01-01" }), null);
+  }
+  for (const paymentStatus of ["paid", "no_payment_required", null]) {
+    assert.equal(stripeCheckoutDraftClearReason({ id: "cs_fake", status: "expired", paymentStatus, paymentIntentId: "pi_fake", paymentIntentStatus: "requires_action" }), null);
+  }
+});
+
+test("expired action-required recovery cannot overwrite a late paid webhook", async () => {
+  const f = fixture(); await startInvoiceCheckout(f.base);
+  const result = await startInvoiceCheckout({ ...f.base, resolveDraft: args => resolveStripeCheckoutDraftBlocker({ ...args,
+    retrieve: async () => {
+      f.state.payments[0].status = PaymentStatus.PAID; f.state.payments[0].customFields.status = "paid";
+      const original = f.session(), raw = original.raw as Record<string, unknown>;
+      return { ok: true, configured: true, provider: "stripe", session: { ...original, status: "expired", paymentIntentId: "pi_fake", paymentIntentStatus: "requires_action",
+        raw: { ...raw, payment_intent: { id: "pi_fake", object: "payment_intent", status: "requires_action", currency: "usd", amount: 10000, customer: "cus_fake", metadata: raw.metadata } } } };
+    },
+  }) });
+  assert.equal(result.ok, false); assert.equal(f.state.payments[0].status, PaymentStatus.PAID); assert.equal(f.state.payments.length, 1);
+  assert.equal(f.checkoutCalls.length, 1);
 });

@@ -9,6 +9,8 @@ import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { isInternalSignatureRequest as requiresDocumentSignature, isParentDocumentSubmissionReceipt, optimisticParentDocumentIds, parentDocumentState, parentDocumentStatusLabel } from "@/lib/parent-document-state";
 import type { RecordPagination } from "@/lib/record-pagination";
 import { remainingParentIncidentCount } from "@/lib/parent-attention";
+import { canCompactParentAccount } from "@/lib/parent-home-account";
+import { activeItemScrollDelta } from "@/lib/horizontal-active-item";
 import { InvoicePrintButton, PaymentReceiptPrintButton } from "@/components/billing-print-actions";
 import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 import {
@@ -388,6 +390,7 @@ type Props = {
   dailyReports: DailyReport[];
   incidents: Incident[];
   attentionSummary?: { openInvoiceCount: number; unacknowledgedIncidentCount: number };
+  paymentActivitySummary?: { pendingCount: number; provisionalCreditCents: number };
   messages: Array<{
     id: string;
     subject: string | null;
@@ -765,6 +768,7 @@ export function ParentPortalWorkspace(props: Props) {
 
 function ParentPortalWorkspaceView({
   attentionSummary,
+  paymentActivitySummary,
   activeView = "home",
   familySection,
   family,
@@ -818,13 +822,29 @@ function ParentPortalWorkspaceView({
     formatTimeInTimeZone(value, timeZone);
   const router = useRouter();
   const activeFamilySection = normalizeParentFamilySection(familySection);
+  const familySectionNavRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (activeView !== "family") return;
-    const activeSection = document.querySelector(
-      "#parent-family-section-nav [aria-current='page']",
-    );
-    activeSection?.scrollIntoView({ block: "nearest", inline: "center" });
+    const nav = familySectionNavRef.current;
+    if (!nav) return;
+    let frame = 0;
+    const alignActiveSection = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const activeSection = nav.querySelector("[aria-current='page']");
+        if (!activeSection) return;
+        const box = nav.getBoundingClientRect();
+        const left = box.left + nav.clientLeft;
+        const delta = activeItemScrollDelta({ left, right: left + nav.clientWidth }, activeSection.getBoundingClientRect());
+        if (Math.abs(delta) > 1) nav.scrollLeft += delta;
+      });
+    };
+    const observer = new ResizeObserver(alignActiveSection);
+    observer.observe(nav);
+    nav.querySelectorAll("a").forEach((link) => observer.observe(link));
+    alignActiveSection();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [activeFamilySection, activeView]);
   const activeViewCopy = parentViewCopy[activeView];
   const previewHrefBase = previewMode
@@ -1182,6 +1202,17 @@ function ParentPortalWorkspaceView({
     (incident) => !incident.parentAcknowledgedAt && !acknowledgedIncidentIds.has(incident.id),
   );
   const openInvoiceCount = attentionSummary?.openInvoiceCount ?? openInvoices.length;
+  const compactHomeAccount = canCompactParentAccount({
+    billingAccount,
+    openInvoiceCount: attentionSummary?.openInvoiceCount,
+    paymentActivity: paymentActivitySummary,
+    bankVerificationPending,
+    autopayPending: autopayStatus === "pending",
+    responsibilityReview: parentBalanceReviewRequired,
+    reauthorizationRequired: paymentMethodReauthorizationRequired,
+    transitionActive: paymentTransitionActive,
+    paymentContinuityAccess,
+  });
   const unacknowledgedIncidentCount = attentionSummary ? remainingParentIncidentCount(attentionSummary.unacknowledgedIncidentCount, incidents, acknowledgedIncidentIds) : incidentsNeedingReceipt.length;
   const homeAttentionCount =
     documentActionCount +
@@ -2108,7 +2139,7 @@ function ParentPortalWorkspaceView({
           aria-label="Family sections"
           className="-mt-2 border-b border-border/80"
         >
-          <div id="parent-family-section-nav" className="flex max-w-full snap-x gap-2 overflow-x-auto pb-2 sm:gap-6 sm:pb-0 md:grid md:grid-cols-3 md:overflow-visible xl:grid-cols-6">
+          <div ref={familySectionNavRef} id="parent-family-section-nav" className="flex max-w-full snap-x gap-2 overflow-x-auto pb-2 sm:gap-6 sm:pb-0 md:grid md:grid-cols-3 md:overflow-visible xl:grid-cols-6">
             {(
               [
                 ["children", "Children"],
@@ -2129,7 +2160,7 @@ function ParentPortalWorkspaceView({
                 aria-current={
                   activeFamilySection === section ? "page" : undefined
                 }
-                className={`relative flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 md:min-w-0 md:justify-center md:text-center ${activeFamilySection === section ? "border-primary/40 bg-primary/10 text-foreground sm:border-primary sm:bg-transparent" : "border-border/70 bg-card/70 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground sm:border-transparent sm:bg-transparent sm:hover:bg-transparent"}`}
+                className={`relative flex min-h-11 min-w-0 max-w-full shrink-0 snap-start items-center whitespace-normal break-words rounded-full border px-4 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 md:justify-center md:text-center ${activeFamilySection === section ? "border-primary/40 bg-primary/10 text-foreground sm:border-primary sm:bg-transparent" : "border-border/70 bg-card/70 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground sm:border-transparent sm:bg-transparent sm:hover:bg-transparent"}`}
               >
                 {label}
               </ParentPortalDocumentLink>
@@ -2350,20 +2381,38 @@ function ParentPortalWorkspaceView({
             <section
               id="parent-home-account"
               className="overflow-hidden rounded-[1.5rem] border bg-card p-4 sm:p-6"
+              data-compact-account={compactHomeAccount ? "true" : "false"}
               aria-labelledby="parent-home-account-heading"
             >
+              {compactHomeAccount ? (
+                <ParentPortalDocumentLink
+                  href={workspaceHref("payments", { familyId: family.id })}
+                  className="flex min-h-11 min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span data-account-icon className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <CreditCard className="size-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 id="parent-home-account-heading" className="text-base font-semibold">Account &amp; payments</h2>
+                    <span className="mt-1 block text-sm tabular-nums">{money(balanceCents)} currently due</span>
+                    <span className="mt-1 block text-sm font-medium text-primary">View Payment Details</span>
+                  </div>
+                  <ArrowRight data-account-chevron className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                </ParentPortalDocumentLink>
+              ) : <>
               <div className="flex items-center gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <span data-account-icon className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                   <CreditCard className="size-5" aria-hidden="true" />
                 </span>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Family account</p>
+                <div className="min-w-0">
                   <h2 id="parent-home-account-heading" className="text-lg font-semibold">
                     Account &amp; Payments
                   </h2>
                 </div>
               </div>
-              {parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? (
+              {!billingAccount ? (
+                <p className="mt-3 text-sm text-muted-foreground">Account details are not available yet. Contact your school if you need help.</p>
+              ) : parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? (
                 <div className="mt-5 rounded-2xl border border-amber-400/35 bg-amber-400/10 p-4">
                   <p className="font-semibold">Balance review in progress</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -2372,7 +2421,7 @@ function ParentPortalWorkspaceView({
                 </div>
               ) : balanceCents === 0 ? (
                 <p className="mt-3 flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                  <span className="text-muted-foreground">Your family balance is current.</span>
+                  <span className="text-muted-foreground">Currently due</span>
                   <span className="font-semibold tabular-nums">{money(balanceCents)}</span>
                 </p>
               ) : (
@@ -2387,27 +2436,29 @@ function ParentPortalWorkspaceView({
                         : "Review invoices and choose a payment method."
                       : balanceCents < 0
                         ? "This account has a family credit."
-                        : "Your family balance is current."}
+                        : "Currently due"}
                   </p>
                 </div>
               )}
               <ParentPortalDocumentLink
                 href={workspaceHref("payments", { familyId: family.id })}
+                data-slot="button"
                 className={buttonVariants({
                   variant: balanceCents > 0 && !checkoutBlocked ? "default" : "outline",
                   className: "mt-4 w-full min-h-12",
                 })}
               >
-                {balanceCents > 0 && !checkoutBlocked ? "Review & Pay" : "View Payment Details"}
+                <span className="min-w-0 break-words">{balanceCents > 0 && !checkoutBlocked ? "Review & Pay" : "View Payment Details"}</span>
                 <ArrowRight data-icon="inline-end" aria-hidden="true" />
               </ParentPortalDocumentLink>
-              <p className="mt-3 text-xs text-muted-foreground">
+              {billingAccount ? <p className="mt-3 text-xs text-muted-foreground">
                 {openInvoiceCount
                   ? `${openInvoiceCount} open invoice${openInvoiceCount === 1 ? "" : "s"}`
                   : latestAccountLedgerEntry
                     ? `Latest activity ${formatDate(latestAccountLedgerEntry.effectiveAt)}`
                     : "No open invoices"}
-              </p>
+              </p> : null}
+              </>}
             </section>
 
             <section

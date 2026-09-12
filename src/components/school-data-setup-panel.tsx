@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import {
   assessSchoolDataSetup,
   schoolDataImportVerificationRevision,
@@ -118,6 +119,7 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
     || sourceSystem !== saved.sourceSystem
     || noCurrentFamiliesExpected !== saved.noCurrentFamiliesExpected
     || notes !== saved.notes;
+  useUnsavedChangesGuard(hasUnsavedChanges, "This school data setup has unsaved changes. Discard them and leave this page?");
   const selectedPath = path || null;
   const steps = selectedPath === "import_existing" ? importSteps : cleanStartSteps;
   const localAssessment = assessSchoolDataSetup({
@@ -139,6 +141,12 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
   const pathProgress = Math.round((completeStepCount / 4) * 100);
   const latestBatch = data.evidence.latestImportBatch;
   const latestFleetVerification = data.evidence.latestFleetVerification;
+  const recommendedPath = !data.setup.path && latestBatch ? "import_existing" as const : null;
+  const recommendedSourceSystem = latestBatch?.sourceAdapter === "bee_flat_file_v1"
+    ? "other" as const
+    : latestBatch?.sourceAdapter === "procare"
+      ? "procare" as const
+      : null;
   const latestFleetVerificationIsCurrent = Boolean(
     latestBatch
     && data.evidence.importTargetFingerprint
@@ -147,13 +155,6 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
     && latestFleetVerification.targetDataFingerprint === data.evidence.importTargetFingerprint,
   );
   const activeSteps = selectedPath ? steps : [];
-
-  useEffect(() => {
-    if (!hasUnsavedChanges) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     if (
@@ -201,6 +202,7 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
       setSourceSystem("");
     } else {
       setNoCurrentFamiliesExpected(false);
+      if (!sourceSystem && recommendedSourceSystem) setSourceSystem(recommendedSourceSystem);
     }
   }
 
@@ -337,6 +339,7 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
         {pathOptions.map((option) => {
           const Icon = option.icon;
           const selected = path === option.value;
+          const recommended = recommendedPath === option.value;
           return (
             <button
               key={option.value}
@@ -354,7 +357,10 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
                   <Icon aria-hidden="true" className="size-5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block font-semibold">{option.title}</span>
+                  <span className="flex flex-wrap items-center gap-2 font-semibold">
+                    {option.title}
+                    {recommended ? <Badge variant="secondary">Detected from existing import</Badge> : null}
+                  </span>
                   <span className="mt-1 block text-sm leading-5 text-muted-foreground">{option.description}</span>
                 </span>
                 {selected ? <CheckCircle2 aria-hidden="true" className="ml-auto size-5 shrink-0 text-primary" /> : null}
@@ -363,6 +369,12 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
           );
         })}
       </div>
+
+      {recommendedPath && !path ? (
+        <div role="status" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-sm leading-5 text-muted-foreground">
+          Existing import evidence was found for this school. Choose Move Existing Records to use the detected source and continue its guarded review.
+        </div>
+      ) : null}
 
       {selectedPath ? (
         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
@@ -513,9 +525,14 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
       ) : null}
 
       <div className="mt-5 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:flex-wrap">
-        <Button type="button" onClick={() => persist(false)} disabled={isPending || !data.centerId || !hasUnsavedChanges}>
+        <Button
+          type="button"
+          variant={localAssessment.canConfirm && hasUnsavedChanges ? "outline" : "default"}
+          onClick={() => persist(false)}
+          disabled={isPending || !data.centerId || !hasUnsavedChanges}
+        >
           {isPending ? <Loader2 aria-hidden="true" data-icon="inline-start" className="animate-spin motion-reduce:animate-none" /> : <Save aria-hidden="true" data-icon="inline-start" />}
-          Save Starting Point
+          {localAssessment.canConfirm && hasUnsavedChanges ? "Save for later" : "Save Starting Point"}
         </Button>
         {selectedPath === "import_existing" ? (
           hasUnsavedChanges ? (
@@ -546,8 +563,9 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
           </Button>
         ) : null}
         {localAssessment.canConfirm && !localAssessment.confirmationCurrent ? (
-          <Button type="button" onClick={() => persist(true)} disabled={!attested || hasUnsavedChanges || isPending}>
-            <ShieldCheck aria-hidden="true" data-icon="inline-start" /> Confirm Data Review
+          <Button type="button" onClick={() => persist(true)} disabled={!data.centerId || !attested || isPending}>
+            <ShieldCheck aria-hidden="true" data-icon="inline-start" />
+            {hasUnsavedChanges ? "Save & Confirm Data Review" : "Confirm Data Review"}
           </Button>
         ) : null}
         {!localAssessment.confirmationCurrent ? (

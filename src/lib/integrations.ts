@@ -40,7 +40,7 @@ export type EmailAttachment = {
   disposition?: "attachment" | "inline";
 };
 
-const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION || "2026-07-29.dahlia";
+export const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION || "2026-07-29.dahlia";
 const STRIPE_ACCOUNTS_V2_API_VERSION = process.env.STRIPE_ACCOUNTS_V2_API_VERSION || STRIPE_API_VERSION;
 const STRIPE_CONNECTED_ACCOUNT_INCLUDES = ["configuration.merchant", "configuration.recipient", "configuration.customer", "defaults", "requirements"];
 const STRIPE_ACCOUNT_LINK_CONFIGURATION_KEYS = ["customer", "merchant", "recipient"] as const;
@@ -417,6 +417,12 @@ function isInvalidPaymentMethodTypeError(json: unknown) {
     message.includes("no valid payment method types") ||
     (message.includes("must activate") && message.includes("payment method")) ||
     (message.includes("payment method") && message.includes("compatible"));
+}
+
+function isStripeIdempotencyConflict(json: unknown) {
+  const error = asRecord(asRecord(json).error);
+  return clean(error.type) === "idempotency_error" || clean(error.code).startsWith("idempotency_")
+    || /idempoten/i.test(clean(error.message));
 }
 
 export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMethodCategory: StripePaymentMethodCategory) {
@@ -890,6 +896,7 @@ export async function createStripeCheckoutSession({
   paymentMethodCategory = "default",
   bankAccountVerificationMethod,
   idempotencyKey,
+  allowPaymentMethodFallback = true,
   checkoutBranding,
   tenantId,
   credentials,
@@ -911,6 +918,7 @@ export async function createStripeCheckoutSession({
   bankAccountVerificationMethod?: StripeBankAccountVerificationMethod | null;
   onBehalfOfConnectedAccount?: boolean;
   idempotencyKey?: string | null;
+  allowPaymentMethodFallback?: boolean;
   checkoutBranding?: StripeCheckoutBranding | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
@@ -1032,27 +1040,30 @@ export async function createStripeCheckoutSession({
     error?: { message?: string; param?: string };
   } | null = null;
 
-  for (const paymentMethodMode of paymentMethodModes) {
+  for (const paymentMethodMode of allowPaymentMethodFallback ? paymentMethodModes : paymentMethodModes.slice(0, 1)) {
     ({ response, json } = await createSession(buildBody(paymentMethodMode), paymentMethodMode));
     if (response.ok && json?.url) break;
-    if (paymentMethodMode === "configuration" && (isMissingPaymentMethodConfigurationError(json) || isInvalidPaymentMethodTypeError(json))) continue;
-    if (paymentMethodMode === "payment_method_types" && isInvalidPaymentMethodTypeError(json)) continue;
+    // A different mode has a different key. Only a definitive validation
+    // rejection permits it; ambiguous acceptance must retry the original key.
+    if (response.status === 400 && !isStripeIdempotencyConflict(json) && paymentMethodMode === "configuration" && (isMissingPaymentMethodConfigurationError(json) || isInvalidPaymentMethodTypeError(json))) continue;
+    if (response.status === 400 && !isStripeIdempotencyConflict(json) && paymentMethodMode === "payment_method_types" && isInvalidPaymentMethodTypeError(json)) continue;
     break;
   }
 
-  if (!response || !response.ok || !json?.url) {
+  if (!response || !response.ok || !json?.url || !json?.id?.startsWith("cs_")) {
     const status = response?.status ?? 500;
     return {
       ok: false,
       configured: true,
       provider: "stripe",
       providerStatus: status,
-      acceptanceUnknown: status >= 500,
+      acceptanceUnknown: status >= 500 || status === 409 || Boolean(response?.ok) || isStripeIdempotencyConflict(json),
       error: json?.error?.message || `Payment processor returned ${status}.`,
     };
   }
   if (!isSecurePaymentUrl(json.url)) {
-    return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure checkout URL." };
+    return { ok: false, configured: true, provider: "stripe", providerStatus: response.status, acceptanceUnknown: true,
+      error: "Payment processor returned an insecure checkout URL." };
   }
 
   return {
@@ -1167,7 +1178,7 @@ export async function expireStripeCheckoutSession({
   const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(cleanSessionId)}/expire`, {
     method: "POST",
     headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
-    body: new URLSearchParams(),
+    body: new URLSearchParams({ "expand[]": "payment_intent" }),
     signal: AbortSignal.timeout(10_000),
   });
   const json = await response.json().catch(() => null) as Record<string, unknown> | null;
@@ -1722,11 +1733,13 @@ export async function createStripeCustomer({
   });
   const json = await response.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
 
-  if (!response.ok || !json?.id) {
+  if (!response.ok || !json?.id?.startsWith("cus_")) {
     return {
       ok: false,
       configured: true,
       provider: "stripe",
+      providerStatus: response.status,
+      acceptanceUnknown: response.status >= 500 || response.status === 409 || response.ok || isStripeIdempotencyConflict(json),
       error: json?.error?.message || `Payment processor returned ${response.status}.`,
     };
   }

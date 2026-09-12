@@ -16,7 +16,9 @@ test("Stripe provider requests omit reserved App Review email fields", async () 
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     bodies.push(String(init?.body ?? ""));
-    const response = url.endsWith("/payment_intents")
+    const response = url.endsWith("/customers")
+      ? { id: `cus_test_${bodies.length}` }
+      : url.endsWith("/payment_intents")
       ? { id: `pi_test_${bodies.length}`, amount: 1_000, status: "succeeded" }
       : { id: `cs_test_${bodies.length}`, url: "https://checkout.stripe.test/session" };
     return new Response(JSON.stringify(response), {

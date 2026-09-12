@@ -100,14 +100,17 @@ test("public payment request routes hide provider details without changing respo
   );
 
   assert.match(checkoutRoute, /PARENT_PAYMENT_UNAVAILABLE_MESSAGE/);
-  assert.equal(checkoutRoute.match(/paymentServiceError\(/g)?.length, 10);
+  const checkoutService = readFileSync("src/lib/invoice-checkout-service.ts", "utf8");
+  assert.match(checkoutRoute, /startInvoiceCheckout\(/);
   assert.match(checkoutRoute, /configured:\s*false/);
   assert.match(checkoutRoute, /configured:\s*accountStatus\.configured/);
-  assert.match(checkoutRoute, /configured:\s*customer\.configured/);
-  assert.match(checkoutRoute, /configured:\s*session\.configured/);
-  assert.match(checkoutRoute, /status:\s*"checkout_session_reused"/);
-  assert.match(checkoutRoute, /paymentId:\s*payment\.id/);
-  assert.match(checkoutRoute, /stripeSessionId:\s*session\.id/);
+  assert.match(checkoutService, /configured:\s*session\.configured/);
+  assert.match(checkoutService, /status:\s*"checkout_session_reused"/);
+  assert.match(checkoutService, /paymentId:\s*payment\.id/);
+  assert.match(checkoutService, /stripeSessionId:\s*session\.id/);
+  assert.doesNotMatch(checkoutService, /error:\s*(?:session|customer|response\.value)\.error\b/);
+  assert.match(checkoutService, /statusCode: 503, status: "confirmation_pending"/);
+  assert.match(checkoutRoute, /const \{ statusCode, \.\.\.response \} = result/);
   assert.match(checkoutRoute, /feeDisclosure:\s*PAYMENT_PROCESSING_RECOVERY_DISCLOSURE/);
   assert.match(checkoutRoute, /feeDisclosureVersion:\s*PAYMENT_PROCESSING_RECOVERY_VERSION/);
 });

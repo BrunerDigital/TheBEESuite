@@ -692,7 +692,10 @@ async function POSTHandler(request: NextRequest) {
 
   const activeFamilyCheckout = draftStripePayments.find((item) => {
     const fields = jsonRecord(item.customFields);
-    return isActiveStripeCheckoutPayment(item) && fields.paymentScope === "family_balance";
+    // Unknown submissions without a Session must reach the existing
+    // same-Payment/key reconciliation below, not the Session-only resolver.
+    return isActiveStripeCheckoutPayment(item) && fields.paymentScope === "family_balance"
+      && (!isStripeSubmissionUnknownPayment(item) || Boolean(activeStripeCheckoutPaymentSummary(item).stripeCheckoutSessionId));
   });
   if (activeFamilyCheckout) {
     const blocker = await resolveStripeCheckoutDraftBlocker({

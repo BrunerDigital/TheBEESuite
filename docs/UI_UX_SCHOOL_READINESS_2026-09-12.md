@@ -1,6 +1,15 @@
 # School UI and workflow readiness — September 12, 2026
 
-## Current verified release
+## Current verified release — refreshed September 12, 16:54 UTC
+
+- Latest verified production commit: `04a0526d96daddb87c1d91daae7a4304e35cb474`, protected PR #361. Vercel `dpl_CqPJK6sRXuooarTPCzRJQ9jaxucS` Ready on all five canonical aliases; health/database connected at 16:36:06 UTC; build errors and scoped post-release error/fatal/5xx logs empty.
+- Fresh, strictly guarded Parent/Teacher fake-account production checks completed at 16:36:06 UTC: 20 navigation cases plus profile, document, report-control, home, layout, shortcut, unsent-history and 52 parent-fit checks. Zero product writes or HTTP/page errors. Evidence: `output/playwright/app-review-production-after-pr361/results.json`.
+- Subsequent completed waves since the original #352 baseline: directory/teacher-recipient draft safety (#355); billing editor drafts (#356); parent document history/signature safety (#357); teacher profile recovery (#358); automation draft/history safety (#359); compact quiet parent Home and wrapping family navigation (#360); semantic native private-message privacy declarations (#361). Each release has its own current evidence document.
+- Exact-main unsigned native run `34705460891` succeeded for commit `04a0526d96daddb87c1d91daae7a4304e35cb474`. Detailed reviewed PR native artifacts in `IOS_PRIVACY_MANIFEST_RECONCILIATION_2026-09-12.md` prove source-matching Parent/Teacher manifests, device/simulator Release builds and public launches. This is not signing, authenticated-native, physical-device, archive, TestFlight or Store evidence.
+- Active unreleased wave: shared invoice Checkout claim/retry/tenant safety (`INVOICE_CHECKOUT_SAFETY_2026-09-12.md`). Next actionable UI work: accurate parent pending-payment summaries, older reports/photos/message continuation, remaining small-phone administrative chrome and dormant product-order retry integrity. These are not human-only dependencies.
+- Broader management-role production verification remains limited by the invalid saved credentials for the nine general synthetic QA roles. Reserved App Review Parent/Teacher accounts work. No account was reset and no school was activated.
+
+### Earlier verified release #352 (historical)
 
 - PR #352 merged through required checks/review conversations at `7e36706cd4526c3f656c109ab23b696f0db86a32`.
 - Production deployment `dpl_HhnvhBkv2aJiAuLsXZi9dMAHNCFm` is Ready on `thebeesuite.io`, `www.thebeesuite.io`, `the-bee-suite-beta.vercel.app`, `the-bee-suite-brunerdigital.vercel.app`, and the main-branch alias. Build/deployment completed September 12 at 03:52:30 UTC.
@@ -26,18 +35,18 @@ This is an active completion record, not a claim that all schools are activated 
 
 | Area / role flow | Built | Correct configuration / scope | Local tests / browser | Production | iOS device | External gate |
 | --- | --- | --- | --- | --- | --- | --- |
-| Parent/guardian home and compact primary navigation | Yes | Recheck | Pending | Pending | Pending | Signed device |
-| Teacher roster and daily task navigation | Yes | Recheck | Pending | Pending | Pending | Signed device |
-| Director / assistant / executive next-action links | Yes; query defect found | Recheck selected context | Pending | Pending | N/A | None for code |
-| FTE school/week deep links and historical review | Yes; explorer/editor mismatch found | Fail-closed target fix needed | Pending | Pending | N/A | No report mutations authorized |
-| Auditor read-only reporting controls | Yes; editable UI found | API denial exists; UI must match | Pending | Pending | N/A | None for code |
-| Parent incident acknowledgment feedback | Yes; stale UI found | Preserve family boundary | Pending | Pending | Pending | No real acknowledgments |
-| Parent reply drafts and earlier announcements | Yes; draft/visibility defects found | Preserve recipients and data | Pending | Pending | Pending | No real messages |
-| Teacher profile/photo network recovery | Yes; rejection gaps found | Retain drafts; uncertain upload must not imply failure | Pending | Pending | Pending | No identity or real media changes |
-| Older parent reports/documents/messages/media | Yes; silent caps found | Bounded family-scoped continuation needed | Pending | Pending | Pending | None for read-only code |
-| Shared search and navigation state | Yes | Recheck stale responses and scope | Pending | Pending | N/A | None for code |
-| Billing and administrative recovery/draft safety | Yes | Separate financial outcome from transport failure | Pending | Pending | N/A | No charges/refunds/provider changes |
-| Authorized pickup and restricted/expired access | Yes | Fail closed | Pending | Pending | Pending | No access changes |
+| Parent/guardian home and compact primary navigation | Yes; #360 | Preserved scoped Family/Payments destinations | Chromium/WebKit, 320/390/768 and 100/200% text | Guarded fake Home/fit verified #361 | Pending | Signed device |
+| Teacher roster and daily task navigation | Yes; #355/#358 | Assigned-classroom and report-recipient safeguards retained | Focused tests and fake browser flows | Guarded fake navigation/controls/profile verified #361 | Pending | Signed device |
+| Director / assistant / executive next-action links | Yes; #352 | Correct destinations and selected context tested | Fake-role browser flows | Management-role auth pending | N/A | Secure working QA credentials |
+| FTE school/week deep links and historical review | Yes; #352 | Fail-closed readable/writable scope and exact historical targets | Focused/fake-browser checks passed | Management-role auth pending | N/A | No real report mutations performed |
+| Auditor read-only reporting controls | Yes; #352 | UI matches API write restrictions | Focused/fake-browser checks passed | Auditor auth pending | N/A | Secure working QA credentials |
+| Parent incident acknowledgment feedback | Yes; #352 | Family boundary preserved; successful receipt immediate | Intercepted fake write tested | Navigation only; no real acknowledgments | Pending | No real acknowledgments performed |
+| Parent reply drafts and earlier announcements | Yes; #352/#359 | Recipient context and unsent navigation guarded | Fake attachment/confirmation/history tests | Unsent-message history cancellation verified #361 | Pending | No real messages performed |
+| Teacher profile/photo network recovery | Yes; #358 | Uncertain result preserves draft; duplicate attempt protected | Fake transport and draft browser checks | Read-only fake profile UX verified #361 | Pending | Physical camera/upload verification |
+| Older parent reports/documents/messages/media | Documents completed #357; other caps still actionable | Family-scoped document continuation verified; other readers need work | Document-focused and fake browser checks passed | Documents verified #361; others pending | Pending | None for remaining read-only code |
+| Shared search and navigation state | Directory/disclosure/history fixes released | Context/later-response guards tested | Fake multi-role browser tests | Parent/Teacher links verified; management auth pending | N/A | Secure working QA credentials |
+| Billing and administrative recovery/draft safety | #356/#359 released; invoice Checkout wave active | Separate outcomes and preserve actor/school/date context | Fake Chromium/WebKit edit/history checks | Management-role auth pending; no live money operations | N/A | No charges/refunds/provider changes performed |
+| Authorized pickup and restricted/expired access | Built; guards retained | Fail-closed unit/source checks | Focused denial checks; wider fake auth pending | General pickup/inactive QA pending | Pending | Secure working QA credentials |
 | School onboarding / data setup | Separate PR #351 plus active follow-up | Preserve concurrent work | Not changed here | Baseline Ready | N/A | School rollout separate |
 
 ## Verification and release contract

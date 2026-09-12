@@ -12,6 +12,12 @@ import { isClosedEnrollmentStatus, isCurrentlyEnrolledStatus } from "@/lib/enrol
 import { prisma } from "@/lib/prisma";
 import { isActiveProcareEnrollmentStatus } from "@/lib/procare-import-fields";
 import { databaseUrlEnvNames, hasDatabaseConfig, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
+import {
+  normalizeSchoolBusinessProfile,
+  readSchoolBusinessProfileConfirmation,
+  schoolBusinessProfileFieldLabel,
+} from "@/lib/school-business-profile";
+import { readSchoolDataSetup, type SchoolDataSetup } from "@/lib/school-data-setup";
 import { readSchoolEin } from "@/lib/school-tax-id";
 import { isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
@@ -42,6 +48,9 @@ export type CenterRolloutGap = {
     ownerGroupId: string | null;
     ownerGroupName: string | null;
     taxIdConfigured: boolean;
+    businessProfileConfirmed: boolean;
+    schoolDataPath: SchoolDataSetup["path"];
+    intentionalEmptyStartConfirmed: boolean;
   };
   classroomCount: number;
   staffCount: number;
@@ -196,6 +205,25 @@ export function selectSchoolIds(candidates: SchoolSelectorCandidate[], selectors
 
 export function needsCurrentClassroomAssignment(child: { enrollmentStatus: string; classroomId: string | null }) {
   return isCurrentlyEnrolledStatus(child.enrollmentStatus) && !child.classroomId;
+}
+
+export function isConfirmedIntentionalEmptySchoolStart(input: {
+  setup: SchoolDataSetup;
+  familyCount: number;
+  childCount: number;
+  guardianCount: number;
+}) {
+  const confirmation = input.setup.reviewConfirmation;
+  return input.familyCount === 0
+    && input.childCount === 0
+    && input.guardianCount === 0
+    && input.setup.path === "start_clean"
+    && input.setup.noCurrentFamiliesExpected
+    && confirmation?.path === "start_clean"
+    && confirmation.noCurrentFamiliesExpected === true
+    && confirmation.familyCount === 0
+    && confirmation.childCount === 0
+    && confirmation.guardianCount === 0;
 }
 
 function jsonRecord(value: unknown): Record<string, unknown> {
@@ -527,9 +555,13 @@ async function main() {
         crmLocationId: true,
         locationId: true,
         address: true,
+        city: true,
+        state: true,
+        postalCode: true,
         phone: true,
         email: true,
         timezone: true,
+        licensedCapacity: true,
         organizationId: true,
         ownerGroupId: true,
         customFields: true,
@@ -665,21 +697,31 @@ async function main() {
     const guardianPinCount = guardianPinCountByCenter.get(center.id) ?? 0;
     const authorizedPickupCount = authorizedPickupCountByCenter.get(center.id) ?? 0;
     const directorAccessCount = directorAccessCountByCenter.get(center.id) ?? 0;
+    const businessProfile = normalizeSchoolBusinessProfile(center);
+    const businessProfileConfirmation = readSchoolBusinessProfileConfirmation(center.customFields, businessProfile);
+    const schoolDataSetup = readSchoolDataSetup(center.customFields);
+    const intentionalEmptyStartConfirmed = isConfirmedIntentionalEmptySchoolStart({
+      setup: schoolDataSetup,
+      familyCount,
+      childCount,
+      guardianCount,
+    });
     const setupGaps: string[] = [];
 
-    if (!center.address) setupGaps.push("missing school address");
-    if (!center.phone) setupGaps.push("missing school phone");
-    if (!center.email) setupGaps.push("missing school notification email");
-    if (!center.timezone) setupGaps.push("missing school timezone");
+    if (!businessProfileConfirmation.complete) {
+      setupGaps.push(`school business profile is missing ${businessProfileConfirmation.missingFields.map(schoolBusinessProfileFieldLabel).join(", ")}`);
+    } else if (!businessProfileConfirmation.confirmationCurrent) {
+      setupGaps.push("school business profile is awaiting explicit confirmation");
+    }
     if (!center.locationId && !center.crmLocationId) setupGaps.push("missing school/CRM location ID");
     if (!center.ownerGroupId) setupGaps.push("missing owner group");
     if (!readSchoolEin(center.customFields)) setupGaps.push("school EIN/tax receipt details are not configured");
     if (classroomCount === 0) setupGaps.push("no classrooms");
     if (staffCount === 0) setupGaps.push("no staff/teacher profiles");
-    if (familyCount === 0) setupGaps.push("no imported families");
-    if (childCount === 0) setupGaps.push("no imported children");
+    if (familyCount === 0 && !intentionalEmptyStartConfirmed) setupGaps.push("no family records or confirmed intentional empty start");
+    if (childCount === 0 && !intentionalEmptyStartConfirmed) setupGaps.push("no child records or confirmed intentional empty start");
     if (childrenWithoutClassroomCount > 0) setupGaps.push(`${childrenWithoutClassroomCount} currently enrolled child(ren) without classroom assignment`);
-    if (guardianCount === 0) setupGaps.push("no guardian records");
+    if (guardianCount === 0 && !intentionalEmptyStartConfirmed) setupGaps.push("no guardian records or confirmed intentional empty start");
     if (directorAccessCount === 0) setupGaps.push("no center director/billing access grant");
 
     const operationalActivationGaps = setupGaps.filter((gap) => gap !== "school EIN/tax receipt details are not configured");
@@ -722,6 +764,9 @@ async function main() {
         ownerGroupId: center.ownerGroupId,
         ownerGroupName: center.ownerGroup?.name ?? null,
         taxIdConfigured: Boolean(readSchoolEin(center.customFields)),
+        businessProfileConfirmed: businessProfileConfirmation.confirmationCurrent,
+        schoolDataPath: schoolDataSetup.path,
+        intentionalEmptyStartConfirmed,
       },
       classroomCount,
       staffCount,

@@ -26,12 +26,12 @@ const workflows: Record<(typeof SYNTHETIC_ROLE_QA_ACCOUNTS)[number]["key"], read
     { id: "reporting", href: "/analytics" },
   ],
   director: [
+    { id: "setup", href: "/billing-settings?view=setup" },
     { id: "classrooms", href: "/classroom-dashboard" },
-    { id: "enrollment", href: "/crm-leads" },
   ],
   assistant: [
+    { id: "setup", href: "/billing-settings?view=setup" },
     { id: "classrooms", href: "/classroom-dashboard" },
-    { id: "enrollment", href: "/crm-leads" },
   ],
   billing: [
     { id: "invoices", href: "/billing-invoices" },

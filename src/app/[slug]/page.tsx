@@ -230,6 +230,11 @@ import {
   readSchoolDataSetup,
 } from "@/lib/school-data-setup";
 import { loadSchoolDataReviewEvidence } from "@/lib/school-data-setup-server";
+import {
+  normalizeSchoolBusinessProfile,
+  readSchoolBusinessProfileConfirmation,
+  schoolBusinessProfileFieldLabel,
+} from "@/lib/school-business-profile";
 import { stripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
 import { terminalStoreEnabled, terminalStoreReturnState } from "@/lib/feature-availability";
@@ -1158,6 +1163,21 @@ async function renderLivePage(
     } = schoolDataEvidence;
     const schoolDataSetup = selectedCenter ? readSchoolDataSetup(selectedCenter.customFields) : readSchoolDataSetup({});
     const schoolDataAssessment = assessSchoolDataSetup(schoolDataSetup, schoolDataEvidence);
+    const selectedSchoolBusinessProfile = normalizeSchoolBusinessProfile({
+      name: selectedCenter?.name ?? "",
+      address: selectedCenter?.address ?? "",
+      city: selectedCenter?.city ?? "",
+      state: selectedCenter?.state ?? "",
+      postalCode: selectedCenter?.postalCode ?? "",
+      phone: selectedCenter?.phone ?? "",
+      email: selectedCenter?.email ?? "",
+      timezone: selectedCenter?.timezone ?? "",
+      licensedCapacity: selectedCenter?.licensedCapacity ?? 0,
+    });
+    const businessProfileConfirmation = readSchoolBusinessProfileConfirmation(
+      selectedCenter?.customFields,
+      selectedSchoolBusinessProfile,
+    );
     const confirmedEmptyCleanStart = schoolDataSetup.path === "start_clean"
       && schoolDataSetup.noCurrentFamiliesExpected
       && schoolDataAssessment.confirmationCurrent
@@ -1186,21 +1206,13 @@ async function renderLivePage(
       requiredActions: string[];
     }> = {
       schoolProfileSetup: {
-        recordReady: Boolean(
-          selectedCenter?.name
-          && selectedCenter?.address
-          && selectedCenter?.city
-          && selectedCenter?.email
-          && selectedCenter?.state
-          && selectedCenter?.postalCode
-          && selectedCenter?.phone
-          && selectedCenter?.timezone
-          && selectedCenter.licensedCapacity > 0
-          && manualComplete("schoolProfile")
-          && !setupValue("schoolProfile").toLocaleLowerCase("en-US").includes("needs confirmation"),
-        ),
+        recordReady: businessProfileConfirmation.confirmationCurrent,
         evidence: selectedCenter
-          ? `${selectedCenter.status} school record · ${selectedCenter.licensedCapacity} licensed capacity · ${selectedCenter.email || "missing email"}`
+          ? businessProfileConfirmation.confirmationCurrent
+            ? `${selectedCenter.status} school record · profile confirmed · ${selectedCenter.licensedCapacity} licensed capacity`
+            : businessProfileConfirmation.complete
+              ? `${selectedCenter.status} school record · all business fields are ready for school confirmation`
+              : `${selectedCenter.status} school record · missing ${businessProfileConfirmation.missingFields.map(schoolBusinessProfileFieldLabel).join(", ")}`
           : "No school record is visible for this login.",
         metrics: [
           `Status: ${selectedCenter?.status ?? "No school"}`,
@@ -1210,7 +1222,9 @@ async function renderLivePage(
           `Licensed capacity: ${selectedCenter?.licensedCapacity ?? 0}`,
           `Contact email: ${selectedCenter?.email ?? "Missing"}`,
         ],
-        requiredActions: ["Confirm school contact details, operating hours, timezone, launch owner, and target go-live date."],
+        requiredActions: businessProfileConfirmation.confirmationCurrent
+          ? ["The saved business profile is confirmed. Reconfirm only if these location details change."]
+          : ["Review the prefilled school profile, correct anything needed, and select Save & confirm school profile."],
       },
       classroomSetup: {
         recordReady: classroomCount > 0 && incompleteClassroomCount === 0 && Boolean(selectedCenter?.licensedCapacity),
@@ -1389,19 +1403,26 @@ async function renderLivePage(
       lastCapturedAt: formatSavedAt(schoolSetup.capturedAt, readCenterLocationTimeZone(selectedCenter)),
       schoolEin: selectedCenter ? readSchoolEin(selectedCenter.customFields) : null,
       businessProfile: {
-        name: selectedCenter?.name ?? "",
-        address: selectedCenter?.address ?? "",
-        city: selectedCenter?.city ?? "",
-        state: selectedCenter?.state ?? "",
-        postalCode: selectedCenter?.postalCode ?? "",
-        phone: selectedCenter?.phone ?? "",
-        email: selectedCenter?.email ?? "",
-        timezone: selectedCenter?.timezone ?? "",
-        licensedCapacity: selectedCenter?.licensedCapacity ? String(selectedCenter.licensedCapacity) : "",
+        name: selectedSchoolBusinessProfile.name,
+        address: selectedSchoolBusinessProfile.address,
+        city: selectedSchoolBusinessProfile.city,
+        state: selectedSchoolBusinessProfile.state,
+        postalCode: selectedSchoolBusinessProfile.postalCode,
+        phone: selectedSchoolBusinessProfile.phone,
+        email: selectedSchoolBusinessProfile.email,
+        timezone: selectedSchoolBusinessProfile.timezone,
+        licensedCapacity: selectedSchoolBusinessProfile.licensedCapacity > 0 ? String(selectedSchoolBusinessProfile.licensedCapacity) : "",
+      },
+      businessProfileConfirmation: {
+        complete: businessProfileConfirmation.complete,
+        confirmationCurrent: businessProfileConfirmation.confirmationCurrent,
+        missingFields: businessProfileConfirmation.missingFields.map(schoolBusinessProfileFieldLabel),
+        confirmedAt: businessProfileConfirmation.confirmedAt,
+        confirmedByEmail: businessProfileConfirmation.confirmedByEmail,
       },
       stats: [
         { label: "Classrooms", value: String(classroomCount), detail: `${selectedCenter?.licensedCapacity ?? 0} licensed capacity` },
-        { label: "People imported", value: `${familyCount}/${childCount}/${guardianCount}`, detail: "Families / children / guardians" },
+        { label: "Family records", value: `${familyCount}/${childCount}/${guardianCount}`, detail: "Families / children / guardians" },
         { label: "Staff readiness", value: String(staffCount), detail: `${staffScheduleCount} schedule rows` },
         { label: "Billing records", value: String(billingAccountCount), detail: `${tuitionPlanCount} plans · ${invoiceCount} invoices` },
         { label: "Documents", value: String(documentCount), detail: `${formCount} active forms` },

@@ -79,6 +79,11 @@ function BillingFixture() {
 }
 
 function Fixture() {
+  useEffect(() => {
+    // Signal after the component tree and its initial preference effects mount.
+    const frame = requestAnimationFrame(() => { document.documentElement.dataset.fixtureReady = "true"; });
+    return () => { cancelAnimationFrame(frame); delete document.documentElement.dataset.fixtureReady; };
+  }, []);
   if (view === "shortcuts") return <>
     <nav aria-label="Fake task shortcuts"><a href="#fake-task-a">First fake task</a><a href="#fake-task-b">Next fake task</a></nav>
     <CollapsibleCard id="fake-task-a" title="First fake task" defaultCollapsed><input aria-label="First fake input" /></CollapsibleCard>
@@ -88,7 +93,7 @@ function Fixture() {
   if (view === "team") return <TeamPermissionsPage data={team} />;
   if (view === "fte") return <FteReportForm centers={query.get("single-school") ? centers.filter((center) => center.id === "b") : centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" allowCenterSelect={!query.get("director")} mode={query.get("director") ? "director" : "executive"} />;
   if (view === "fte-reader") return <FteReportExplorer centers={centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" canEdit={false} />;
-  if (view === "teacher") return <TeacherMobileWorkspace teacherName="Fake Teacher" roster={teacherRoster} teacherProfile={{ name: "Fake Teacher", loginEmail: "teacher@example.com", contactEmail: "teacher@example.com", phone: "", title: "Teacher", centerId: "fake-center", centerName: "Fake School", classroomId: "fake-room", hasStaffKioskCode: true }} classroomOptions={[{ id: "fake-room", name: "Fake Classroom", ageGroup: "Preschool" }]} />;
+  if (view === "teacher") return <><a href="?view=home">Leave fake teacher</a><TeacherMobileWorkspace teacherName="Fake Teacher" roster={teacherRoster} teacherProfile={{ id: "fake-teacher", name: "Fake Teacher", loginEmail: "teacher@example.com", contactEmail: "teacher@example.com", phone: "", title: "Teacher", centerId: "fake-center", centerName: "Fake School", classroomId: "fake-room", hasStaffKioskCode: true }} classroomOptions={[{ id: "fake-room", name: "Fake Classroom", ageGroup: "Preschool" }]} /></>;
   return <ParentFixture />;
 }
 

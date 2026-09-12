@@ -9,6 +9,30 @@ export type TeacherProfileSetupInput = {
   staffKioskPin: string | null;
 };
 
+export type TeacherProfileDraft = { name: string; contactEmail: string; phone: string; title: string; classroomId: string; staffKioskPin: string };
+export type TeacherProfileReceipt = Omit<TeacherProfileSetupInput, "staffKioskPin"> & { id: string; centerId: string; hasStaffKioskCode: boolean };
+
+export function teacherProfileDraftSignature(draft: TeacherProfileDraft) {
+  return JSON.stringify([draft.name, draft.contactEmail, draft.phone, draft.title, draft.classroomId, draft.staffKioskPin]);
+}
+
+export function teacherProfileDraftFromReceipt(profile: TeacherProfileReceipt): TeacherProfileDraft {
+  return { name: profile.name, contactEmail: profile.contactEmail ?? "", phone: profile.phone ?? "", title: profile.title, classroomId: profile.classroomId ?? "none", staffKioskPin: "" };
+}
+
+/** A successful HTTP response is not proof that this exact profile was saved. */
+export function readTeacherProfileSaveReceipt(value: unknown, expected: { profileId: string | null; centerId: string; retainedClassroomId: string | null; input: TeacherProfileSetupInput }): TeacherProfileReceipt | null {
+  const response = asRecord(value), profile = asRecord(response.profile);
+  if (response.ok !== true || response.mode !== (expected.profileId ? "updated" : "created")
+    || typeof profile.id !== "string" || !profile.id.trim() || (expected.profileId && profile.id !== expected.profileId)
+    || profile.centerId !== expected.centerId || typeof profile.hasStaffKioskCode !== "boolean"
+    || (expected.input.staffKioskPin && !profile.hasStaffKioskCode)) return null;
+  const input = expected.input;
+  if (profile.name !== input.name || profile.title !== input.title || profile.contactEmail !== input.contactEmail || profile.phone !== input.phone
+    || profile.classroomId !== (input.classroomId ?? expected.retainedClassroomId)) return null;
+  return { id: profile.id, centerId: expected.centerId, name: input.name, title: input.title, contactEmail: input.contactEmail, phone: input.phone, classroomId: input.classroomId ?? expected.retainedClassroomId, hasStaffKioskCode: profile.hasStaffKioskCode };
+}
+
 type NormalizeOptions = {
   allowedClassroomIds?: string[];
 };
@@ -42,7 +66,8 @@ export function normalizeTeacherProfileSetupPayload(body: unknown, options: Norm
   const phone = cleanNullable(input.phone, 40);
   const title = clean(input.title, 80) || "Teacher";
   const classroomId = cleanNullable(input.classroomId, 80);
-  const staffKioskPin = cleanNullable(input.staffKioskPin, 4);
+  // Validate the whole code; truncation would silently save a different PIN.
+  const staffKioskPin = typeof input.staffKioskPin === "string" ? input.staffKioskPin.trim() || null : null;
 
   if (!name) {
     return { ok: false as const, error: "Teacher name is required." };
@@ -50,7 +75,7 @@ export function normalizeTeacherProfileSetupPayload(body: unknown, options: Norm
   if (contactEmail && !validEmail(contactEmail)) {
     return { ok: false as const, error: "Enter a valid contact email." };
   }
-  if (staffKioskPin && !/^\d{4}$/.test(staffKioskPin)) {
+  if ((input.staffKioskPin != null && typeof input.staffKioskPin !== "string") || (staffKioskPin && !/^\d{4}$/.test(staffKioskPin))) {
     return { ok: false as const, error: "Staff kiosk code must be exactly 4 digits." };
   }
   if (classroomId && options.allowedClassroomIds && !options.allowedClassroomIds.includes(classroomId)) {

@@ -3270,7 +3270,7 @@ async function renderLivePage(
   if (slug === "teacher-portal") {
     const staffProfile = await prisma.staffProfile.findUnique({
       where: { userId: user.id },
-      select: { centerId: true, classroomId: true, title: true, phone: true, customFields: true },
+      select: { id: true, centerId: true, classroomId: true, title: true, phone: true, customFields: true },
     });
     const teacherProfileCenterId = staffProfile?.centerId ?? user.primaryCenterId ?? centers[0]?.id ?? null;
     const teacherCenter = teacherProfileCenterId
@@ -3399,6 +3399,7 @@ async function renderLivePage(
         teacherName={userViewText(user.name)}
         appReviewMode={verifiedAppReviewKind === "teacher"}
         teacherProfile={{
+          id: staffProfile?.id ?? null,
           name: userViewText(user.name),
           loginEmail: user.email,
           contactEmail: staffProfile ? readStaffContactEmail(staffProfile.customFields) : null,

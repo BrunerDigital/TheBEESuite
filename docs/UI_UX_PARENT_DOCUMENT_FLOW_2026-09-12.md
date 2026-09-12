@@ -1,5 +1,15 @@
 # Parent home and document flow — September 12, 2026
 
+## Current production verification
+
+PR #357 merged through protected checks at `b9478b66a32da4114eda1bc0dddb7c2167d4b249` on September 12 at 14:45:43 UTC. Final candidate `ec7b3559` passed Prisma generation, lint, TypeScript, all **2,011 tests**, the optimized Next build, CodeQL, CI run `34699970228`, and Vercel preview. Both static native readiness checks passed.
+
+Production `dpl_5A8nSzKQeHg4Ed91PULnhqEKnM74` became Ready at 14:48:52.510 UTC with all five canonical/project aliases. The canonical health endpoint returned HTTP 200, `ok: true`, and `database: connected` at 14:49:43.337 UTC. www and beta redirect to the canonical domain; the project/main Vercel aliases retain their existing SSO protection. Build-log error inspection and the post-flow runtime error/fatal query were empty.
+
+Fresh same-run reserved-account fake-scope proof passed at 14:49:52.240 UTC. Guarded production verification completed 14:51:03.577 UTC: 20 navigation cases, four document groups, eight 320/390px normal/enlarged layouts, four home attention/order checks, six teacher keyboard shortcut transitions, and two teacher report-control groups. Exactly two login requests and 25 session heartbeats were allowed; zero product writes, blocked attempts, HTTP errors, page exceptions, or horizontal overflow. Evidence: `output/playwright/app-review-production-after-pr357/results.json` and 35 fake-only screenshots.
+
+The live fake parent has one current child and three approved documents, with no required documents, open invoices, or unacknowledged incidents. Pending submissions and histories beyond 20 rows are therefore local-fixture evidence only. No signed/native authenticated device or store submission is claimed. One non-blocking follow-up remains: changing text size after loading can scroll the active family subsection tab out of view; bottom navigation remains usable. Older parent report/photo/message history and teacher profile safety are separate ongoing waves.
+
 ## Current baseline before changes
 
 Started on isolated branch `work/parent-document-home-flow-20260912` from current `origin/main` (`d4b12d49`) and incorporated the validated billing candidate `c7422731`. That candidate is protected PR #356; it must be merged and deployment state reconciled before this wave releases. Unrelated main-checkout work is untouched.
@@ -16,7 +26,7 @@ The current production fake-parent home was visually inspected from `output/play
 
 No production records, signatures, messages, family access, or school configuration are changed during implementation or QA. Older report/message/media continuation remains a separate follow-up. This wave now also corrects the bounded-list attention-count defects described below.
 
-## Implemented; release validation in progress
+## Implemented scope
 
 - Parent shortcuts precede the sibling list. Required actions precede today’s children; a quiet “caught up” panel follows them. Family subviews use specific headings, and the duplicate Home header button is hidden only while mobile bottom navigation is available.
 - Required documents lead stable, counted 20-record pages; every page is reachable. An exact linked document outside the current page is separately scoped and loaded, never replaced with another document. Missing links show a recovery state. Submitted work says “Awaiting school review,” with replacement optional; complete records never reopen because of a legacy signature marker.
@@ -32,6 +42,6 @@ No production records, signatures, messages, family access, or school configurat
 - Focused scope/status/paging/submission/attention/navigation tests pass, including real API module mocks proving transactional rollback and exact receipts. The localhost real-component recovery harness passes with 20 intercepted fake writes and zero backend/provider requests. It includes a deterministic delayed-frame focus regression, 25+ document histories, explicit unavailable targets, unsent draft cancellation, malformed success receipts, and older invoice/incident actions.
 - The first full gate reached 2,009 tests with four stale source assertions (old labels/authorization shapes). Each was updated to assert the new behavior and retained or stronger scope requirements; the affected 38 tests pass. No rule or gate was disabled.
 - Fresh post-resume source verification under `output/playwright/parent-document-source-localhost/` passes 48 Chromium plus 48 WebKit density cases, eight document cases, eight message cases, two deterministic focus cases, and eight document-geometry cases. Both engines verify 246px fields, a 114px submit button, and an unbroken Documents heading at 320px/200% text. There were zero backend/provider requests, layout overflows, or client errors. The restarted Next development server must use its matching `localhost:3224` origin; earlier 127.0.0.1 HMR failures were environmental and are not passing evidence.
-- A full-gate retry caught an overly narrow inferred union in the fake-document fixture state. The fixture now explicitly uses the real component's document prop type; production types and rules were not weakened. The complete gate then passed all 2,010 tests and the optimized Next build. PR review identified the known-rollback upload cleanup follow-up; dedicated transport/API mocks now distinguish rollback, cleanup failure, and lost commit receipts. The full gate is rerunning on that final patch before PR #357 can merge.
+- A full-gate retry caught an overly narrow inferred union in the fake-document fixture state. The fixture now explicitly uses the real component's document prop type; production types and rules were not weakened. The complete gate then passed all 2,010 tests and the optimized Next build. PR review identified the known-rollback upload cleanup follow-up; dedicated transport/API mocks now distinguish rollback, cleanup failure, and lost commit receipts. The final patch passed all 2,011 tests and the complete production gate before PR #357 merged.
 - Static `mobile:store:check` passes both apps. This web wave does not establish signing, archive, physical-device, authenticated-native, TestFlight, or submission approval.
-- Prior PR #356 is merged as `0698eda6` and Ready with healthy production checks; its exact evidence is in `UI_UX_BILLING_TARGET_SAFETY_2026-09-12.md`. Wave4 production release remains pending until its own full gate and protected workflow complete.
+- Prior PR #356 is merged as `0698eda6` and Ready with healthy production checks; its exact evidence is in `UI_UX_BILLING_TARGET_SAFETY_2026-09-12.md`. This parent wave is now also merged and live; the current verified release facts are recorded at the top of this document.

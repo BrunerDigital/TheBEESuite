@@ -12,7 +12,7 @@
 
 Code, fake-component navigation, and mocked requests only. No charges, refunds, invoices, ledger entries, enrollment, roles, identities, or provider settings will be changed. Explicit unresolved targets must show a recovery state until a user deliberately selects a valid authorized family. No fallback to a different family is acceptable for a requested exact ID.
 
-## Implemented; protected release pending
+## Implemented and released through PR #356
 
 - Exact family/school links never substitute a different account in the workbench or terminal. Exact child links are also exact-or-unselected. Terminal and ledger remount for a changed URL selection using collision-safe keys.
 - Capped eligible family lists receive only an exact authorized, still-eligible supplement through the identical Prisma predicate and selector. Settled historical accounts use existing authorized ledger-account metadata, including accounts with no entries; they never mount the writable workbench or terminal. Historical invoice links preserve their original account and status filter. A separate current-family suggestion remains an explicit action, not an identity substitution.
@@ -35,3 +35,11 @@ The final `npm run vercel-build` passed Prisma generation, lint, typecheck, all 
 PR #355 was merged and production-verified before this wave: `40c48a9a`, Ready `dpl_73M8wfzhCChdcktnrJF4RxHGJC3Z`, healthy database, 20 navigation and two teacher-control checks, zero product writes. It was incorporated by ordinary merge `4d747bc4`. General billing-role authenticated production verification still needs working credentials in the secure local environment; no password reset or role change is inferred.
 
 Current official reference: [Stripe server-driven Terminal collection](https://docs.stripe.com/terminal/payments/collect-card-payment?terminal-sdk-platform=server-driven), checked September 12, 2026. Reader acknowledgement is asynchronous and is not itself proof of a completed payment. This wave changes local targeting/feedback, not Stripe API versions, payment intents, webhooks, or provider configuration.
+
+### Final release evidence
+
+- PR #356 passed protected checks (CI `34674178053`, CodeQL `34674177596`), then squash-merged candidate `c74227318b059121319b5bc0484623df6e1ac864` as main `0698eda62d6eab286e6d128037a2dacfc7cf4533` at 04:57:10 UTC on September 12.
+- Production `dpl_HRXNJGDx5wHC2n3vzjDawBRPSsdB` is Ready on that exact main commit at 05:00:01.308 UTC. All five expected aliases are assigned; canonical `thebeesuite.io` is public, www/beta redirect there, and generated project/branch aliases remain Vercel SSO-protected.
+- Canonical health at 05:02:31.549 UTC returned HTTP 200, `ok:true`, `database:connected`. Deployment-scoped error/fatal and 5xx queries through 05:05:09 returned no entries; build review found no failure.
+- Fresh isolated fake-review scope proof at 05:03:49 preceded 20/20 Parent/Teacher navigation checks and two teacher-control checks at phone/desktop sizes. Zero page/HTTP errors, overflow, or product writes; only two login and twelve session-heartbeat POSTs. Sanitized evidence is `output/playwright/app-review-production-after-pr356/results.json` with 22 screenshots.
+- Billing-specific production authentication remains **not verified** because the existing general role-QA credentials are invalid. Local targeting, draft, and financial-receipt tests are not a substitute for that remaining authenticated production check. No passwords or roles were changed.

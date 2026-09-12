@@ -1,17 +1,11 @@
 import { createHash } from "node:crypto";
 
-export const INTERNAL_SIGNATURE_PENDING_KEY = "internal_signature_pending";
-export const LEGACY_SIGNATURE_PROVIDER_PENDING_KEY = "signature_provider_pending";
+export { INTERNAL_SIGNATURE_PENDING_KEY, LEGACY_SIGNATURE_PROVIDER_PENDING_KEY, isInternalSignatureRequest } from "./parent-document-state";
 export const SIGNATURE_CONSENT_TEXT =
   "I agree that typing my name and submitting this document is my electronic signature for this school record.";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
-}
-
-export function isInternalSignatureRequest(record: { storageKey?: string | null }) {
-  const storageKey = clean(record.storageKey).toLowerCase();
-  return storageKey === INTERNAL_SIGNATURE_PENDING_KEY || storageKey === LEGACY_SIGNATURE_PROVIDER_PENDING_KEY;
 }
 
 export function normalizeSignatureName(value: unknown) {

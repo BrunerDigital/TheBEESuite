@@ -5,6 +5,10 @@ import type { ComponentPropsWithoutRef, Dispatch, SetStateAction } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
+import { isInternalSignatureRequest as requiresDocumentSignature, isParentDocumentSubmissionReceipt, optimisticParentDocumentIds, parentDocumentState, parentDocumentStatusLabel } from "@/lib/parent-document-state";
+import type { RecordPagination } from "@/lib/record-pagination";
+import { remainingParentIncidentCount } from "@/lib/parent-attention";
 import { InvoicePrintButton, PaymentReceiptPrintButton } from "@/components/billing-print-actions";
 import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 import {
@@ -332,6 +336,15 @@ const parentViewCopy: Record<
   },
 };
 
+const parentFamilySectionTitles: Record<ParentPortalFamilySection, string> = {
+  children: "Children",
+  "check-in": "School check-in",
+  documents: "Documents",
+  billing: "Billing settings",
+  profile: "Profile & security",
+  notifications: "Notifications & privacy",
+};
+
 type Props = {
   activeView?: ParentPortalView;
   familySection?: string;
@@ -374,6 +387,7 @@ type Props = {
   };
   dailyReports: DailyReport[];
   incidents: Incident[];
+  attentionSummary?: { openInvoiceCount: number; unacknowledgedIncidentCount: number };
   messages: Array<{
     id: string;
     subject: string | null;
@@ -394,6 +408,11 @@ type Props = {
     storageKey?: string | null;
     downloadUrl?: string | null;
   }>;
+  documentPagination?: RecordPagination;
+  documentSummary?: { total: number; actionRequired: number; firstRequired: { id: string; name: string; status: string } | null };
+  linkedDocument?: Props["documents"][number] | null;
+  requestedDocumentId?: string;
+  requestedDocumentUnavailable?: boolean;
   media?: ParentMedia[];
   announcements?: Array<{
     id: string;
@@ -442,11 +461,6 @@ const defaultNotificationPreferences: NotificationPreferences = {
   announcements: true,
 };
 
-const signaturePendingStorageKeys = new Set([
-  "internal_signature_pending",
-  "signature_provider_pending",
-]);
-
 const fallbackCheckoutReadiness: StripeCheckoutReadiness = {
   accountId: null,
   chargesEnabled: true,
@@ -472,12 +486,6 @@ const fallbackCheckoutReadiness: StripeCheckoutReadiness = {
 // for an approved school-level rollout hold.
 const parentPortalDocumentsEnabled =
   process.env.NEXT_PUBLIC_PARENT_PORTAL_DOCUMENTS_ENABLED !== "0";
-
-function requiresDocumentSignature(document: { storageKey?: string | null }) {
-  return signaturePendingStorageKeys.has(
-    (document.storageKey || "").trim().toLowerCase(),
-  );
-}
 
 function formatDateInTimeZone(value: string | Date | null, timeZone: string) {
   return formatZonedDateTime(value, timeZone, {
@@ -756,6 +764,7 @@ export function ParentPortalWorkspace(props: Props) {
 }
 
 function ParentPortalWorkspaceView({
+  attentionSummary,
   activeView = "home",
   familySection,
   family,
@@ -778,6 +787,11 @@ function ParentPortalWorkspaceView({
   incidents,
   messages,
   documents,
+  documentPagination,
+  documentSummary,
+  linkedDocument = null,
+  requestedDocumentId,
+  requestedDocumentUnavailable = false,
   media = [],
   announcements = [],
   uniformProducts = [],
@@ -855,6 +869,7 @@ function ParentPortalWorkspaceView({
     Record<string, File | null>
   >({});
   const [visibleDocumentCount, setVisibleDocumentCount] = useState(5);
+  const [submittedDocumentSnapshots, setSubmittedDocumentSnapshots] = useState<ReadonlyMap<string, Props["documents"][number]>>(() => new Map());
   const [signatureAcknowledgements, setSignatureAcknowledgements] = useState<
     Record<string, boolean>
   >({});
@@ -902,6 +917,10 @@ function ParentPortalWorkspaceView({
     useState("");
   const [paymentCheckoutError, setPaymentCheckoutError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const hasUnsentPortalDraft = Boolean(message.trim() || messageAttachments.length || requestDetails.trim() || requestName.trim() || requestPhone.trim() || requestRelation.trim()
+    || Object.values(documentNotes).some((note) => note.trim()) || Object.values(documentFiles).some(Boolean)
+    || Object.values(signatureNames).some((name) => name.trim()) || Object.values(signatureAcknowledgements).some(Boolean));
+  useUnsavedChangesGuard(hasUnsentPortalDraft, "You have an unsent message, document, or contact request. Discard this draft and leave the page?");
   const passwordLengthReady = newPassword.length >= 8;
   const passwordsMatch =
     Boolean(confirmPassword) && newPassword === confirmPassword;
@@ -926,6 +945,8 @@ function ParentPortalWorkspaceView({
       familyId?: string | null;
       section?: ParentPortalFamilySection | null;
       hash?: string | null;
+      documentsPage?: number;
+      documentId?: string | null;
     } = {},
   ) {
     return parentPortalWorkspaceHref({
@@ -1147,20 +1168,31 @@ function ParentPortalWorkspaceView({
     dailyUpdateDays.find((day) => day.key === selectedUpdateDayKey) ??
     dailyUpdateDays[0] ??
     null;
-  const documentsNeedingAction = documents.filter((document) => {
-    const status = document.status.trim().toLowerCase();
-    return (
-      requiresDocumentSignature(document) ||
-      !["approved", "complete", "completed", "signed"].includes(status)
-    );
-  });
+  const loadedDocuments = linkedDocument && !documents.some((document) => document.id === linkedDocument.id) ? [linkedDocument, ...documents] : documents;
+  const submittedDocumentIds = optimisticParentDocumentIds(loadedDocuments, submittedDocumentSnapshots);
+  const displayDocuments = loadedDocuments
+    .map((document) => submittedDocumentIds.has(document.id) ? { ...document, status: "SUBMITTED" } : document)
+    .toSorted((left, right) => Number(right.id === requestedDocumentId) - Number(left.id === requestedDocumentId)
+      || Number(parentDocumentState(right) === "action_required") - Number(parentDocumentState(left) === "action_required"));
+  const documentsNeedingAction = displayDocuments.filter((document) => parentDocumentState(document) === "action_required");
+  const submittedRequiredCount = loadedDocuments.filter((document) => submittedDocumentIds.has(document.id) && parentDocumentState(document) === "action_required").length;
+  const documentActionCount = documentSummary ? Math.max(0, documentSummary.actionRequired - submittedRequiredCount) : documentsNeedingAction.length;
+  const firstRequiredDocument = documentSummary?.firstRequired && !submittedDocumentIds.has(documentSummary.firstRequired.id) ? documentSummary.firstRequired : documentsNeedingAction[0];
   const incidentsNeedingReceipt = incidents.filter(
     (incident) => !incident.parentAcknowledgedAt && !acknowledgedIncidentIds.has(incident.id),
   );
+  const openInvoiceCount = attentionSummary?.openInvoiceCount ?? openInvoices.length;
+  const unacknowledgedIncidentCount = attentionSummary ? remainingParentIncidentCount(attentionSummary.unacknowledgedIncidentCount, incidents, acknowledgedIncidentIds) : incidentsNeedingReceipt.length;
   const homeAttentionCount =
-    documentsNeedingAction.length +
-    openInvoices.length +
-    incidentsNeedingReceipt.length;
+    documentActionCount +
+    openInvoiceCount +
+    unacknowledgedIncidentCount;
+
+  useEffect(() => {
+    if (!requestedDocumentId || activeView !== "family" || activeFamilySection !== "documents") return;
+    const detail = document.getElementById(`parent-document-${requestedDocumentId}`);
+    if (detail instanceof HTMLDetailsElement) { detail.open = true; detail.querySelector("summary")?.focus(); }
+  }, [requestedDocumentId, activeView, activeFamilySection]);
 
   useEffect(() => {
     const hash = window.location.hash.toLowerCase();
@@ -1795,8 +1827,11 @@ function ParentPortalWorkspaceView({
 
   function submitDocument(documentId: string) {
     if (previewOnly()) return;
+    const sourceDocument = loadedDocuments.find((record) => record.id === documentId);
+    if (isPending || !family || !sourceDocument) return;
     startTransition(async () => {
       const formData = new FormData();
+      formData.append("familyId", family.id);
       formData.append("note", documentNotes[documentId] || "");
       formData.append(
         "signatureAcknowledged",
@@ -1821,6 +1856,8 @@ function ParentPortalWorkspaceView({
       } | null;
       if (!response.ok)
         return showError(json?.error || "Document could not be submitted.");
+      if (!isParentDocumentSubmissionReceipt(json, documentId)) return showError("We could not confirm this document submission. Your draft is still here. Check the document status with your school before submitting again.");
+      setSubmittedDocumentSnapshots((current) => new Map([...current, [documentId, sourceDocument]]));
       setDocumentNotes((current) => ({ ...current, [documentId]: "" }));
       setDocumentFiles((current) => ({ ...current, [documentId]: null }));
       setSignatureAcknowledgements((current) => ({
@@ -1828,6 +1865,8 @@ function ParentPortalWorkspaceView({
         [documentId]: false,
       }));
       setSignatureNames((current) => ({ ...current, [documentId]: "" }));
+      const fileInput = document.getElementById(`parent-document-file-${documentId}`);
+      if (fileInput instanceof HTMLInputElement) fileInput.value = "";
       showStatus("Document submitted for director review.");
       router.refresh();
     });
@@ -1853,6 +1892,113 @@ function ParentPortalWorkspaceView({
   const homeGreeting = homeGreetingName
     ? `Welcome back, ${homeGreetingName}`
     : "Welcome back";
+  const homeAttentionPanel = (
+<section
+            id="parent-home-attention"
+            className={`overflow-hidden rounded-[1.5rem] border bg-card ${homeAttentionCount ? "border-amber-400/45" : ""}`}
+            aria-labelledby="parent-home-attention-heading"
+            data-parent-home-priority="true"
+          >
+            <div className={`flex items-center gap-3 px-3 py-3 sm:px-6 sm:py-4 ${homeAttentionCount ? "border-b" : ""}`}>
+              <span className={`grid size-8 shrink-0 place-items-center rounded-xl sm:size-10 ${homeAttentionCount ? "bg-amber-400/15 text-amber-800 dark:text-amber-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>
+                {homeAttentionCount ? (
+                  <AlertCircle className="size-5" aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 className="size-5" aria-hidden="true" />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 id="parent-home-attention-heading" className="text-base font-semibold sm:text-lg">
+                  {homeAttentionCount ? "Needs your attention" : "You’re all caught up"}
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {homeAttentionCount
+                    ? `${homeAttentionCount} item${homeAttentionCount === 1 ? "" : "s"} to review`
+                    : "No forms, invoices, or reports need action right now."}
+                </p>
+              </div>
+              {homeAttentionCount ? (
+                <Badge variant="outline" className="shrink-0 tabular-nums">
+                  {homeAttentionCount}
+                </Badge>
+              ) : null}
+            </div>
+            {homeAttentionCount ? (
+              <div className="divide-y px-4 sm:px-6">
+                {firstRequiredDocument ? (
+                  <ParentPortalDocumentLink
+                    href={workspaceHref("family", {
+                      familyId: family.id,
+                      section: "documents",
+                      documentsPage: 1,
+                      documentId: firstRequiredDocument.id,
+                    })}
+                    className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                      <FileText className="size-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold leading-5">
+                        {documentActionCount > 1
+                          ? `${documentActionCount} documents to review`
+                          : `Review ${firstRequiredDocument.name}`}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {documentActionCount > 1
+                          ? `${firstRequiredDocument.name} and ${documentActionCount - 1} more`
+                          : displayTokenLabel(firstRequiredDocument.status)}
+                      </span>
+                    </span>
+                    <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </ParentPortalDocumentLink>
+                ) : null}
+                {openInvoiceCount ? (
+                  <ParentPortalDocumentLink
+                    href={workspaceHref("payments", { familyId: family.id })}
+                    className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                      <ReceiptText className="size-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold leading-5">
+                        Upcoming payment
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {openInvoices[0] ? `${openInvoices[0].number} · due ${formatDate(openInvoices[0].dueDate)}` : "Review your account’s open invoices"}
+                      </span>
+                    </span>
+                    <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </ParentPortalDocumentLink>
+                ) : null}
+                {unacknowledgedIncidentCount ? (
+                  <ParentPortalDocumentLink
+                    href={workspaceHref("family", {
+                      familyId: family.id,
+                      section: "children",
+                      hash: "incidents",
+                    })}
+                    className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                      <AlertCircle className="size-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold leading-5">
+                        {unacknowledgedIncidentCount === 1 ? "Incident report to review" : `${unacknowledgedIncidentCount} incident reports to review`}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {incidentsNeedingReceipt[0] ? `${incidentsNeedingReceipt[0].child.fullName} · ${formatDate(incidentsNeedingReceipt[0].occurredAt)}` : "Review and acknowledge your school’s reports"}
+                      </span>
+                    </span>
+                    <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </ParentPortalDocumentLink>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+  );
 
   return (
     <div
@@ -1868,7 +2014,7 @@ function ParentPortalWorkspaceView({
         <div className="relative z-[1] flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-balance font-heading text-2xl font-semibold leading-tight tracking-tight sm:text-4xl">
-              {activeView === "home" ? homeGreeting : activeViewCopy.title}
+              {activeView === "home" ? homeGreeting : activeView === "family" ? parentFamilySectionTitles[activeFamilySection] : activeViewCopy.title}
             </h1>
             {activeView === "home" ? (
               <p className="mt-1 break-words text-sm leading-5 text-muted-foreground">
@@ -1880,7 +2026,7 @@ function ParentPortalWorkspaceView({
           {activeView !== "home" ? (
             <ParentPortalDocumentLink
               href={workspaceHref("home", { familyId: family.id })}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
+              className={`${buttonVariants({ variant: "outline", size: "sm" })} max-lg:hidden`}
             >
               <Home data-icon="inline-start" aria-hidden="true" />
               Home
@@ -1994,6 +2140,72 @@ function ParentPortalWorkspaceView({
 
       {activeView === "home" ? (
         <>
+          <section aria-labelledby="parent-quick-actions-heading" data-parent-home-actions="true">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h2 id="parent-quick-actions-heading" className="sr-only text-base font-semibold sm:not-sr-only">
+                  Quick actions
+                </h2>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3 xl:grid-cols-4">
+              {(
+                [
+                  [
+                    workspaceHref("family", {
+                      familyId: family.id,
+                      section: "check-in",
+                    }),
+                    "School Check-In",
+                    "Family PIN and QR code",
+                    KeyRound,
+                    "School Check-In",
+                  ],
+                  [
+                    workspaceHref("messages", { familyId: family.id }),
+                    "Message the School",
+                    "Ask a question or send a note",
+                    MessageSquare,
+                    "Message School",
+                  ],
+                  [
+                    workspaceHref("updates", { familyId: family.id }),
+                    "Photos & Daily Reports",
+                    latestReport
+                      ? `${latestReport.child.fullName} · ${formatDate(latestReport.date)}`
+                      : "See shared classroom moments",
+                    Camera,
+                    "Photos & Reports",
+                  ],
+                  [
+                    workspaceHref("payments", { familyId: family.id }),
+                    "View Payments",
+                    "Balance, invoices, and payment methods",
+                    CreditCard,
+                    "View Payments",
+                  ],
+                ] as const
+              ).map(([href, label, detail, Icon, mobileLabel]) => (
+                <ParentPortalDocumentLink
+                  key={href}
+                  href={href}
+                  className="group relative flex min-h-14 items-center gap-2 rounded-xl border bg-card px-2.5 py-2 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] active:bg-primary/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-24 sm:gap-3 sm:rounded-2xl sm:p-4"
+                >
+                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary sm:size-9 sm:rounded-xl">
+                    <Icon className="size-4 sm:size-5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold leading-5 sm:hidden">{mobileLabel}</span>
+                    <span className="hidden text-balance text-sm font-semibold leading-5 sm:block">{label}</span>
+                    <span className="mt-1 hidden text-xs leading-5 text-muted-foreground sm:block">
+                      {detail}
+                    </span>
+                  </span>
+                </ParentPortalDocumentLink>
+              ))}
+            </div>
+          </section>
+          {homeAttentionCount ? homeAttentionPanel : null}
           <section
             id="today"
             className="parent-portal-feature scroll-mt-28 overflow-hidden rounded-[1.5rem] border bg-card"
@@ -2132,175 +2344,7 @@ function ParentPortalWorkspaceView({
 
           </section>
 
-          <section aria-labelledby="parent-quick-actions-heading" data-parent-home-actions="true">
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <h2 id="parent-quick-actions-heading" className="sr-only text-base font-semibold sm:not-sr-only">
-                  Quick actions
-                </h2>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3 xl:grid-cols-4">
-              {(
-                [
-                  [
-                    workspaceHref("family", {
-                      familyId: family.id,
-                      section: "check-in",
-                    }),
-                    "School Check-In",
-                    "Family PIN and QR code",
-                    KeyRound,
-                    "School Check-In",
-                  ],
-                  [
-                    workspaceHref("messages", { familyId: family.id }),
-                    "Message the School",
-                    "Ask a question or send a note",
-                    MessageSquare,
-                    "Message School",
-                  ],
-                  [
-                    workspaceHref("updates", { familyId: family.id }),
-                    "Photos & Daily Reports",
-                    latestReport
-                      ? `${latestReport.child.fullName} · ${formatDate(latestReport.date)}`
-                      : "See shared classroom moments",
-                    Camera,
-                    "Photos & Reports",
-                  ],
-                  [
-                    workspaceHref("payments", { familyId: family.id }),
-                    "View Payments",
-                    "Balance, invoices, and payment methods",
-                    CreditCard,
-                    "View Payments",
-                  ],
-                ] as const
-              ).map(([href, label, detail, Icon, mobileLabel]) => (
-                <ParentPortalDocumentLink
-                  key={href}
-                  href={href}
-                  className="group relative flex min-h-14 items-center gap-2 rounded-xl border bg-card px-2.5 py-2 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] active:bg-primary/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-24 sm:gap-3 sm:rounded-2xl sm:p-4"
-                >
-                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary sm:size-9 sm:rounded-xl">
-                    <Icon className="size-4 sm:size-5" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold leading-5 sm:hidden">{mobileLabel}</span>
-                    <span className="hidden text-balance text-sm font-semibold leading-5 sm:block">{label}</span>
-                    <span className="mt-1 hidden text-xs leading-5 text-muted-foreground sm:block">
-                      {detail}
-                    </span>
-                  </span>
-                </ParentPortalDocumentLink>
-              ))}
-            </div>
-          </section>
-
-          <section
-            id="parent-home-attention"
-            className={`overflow-hidden rounded-[1.5rem] border bg-card ${homeAttentionCount ? "border-amber-400/45" : ""}`}
-            aria-labelledby="parent-home-attention-heading"
-            data-parent-home-priority="true"
-          >
-            <div className={`flex items-center gap-3 px-3 py-3 sm:px-6 sm:py-4 ${homeAttentionCount ? "border-b" : ""}`}>
-              <span className={`grid size-8 shrink-0 place-items-center rounded-xl sm:size-10 ${homeAttentionCount ? "bg-amber-400/15 text-amber-800 dark:text-amber-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>
-                {homeAttentionCount ? (
-                  <AlertCircle className="size-5" aria-hidden="true" />
-                ) : (
-                  <CheckCircle2 className="size-5" aria-hidden="true" />
-                )}
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 id="parent-home-attention-heading" className="text-base font-semibold sm:text-lg">
-                  {homeAttentionCount ? "Needs your attention" : "You’re all caught up"}
-                </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {homeAttentionCount
-                    ? `${homeAttentionCount} item${homeAttentionCount === 1 ? "" : "s"} to review`
-                    : "No forms, invoices, or reports need action right now."}
-                </p>
-              </div>
-              {homeAttentionCount ? (
-                <Badge variant="outline" className="shrink-0 tabular-nums">
-                  {homeAttentionCount}
-                </Badge>
-              ) : null}
-            </div>
-            {homeAttentionCount ? (
-              <div className="divide-y px-4 sm:px-6">
-                {documentsNeedingAction[0] ? (
-                  <ParentPortalDocumentLink
-                    href={workspaceHref("family", {
-                      familyId: family.id,
-                      section: "documents",
-                    })}
-                    className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                      <FileText className="size-5" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold leading-5">
-                        {documentsNeedingAction.length > 1
-                          ? `${documentsNeedingAction.length} documents to review`
-                          : `Review ${documentsNeedingAction[0].name}`}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {documentsNeedingAction.length > 1
-                          ? `${documentsNeedingAction[0].name} and ${documentsNeedingAction.length - 1} more`
-                          : displayTokenLabel(documentsNeedingAction[0].status)}
-                      </span>
-                    </span>
-                    <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                  </ParentPortalDocumentLink>
-                ) : null}
-                {openInvoices[0] ? (
-                  <ParentPortalDocumentLink
-                    href={workspaceHref("payments", { familyId: family.id })}
-                    className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                      <ReceiptText className="size-5" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold leading-5">
-                        Upcoming payment
-                      </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {openInvoices[0].number} · due {formatDate(openInvoices[0].dueDate)}
-                      </span>
-                    </span>
-                    <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                  </ParentPortalDocumentLink>
-                ) : null}
-                {incidentsNeedingReceipt[0] ? (
-                  <ParentPortalDocumentLink
-                    href={workspaceHref("family", {
-                      familyId: family.id,
-                      section: "children",
-                      hash: "incidents",
-                    })}
-                    className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                      <AlertCircle className="size-5" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold leading-5">
-                        Incident Report to Review
-                      </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {incidentsNeedingReceipt[0].child.fullName} · {formatDate(incidentsNeedingReceipt[0].occurredAt)}
-                      </span>
-                    </span>
-                    <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                  </ParentPortalDocumentLink>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
+          {!homeAttentionCount ? homeAttentionPanel : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <section
@@ -2358,8 +2402,8 @@ function ParentPortalWorkspaceView({
                 <ArrowRight data-icon="inline-end" aria-hidden="true" />
               </ParentPortalDocumentLink>
               <p className="mt-3 text-xs text-muted-foreground">
-                {openInvoices.length
-                  ? `${openInvoices.length} open invoice${openInvoices.length === 1 ? "" : "s"}`
+                {openInvoiceCount
+                  ? `${openInvoiceCount} open invoice${openInvoiceCount === 1 ? "" : "s"}`
                   : latestAccountLedgerEntry
                     ? `Latest activity ${formatDate(latestAccountLedgerEntry.effectiveAt)}`
                     : "No open invoices"}
@@ -3559,9 +3603,9 @@ function ParentPortalWorkspaceView({
                 <div className="mt-2 text-xs text-muted-foreground">
                   No processing fee is added to your payment.
                 </div>
-                {!parentBalanceReviewRequired && openInvoices.length > 1 ? (
+                {!parentBalanceReviewRequired && openInvoiceCount > 1 ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    {openInvoices.length} open invoice records are listed below.
+                    {openInvoiceCount} open invoices on this account; {invoices.length} records shown, including the next open invoice.
                     Checkout uses only the family balance shown here.
                   </div>
                 ) : null}
@@ -3778,8 +3822,8 @@ function ParentPortalWorkspaceView({
                   <span className="min-w-0 flex-1 basis-24">
                     <span className="block font-semibold">Invoice history</span>
                     <span className="block text-xs text-muted-foreground">
-                      {openInvoices.length
-                        ? `${openInvoices.length} open invoice${openInvoices.length === 1 ? "" : "s"}`
+                      {openInvoiceCount
+                        ? `${openInvoiceCount} open invoice${openInvoiceCount === 1 ? "" : "s"} · ${invoices.length} records shown`
                         : `${invoices.length} invoice${invoices.length === 1 ? "" : "s"}`}
                     </span>
                   </span>
@@ -4184,15 +4228,18 @@ function ParentPortalWorkspaceView({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {!documents.length ? (
+                {requestedDocumentUnavailable ? <Alert variant="destructive"><AlertTitle>Document not available</AlertTitle><AlertDescription>The requested document is not available for this family. No other document has been opened in its place. Choose a request below or ask your school for the correct link.</AlertDescription></Alert> : null}
+                <p className="text-sm text-muted-foreground">{documentActionCount ? `${documentActionCount} document${documentActionCount === 1 ? " needs" : "s need"} your action. Required requests appear first.` : "No documents need your action. Submitted documents stay available while your school reviews them."}</p>
+                {!displayDocuments.length ? (
                   <div className="rounded-xl border border-dashed bg-muted/20 p-4">
                     <p className="font-medium">No documents requested</p>
                     <p className="mt-1 text-sm text-muted-foreground">Your school’s document requests will appear here. You can still request a contact or pickup change below.</p>
                   </div>
                 ) : null}
-                {documents.slice(0, visibleDocumentCount).map((document) => (
+                {displayDocuments.slice(0, visibleDocumentCount).map((document) => (
                   <details
                     key={document.id}
+                    id={`parent-document-${document.id}`}
                     data-parent-document={document.id}
                     className="group rounded-2xl border bg-background/40"
                   >
@@ -4208,14 +4255,14 @@ function ParentPortalWorkspaceView({
                         </span>
                       </span>
                       <span className="flex min-w-0 items-center gap-2">
-                        <Badge>{displayTokenLabel(document.status)}</Badge>
+                        <Badge variant={parentDocumentState(document) === "action_required" ? "default" : "outline"}>{parentDocumentStatusLabel(document)}</Badge>
                         <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
                       </span>
                     </summary>
-                    <div className="space-y-3 border-t px-4 pb-4 pt-3">
+                    <div data-parent-document-body className="space-y-3 border-t px-4 pb-4 pt-3">
                         {document.downloadUrl ? (
                           <a
-                            className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                            className="inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             href={document.downloadUrl}
                             target="_blank"
                             rel="noreferrer"
@@ -4223,8 +4270,11 @@ function ParentPortalWorkspaceView({
                             Open uploaded file
                           </a>
                         ) : null}
-                    {document.status !== "APPROVED" ? (
-                      <div className="space-y-2">
+                    {parentDocumentState(document) === "awaiting_review" ? <p className="text-sm text-muted-foreground">Your school is reviewing this submission. No action is needed unless the school asks for changes.</p> : null}
+                    {parentDocumentState(document) === "action_required" || parentDocumentState(document) === "awaiting_review" ? (
+                      <details open={parentDocumentState(document) === "action_required"}>
+                        <summary className="flex min-h-11 cursor-pointer items-center rounded text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{parentDocumentState(document) === "awaiting_review" ? "Replace submission (optional)" : "Complete this request"}</summary>
+                      <fieldset data-parent-document-form disabled={isPending} className="min-w-0 space-y-2">
                         {requiresDocumentSignature(document) ? (
                           <div className="space-y-1">
                             <Label
@@ -4281,7 +4331,7 @@ function ParentPortalWorkspaceView({
                             }
                           />
                         </div>
-                        <label className="flex min-h-10 items-start gap-2 text-xs leading-5 text-muted-foreground">
+                        <label data-parent-document-consent className="flex min-h-11 items-start gap-2 text-sm leading-5 text-muted-foreground">
                           <input
                             type="checkbox"
                             className="mt-0.5 size-5 shrink-0 accent-primary"
@@ -4316,16 +4366,17 @@ function ParentPortalWorkspaceView({
                             ? "Sign and Submit"
                             : "Submit for Review"}
                         </Button>
-                      </div>
+                      </fieldset>
+                      </details>
                     ) : null}
                     </div>
                   </details>
                 ))}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
-                    {documents.length ? `Showing ${Math.min(visibleDocumentCount, documents.length)} of ${documents.length} available documents` : null}
+                    {displayDocuments.length ? `Showing ${Math.min(visibleDocumentCount, displayDocuments.length)} of ${displayDocuments.length} loaded documents${linkedDocument ? " (including the linked document)" : ""}` : null}
                   </p>
-                  {visibleDocumentCount < documents.length ? (
+                  {visibleDocumentCount < displayDocuments.length ? (
                     <Button type="button" variant="outline" onClick={() => {
                       setVisibleDocumentCount((count) => count + 5);
                       // Continue at the first revealed document, including the
@@ -4339,6 +4390,15 @@ function ParentPortalWorkspaceView({
                     </Button>
                   ) : null}
                 </div>
+                {documentPagination ? (
+                  <nav aria-label="Document pages" className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm">
+                    <p className="text-muted-foreground">Page {documentPagination.page} of {documentPagination.totalPages} · {documentPagination.total} documents</p>
+                    <div className="flex flex-wrap gap-2">
+                      {documentPagination.page > 1 ? <ParentPortalDocumentLink className={buttonVariants({ variant: "outline" })} href={workspaceHref("family", { familyId: family.id, section: "documents", documentsPage: documentPagination.page - 1, hash: "documents" })}>Previous documents</ParentPortalDocumentLink> : null}
+                      {documentPagination.page < documentPagination.totalPages ? <ParentPortalDocumentLink className={buttonVariants({ variant: "outline" })} href={workspaceHref("family", { familyId: family.id, section: "documents", documentsPage: documentPagination.page + 1, hash: "documents" })}>Next documents</ParentPortalDocumentLink> : null}
+                    </div>
+                  </nav>
+                ) : null}
                 <details
                   id="contact-request"
                   className="group scroll-mt-28 rounded-2xl border bg-background/40"

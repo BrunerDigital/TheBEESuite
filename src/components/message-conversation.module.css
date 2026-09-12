@@ -287,8 +287,8 @@
 
 @media (max-width: 40rem) {
   .parentWorkspace {
-    width: calc(100% + 1.5rem);
-    margin-inline: -0.75rem;
+    width: calc(100% + 2 * var(--bee-parent-page-gutter, 0.75rem));
+    margin-inline: calc(-1 * var(--bee-parent-page-gutter, 0.75rem));
     border-right: 0;
     border-left: 0;
     border-radius: 0;

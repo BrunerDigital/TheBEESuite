@@ -506,6 +506,12 @@ export async function uploadDocumentBuffer({
   };
 }
 
+/** Only remove a newly created object after its database transaction is known to have rolled back. */
+export async function deleteDocumentObject(storageKey: string) {
+  const { error } = await getSupabaseStorageClient().storage.from(DOCUMENT_BUCKET).remove([storageKey]);
+  if (error) throw new Error(error.message);
+}
+
 export async function createDocumentSignedUrl(storageKey: string, expiresIn = DOCUMENT_SIGNED_URL_SECONDS) {
   const client = getSupabaseStorageClient();
   for (const bucket of [...new Set([DOCUMENT_BUCKET, CHILD_MEDIA_BUCKET])]) {

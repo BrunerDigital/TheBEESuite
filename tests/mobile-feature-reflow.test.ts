@@ -24,9 +24,19 @@ test("the full authenticated toolbar fits small phones with 44px icon targets", 
 });
 
 test("enlarged bottom navigation reflows into readable touch-sized rows", () => {
-  assert.match(quality, /\.app-bottom-navigation > div\s*\{[^}]*repeat\(auto-fit, minmax\(min\(100%, 3\.4rem\), 1fr\)\)/);
+  assert.match(quality, /\[data-role="PARENT_GUARDIAN"\] \.app-bottom-navigation > div\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap/);
+  assert.match(quality, /\[data-role="PARENT_GUARDIAN"\] \.app-bottom-navigation > div > :is\(a, button\)\s*\{[^}]*flex: 1 0 44px;[^}]*min-width: max-content/);
   assert.match(quality, /\.app-bottom-navigation > div > :is\(a, button\)\s*\{[^}]*min-height: 48px/);
   assert.match(readFileSync("scripts/qa-mobile-features.ts", "utf8"), /\.app-bottom-navigation :is\(a,button\)/);
+});
+
+test("parent document spacing preserves readable fields instead of scaling nested padding", () => {
+  const css = readFileSync("src/app/parent-mobile-home.css", "utf8");
+  assert.match(css, /\[data-parent-document-body\]\s*\{\s*padding-inline: 12px/);
+  assert.match(css, /\[data-parent-document-consent\]\s*\{\s*min-height: 44px/);
+  assert.match(parent, /<fieldset data-parent-document-form disabled=\{isPending\}/);
+  assert.match(parent, /parentFamilySectionTitles\[activeFamilySection\]/);
+  assert.match(parent, /buttonVariants\(\{ variant: "outline", size: "sm" \}\)\} max-lg:hidden/);
 });
 
 test("mobile feature buttons wrap without resizing icon-only controls", () => {
@@ -48,14 +58,17 @@ test("message composition reserves space for the send control and attachment tra
   }
   assert.match(css, /\.parentTimeline\s*\{[^}]*min-height: 12rem;[^}]*flex: none/);
   assert.match(css, /\.parentWorkspace\s*\{[^}]*height: auto;[^}]*min-height: 0/);
+  assert.match(css, /width: calc\(100% \+ 2 \* var\(--bee-parent-page-gutter, 0\.75rem\)\)/);
+  assert.match(css, /margin-inline: calc\(-1 \* var\(--bee-parent-page-gutter, 0\.75rem\)\)/);
+  assert.match(readFileSync("src/app/parent-mobile-home.css", "utf8"), /--bee-parent-page-gutter: 12px/);
 });
 
 test("every available family document can be revealed with keyboard continuation", () => {
-  assert.match(parent, /documents\.slice\(0, visibleDocumentCount\)/);
+  assert.match(parent, /displayDocuments\.slice\(0, visibleDocumentCount\)/);
   assert.doesNotMatch(parent, /documents\.slice\(0, 5\)/);
   assert.match(parent, /setVisibleDocumentCount\(\(count\) => count \+ 5\)/);
   assert.match(parent, /\[visibleDocumentCount\]\?\.focus\(\)/);
-  assert.match(parent, /Showing \$\{Math\.min\(visibleDocumentCount, documents\.length\)\} of \$\{documents\.length\} available documents/);
+  assert.match(parent, /Showing \$\{Math\.min\(visibleDocumentCount, displayDocuments\.length\)\} of \$\{displayDocuments\.length\} loaded documents/);
 });
 
 test("empty updates have one explanation and report anchors remain unique", () => {

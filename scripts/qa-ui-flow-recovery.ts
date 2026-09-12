@@ -56,6 +56,7 @@ async function main() {
       if (outcome === "hold") await new Promise<void>((resolve) => { releaseHeld = resolve; });
       if (url.pathname === "/api/billing/terminal-payment" && terminalPollFailure && JSON.parse(request.postData() || "{}").action === "payment_status") return route.fulfill({ status: terminalPollFailure === "http" ? 500 : 200, contentType: "application/json", body: "{}" });
       if (url.pathname === "/api/billing/terminal-payment" && outcome === "success") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, paymentId: "fake-payment", status: JSON.parse(request.postData() || "{}").action === "payment_status" ? "succeeded" : "processing" }) });
+      if (/^\/api\/parent\/documents\/[^/]+\/submit$/.test(url.pathname) && outcome === "success") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, document: { id: decodeURIComponent(url.pathname.split("/")[4]), status: "SUBMITTED" } }) });
       return route.fulfill({ status: outcome === "reject" ? 403 : 200, contentType: "application/json", body: JSON.stringify(outcome === "reject" ? { error: "Fake test denial" } : outcome === "invalid-success" ? { ok: false } : { ok: true, ...(url.pathname === "/api/device-sessions" ? { revokedAt: new Date().toISOString() } : {}) }) });
     }
     if (request.method() !== "GET") throw new Error("Unexpected non-API write blocked");
@@ -65,6 +66,29 @@ async function main() {
   const errors: string[] = [];
   page.on("pageerror", (error) => { errors.push(error.message); console.error("Local fixture error:", error.message); });
   try {
+    await page.goto(`${base}/?view=shortcuts`);
+    await page.getByRole("link", { name: "First fake task", exact: true }).waitFor();
+    await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+    const deferredFocus = await page.evaluate(async () => {
+      const originalFrame = window.requestAnimationFrame, originalCancel = window.cancelAnimationFrame;
+      let frameId = 1_000_000;
+      const frames = new Map<number, FrameRequestCallback>();
+      window.requestAnimationFrame = (callback) => { frames.set(++frameId, callback); return frameId; };
+      window.cancelAnimationFrame = (id) => { if (!frames.delete(id)) originalCancel(id); };
+      try {
+        const first = document.querySelector<HTMLAnchorElement>('a[href="#fake-task-a"]')!;
+        const next = document.querySelector<HTMLAnchorElement>('a[href="#fake-task-b"]')!;
+        const changed = new Promise<void>((done) => window.addEventListener("hashchange", () => done(), { once: true }));
+        first.focus(); first.click(); await changed;
+        next.focus();
+        for (const callback of [...frames.values()]) callback(performance.now());
+        return { focused: document.activeElement === next, queuedFrames: frames.size };
+      } finally { window.requestAnimationFrame = originalFrame; window.cancelAnimationFrame = originalCancel; }
+    });
+    assert.equal(deferredFocus.queuedFrames, 1, "Click and hashchange schedule one navigation focus frame");
+    assert.equal(deferredFocus.focused, true, "Deferred focus cannot steal the user's next shortcut");
+    await page.getByRole("link", { name: "Next fake task", exact: true }).press("Enter");
+    await page.locator('#fake-task-b [aria-expanded="true"]').waitFor();
     await page.goto(`${base}/?view=fte`);
     await page.getByText("Historical reporting week", { exact: true }).waitFor();
     assert.equal(await page.getByLabel("Week start", { exact: true }).inputValue(), "2026-04-08");
@@ -500,6 +524,80 @@ async function main() {
         assert.equal(await page.getByRole("button", { name: "Charge $125.00", exact: true }).isDisabled(), true);
       }
     }
+    const beforeDocuments = writes.length;
+    await page.goto(`${base}/?view=home&document-case=approved&attention-case=hidden`);
+    await page.locator("#parent-home-attention").getByText("12 items to review", { exact: true }).waitFor();
+    await page.getByRole("link", { name: /5 incident reports to review/ }).waitFor();
+    await page.getByRole("link", { name: /Upcoming payment.*FAKE-OLDER-OPEN/ }).waitFor();
+    assert.equal(await page.getByText("You’re all caught up", { exact: true }).count(), 0);
+    await page.goto(`${base}/?view=payments&document-case=approved&attention-case=hidden`);
+    await page.getByText(/7 open invoices on this account; 20 records shown/).waitFor();
+    assert.ok(await page.getByText("FAKE-OLDER-OPEN", { exact: true }).count());
+    await page.goto(`${base}/?view=children&document-case=approved&attention-case=hidden`);
+    await page.locator('#incidents [data-slot="card-content"] > div').first().getByText("Fake older report still needs acknowledgment", { exact: false }).waitFor();
+    assert.equal(await page.locator("#incidents").getByRole("button", { name: "Acknowledge", exact: true }).count(), 1);
+    await page.goto(`${base}/?view=home&document-case=many-required&multi-child=1`);
+    assert.equal(await page.locator("#today article").count(), 3);
+    const actionsBox = await page.locator('[data-parent-home-actions="true"]').boundingBox();
+    const childrenBox = await page.locator("#today").boundingBox();
+    assert.ok(actionsBox && childrenBox && actionsBox.y < childrenBox.y, "Everyday shortcuts precede the unbounded sibling list");
+    const requiredLink = page.getByRole("link", { name: /25 documents to review/ });
+    assert.equal(new URL((await requiredLink.getAttribute("href"))!, base).searchParams.get("documentId"), "fake-required-1");
+    for (const state of ["submitted", "approved"]) {
+      await page.goto(`${base}/?view=documents&document-case=${state}&documentId=fake-document`);
+      await page.getByText("No documents need your action.", { exact: false }).waitFor();
+      const target = page.locator('[data-parent-document="fake-document"]');
+      assert.equal(await target.getAttribute("open"), "");
+      if (state === "submitted") {
+        await target.getByText("Awaiting school review", { exact: true }).waitFor();
+        assert.equal(await target.getByLabel("Type your full name", { exact: true }).isVisible(), false);
+        await target.getByText("Replace submission (optional)", { exact: true }).click();
+        assert.equal(await target.getByLabel("Type your full name", { exact: true }).isVisible(), true);
+      } else {
+        assert.equal(await target.locator("input,textarea,button").count(), 0, "Approved legacy signature markers cannot reopen submission controls");
+      }
+    }
+    await page.goto(`${base}/?view=documents&document-case=history`);
+    assert.match(await page.locator("[data-parent-document] > summary").first().innerText(), /Fake required form/);
+    await page.getByText("1 document needs your action.", { exact: false }).waitFor();
+    assert.equal(new URL((await page.getByRole("link", { name: "Next documents", exact: true }).getAttribute("href"))!, base).searchParams.get("documentsPage"), "2");
+    await page.goto(`${base}/?view=documents&document-case=many-required&documentsPage=2`);
+    await page.getByText("25 documents need your action.", { exact: false }).waitFor();
+    assert.equal(await page.locator("[data-parent-document]").count(), 5);
+    assert.match(await page.locator("[data-parent-document] > summary").first().innerText(), /Fake required form 21/);
+    await page.goto(`${base}/?view=documents&document-case=many-required&documentId=fake-required-25`);
+    assert.equal(await page.locator('[data-parent-document="fake-required-25"]').getAttribute("open"), "");
+    await page.goto(`${base}/?view=documents&document-case=many-required&documentId=outside`);
+    await page.getByText("Document not available", { exact: true }).waitFor();
+    assert.equal(await page.locator("details[data-parent-document][open]").count(), 0);
+    await page.goto(`${base}/?view=documents&document-case=many-required&documentId=fake-required-1`);
+    const signature = page.locator("#parent-document-signature-fake-required-1");
+    await signature.fill("Fake Guardian");
+    await page.locator('[data-parent-document="fake-required-1"]').getByRole("checkbox").check();
+    const documentUrl = page.url();
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await page.getByRole("link", { name: "Next documents", exact: true }).click();
+    assert.equal(page.url(), documentUrl);
+    assert.equal(await signature.inputValue(), "Fake Guardian");
+    outcome = "invalid-success";
+    await page.getByRole("button", { name: "Sign and Submit", exact: true }).first().click();
+    await page.getByRole("alert").filter({ hasText: "could not confirm this document submission" }).waitFor();
+    assert.equal(await signature.inputValue(), "Fake Guardian");
+    outcome = "success";
+    await page.getByRole("button", { name: "Sign and Submit", exact: true }).first().click();
+    await page.getByRole("status").filter({ hasText: "Document submitted for director review" }).waitFor();
+    assert.equal(await signature.inputValue(), "");
+    await page.getByText("24 documents need your action.", { exact: false }).waitFor();
+    for (const status of ["SUBMITTED", "APPROVED", "REJECTED"]) {
+      await page.evaluate((status) => window.dispatchEvent(new CustomEvent("fake-parent-server-refresh", { detail: { id: "fake-required-1", status } })), status);
+      const target = page.locator('[data-parent-document="fake-required-1"]');
+      await target.getByText(status === "SUBMITTED" ? "Awaiting school review" : status === "APPROVED" ? "Complete" : "Changes requested", { exact: true }).waitFor();
+      await page.getByText(`${status === "REJECTED" ? 25 : 24} documents need your action.`, { exact: false }).waitFor();
+      if (status === "APPROVED") assert.equal(await target.locator("input,textarea,button").count(), 0, "Authoritative approval replaces optimistic submission state");
+      if (status === "REJECTED") assert.equal(await target.getByLabel("Type your full name", { exact: true }).isVisible(), true, "A new school rejection restores the required form");
+    }
+    assert.equal(writes.length, beforeDocuments + 2, "Only two explicit fake document submissions were intercepted");
+    await page.screenshot({ path: path.join(evidenceDirectory, "parent-documents-confirmed-submit-390.png"), fullPage: true });
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ passed: true, checks: ["exact historical school/week", "saved zero retained", "uncertain save preserves draft", "no automatic retry", "discard cancel/confirm", "approved director locked", "auditor read-only", "family school timezone", "earlier announcements keyboard disclosure", "reply context preserves draft and attachment", "acknowledgment reject/success with refresh held", "teacher profile failure retains inputs", "teacher photo failure retains selection and caption", "teacher recipient discard guards", "attendance never retargets drafts", "pending controls locked", "report batches never silently truncate", "staff-only backdate settings survive save and child changes", "destination-only location draft guarded", "directory and session totals and paging", "directory canonical search and role disclosure", "read-only and current-device explanations", "session recovery and success announcement", "billing exact family and school", "billing route-key state refresh", "historical ledger without activity", "billing-only and enrollment permissions", "child exact targeting and discard guards", "confirmed context change clears financial drafts", "date-only billing draft guard", "pending reader target and confirmation lock", "unknown terminal result stays locked", "successful terminal charge cannot repeat"], interceptedWrites: writes.length }));
   } finally { await browser.close(); await new Promise<void>((done) => server.close(() => done())); }

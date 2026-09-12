@@ -117,6 +117,8 @@ import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
 import { getParentPortalPaymentFamilyScope, getParentPortalPaymentReturn, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
+import { parentCurrentChildScope, readParentDocumentPage } from "@/lib/parent-document-query";
+import { parentAttentionScope, parentIncidentOrder, parentIncidentSelect, parentInvoiceOrder, parentInvoiceSelect, prioritizeParentAttentionRecords } from "@/lib/parent-attention";
 import { readStripeConnectMigration, stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
 import { canUseCorporateStripeVerification, readCorporateStripeVerificationTarget } from "@/lib/corporate-stripe-verification";
@@ -2274,7 +2276,7 @@ async function renderLivePage(
               name: true,
               centerId: true,
               children: {
-                where: currentlyEnrolledChildWhere(),
+                where: parentCurrentChildScope(user.tenantId),
                 orderBy: { fullName: "asc" },
                 select: {
                   id: true,
@@ -2367,7 +2369,7 @@ async function renderLivePage(
             id: true,
             name: true,
             centerId: true,
-            children: { where: currentlyEnrolledChildWhere(), select: { fullName: true }, orderBy: { fullName: "asc" } },
+            children: { where: parentCurrentChildScope(user.tenantId), select: { fullName: true }, orderBy: { fullName: "asc" } },
           },
         })
       : [];
@@ -2452,7 +2454,7 @@ async function renderLivePage(
         pickups: { orderBy: { fullName: "asc" } },
         emergencyContacts: { orderBy: { fullName: "asc" } },
           children: {
-            where: currentlyEnrolledChildWhere(),
+            where: parentCurrentChildScope(user.tenantId),
             select: {
               id: true,
               fullName: true,
@@ -2506,7 +2508,8 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, activeParentPaymentRows, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
+    const attentionScope = parentAttentionScope({ familyId, childIds, currentFamily: Boolean(family && !paymentContinuityAccess) });
+    const [billingAccount, activeParentPaymentRows, latestLedgerEntry, agencyLedgerEntries, invoiceRows, dailyReports, incidentRows, messages, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows, openInvoiceCount, firstOpenInvoice, unacknowledgedIncidentCount, firstUnacknowledgedIncident] = await prisma.$transaction([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2608,18 +2611,10 @@ async function renderLivePage(
         select: { type: true, sourceSystem: true, amountCents: true },
       }),
       prisma.invoice.findMany({
-        where: { billingAccount: { familyId } },
-        orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+        where: attentionScope.invoice,
+        orderBy: parentInvoiceOrder,
         take: 20,
-        select: {
-          id: true,
-          number: true,
-          status: true,
-          dueDate: true,
-          totalCents: true,
-          customFields: true,
-          items: { orderBy: { id: "asc" }, select: { description: true, amountCents: true } },
-        },
+        select: parentInvoiceSelect,
       }),
       prisma.dailyReport.findMany({
         where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sentAt: { not: null } },
@@ -2641,18 +2636,10 @@ async function renderLivePage(
         },
       }),
       prisma.incidentReport.findMany({
-        where: { childId: { in: childIds.length ? childIds : ["__none__"] } },
-        orderBy: { occurredAt: "desc" },
+        where: attentionScope.incident,
+        orderBy: parentIncidentOrder,
         take: 20,
-        select: {
-          id: true,
-          occurredAt: true,
-          type: true,
-          description: true,
-          actionTaken: true,
-          parentAcknowledgedAt: true,
-          child: { select: { fullName: true } },
-        },
+        select: parentIncidentSelect,
       }),
       prisma.message.findMany({
         where: { familyId: parentPortalContentFamilyId },
@@ -2668,12 +2655,6 @@ async function renderLivePage(
           metadata: true,
           sender: { select: { name: true, role: true } },
         },
-      }),
-      prisma.document.findMany({
-        where: { OR: [{ familyId: parentPortalContentFamilyId }, { childId: { in: childIds.length ? childIds : ["__none__"] } }] },
-        orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
-        take: 20,
-        select: { id: true, name: true, type: true, status: true, expiresAt: true, storageKey: true },
       }),
       prisma.childMedia.findMany({
         where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sharedWithParents: true, status: "shared" },
@@ -2744,14 +2725,27 @@ async function renderLivePage(
         orderBy: { name: "asc" },
         select: { id: true, name: true, staffProfile: { select: { classroom: { select: { name: true } } } } },
       }),
-    ]);
+      prisma.invoice.count({ where: attentionScope.openInvoice }),
+      prisma.invoice.findFirst({ where: attentionScope.openInvoice, orderBy: parentInvoiceOrder, select: parentInvoiceSelect }),
+      prisma.incidentReport.count({ where: attentionScope.unacknowledgedIncident }),
+      prisma.incidentReport.findFirst({ where: attentionScope.unacknowledgedIncident, orderBy: parentIncidentOrder, select: parentIncidentSelect }),
+    ], { isolationLevel: "RepeatableRead" });
+    const invoices = prioritizeParentAttentionRecords(invoiceRows, firstOpenInvoice);
+    const incidents = prioritizeParentAttentionRecords(incidentRows, firstUnacknowledgedIncident);
+    // Keep transactions sequential: the serverless production pool is bounded.
+    const parentDocuments = await prisma.$transaction((tx) => readParentDocumentPage(tx.document, {
+      familyId, childIds, enabled: Boolean(family && !paymentContinuityAccess),
+      requestedPage: firstSearchParam(searchParams.documentsPage),
+      requestedDocumentId: firstSearchParam(searchParams.documentId) || undefined,
+    }), { isolationLevel: "RepeatableRead" });
+    const documents = parentDocuments.documents;
     const classroomTeachers = classroomTeacherRows.map((teacher) => ({
       id: teacher.id,
       name: userViewText(teacher.name),
       classroomNames: teacher.staffProfile?.classroom?.name ? [teacher.staffProfile.classroom.name] : [],
     }));
 
-    const [signedDocuments, signedMedia, signedMessages] = await Promise.all([
+    const [signedDocuments, signedMedia, signedMessages, signedLinkedDocuments] = await Promise.all([
       signDocumentRecords(documents),
       signChildMediaRecords(media),
       Promise.all(messages.map(async (message) => ({
@@ -2763,6 +2757,7 @@ async function renderLivePage(
         canReport: Boolean(message.senderId && message.senderId !== user.id),
         attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       }))),
+      signDocumentRecords(parentDocuments.linkedDocument && !documents.some((document) => document.id === parentDocuments.linkedDocument?.id) ? [parentDocuments.linkedDocument] : []),
     ]);
     const reportAttendanceLogs = dailyReports.length
       ? await prisma.checkInOutLog.findMany({
@@ -3232,12 +3227,18 @@ async function renderLivePage(
         }}
         dailyReports={parentDailyReports}
         incidents={incidents}
+        attentionSummary={{ openInvoiceCount, unacknowledgedIncidentCount }}
         messages={paymentContinuityAccess ? [] : signedMessages}
         centerName={familyCenter ? formatCenterName(familyCenter) : parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
         centerEin={familyCenter ? readSchoolEin(familyCenter.customFields) : parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
         centerTimeZone={familyCenter ? readCenterLocationTimeZone(familyCenter) : parentServiceDay.timeZone}
         classroomTeachers={paymentContinuityAccess ? [] : classroomTeachers}
         documents={paymentContinuityAccess ? [] : signedDocuments}
+        documentPagination={parentDocuments.pagination}
+        documentSummary={parentDocuments.summary}
+        linkedDocument={signedLinkedDocuments[0] ?? null}
+        requestedDocumentId={parentDocuments.requestedDocumentId}
+        requestedDocumentUnavailable={parentDocuments.requestedDocumentUnavailable}
         media={signedMedia}
         announcements={paymentContinuityAccess ? [] : announcements}
         uniformProducts={[]}

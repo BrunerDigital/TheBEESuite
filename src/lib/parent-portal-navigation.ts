@@ -17,6 +17,8 @@ export type ParentPortalWorkspaceHrefOptions = {
   familyId?: string | null;
   section?: ParentPortalFamilySection | null;
   hash?: string | null;
+  documentsPage?: number;
+  documentId?: string | null;
 };
 
 const parentPortalViewSet = new Set<string>(PARENT_PORTAL_VIEWS);
@@ -65,6 +67,8 @@ export function parentPortalWorkspaceHref({
   familyId,
   section,
   hash,
+  documentsPage,
+  documentId,
 }: ParentPortalWorkspaceHrefOptions): string {
   const previewMode = Boolean(previewHrefBase);
   const baseHref = previewHrefBase || "/parent-portal";
@@ -76,6 +80,8 @@ export function parentPortalWorkspaceHref({
       screen: previewMode ? view : null,
       section: view === "family" ? section : null,
       familyId,
+      documentsPage: view === "family" && section === "documents" && documentsPage && Number.isSafeInteger(documentsPage) && documentsPage > 1 ? String(documentsPage) : null,
+      documentId: view === "family" && section === "documents" ? documentId ?? null : null,
     },
     hash,
   );

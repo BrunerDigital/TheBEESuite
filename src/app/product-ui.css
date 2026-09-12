@@ -140,6 +140,23 @@
       height: 20px;
       flex-shrink: 0;
     }
+
+    /* Keep all five parent destinations readable at enlarged text sizes.
+       Intrinsic label widths wrap only when needed; non-text padding stays
+       compact while font size and the existing 48px targets are preserved. */
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] .app-bottom-navigation {
+      padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] .app-bottom-navigation > div {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] .app-bottom-navigation > div > :is(a, button) {
+      flex: 1 0 44px;
+      min-width: max-content;
+    }
   }
 
   .app-global-search {

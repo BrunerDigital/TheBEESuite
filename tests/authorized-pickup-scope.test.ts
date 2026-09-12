@@ -27,7 +27,9 @@ test("authorized pickup portal fails closed and verifies the linked family tenan
   assert.match(pickupBranch, /authorizedPickup\.findFirst\([\s\S]*where: \{ userId: user\.id \}/);
   assert.match(pickupBranch, /organization: \{ tenantId: user\.tenantId \}/);
   assert.match(pickupBranch, /if \(!pickupCenter\) return <AuthorizedPickupAccessBlocked/);
-  assert.match(pickupBranch, /currentlyEnrolledChildWhere\(\)/);
+  assert.match(pickupBranch, /parentCurrentChildScope\(user\.tenantId\)/);
+  const childScope = readFileSync("src/lib/parent-document-query.ts", "utf8");
+  assert.match(childScope, /currentlyEnrolledChildWhere\(\), classroom: \{ center: \{ organization: \{ tenantId \}/);
   assert.match(pickupBranch, /AuthorizedPickupWorkspace/);
   assert.doesNotMatch(pickupBranch, /billingAccount|invoice|ledgerEntry|message|document|dailyReport|incidentReport|childMedia/);
 });

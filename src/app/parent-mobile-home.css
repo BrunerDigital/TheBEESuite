@@ -61,6 +61,10 @@
   }
 
   @media (max-width: 639px) {
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] .dashboard-workspace {
+      --bee-parent-page-gutter: 12px;
+    }
+
     .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-workspace {
       gap: 0.75rem;
     }
@@ -70,7 +74,64 @@
     }
 
     .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-heading:not([data-parent-heading-view="home"]) {
-      padding: 0.75rem;
+      padding: 12px;
+    }
+
+    /* Enlarge the text, not layers of nested horizontal padding. The full
+       consent label remains a touch target; only its decorative box is fixed. */
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] .dashboard-workspace,
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #documents :is([data-slot="card-header"], [data-slot="card-content"]),
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] [data-parent-document-body] {
+      padding-inline: 12px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] [data-parent-document] > summary {
+      padding-inline: 12px;
+      column-gap: 8px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] [data-parent-document] > summary > span:first-child,
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-attention a > span:first-child {
+      width: 40px;
+      height: 40px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] :is([data-parent-document], #parent-home-attention) svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] [data-parent-document-form] [data-slot="button"] {
+      padding-inline: 12px;
+      gap: 8px;
+      min-height: 44px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] [data-parent-document-consent] {
+      min-height: 44px;
+      gap: 8px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] [data-parent-document-consent] input[type="checkbox"] {
+      width: 20px;
+      min-width: 20px;
+      height: 20px;
+      min-height: 20px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-attention > div {
+      padding-inline: 12px;
+      gap: 8px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-attention > div:first-child > span:first-child {
+      width: 32px;
+      height: 32px;
+    }
+
+    .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-attention a {
+      gap: 8px;
     }
 
     /* Icons need a stable hit area; they must not consume the header at text zoom. */

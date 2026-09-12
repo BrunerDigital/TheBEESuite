@@ -139,7 +139,14 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpan
 function useExpandForHash(id: string, expand: () => void, preferenceLoaded: boolean) {
   useEffect(() => {
     if (!preferenceLoaded) return;
+    let pendingFrame: number | null = null;
+    let clickedHash: string | null = null;
+    const cancelPendingFocus = () => {
+      if (pendingFrame !== null) window.cancelAnimationFrame(pendingFrame);
+      pendingFrame = null;
+    };
     function expandAndFocusTarget(targetHash: string) {
+      cancelPendingFocus();
       let target = "";
       try {
         target = decodeURIComponent(targetHash.slice(1));
@@ -149,25 +156,37 @@ function useExpandForHash(id: string, expand: () => void, preferenceLoaded: bool
       const container = document.getElementById(id);
       const destination = document.getElementById(target);
       if (target !== id && (!container || !destination || !container.contains(destination))) return;
+      const originalFocus = document.activeElement;
       expand();
-      window.requestAnimationFrame(() => {
+      pendingFrame = window.requestAnimationFrame(() => {
+        pendingFrame = null;
+        if (window.location.hash !== targetHash) return;
         const element = document.getElementById(target) ?? document.getElementById(id);
+        // A subsequent keyboard/touch action owns focus now. A delayed frame
+        // must not pull the user away from the next shortcut or form field.
+        if (document.activeElement !== originalFocus && document.activeElement !== element) return;
         element?.scrollIntoView({ block: "start" });
         element?.focus({ preventScroll: true });
       });
     }
 
     function expandFromAnchorClick(event: MouseEvent) {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       if (!(event.target instanceof Element)) return;
       const anchor = event.target.closest<HTMLAnchorElement>("a[href]");
       const href = anchor?.getAttribute("href");
-      if (!href) return;
+      if (!href || anchor?.hasAttribute("download") || (anchor?.target && anchor.target !== "_self")) return;
       const destination = new URL(href, window.location.href);
-      if (destination.origin !== window.location.origin || destination.pathname !== window.location.pathname || !destination.hash) return;
+      if (destination.origin !== window.location.origin || destination.pathname !== window.location.pathname || destination.search !== window.location.search || !destination.hash) return;
+      clickedHash = destination.hash;
       expandAndFocusTarget(destination.hash);
     }
 
     function expandFromLocationHash() {
+      // The click already expanded and queued focus. Its resulting hashchange
+      // must not queue a second frame after focus has moved to the next task.
+      if (clickedHash === window.location.hash) { clickedHash = null; return; }
+      clickedHash = null;
       expandAndFocusTarget(window.location.hash);
     }
 
@@ -175,6 +194,7 @@ function useExpandForHash(id: string, expand: () => void, preferenceLoaded: bool
     window.addEventListener("hashchange", expandFromLocationHash);
     document.addEventListener("click", expandFromAnchorClick);
     return () => {
+      cancelPendingFocus();
       window.removeEventListener("hashchange", expandFromLocationHash);
       document.removeEventListener("click", expandFromAnchorClick);
     };

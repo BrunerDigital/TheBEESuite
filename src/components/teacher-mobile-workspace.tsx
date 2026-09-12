@@ -36,6 +36,7 @@ import { CUSTODY_WARNING_LABEL, custodyWarningPreview, custodyWarningSummary, ha
 import { teacherProfileChecklistTasks } from "@/lib/setup-checklists";
 import { formatZonedDateTime, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 import targetStyles from "./teacher-report-targets.module.css";
+import { TeacherChildPicker } from "./teacher-child-picker";
 
 type ChildOption = {
   id: string;
@@ -1322,7 +1323,9 @@ export function TeacherMobileWorkspace({
             </Button>
         </CollapsibleCard>
 
-        <CollapsibleCard id="teacher-location" compactHeader title="Child location" description={selectedChild ? `${selectedChild.fullName} · currently ${locationFor(selectedChild)}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+        <CollapsibleCard id="teacher-location" compactHeader title="Child location" collapsedSummary={selectedChild ? `${selectedChild.fullName} · currently ${locationFor(selectedChild)}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+            <TeacherChildPicker id="location-child" label="Child to move" groups={byClassroom} selectedChildId={selectedChildId} disabled={isPending} onChildChange={chooseChild} />
+            {selectedChild && <p className="text-sm text-muted-foreground">Current location: {locationFor(selectedChild)}</p>}
             <div className="space-y-1">
               <Label htmlFor="teacher-location-target">Move to</Label>
               <Select value={locationTarget} onValueChange={(value) => value && setLocationTarget(value)}>
@@ -1349,28 +1352,8 @@ export function TeacherMobileWorkspace({
             </Button>
         </CollapsibleCard>
 
-        <CollapsibleCard id="teacher-photo" compactHeader title="Photo" description={selectedChild?.fullName ?? "Choose a child"} collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${selectedChild.photoVideoPermission ? "Sharing allowed" : "Permission required"}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
-            <div className="space-y-1">
-              <Label htmlFor="photo-child">Child</Label>
-              <Select value={selectedChild?.id ?? ""} onValueChange={(value) => { if (value) chooseChild(value); }}>
-                <SelectTrigger id="photo-child" className="w-full">
-                  <SelectValue placeholder="Choose a child from this class" />
-                </SelectTrigger>
-                <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
-                  {byClassroom.map((classroom) => (
-                    <SelectGroup key={classroom.id ?? "unassigned-photo"}>
-                      <SelectLabel>{classroom.name}</SelectLabel>
-                      {classroom.children.map((child) => (
-                        <SelectItem key={child.id} value={child.id}>
-                          <span className="truncate">{child.fullName}</span>
-                          <span className="text-xs text-muted-foreground">{child.ageGroup}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <CollapsibleCard id="teacher-photo" compactHeader title="Photo" collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${selectedChild.photoVideoPermission ? "Sharing allowed" : "Permission required"}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+            <TeacherChildPicker id="photo-child" label="Child for photo" groups={byClassroom} selectedChildId={selectedChildId} disabled={isPending} onChildChange={chooseChild} />
             <div className="flex flex-wrap gap-2">
               <Badge variant={selectedChild?.photoVideoPermission ? "default" : "secondary"}>
                 {selectedChild?.photoVideoPermission ? "Shares with parents now" : "Permission review required"}
@@ -1679,7 +1662,9 @@ export function TeacherMobileWorkspace({
             </Button>
         </CollapsibleCard>
 
-        <CollapsibleCard id="teacher-incident" compactHeader title="Incident report" description="Send an objective record to the director for review." collapsedSummary={selectedChild?.fullName ?? "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+        <CollapsibleCard id="teacher-incident" compactHeader title="Incident report" collapsedSummary={selectedChild?.fullName ?? "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+            <TeacherChildPicker id="incident-child" label="Child for incident" groups={byClassroom} selectedChildId={selectedChildId} disabled={isPending} onChildChange={chooseChild} />
+            <p className="text-sm text-muted-foreground">Send an objective record to the director for review.</p>
             <Input aria-label="Incident type" value={incidentType} onChange={(event) => setIncidentType(event.target.value)} placeholder="Incident type" />
             <Textarea id="teacher-incident-description" aria-label="Objective incident description" value={incidentDescription} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Describe what happened using observable facts" />
             <Textarea id="teacher-incident-action" aria-label="Action taken after incident" value={actionTaken} onChange={(event) => setActionTaken(event.target.value)} placeholder="Action taken" />

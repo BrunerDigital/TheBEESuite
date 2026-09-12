@@ -286,7 +286,9 @@ async function main() {
     assert.equal(await page.getByLabel("Mood", { exact: true }).inputValue(), "Calm");
     assert.equal(await page.getByRole("checkbox", { name: "Send to parent portal", exact: true }).isChecked(), false);
     await page.locator("#daily-report-child").click();
-    await page.getByRole("option", { name: "Fake Child · Preschool", exact: true }).click();
+    const reportChildOption = page.getByRole("option", { name: "Fake Child · Preschool", exact: true });
+    await reportChildOption.click();
+    await reportChildOption.waitFor({ state: "hidden" });
     const photoClosed = page.locator("#teacher-photo").getByRole("button", { expanded: false }).first();
     if (await photoClosed.count()) await photoClosed.click();
     await page.locator("#photo-child").click();

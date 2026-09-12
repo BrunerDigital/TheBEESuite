@@ -28,8 +28,10 @@ test("fixture server closes even when browser cleanup itself rejects", async () 
   assert.equal(server.listening, false);
 });
 
-test("teacher target harness puts browser launch and all setup inside shared cleanup", () => {
-  const source = readFileSync("scripts/qa-teacher-report-targets.ts", "utf8");
-  assert.match(source, /await withFixtureBrowser\(server, \(\) => \(browserEngine === "webkit" \? webkit : chromium\).launch\(\), async browser => \{/);
-  assert.doesNotMatch(source, /const browser = await/);
+test("teacher harnesses put browser launch and all setup inside shared cleanup", () => {
+  for (const file of ["scripts/qa-teacher-report-targets.ts", "scripts/qa-teacher-child-picker.ts"]) {
+    const source = readFileSync(file, "utf8");
+    assert.match(source, /await withFixtureBrowser\(server, \(\) => \(browserEngine === "webkit" \? webkit : chromium\).launch\(\), async browser => \{/);
+    assert.doesNotMatch(source, /const browser = await/);
+  }
 });

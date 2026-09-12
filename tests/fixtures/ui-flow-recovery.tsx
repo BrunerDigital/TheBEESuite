@@ -84,6 +84,20 @@ function BillingFixture() {
   </>;
 }
 
+function TeacherFixture() {
+  const [currentRoster, setCurrentRoster] = useState(teacherRoster);
+  useEffect(() => {
+    // This test-only event changes fake props; it never calls an application API.
+    const remove = (event: Event) => {
+      const id = (event as CustomEvent<unknown>).detail;
+      if (typeof id === "string") setCurrentRoster(current => current.filter(child => child.id !== id));
+    };
+    window.addEventListener("fake-teacher-remove-child", remove);
+    return () => window.removeEventListener("fake-teacher-remove-child", remove);
+  }, []);
+  return <><a href="?view=home">Leave fake teacher</a><TeacherMobileWorkspace previewMode={query.has("teacher-layout-only")} previewHistoryGuard={query.has("teacher-layout-only")} teacherName="Fake Teacher" roster={currentRoster} teacherProfile={{ id: "fake-teacher", name: "Fake Teacher", loginEmail: "teacher@example.com", contactEmail: "teacher@example.com", phone: "", title: "Teacher", centerId: "fake-center", centerName: "Fake School", classroomId: "fake-room", hasStaffKioskCode: true }} classroomOptions={[{ id: "fake-room", name: "Fake Classroom", ageGroup: "Preschool" }]} /></>;
+}
+
 function Fixture() {
   useEffect(() => {
     // Signal after the component tree and its initial preference effects mount.
@@ -100,7 +114,7 @@ function Fixture() {
   if (view === "automation") return <AutomationFixture />;
   if (view === "fte") return <FteReportForm centers={query.get("single-school") ? centers.filter((center) => center.id === "b") : centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" allowCenterSelect={!query.get("director")} mode={query.get("director") ? "director" : "executive"} />;
   if (view === "fte-reader") return <FteReportExplorer centers={centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" canEdit={false} />;
-  if (view === "teacher") return <><a href="?view=home">Leave fake teacher</a><TeacherMobileWorkspace previewMode={query.has("teacher-layout-only")} previewHistoryGuard={query.has("teacher-layout-only")} teacherName="Fake Teacher" roster={teacherRoster} teacherProfile={{ id: "fake-teacher", name: "Fake Teacher", loginEmail: "teacher@example.com", contactEmail: "teacher@example.com", phone: "", title: "Teacher", centerId: "fake-center", centerName: "Fake School", classroomId: "fake-room", hasStaffKioskCode: true }} classroomOptions={[{ id: "fake-room", name: "Fake Classroom", ageGroup: "Preschool" }]} /></>;
+  if (view === "teacher") return <TeacherFixture />;
   return <ParentFixture />;
 }
 

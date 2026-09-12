@@ -15,6 +15,7 @@ import {
 } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { parentProductPurchasingEnabled } from "@/lib/parent-product-purchase-availability";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { studentUniformShirtVariantFromProduct } from "@/lib/uniform-products";
 
@@ -34,6 +35,13 @@ async function POSTHandler(request: NextRequest) {
   }
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parent accounts can purchase parent portal products." }, { status: 403 });
+  }
+  if (!parentProductPurchasingEnabled()) {
+    return NextResponse.json({
+      ok: false,
+      code: "PRODUCT_PURCHASE_UNAVAILABLE",
+      error: "New product orders are not available in the parent portal. Contact your school about ordering. Existing invoices can still be paid from Payments.",
+    }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
   }
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const familyId = clean(body.familyId);
@@ -155,4 +163,4 @@ async function POSTHandler(request: NextRequest) {
   }, { status: 201 });
 }
 
-export const POST = withApiLogging("POST", POSTHandler);
+export const POST = withApiLogging("POST", POSTHandler, { omitRequestBody: true, omitResponseBody: true });

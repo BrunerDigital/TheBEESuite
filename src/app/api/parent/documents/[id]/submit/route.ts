@@ -195,8 +195,10 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   }
 
   let updated: { id: string; status: DocumentStatus };
+  let callbackFailed = false;
   try {
     updated = await prisma.$transaction(async (tx) => {
+      try {
       const currentActor = await tx.user.findFirst({ where: { id: user.id, tenantId: user.tenantId, role: UserRole.PARENT_GUARDIAN, isActive: true }, select: { id: true } });
       const currentCenters = currentActor ? await tx.center.findMany({ where: { organization: { tenantId: user.tenantId } }, select: { id: true } }) : [];
       const currentFamily = currentActor ? await tx.family.findFirst({ where: familyWhereFor(currentCenters.map((center) => center.id)), select: familySelect }) : null;
@@ -251,16 +253,23 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     },
       }, tx);
       return { id: document.id, status: DocumentStatus.SUBMITTED };
+      } catch (error) {
+        // The callback rejected before Prisma could attempt COMMIT.
+        callbackFailed = true;
+        throw error;
+      }
     }, { isolationLevel: "Serializable" });
   } catch (error) {
     const conflict = error instanceof DocumentSubmissionConflict || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034");
-    if (conflict) {
+    if (callbackFailed || conflict) {
       // These failures prove the transaction rolled back. Never remove a new
       // object on an ambiguous commit failure, nor delete the previous version.
       if (uploadedStorageKey && uploadedStorageKey !== document.storageKey) {
         try { await deleteDocumentObject(uploadedStorageKey); }
         catch { console.error("parent_document_submission_uncommitted_upload_cleanup_failed"); }
       }
+    }
+    if (conflict) {
       return NextResponse.json({ ok: false, error: "This document or your family access changed. Reload to review its current status before submitting again." }, { status: 409 });
     }
     throw error;

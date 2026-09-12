@@ -497,7 +497,16 @@ export async function uploadDocumentBuffer({
   });
   if (uploadError) throw new Error(uploadError.message);
 
-  const signedUrl = await createDocumentSignedUrl(storageKey);
+  let signedUrl: string;
+  try {
+    signedUrl = await createDocumentSignedUrl(storageKey);
+  } catch (error) {
+    // This unique, non-overwriting upload has not yet been returned to any
+    // caller or referenced by a database record. Clean up only that new key.
+    try { await deleteDocumentObject(storageKey); }
+    catch { console.error("document_upload_unreferenced_object_cleanup_failed"); }
+    throw error;
+  }
   return {
     bucket: DOCUMENT_BUCKET,
     storageKey,

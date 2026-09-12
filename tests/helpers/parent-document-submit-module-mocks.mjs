@@ -4,12 +4,12 @@ import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 
 const actor = { id: "fake-parent", tenantId: "fake-tenant", role: "PARENT_GUARDIAN", email: "fake-parent@example.test", isActive: true };
-let user, currentActor, family, row, uploads, removed, notes, audits, transactions, auditFailure, notificationFailure, beforeTransaction, scopeAllowed;
+let user, currentActor, family, row, uploads, removed, notes, audits, transactions, auditFailure, noteFailure, cleanupFailure, notificationFailure, beforeTransaction, afterCommit, scopeAllowed;
 function reset(extra = {}) {
   user = { ...actor }; currentActor = { ...actor };
   family = { id: "fake-family", name: "Fake Family", centerId: "fake-school", guardians: [{ userId: actor.id }], children: [{ id: "fake-child", familyId: "fake-family", fullName: "Fake Child", enrollmentStatus: "active", classroomId: "fake-class", classroom: { centerId: "fake-school", center: { organization: { tenantId: actor.tenantId } } } }] };
   row = { id: "fake-document", name: "Fake school form", type: "school_form", status: "REQUESTED", storageKey: "internal_signature_pending", familyId: "fake-family", childId: null, restricted: false, ...extra };
-  uploads = []; removed = []; notes = []; audits = []; transactions = 0; auditFailure = false; notificationFailure = false; beforeTransaction = () => {}; scopeAllowed = true;
+  uploads = []; removed = []; notes = []; audits = []; transactions = 0; auditFailure = false; noteFailure = false; cleanupFailure = false; notificationFailure = false; beforeTransaction = () => {}; afterCommit = () => {}; scopeAllowed = true;
 }
 function matches(value, where) {
   return Object.entries(where).every(([key, filter]) => {
@@ -60,10 +60,10 @@ const prisma = {
         if (!matches(expandedDocument(), where)) return { count: 0 };
         Object.assign(staged, data); return { count: 1 };
       } },
-      note: { async create({ data }) { stagedNotes.push(data); } },
+      note: { async create({ data }) { if (noteFailure) throw new Error("Fake note failure"); stagedNotes.push(data); } },
       auditLog: { async create({ data }) { if (auditFailure) throw new Error("Fake audit failure"); stagedAudits.push(data); } },
     });
-    row = staged; notes.push(...stagedNotes); audits.push(...stagedAudits); return result;
+    row = staged; notes.push(...stagedNotes); audits.push(...stagedAudits); afterCommit(); return result;
   },
 };
 mock.module("@/lib/prisma", { namedExports: { prisma } });
@@ -76,7 +76,7 @@ mock.module("@/lib/parent-portal-family-scope", { namedExports: {
 mock.module("@/lib/supabase-storage", { namedExports: {
   contentTypeForDocumentFile(file) { return file.type; },
   async uploadDocumentBuffer(input) { assert.equal(input.familyId, "fake-family"); assert.equal(input.tenantId, actor.tenantId); const storageKey = `new-fake-object-${uploads.length}`; uploads.push({ ...input, storageKey }); return { storageKey }; },
-  async deleteDocumentObject(key) { removed.push(key); },
+  async deleteDocumentObject(key) { removed.push(key); if (cleanupFailure) throw new Error("Fake cleanup failure"); },
 } });
 mock.module("@/lib/location-users", { namedExports: { async getCenterLeadershipUsers() { return [{ id: "fake-director" }]; } } });
 mock.module("@/lib/request-response-logging", { namedExports: { withApiLogging(_method, handler) { return handler; } } });
@@ -127,12 +127,24 @@ test("parent document submission is scoped and transactional", async (t) => {
   });
   await t.test("audit rollback preserves the original document and uncertain commit retains upload", async () => {
     reset(); auditFailure = true; await assert.rejects(post, /Fake audit failure/);
-    assert.equal(row.status, "REQUESTED"); assert.equal(notes.length, 0); assert.equal(audits.length, 0); assert.deepEqual(removed, []);
+    assert.equal(row.status, "REQUESTED"); assert.equal(notes.length, 0); assert.equal(audits.length, 0); assert.deepEqual(removed, ["new-fake-object-0"]);
+    reset(); noteFailure = true; await assert.rejects(post, /Fake note failure/);
+    assert.equal(row.status, "REQUESTED"); assert.equal(notes.length, 0); assert.equal(audits.length, 0); assert.deepEqual(removed, ["new-fake-object-0"]);
     reset(); beforeTransaction = () => { throw new Error("Unknown commit state"); }; await assert.rejects(post, /Unknown commit state/); assert.deepEqual(removed, []);
+    reset(); afterCommit = () => { throw new Error("Commit receipt lost"); }; await assert.rejects(post, /Commit receipt lost/);
+    assert.equal(row.status, "SUBMITTED"); assert.equal(row.storageKey, "new-fake-object-0"); assert.equal(audits.length, 1); assert.deepEqual(removed, []);
   });
   await t.test("known serializable rollback removes only the new upload", async () => {
     reset(); beforeTransaction = () => { throw new Prisma.PrismaClientKnownRequestError("Fake conflict", { code: "P2034", clientVersion: "fake" }); };
     assert.equal((await post()).status, 409); assert.equal(row.storageKey, "internal_signature_pending"); assert.deepEqual(removed, ["new-fake-object-0"]);
+  });
+  await t.test("cleanup failure preserves the callback error and logs no document data", async () => {
+    reset(); auditFailure = true; cleanupFailure = true; const logging = mock.method(console, "error", () => {});
+    try {
+      await assert.rejects(post, /Fake audit failure/);
+      assert.equal(row.status, "REQUESTED"); assert.equal(audits.length, 0);
+      assert.deepEqual(logging.mock.calls.map((call) => call.arguments), [["parent_document_submission_uncommitted_upload_cleanup_failed"]]);
+    } finally { logging.mock.restore(); }
   });
   await t.test("notification failure cannot invalidate a confirmed submission", async () => {
     reset(); notificationFailure = true; const logging = mock.method(console, "error", () => {});

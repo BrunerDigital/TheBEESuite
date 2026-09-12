@@ -1,0 +1,32 @@
+.workspace {
+  overflow-wrap: anywhere;
+}
+
+.workspace :is([data-slot="select-trigger"], [data-slot="button"]) {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding-block: 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.workspace [data-slot="select-trigger"] [data-slot="select-value"] {
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  -webkit-line-clamp: unset;
+}
+
+@media (max-width: 639px) {
+  .workspace :is([data-slot="card-header"], [data-slot="card-content"]) {
+    padding-inline: 12px;
+  }
+
+  .workspace :is([data-slot="select-trigger"], [data-slot="button"]) {
+    padding-inline: 12px;
+    gap: 8px;
+  }
+}

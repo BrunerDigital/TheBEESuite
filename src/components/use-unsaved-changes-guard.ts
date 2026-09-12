@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { installUnsavedHistoryGuard } from "@/lib/unsaved-history-guard";
 
 const activeUnsavedChangeGuards = new Map<symbol, string>();
 
@@ -10,6 +11,10 @@ function activeGuardMessage() {
       ?? "This page has unsaved changes. Discard them and leave this page?";
   }
   return "This page has unsaved changes. Discard them and leave this page?";
+}
+
+export function initializeUnsavedChangesHistory() {
+  installUnsavedHistoryGuard(window, () => activeUnsavedChangeGuards.size > 0, () => window.confirm(activeGuardMessage()));
 }
 
 function warnBeforeUnload(event: BeforeUnloadEvent) {
@@ -45,11 +50,12 @@ function unregisterGuard(id: symbol) {
   document.removeEventListener("click", guardLink, true);
 }
 
-/** Protect document exits and ordinary internal links without changing native/download links. */
+/** Protect document exits, tracked browser traversal, and ordinary internal links. */
 export function useUnsavedChangesGuard(dirty: boolean, message: string) {
   const guardId = useRef(Symbol("unsaved-change-guard"));
 
   useEffect(() => {
+    initializeUnsavedChangesHistory();
     if (!dirty) return;
     const id = guardId.current;
     registerGuard(id, message);

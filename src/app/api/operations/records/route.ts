@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, canManageStaffCompensation, getCurrentUser } from "@/lib/auth";
+import { normalizeAutomationDraft } from "@/lib/automation-workflow-state";
+import { AutomationConfigurationError, saveAutomationConfiguration } from "@/lib/automation-workflow-persistence";
 import { writeAuditLog } from "@/lib/audit";
 import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
@@ -2111,40 +2113,23 @@ async function POSTHandler(request: NextRequest) {
     if (!data.name) return NextResponse.json({ ok: false, error: "Campaign name is required." }, { status: 400 });
     result = id ? await prisma.campaign.update({ where: { id }, data }) : await prisma.campaign.create({ data });
   } else if (entity === "automation") {
-    const brand = await prisma.brand.findFirst({ where: { tenantId: user.tenantId }, orderBy: { createdAt: "asc" }, select: { id: true } });
-    if (id) {
-      const existing = await prisma.automation.findUnique({
-        where: { id },
-        select: { tenantId: true, brand: { select: { tenantId: true } } },
-      });
-      if (!existing || (existing.tenantId !== user.tenantId && existing.brand?.tenantId !== user.tenantId)) {
-        return NextResponse.json({ ok: false, error: "Automation not found for this tenant." }, { status: 404 });
-      }
+    const draft = normalizeAutomationDraft(body, id ? "update" : "create");
+    if (!draft.name) return NextResponse.json({ ok: false, error: "Workflow name is required." }, { status: 400 });
+    const limits = { name: 160, trigger: 100, audience: 2000, condition: 4000, delay: 100, actionType: 100, channel: 100, templateKey: 160, subject: 500, body: 20000, status: 100 } as const;
+    for (const [field, limit] of Object.entries(limits)) {
+      if (draft[field as keyof typeof limits].length > limit) return NextResponse.json({ ok: false, error: `Workflow ${field} must be ${limit} characters or fewer. Your saved configuration is unchanged.` }, { status: 400 });
     }
-    const data = {
-      tenantId: user.tenantId,
-      brandId: brand?.id ?? null,
-      name: clean(body.name),
-      trigger: clean(body.trigger) || "manual",
-      condition: clean(body.condition) || clean(body.audience)
-        ? {
-            rule: clean(body.condition),
-            audience: clean(body.audience),
-            requiresReview: body.requiresReview === true || body.requiresReview === "true",
-          }
-        : undefined,
-      action: {
-        type: clean(body.actionType) || clean(body.action) || "create_task",
-        channel: clean(body.channel) || "task",
-        templateKey: clean(body.templateKey) || null,
-        subject: clean(body.subject) || null,
-        body: clean(body.body) || null,
-      },
-      delay: clean(body.delay) || null,
-      status: clean(body.status) || "active",
-    };
-    if (!data.name) return NextResponse.json({ ok: false, error: "Automation name is required." }, { status: 400 });
-    result = id ? await prisma.automation.update({ where: { id }, data }) : await prisma.automation.create({ data });
+    try {
+      const record = await saveAutomationConfiguration({
+        database: prisma, actor: user, canManage: canManageOperations, id, draft, expectedRecordSignature: body.expectedRecordSignature,
+        audit: (tx, resourceId, mode) => writeAuditLog(user, { centerId: null, action: `operations.automation.${mode}`, resource: "automation", resourceId, metadata: { configurationOnly: true, scope: "tenant" } }, tx),
+      });
+      // Saved configuration is not an execution, notification, or provider action.
+      return NextResponse.json({ ok: true, entity: "automation", mode: id ? "updated" : "created", configurationOnly: true, record }, { status: id ? 200 : 201 });
+    } catch (error) {
+      if (error instanceof AutomationConfigurationError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      throw error;
+    }
   } else if (entity === "document") {
     const familyId = clean(body.familyId);
     if (!familyId) return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });

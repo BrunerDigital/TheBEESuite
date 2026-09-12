@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { ClientErrorReporter } from "@/components/client-error-reporter";
 import { PwaInstallManager } from "@/components/pwa-install-manager";
 import { SubmissionFeedback } from "@/components/submission-feedback";
+import { UnsavedChangesHistoryRuntime } from "@/components/unsaved-changes-history-runtime";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CANONICAL_APP_BASE_URL } from "@/lib/public-app-url";
+import { UNSAVED_HISTORY_BOOTSTRAP } from "@/lib/unsaved-history-guard";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
@@ -86,11 +89,13 @@ export default function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+        <Script id="bee-unsaved-history" strategy="beforeInteractive">{UNSAVED_HISTORY_BOOTSTRAP}</Script>
       </head>
       <body className="min-h-full flex flex-col">
         <TooltipProvider>{children}</TooltipProvider>
         <ClientErrorReporter />
         <PwaInstallManager />
+        <UnsavedChangesHistoryRuntime />
         <SubmissionFeedback />
         {collectVercelTelemetry ? <Analytics /> : null}
         {collectVercelTelemetry ? <SpeedInsights /> : null}

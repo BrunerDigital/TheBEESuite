@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { Activity, CreditCard, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
@@ -28,9 +29,9 @@ const workflowData: AutomationWorkflowBuilderData = {
     delay: "1 day",
     status: "active",
     brand: { name: "Sunshine Academy" },
-    runs: [{ id: "run-preview", status: "completed", createdAt: "2026-08-09T16:30:00.000Z", logs: { matched: 12, reviewed: 12, sent: 12 } }],
+    runs: [],
   }],
-  stats: { total: 8, active: 6, paused: 2, recentRuns: 14 },
+  stats: { total: 1, active: 1, paused: 0, recentRuns: 0 },
 };
 
 const previewPortfolioWorkspace: WorkspaceState = {
@@ -329,5 +330,12 @@ export default async function DevicePreviewPage({ searchParams }: { searchParams
   if (role === "kiosk" || role === "kiosk-staff") {
     return <DevicePreviewGuard><KioskCheckIn previewMode familyOnly={role === "kiosk"} center={{ id: "preview-center", name: "Sunshine Academy", place: "Carmel, Indiana", timeZone: "America/Indiana/Indianapolis" }} initialMode={role === "kiosk-staff" ? "staff" : "family"} /></DevicePreviewGuard>;
   }
-  return <DevicePreviewGuard rewriteWorkspaceLinks={role === "director" || role === "role-dashboard" || role === "executive" || role === "regional"}><ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} /></DevicePreviewGuard>;
+  return <DevicePreviewGuard rewriteWorkspaceLinks={role === "director" || role === "role-dashboard" || role === "executive" || role === "regional"}>
+    {scenario === "history-qa" ? <nav aria-label="Fake history destinations" className="relative z-[100] flex gap-3 bg-background p-3">
+      <Link prefetch={false} href="/device-preview?view=parent&scenario=history-qa">Fake parent destination</Link>
+      <Link prefetch={false} href="/device-preview?view=workflow&scenario=history-qa">Fake workflow destination</Link>
+      <Link prefetch={false} href="/device-preview?view=billing&scenario=history-qa">Fake billing destination</Link>
+    </nav> : null}
+    <ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} />
+  </DevicePreviewGuard>;
 }

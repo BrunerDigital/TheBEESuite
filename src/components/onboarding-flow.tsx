@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useMemo, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useState, useTransition } from "react";
 import {
   ArrowRight,
   BadgeDollarSign,
@@ -22,7 +22,9 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { schoolOnboardingSetupSections, type SchoolOnboardingSetupField } from "@/lib/onboarding-setup";
+import type { SchoolDataSetupPath, SchoolDataSourceSystem } from "@/lib/school-data-setup";
+import { ONBOARDING_DRAFT_STORAGE_KEY, parseOnboardingDraft, serializeOnboardingDraft } from "@/lib/onboarding-draft";
+import { parseOnboardingLocationRoster } from "@/lib/onboarding-location-roster";
 import { cn } from "@/lib/utils";
 
 const steps = [
@@ -37,9 +39,9 @@ const steps = [
     fields: ["centerCount", "state"],
   },
   {
-    title: "School setup",
+    title: "Starting data",
     icon: ClipboardList,
-    fields: schoolOnboardingSetupSections.map((section) => section.field),
+    fields: ["dataSetupPath"],
   },
   {
     title: "Payouts",
@@ -63,6 +65,7 @@ type FormState = {
   workEmail: string;
   centerCount: string;
   state: string;
+  locationRoster: string;
   timeline: string;
   priority: string;
   payoutAdminName: string;
@@ -71,8 +74,11 @@ type FormState = {
   softwarePlan: string;
   addOnBundle: string;
   merchantFeeStrategy: string;
+  dataSetupPath: SchoolDataSetupPath | "";
+  dataSourceSystem: SchoolDataSourceSystem | "";
+  noCurrentFamiliesExpected: boolean;
   notes: string;
-} & Record<SchoolOnboardingSetupField, string>;
+};
 
 type WorkspaceSetup = {
   existingWorkspace?: boolean;
@@ -89,7 +95,10 @@ type WorkspaceSetup = {
   organizationName?: string;
   centerId?: string;
   centerName?: string;
+  centerCount?: number;
+  centers?: Array<{ id: string; name: string }>;
   schoolSetupStatus?: string;
+  dataSetupPath?: string;
   userId?: string;
   loginUrl?: string;
   embedCode?: string;
@@ -108,15 +117,12 @@ type WorkspaceSetup = {
   };
 };
 
-const initialSetupFields = Object.fromEntries(
-  schoolOnboardingSetupSections.map((section) => [section.field, ""]),
-) as Record<SchoolOnboardingSetupField, string>;
-
 const initialForm: FormState = {
   brandName: "",
   workEmail: "",
   centerCount: "",
   state: "",
+  locationRoster: "",
   timeline: "",
   priority: "",
   payoutAdminName: "",
@@ -125,12 +131,32 @@ const initialForm: FormState = {
   softwarePlan: "",
   addOnBundle: "",
   merchantFeeStrategy: "",
+  dataSetupPath: "",
+  dataSourceSystem: "",
+  noCurrentFamiliesExpected: false,
   notes: "",
-  ...initialSetupFields,
 };
 
-function hasValue(value: string) {
-  return value.trim().length > 0;
+function hasValue(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function sourceLabelForReview(value: SchoolDataSourceSystem | "") {
+  if (value === "procare") return "ProCare export package";
+  if (value === "other") return "Another system or spreadsheet";
+  return "Missing";
+}
+
+function dataSetupPathLabel(value: SchoolDataSetupPath | null | "") {
+  if (value === "import_existing") return "Move existing records";
+  if (value === "start_clean") return "Clean workspace";
+  return "Missing";
+}
+
+function onboardingDisplayValue(value: string) {
+  if (value === "Multi-location pilot - all features included") return "Multi-location plan - all features included";
+  if (value === "Enterprise pilot configuration") return "Enterprise launch configuration";
+  return value;
 }
 
 export function OnboardingFlow() {
@@ -141,19 +167,39 @@ export function OnboardingFlow() {
   const [submissionId, setSubmissionId] = useState("");
   const [workspace, setWorkspace] = useState<WorkspaceSetup | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const locationReview = useMemo(() => parseOnboardingLocationRoster(form.locationRoster, {
+    state: form.state,
+    email: form.workEmail,
+    dataSetupPath: form.dataSetupPath,
+    dataSourceSystem: form.dataSourceSystem,
+  }), [form.dataSetupPath, form.dataSourceSystem, form.locationRoster, form.state, form.workEmail]);
 
-  const completedFields = useMemo(
-    () => Object.entries(form).filter(([key, value]) => key !== "notes" && hasValue(value)).length,
-    [form],
-  );
-  const requiredTotal = Object.keys(initialForm).filter((key) => key !== "notes").length;
-  const progress = Math.round((completedFields / requiredTotal) * 100);
   const currentStep = steps[activeStep];
-  const canContinue = currentStep.fields.every((field) => hasValue(form[field as keyof FormState]));
-  const completedSteps = steps.map((step) =>
-    step.fields.length > 0 && step.fields.every((field) => hasValue(form[field as keyof FormState])),
-  );
+  const stepIsComplete = (step: (typeof steps)[number]): boolean => {
+    if (step.title === "Centers") {
+      const requestedCenters = Number(form.centerCount);
+      const validCount = Number.isInteger(requestedCenters) && requestedCenters >= 1 && requestedCenters <= 100;
+      const rosterReady = requestedCenters > 1
+        ? locationReview.locations.length === requestedCenters && locationReview.errors.length === 0
+        : !form.locationRoster.trim() || (locationReview.locations.length === 1 && locationReview.errors.length === 0);
+      return validCount && hasValue(form.state) && rosterReady;
+    }
+    if (step.title === "Starting data") {
+      return Boolean(form.dataSetupPath)
+        && (form.dataSetupPath === "start_clean" || Boolean(form.dataSourceSystem));
+    }
+    if (step.title === "Review") {
+      return steps.slice(0, -1).every((candidate) => stepIsComplete(candidate));
+    }
+    return step.fields.length > 0 && step.fields.every((field) => hasValue(form[field as keyof FormState]));
+  };
+  const completedSteps = steps.map((step) => stepIsComplete(step));
+  const completedRequiredSteps = completedSteps.slice(0, -1).filter(Boolean).length;
+  const progress = Math.round((completedRequiredSteps / (steps.length - 1)) * 100);
+  const canContinue = stepIsComplete(currentStep);
   const controlId = (field: keyof FormState) => `${controlPrefix}-${field}`;
   const draftEmbedCode = useMemo(() => {
     const appBaseUrl = typeof window !== "undefined" ? window.location.origin : "https://thebeesuite.io";
@@ -170,6 +216,32 @@ export function OnboardingFlow() {
 ></script>`;
   }, [form.brandName]);
 
+  useEffect(() => {
+    const restoreTimer = window.setTimeout(() => {
+      try {
+        const restored = parseOnboardingDraft(window.localStorage.getItem(ONBOARDING_DRAFT_STORAGE_KEY));
+        if (restored) {
+          setForm((current) => ({ ...current, ...restored.form } as FormState));
+          setActiveStep(restored.activeStep);
+          setDraftRestored(true);
+        }
+      } catch {
+        // Storage may be unavailable in private browsing or restricted webviews.
+      }
+      setDraftReady(true);
+    }, 0);
+    return () => window.clearTimeout(restoreTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady || submitted) return;
+    try {
+      window.localStorage.setItem(ONBOARDING_DRAFT_STORAGE_KEY, serializeOnboardingDraft(form, activeStep));
+    } catch {
+      // Draft persistence is an enhancement and must never block onboarding.
+    }
+  }, [activeStep, draftReady, form, submitted]);
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
@@ -182,6 +254,12 @@ export function OnboardingFlow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          dataSetup: {
+            path: form.dataSetupPath,
+            sourceSystem: form.dataSourceSystem,
+            noCurrentFamiliesExpected: form.noCurrentFamiliesExpected,
+            notes: form.notes,
+          },
           pageUrl: typeof window !== "undefined" ? window.location.href : "",
         }),
       });
@@ -201,6 +279,12 @@ export function OnboardingFlow() {
       setSubmissionId(data?.notificationId ?? "");
       setWorkspace(data?.workspace ?? null);
       setSubmitted(true);
+      try {
+        window.localStorage.removeItem(ONBOARDING_DRAFT_STORAGE_KEY);
+      } catch {
+        // The workspace was created even if this browser does not expose storage.
+      }
+      setDraftRestored(false);
     });
   }
 
@@ -278,7 +362,7 @@ export function OnboardingFlow() {
                 <p className="leading-7">
                   {workspace?.existingWorkspace
                     ? `${form.workEmail} already has BEE Suite access. We requested an account recovery email. If it does not arrive, use Forgot password or contact support.`
-                    : `${form.brandName || "Your organization"} now has a BEE Suite workspace, an owner account, and its first school profile.`}
+                    : `${form.brandName || "Your organization"} now has a BEE Suite workspace, an owner account, and ${(workspace?.centerCount ?? 1).toLocaleString()} school profile${(workspace?.centerCount ?? 1) === 1 ? "" : "s"}.`}
                   {" "}Use School Setup to finish school profiles, invite staff, install the inquiry form, and complete payout setup.
                 </p>
                 {!workspace?.auth?.passwordReset?.ok ? (
@@ -289,7 +373,7 @@ export function OnboardingFlow() {
                 <div className="rounded-lg border border-white/10 bg-slate-950/50 p-4">
                   <div className="text-sm font-semibold text-white">Inquiry form embed setup</div>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
-                    This code is connected to the first school created during setup. Each additional school has its own code in School Setup.
+                    This code is connected to the primary school created during setup. Each additional school has its own code in School Setup.
                   </p>
                   <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-black/50 p-3 text-xs leading-5 text-slate-200">{workspace?.embedCode || draftEmbedCode}</pre>
                 </div>
@@ -303,11 +387,12 @@ export function OnboardingFlow() {
                     ["Brand", form.brandName],
                     ["Organization", workspace?.ownerGroupName || form.brandName || "Your organization"],
                     ["Account", workspace?.tenantName || form.brandName || "The BEE Suite"],
-                    ["First school", workspace?.centerName || "School profile"],
+                    ["Primary school", workspace?.centerName || "School profile"],
                     ["Centers requested", form.centerCount],
-                    ["School setup", workspace?.schoolSetupStatus || `${schoolOnboardingSetupSections.length} sections captured`],
+                    ["Data starting point", form.dataSetupPath === "import_existing" ? "Move existing records" : "Clean workspace"],
+                    ["School setup", workspace?.schoolSetupStatus || "Continue in workspace"],
                     ["Payout owner", form.payoutAdminName],
-                    ["Software plan", form.softwarePlan],
+                    ["Software plan", onboardingDisplayValue(form.softwarePlan)],
                     ["Priority", form.priority],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-lg border border-white/10 bg-slate-950/50 p-3">
@@ -341,15 +426,30 @@ export function OnboardingFlow() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
+                {draftRestored ? (
+                  <div role="status" className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950 sm:flex-row sm:items-center">
+                    <span>Your saved onboarding draft was restored on this device.</span>
+                    <Button type="button" size="sm" variant="outline" className="sm:ml-auto" onClick={() => {
+                      try {
+                        window.localStorage.removeItem(ONBOARDING_DRAFT_STORAGE_KEY);
+                      } catch {
+                        // Reset the in-memory form even when storage is restricted.
+                      }
+                      setForm(initialForm);
+                      setActiveStep(0);
+                      setDraftRestored(false);
+                    }}>Start over</Button>
+                  </div>
+                ) : null}
                 {activeStep === 0 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor={controlId("brandName")}>Brand name</Label>
-                      <Input id={controlId("brandName")} value={form.brandName} onChange={(event) => update("brandName", event.target.value)} placeholder="Your childcare brand" required />
+                      <Input id={controlId("brandName")} name="brandName" autoComplete="organization" value={form.brandName} onChange={(event) => update("brandName", event.target.value)} placeholder="Your childcare brand…" required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={controlId("workEmail")}>Work email</Label>
-                      <Input id={controlId("workEmail")} value={form.workEmail} onChange={(event) => update("workEmail", event.target.value)} placeholder="owner@example.com" type="email" required />
+                      <Input id={controlId("workEmail")} name="workEmail" autoComplete="email" spellCheck={false} value={form.workEmail} onChange={(event) => update("workEmail", event.target.value)} placeholder="owner@example.com" type="email" required />
                     </div>
                   </div>
                 ) : null}
@@ -358,29 +458,118 @@ export function OnboardingFlow() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor={controlId("centerCount")}>Number of centers</Label>
-                      <Input id={controlId("centerCount")} value={form.centerCount} onChange={(event) => update("centerCount", event.target.value)} placeholder="12" inputMode="numeric" required />
+                      <Input id={controlId("centerCount")} name="centerCount" autoComplete="off" value={form.centerCount} onChange={(event) => update("centerCount", event.target.value)} placeholder="12" inputMode="numeric" type="number" min={1} max={100} step={1} required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={controlId("state")}>Primary state or region</Label>
-                      <Input id={controlId("state")} value={form.state} onChange={(event) => update("state", event.target.value)} placeholder="Florida" required />
+                      <Input id={controlId("state")} name="state" autoComplete="address-level1" value={form.state} onChange={(event) => update("state", event.target.value)} placeholder="Florida…" required />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor={controlId("locationRoster")}>School details {Number(form.centerCount) > 1 ? "(required for every school)" : "(optional now)"}</Label>
+                      <Textarea
+                        id={controlId("locationRoster")}
+                        name="locationRoster"
+                        autoComplete="off"
+                        value={form.locationRoster}
+                        onChange={(event) => update("locationRoster", event.target.value)}
+                        rows={Math.max(5, Math.min(12, Number(form.centerCount) + 2 || 5))}
+                        placeholder={'Name | Address | City | State | ZIP | Phone | Email | Licensed Capacity | Data Path | Source System\nDowntown School | 100 Main St | Orlando | FL | 32801 | 407-555-0100 | director@example.com | 120 | import_existing | procare'}
+                      />
+                      <p className="text-xs leading-5 text-slate-600">Paste from a spreadsheet using tab, pipe, or comma-separated columns. Data Path and Source System are optional per-school overrides; otherwise the starting-data choice below is used. For multiple locations, the row count must match the requested school count so no placeholder locations are created.</p>
+                      {form.locationRoster.trim() ? (
+                        <div className={cn("rounded-lg border p-3 text-xs", locationReview.errors.length ? "border-red-300 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-900")}>
+                          {locationReview.errors.length
+                            ? locationReview.errors.slice(0, 5).map((error) => <div key={error}>{error}</div>)
+                            : `${locationReview.locations.length.toLocaleString()} complete school row${locationReview.locations.length === 1 ? "" : "s"} ready.`}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
 
                 {activeStep === 2 ? (
-                  <div className="grid gap-4">
-                    {schoolOnboardingSetupSections.map((section) => (
-                      <div key={section.field} className="space-y-2">
-                        <Label htmlFor={controlId(section.field)}>{section.label}</Label>
-                        <Textarea
-                          id={controlId(section.field)}
-                          value={form[section.field]}
-                          onChange={(event) => update(section.field as SchoolOnboardingSetupField, event.target.value)}
-                          placeholder={section.placeholder}
-                          required
-                        />
+                  <div className="grid gap-5">
+                    <div>
+                      <h3 className="text-pretty text-lg font-semibold">How will these schools begin by default?</h3>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">This chooses the default setup path. A school-detail row can override it for a specific location. Family records are added or imported only after secure workspace access is ready.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {[
+                        {
+                          value: "import_existing" as const,
+                          title: "Move Existing Records",
+                          detail: "Use guarded preview, duplicate matching, corrections, and school confirmation before importing.",
+                        },
+                        {
+                          value: "start_clean" as const,
+                          title: "Start Clean",
+                          detail: "Set up the school first, then add families and children directly as enrollment begins.",
+                        },
+                      ].map((option) => {
+                        const selected = form.dataSetupPath === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => {
+                              update("dataSetupPath", option.value);
+                              if (option.value === "start_clean") update("dataSourceSystem", "");
+                              if (option.value === "import_existing") update("noCurrentFamiliesExpected", false);
+                            }}
+                            className={cn(
+                              "min-h-32 rounded-xl border p-4 text-left transition-[border-color,background-color,color] motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950",
+                              selected ? "border-amber-500 bg-amber-50" : "bg-white hover:border-amber-400 hover:bg-amber-50/50",
+                            )}
+                          >
+                            <span className="flex items-center justify-between gap-3 font-semibold">
+                              {option.title}
+                              {selected ? <CheckCircle2 aria-hidden="true" className="size-5 text-emerald-700" /> : null}
+                            </span>
+                            <span className="mt-2 block text-sm leading-5 text-slate-600">{option.detail}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {form.dataSetupPath === "import_existing" ? (
+                      <div className="space-y-2">
+                        <Label htmlFor={controlId("dataSourceSystem")}>Previous source</Label>
+                        <Select value={form.dataSourceSystem} onValueChange={(value) => update("dataSourceSystem", (value ?? "") as SchoolDataSourceSystem | "")}>
+                          <SelectTrigger id={controlId("dataSourceSystem")}><SelectValue placeholder="Choose the previous system…" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="procare">ProCare export package</SelectItem>
+                            <SelectItem value="other">Another system or spreadsheet</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs leading-5 text-slate-600">
+                          {form.dataSourceSystem === "other"
+                            ? "Use the guided BEE flat-file adapter to map one reviewed table at a time. Keep stable source IDs and do not email family exports or credentials."
+                            : "Use the complete, unchanged school package. The guarded importer previews mappings and duplicate matches before writing records."}
+                        </p>
                       </div>
-                    ))}
+                    ) : null}
+                    {form.dataSetupPath === "start_clean" ? (
+                      <label className="flex min-h-11 items-start gap-3 rounded-xl border bg-slate-50 p-4 text-sm">
+                        <input
+                          type="checkbox"
+                          name="noCurrentFamiliesExpected"
+                          checked={form.noCurrentFamiliesExpected}
+                          onChange={(event) => update("noCurrentFamiliesExpected", event.target.checked)}
+                          className="mt-0.5 size-5 shrink-0 accent-amber-500"
+                        />
+                        <span><span className="block font-medium">No current families or children are expected yet</span><span className="mt-1 block text-xs leading-5 text-slate-600">The workspace will stay empty until real enrollment begins; no sample or placeholder families are created.</span></span>
+                      </label>
+                    ) : null}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+                        <div className="font-semibold text-emerald-950">BEE setup team prepares</div>
+                        <p className="mt-1 text-xs leading-5 text-emerald-900/75">Business profile, configuration, forms, billing rules, integrations, templates, and technical checks from approved business information.</p>
+                      </div>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+                        <div className="font-semibold text-amber-950">School confirms</div>
+                        <p className="mt-1 text-xs leading-5 text-amber-900/75">Family and child facts, source exceptions, payout bank details on the secure provider page, invitation scope, and final launch approval.</p>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
 
@@ -429,11 +618,11 @@ export function OnboardingFlow() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={controlId("payoutAdminName")}>Payout setup owner</Label>
-                      <Input id={controlId("payoutAdminName")} value={form.payoutAdminName} onChange={(event) => update("payoutAdminName", event.target.value)} placeholder="Finance owner or franchise admin" required />
+                      <Input id={controlId("payoutAdminName")} name="payoutAdminName" autoComplete="name" value={form.payoutAdminName} onChange={(event) => update("payoutAdminName", event.target.value)} placeholder="Finance owner or franchise admin…" required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={controlId("payoutAdminEmail")}>Payout setup email</Label>
-                      <Input id={controlId("payoutAdminEmail")} value={form.payoutAdminEmail} onChange={(event) => update("payoutAdminEmail", event.target.value)} placeholder="finance@example.com" type="email" required />
+                      <Input id={controlId("payoutAdminEmail")} name="payoutAdminEmail" autoComplete="email" spellCheck={false} value={form.payoutAdminEmail} onChange={(event) => update("payoutAdminEmail", event.target.value)} placeholder="finance@example.com" type="email" required />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor={controlId("payoutReadiness")}>Payout account readiness</Label>
@@ -486,7 +675,8 @@ export function OnboardingFlow() {
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor={controlId("notes")}>Launch notes</Label>
-                      <Textarea id={controlId("notes")} value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Tell us about current systems, imports, or launch constraints." />
+                      <Textarea id={controlId("notes")} name="notes" autoComplete="off" value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Tell us about current systems, imports, or launch constraints…" />
+                      <p className="text-xs leading-5 text-slate-600">Do not include family or child details, passwords, bank information, or verification codes.</p>
                     </div>
                   </div>
                 ) : null}
@@ -498,19 +688,16 @@ export function OnboardingFlow() {
                         ["Brand", form.brandName || "Missing"],
                         ["Email", form.workEmail || "Missing"],
                         ["Centers", form.centerCount || "Missing"],
+                        ["School detail rows", form.locationRoster.trim() ? String(locationReview.locations.length) : "Primary profile to finish in School Setup"],
                         ["Region", form.state || "Missing"],
                         ["Payout owner", form.payoutAdminName || "Missing"],
                         ["Payout email", form.payoutAdminEmail || "Missing"],
-                        ["Software plan", form.softwarePlan || "Missing"],
-                        ["Add-ons", form.addOnBundle || "Missing"],
+                        ["Software plan", onboardingDisplayValue(form.softwarePlan) || "Missing"],
+                        ["Add-ons", onboardingDisplayValue(form.addOnBundle) || "Missing"],
                         ["Merchant fees", form.merchantFeeStrategy || "Missing"],
                         ["Payout readiness", form.payoutReadiness || "Missing"],
-                        ["Classroom setup", form.classroomSetup ? "Provided" : "Missing"],
-                        ["Tuition/rates", form.tuitionRateSetup ? "Provided" : "Missing"],
-                        ["Subsidy rules", form.subsidyRules ? "Provided" : "Missing"],
-                        ["Balance rules", form.balanceRules ? "Provided" : "Missing"],
-                        ["Invoice rules", form.invoiceRules ? "Provided" : "Missing"],
-                        ["Licensing setup", form.licensingSetup ? "Provided" : "Missing"],
+                        ["Default data starting point", dataSetupPathLabel(form.dataSetupPath)],
+                        ["Default previous source", form.dataSetupPath === "import_existing" ? sourceLabelForReview(form.dataSourceSystem) : "None"],
                         ["Timeline", form.timeline || "Missing"],
                         ["Priority", form.priority || "Missing"],
                       ].map(([label, value]) => (
@@ -520,8 +707,40 @@ export function OnboardingFlow() {
                         </div>
                       ))}
                     </div>
+                    {locationReview.locations.length ? (
+                      <div className="space-y-3">
+                        <div>
+                          <h3 className="text-sm font-semibold">School profiles to create</h3>
+                          <p className="mt-1 text-xs leading-5 text-slate-600">Review each school and its starting-data path before finishing. You can go back to correct any row.</p>
+                        </div>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          {locationReview.locations.map((location, index) => (
+                            <div key={`${location.name}-${index}`} className="rounded-lg border bg-white p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">School {index + 1}</div>
+                                  <h4 className="mt-1 text-sm font-semibold text-slate-950">{location.name}</h4>
+                                </div>
+                                <div className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                  Capacity {location.licensedCapacity || "Not supplied"}
+                                </div>
+                              </div>
+                              <p className="mt-3 text-sm leading-5 text-slate-700">
+                                {location.address}, {location.city}, {location.state} {location.postalCode}
+                              </p>
+                              <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                                <div><span className="font-medium text-slate-800">Email:</span> {location.email}</div>
+                                <div><span className="font-medium text-slate-800">Phone:</span> {location.phone || "Not supplied"}</div>
+                                <div><span className="font-medium text-slate-800">Starting data:</span> {dataSetupPathLabel(location.dataSetupPath)}</div>
+                                <div><span className="font-medium text-slate-800">Previous source:</span> {location.dataSetupPath === "import_existing" ? sourceLabelForReview(location.dataSourceSystem ?? "") : "None"}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="rounded-lg border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-700">
-                      Finishing onboarding creates your BEE Suite organization, owner account, first school profile, and inquiry form. Online payments remain unavailable until payout setup is complete and approved.
+                      Finishing onboarding creates your BEE Suite organization, owner account, every supplied school profile, and a school-scoped inquiry form record. Online payments remain unavailable until payout setup is complete and approved.
                     </div>
                   </div>
                 ) : null}
@@ -534,7 +753,7 @@ export function OnboardingFlow() {
 
                 <div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center">
                   <Button type="button" disabled={!canContinue || isPending} onClick={nextStep} aria-busy={isPending}>
-                    {isPending ? "Submitting..." : activeStep === steps.length - 1 ? "Finish intake" : "Continue"}
+                    {isPending ? "Submitting…" : activeStep === steps.length - 1 ? "Finish intake" : "Continue"}
                     <ArrowRight data-icon="inline-end" />
                   </Button>
                   {activeStep > 0 ? (

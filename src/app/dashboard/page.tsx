@@ -122,7 +122,12 @@ export default async function DashboardPage() {
     && user.workspace?.mode === "center"
     && executiveRoles.has(user.role);
   const canSeePayrollSummaries = canSeeExecutiveMetrics || canSeeLocationExecutivePayroll;
-  const directorChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "director_launch");
+  const dashboardChecklistCenterId = centers[0]?.id ?? user.primaryCenterId;
+  const directorChecklistCompletedIds = readCompletedSetupChecklistIds(
+    dashboardPreferenceUser?.customFields,
+    "director_launch",
+    { centerId: dashboardChecklistCenterId, allowLegacyFallback: dashboardChecklistCenterId === user.primaryCenterId },
+  );
   const teacherChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "teacher_profile");
   const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The BEE Suite";
   const isKidCityWorkspace = /kid[-\s]*city/i.test(`${tenantBrand?.slug || ""} ${brandName}`);
@@ -173,16 +178,6 @@ export default async function DashboardPage() {
     trendLeadRows,
     trendTourRows,
     trendInvoiceRows,
-    familyCount,
-    documentCount,
-    billingAccountCount,
-    guardianLoginCount,
-    attendanceRecordCount,
-    messageTemplateCount,
-    calendarEventCount,
-    fteReportCount,
-    complianceTaskCount,
-    incidentReviewCount,
     attendanceClassroomRows,
     accountsReceivableFamilyRows,
     executiveAccountsReceivableFamilyRows,
@@ -364,23 +359,6 @@ export default async function DashboardPage() {
         totalCents: true,
       },
     }),
-    prisma.family.count({ where: currentFamilyWhere }),
-    prisma.document.count({
-      where: {
-        OR: [
-          { family: { centerId: scopedCenterFilter } },
-          { child: { family: { centerId: scopedCenterFilter } } },
-        ],
-      },
-    }),
-    prisma.billingAccount.count({ where: { family: { centerId: scopedCenterFilter } } }),
-    prisma.guardian.count({ where: { family: currentFamilyWhere, userId: { not: null } } }),
-    prisma.checkInOutLog.count({ where: { centerId: scopedCenterFilter } }),
-    prisma.messageTemplate.count({ where: { centerId: scopedCenterFilter } }),
-    prisma.calendarEvent.count({ where: { centerId: scopedCenterFilter } }),
-    prisma.fteReport.count({ where: { centerId: scopedCenterFilter } }),
-    prisma.complianceTask.count({ where: { centerId: scopedCenterFilter } }),
-    prisma.incidentReport.count({ where: { classroom: { centerId: scopedCenterFilter }, adminReviewStatus: { not: "pending" } } }),
     prisma.classroom.findMany({
       where: activeClassroomWhere(attendanceClassroomWhere),
       orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
@@ -572,24 +550,6 @@ export default async function DashboardPage() {
     stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(center.id) || canUseCorporateVerification,
   })), { userEmail: user.email });
   const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
-    centerCount: centers.length,
-    classroomCount: classroomSnapshotRows.length,
-    teacherStaffCount: staffCount,
-    importedFamilyCount: familyCount,
-    importedChildCount: activeChildren,
-    documentCount,
-    billingAccountCount,
-    invoiceCount: trendInvoiceRows.length,
-    guardianLoginCount,
-    attendanceRecordCount,
-    messageTemplateCount,
-    parentMessageCount: unreadMessages + parentMessageRows.length,
-    calendarEventCount,
-    fteReportCount,
-    complianceTaskCount,
-    incidentReviewCount,
-    leadCount: newLeadCount + highIntentLeadCount,
-    dashboardConfigured: dashboardWidgetConfig.widgets.some((widget) => widget.visible),
     payoutReady: payoutSetupFlow.complete,
   });
   const fteDueState = getFteDueState(today);
@@ -1088,6 +1048,7 @@ export default async function DashboardPage() {
       }] : []),
       ...(user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR ? [{
         key: "director_launch" as const,
+        centerId: dashboardChecklistCenterId,
         title: "Director launch setup checklist",
         description: "Track the school-level setup work required before all BEE Suite features go live.",
         completedIds: directorChecklistCompletedIds,

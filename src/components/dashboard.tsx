@@ -167,6 +167,7 @@ export type LiveDashboardData = {
   }>;
   setupChecklists?: Array<{
     key: SetupChecklistKey;
+    centerId?: string | null;
     title: string;
     description: string;
     completedIds: string[];
@@ -1787,6 +1788,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             <SetupChecklistPanel
               key={checklist.key}
               checklistKey={checklist.key}
+              centerId={checklist.centerId}
               title={checklist.title}
               description={checklist.description}
               tasks={checklist.tasks ?? (checklist.key === "director_launch" ? directorLaunchChecklistTasks : teacherProfileChecklistTasks)}

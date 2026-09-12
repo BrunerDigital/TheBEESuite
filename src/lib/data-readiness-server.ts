@@ -10,6 +10,7 @@ import {
   type DataReadinessWorkspaceData,
 } from "@/lib/data-readiness";
 import { prisma } from "@/lib/prisma";
+import { schoolDataImportVerificationRevision } from "@/lib/school-data-setup";
 
 function asRecord(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -121,7 +122,7 @@ export async function loadDataReadinessWorkspace(
         centerId: { in: centerIds },
         OR: [
           { action: "data_readiness.decision.recorded" },
-          { action: "procare.import.reconciliation_exported" },
+          { action: "procare.import.fleet_verification_exported" },
         ],
       },
       orderBy: { createdAt: "desc" },
@@ -131,11 +132,10 @@ export async function loadDataReadinessWorkspace(
   ]);
 
   const latestDecisionByResource = new Map<string, ReturnType<typeof decisionEvidence>>();
-  const verifiedBatchIds = new Set<string>();
+  const latestFleetAuditByBatch = new Map<string, Record<string, unknown>>();
   for (const audit of auditLogs) {
-    if (audit.action === "procare.import.reconciliation_exported" && audit.resourceId) {
-      const metadata = asRecord(audit.metadata);
-      if (!metadata.decision || String(metadata.decision).toUpperCase() === "PASS") verifiedBatchIds.add(audit.resourceId);
+    if (audit.action === "procare.import.fleet_verification_exported" && audit.resourceId) {
+      if (!latestFleetAuditByBatch.has(audit.resourceId)) latestFleetAuditByBatch.set(audit.resourceId, asRecord(audit.metadata));
       continue;
     }
     if (audit.action !== "data_readiness.decision.recorded" || !audit.resourceId) continue;
@@ -150,6 +150,28 @@ export async function loadDataReadinessWorkspace(
     countByBatchStatus.set(`${row.batchId}:${row.status}`, count);
     sourceRows += count;
   }
+
+  const batchIsVerified = (batch: (typeof batches)[number], summary: Record<string, unknown>) => {
+    const metadata = latestFleetAuditByBatch.get(batch.id);
+    if (!metadata || text(metadata.status) !== "READY_FOR_DIRECTOR_REVIEW" || number(metadata.blockerCount) !== 0) return false;
+    const importedRows = countByBatchStatus.get(`${batch.id}:imported`) ?? number(summary.imported);
+    const unresolvedRows = countByBatchStatus.get(`${batch.id}:needs_resolution`) ?? number(summary.unresolved);
+    const disposedRows = countByBatchStatus.get(`${batch.id}:disposed`) ?? number(summary.disposed);
+    return text(metadata.verificationRevision) === schoolDataImportVerificationRevision({
+      id: batch.id,
+      filename: batch.filename,
+      status: batch.status,
+      createdAt: batch.createdAt.toISOString(),
+      totalRows: batch._count.rows,
+      importedRows,
+      unresolvedRows,
+      disposedRows,
+      errorRows: Math.max(batch._count.rows - importedRows, 0),
+      sourceSha256: text(summary.sourceSha256) || null,
+      reviewFingerprint: text(summary.reviewFingerprint) || null,
+      sourceAdapter: summary.sourceAdapter === "bee_flat_file_v1" ? "bee_flat_file_v1" : "procare",
+    });
+  };
 
   const rowTasks = issueRows.map((row) => buildImportRowReadinessTask({
     id: row.id,
@@ -183,7 +205,7 @@ export async function loadDataReadinessWorkspace(
       rowCount: batch._count.rows,
       importedRows,
       unresolvedRows,
-      verified: verifiedBatchIds.has(batch.id),
+      verified: batchIsVerified(batch, summary),
       ...latestDecisionByResource.get(`ProcareImportBatch:${batch.id}`),
     });
   });
@@ -210,7 +232,7 @@ export async function loadDataReadinessWorkspace(
       unresolvedRows: countByBatchStatus.get(`${batch.id}:needs_resolution`) ?? number(summary.unresolved),
       disposedRows: countByBatchStatus.get(`${batch.id}:disposed`) ?? number(summary.disposed),
       createdAt: batch.createdAt.toISOString(),
-      verified: verifiedBatchIds.has(batch.id),
+      verified: batchIsVerified(batch, summary),
     };
   });
 

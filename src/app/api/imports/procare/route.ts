@@ -40,6 +40,8 @@ import {
   procareImportReviewFingerprint,
   procareSourceSha256,
 } from "@/lib/procare-import-review";
+import { readSchoolDataSetup, schoolDataImportVerificationRevision } from "@/lib/school-data-setup";
+import { loadSchoolDataFingerprint } from "@/lib/school-data-setup-server";
 import { buildProcareReconciliationReport, procareRetentionReviewDue } from "@/lib/procare-migration-controls";
 import {
   assessProcareFleetSourceCoverage,
@@ -72,6 +74,30 @@ export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+type SchoolImportSourceAdapter = "procare" | "bee_flat_file_v1";
+
+function schoolImportSourceAdapter(value: unknown): SchoolImportSourceAdapter | null {
+  const normalized = clean(value).toLowerCase();
+  return normalized === "procare" || normalized === "bee_flat_file_v1" ? normalized : null;
+}
+
+function schoolImportSetupError(
+  center: Pick<ImportCenter, "customFields">,
+  sourceAdapter: SchoolImportSourceAdapter,
+) {
+  const savedDataSetup = readSchoolDataSetup(center.customFields);
+  if (savedDataSetup.path === "start_clean") {
+    return "This school is set to start with a clean workspace. Change its saved data starting point before reviewing an import.";
+  }
+  const expectedAdapter = savedDataSetup.sourceSystem === "other" ? "bee_flat_file_v1" : savedDataSetup.sourceSystem;
+  if (expectedAdapter && sourceAdapter !== expectedAdapter) {
+    return expectedAdapter === "procare"
+      ? "This school's saved starting point expects the supported previous-system package. Change the saved source or select that source format."
+      : "This school's saved starting point expects the BEE mapped flat-file adapter. Change the saved source or select that source format.";
+  }
+  return null;
 }
 
 function parseDelimited(text: string, delimiter: "," | "\t" | ";" | "|") {
@@ -190,11 +216,13 @@ function isEmail(value: string) {
 }
 
 function metadataFromRow(rawData: Record<string, string>, extra: Record<string, unknown> = {}) {
+  const sourceAdapter = extra.sourceAdapter === "bee_flat_file_v1" ? "bee_flat_file_v1" : "procare";
   const userDefined = Object.fromEntries(
     Object.entries(rawData).filter(([key, value]) => value && /user\s*defined|udf|tracking|custom|school\s*field/i.test(key)),
   );
   return {
-    source: "procare_import",
+    source: sourceAdapter === "procare" ? "procare_import" : "bee_flat_file_import",
+    sourceAdapter,
     rawData,
     sourceFields: procareSourceFields(rawData),
     userDefined,
@@ -379,17 +407,18 @@ async function findOrCreateClassroom({
   name,
   ageGroup,
   rawData,
+  sourceSystem,
 }: {
   centerId: string;
   name: string;
   ageGroup: string;
   rawData: Record<string, string>;
+  sourceSystem: SchoolImportSourceAdapter;
 }, db: ProcareClassroomDb = prisma) {
   const providedClassroomExternalId = externalValue(rawData, ["classroom id", "room id", "class id", "classroom key", "room key"]);
-  const classroomExternalId = providedClassroomExternalId || name;
   const rawMatches = providedClassroomExternalId
     ? await db.classroom.findMany({
-        where: { centerId, sourceSystem: "procare", externalId: classroomExternalId },
+        where: { centerId, sourceSystem, externalId: providedClassroomExternalId },
         take: 20,
         select: { id: true, capacity: true, ratioRule: true, customFields: true },
       })
@@ -400,28 +429,33 @@ async function findOrCreateClassroom({
       });
   const matches = await activeProcareClassroomMatches(rawMatches, centerId, db);
   if (matches.length > 1) {
-    throw new Error("Multiple classrooms match this ProCare room. Resolve the duplicate classrooms before importing.");
+    throw new Error("Multiple classrooms match this source room. Resolve the duplicate classrooms before importing.");
   }
   const existing = matches[0] ?? null;
   const capacity = value(rawData, ["capacity", "licensed capacity", "room capacity"]);
   const ratioRule = value(rawData, ["ratio", "ratio rule", "staff ratio"]);
   const importedCapacity = capacity ? intValue(capacity, -1) : null;
   if (importedCapacity !== null && importedCapacity < 0) {
-    throw new Error("The ProCare classroom capacity is invalid. Correct the source value before importing this row.");
+    throw new Error("The source classroom capacity is invalid. Correct the source value before importing this row.");
   }
   if (existing) {
     const legacyUnverifiedClassroom = existing.capacity === 12
       && /Imported from ProCare; verify capacity and ratio\./i.test(existing.ratioRule ?? "");
     const nextCapacity = importedCapacity ?? (legacyUnverifiedClassroom ? 0 : existing.capacity);
     const nextRatioRule = ratioRule || (legacyUnverifiedClassroom
-      ? "Imported from ProCare; capacity and ratio need director verification."
+      ? "Imported from a source system; capacity and ratio need director verification."
       : existing.ratioRule);
     await db.classroom.update({
       where: { id: existing.id },
       data: {
         ...(existing.redirectedFromArchived
           ? {}
-          : { name, sourceSystem: "procare", externalId: classroomExternalId }),
+          : {
+              name,
+              ...(providedClassroomExternalId
+                ? { sourceSystem, externalId: providedClassroomExternalId }
+                : {}),
+            }),
         ageGroup,
         capacity: nextCapacity,
         ratioRule: nextRatioRule,
@@ -433,6 +467,7 @@ async function findOrCreateClassroom({
             capacityImported: Boolean(capacity),
             ratioRuleImported: Boolean(ratioRule),
             setupVerificationRequired: nextCapacity <= 0 || !nextRatioRule,
+            sourceAdapter: sourceSystem,
           }),
         ),
       },
@@ -446,15 +481,16 @@ async function findOrCreateClassroom({
       name,
       ageGroup,
       capacity: importedCapacity ?? 0,
-      ratioRule: ratioRule || "Imported from ProCare; capacity and ratio need director verification.",
-      sourceSystem: "procare",
-      externalId: classroomExternalId,
+      ratioRule: ratioRule || "Imported from a source system; capacity and ratio need director verification.",
+      sourceSystem,
+      externalId: providedClassroomExternalId,
       customFields: metadataFromRow(rawData, {
         mappedCenterId: centerId,
         importedFromColumn: "classroom",
         capacityImported: Boolean(capacity),
         ratioRuleImported: Boolean(ratioRule),
         setupVerificationRequired: !capacity || !ratioRule,
+        sourceAdapter: sourceSystem,
       }),
     },
     select: { id: true },
@@ -481,6 +517,7 @@ async function ensureTeacherCenterGrant(input: {
   tenantId: string;
   organizationId?: string | null;
   centerId: string;
+  sourceAdapter: SchoolImportSourceAdapter;
 }, db: TeacherCenterGrantDb = prisma) {
   await db.userAccessGrant.updateMany({
     where: {
@@ -523,7 +560,11 @@ async function ensureTeacherCenterGrant(input: {
       centerId: input.centerId,
       role: UserRole.TEACHER,
       scopeType: "CENTER",
-      permissions: { createdFromProcareImport: true },
+      permissions: {
+        createdFromSchoolDataImport: true,
+        sourceAdapter: input.sourceAdapter,
+        ...(input.sourceAdapter === "procare" ? { createdFromProcareImport: true } : {}),
+      },
     },
   });
 }
@@ -536,10 +577,11 @@ async function findExistingImportedStaffProfile(input: {
   centerId: string;
   externalId: string | null;
   contactEmail: string;
+  sourceSystem: SchoolImportSourceAdapter;
   rejectAmbiguous?: boolean;
 }) {
   const identityWhere: Prisma.StaffProfileWhereInput | null = input.externalId
-    ? { sourceSystem: "procare", externalId: input.externalId }
+    ? { sourceSystem: input.sourceSystem, externalId: input.externalId }
     : input.contactEmail
       ? { customFields: { path: ["staffContactEmail"], equals: input.contactEmail } }
       : null;
@@ -556,7 +598,7 @@ async function findExistingImportedStaffProfile(input: {
     },
   });
   if (input.rejectAmbiguous && matches.length > 1) {
-    throw new Error("Multiple staff profiles use this ProCare identity. Resolve the duplicate staff records before importing.");
+    throw new Error("Multiple staff profiles use this source identity. Resolve the duplicate staff records before importing.");
   }
   return matches[0] ?? null;
 }
@@ -595,12 +637,14 @@ function parseImportRowNumbers(input: string) {
 }
 
 function importReviewEvidence(input: {
+  sourceAdapter: SchoolImportSourceAdapter;
   sourceSha256: string;
   mappingSignature: string;
   warningRowNumbers: number[];
   duplicateReviewRowNumbers: number[];
 }) {
   return JSON.stringify({
+    sourceAdapter: input.sourceAdapter,
     sourceSha256: input.sourceSha256,
     mappingSignature: input.mappingSignature,
     warningRowNumbers: [...input.warningRowNumbers].sort((left, right) => left - right),
@@ -612,10 +656,12 @@ async function findProcareDuplicateMatches({
   rowNumber,
   targetCenterId,
   rawData,
+  sourceSystem,
 }: {
   rowNumber: number;
   targetCenterId: string;
   rawData: Record<string, string>;
+  sourceSystem: SchoolImportSourceAdapter;
 }) {
   const accountExternalId = externalValue(rawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
   const familyName = procareFamilyName(rawData);
@@ -629,7 +675,7 @@ async function findProcareDuplicateMatches({
   const matches: ProcareDuplicateMatch[] = [];
 
   const familyWhere: Prisma.FamilyWhereInput[] = accountExternalId
-    ? [{ sourceSystem: "procare", externalId: accountExternalId }]
+    ? [{ sourceSystem, externalId: accountExternalId }]
     : [
         familyName ? { name: familyName } : undefined,
         email ? { billingEmail: email } : undefined,
@@ -690,7 +736,7 @@ async function findProcareDuplicateMatches({
   }
 
   const childWhere: Prisma.ChildWhereInput[] = childExternalId
-    ? [{ sourceSystem: "procare", externalId: childExternalId }]
+    ? [{ sourceSystem, externalId: childExternalId }]
     : childName
       ? [{ fullName: childName }]
       : [];
@@ -737,7 +783,7 @@ async function findProcareDuplicateMatches({
 
   const guardianLookupWhere = guardianImports.flatMap((guardianImport): Prisma.GuardianWhereInput[] => (
     guardianImport.externalId
-      ? [{ sourceSystem: "procare", externalId: guardianImport.externalId }]
+      ? [{ sourceSystem, externalId: guardianImport.externalId }]
       : [
           guardianImport.guardianEmail ? { email: guardianImport.guardianEmail } : undefined,
           guardianImport.guardianPhone ? { phone: guardianImport.guardianPhone } : undefined,
@@ -755,7 +801,7 @@ async function findProcareDuplicateMatches({
   for (const guardianImport of guardianImports) {
     const matchingGuardianCandidates = guardianCandidates.filter((candidate) => (
       guardianImport.externalId
-        ? candidate.sourceSystem === "procare" && candidate.externalId === guardianImport.externalId
+        ? candidate.sourceSystem === sourceSystem && candidate.externalId === guardianImport.externalId
         : Boolean(
             (guardianImport.guardianEmail && candidate.email === guardianImport.guardianEmail)
             || (guardianImport.guardianPhone && candidate.phone === guardianImport.guardianPhone)
@@ -808,6 +854,7 @@ async function previewImportRows({
   sourceType,
   filename,
   duplicateMode,
+  sourceSystem,
 }: {
   rows: string[][];
   headers: string[];
@@ -817,6 +864,7 @@ async function previewImportRows({
   sourceType: string;
   filename: string;
   duplicateMode: DuplicateMatchMode;
+  sourceSystem: SchoolImportSourceAdapter;
 }) {
   const importRowCount = Math.max(rows.length - 1, 0);
   const runDatabasePreviewLookups = true;
@@ -899,19 +947,19 @@ async function previewImportRows({
   const previewExactIdentityLookupResults = await Promise.all([
     previewCenterIds.length && previewFamilyExternalIds.length
       ? prisma.family.findMany({
-          where: { centerId: { in: previewCenterIds }, sourceSystem: "procare", externalId: { in: previewFamilyExternalIds } },
+          where: { centerId: { in: previewCenterIds }, sourceSystem, externalId: { in: previewFamilyExternalIds } },
           select: { id: true, centerId: true, externalId: true },
         })
       : Promise.resolve([]),
     previewCenterIds.length && previewChildExternalIds.length
       ? prisma.child.findMany({
-          where: { family: { centerId: { in: previewCenterIds } }, sourceSystem: "procare", externalId: { in: previewChildExternalIds } },
+          where: { family: { centerId: { in: previewCenterIds } }, sourceSystem, externalId: { in: previewChildExternalIds } },
           select: { id: true, externalId: true, family: { select: { centerId: true } } },
         })
       : Promise.resolve([]),
     previewCenterIds.length && previewGuardianExternalIds.length
       ? prisma.guardian.findMany({
-          where: { family: { centerId: { in: previewCenterIds } }, sourceSystem: "procare", externalId: { in: previewGuardianExternalIds } },
+          where: { family: { centerId: { in: previewCenterIds } }, sourceSystem, externalId: { in: previewGuardianExternalIds } },
           select: { id: true, externalId: true, family: { select: { centerId: true } } },
         })
       : Promise.resolve([]),
@@ -999,6 +1047,7 @@ async function previewImportRows({
             centerId: targetCenter.id,
             externalId: employeeExternalId,
             contactEmail: staffContactEmail,
+            sourceSystem,
           })
         : null;
       if (runDatabasePreviewLookups) {
@@ -1106,7 +1155,7 @@ async function previewImportRows({
       && exactChildIdentityIsSafe
       && exactGuardianIdentitiesAreSafe;
     const rowDuplicateMatches = runDatabasePreviewLookups && !canUseExactIdentityFastPath
-      ? await findProcareDuplicateMatches({ rowNumber, targetCenterId: targetCenter.id, rawData })
+      ? await findProcareDuplicateMatches({ rowNumber, targetCenterId: targetCenter.id, rawData, sourceSystem })
       : [];
     const rowDuplicateWarnings = rowDuplicateMatches.filter((match) => duplicateMatchNeedsReview(match, duplicateMode));
     if (rowDuplicateMatches.length) duplicateMatches.push(...rowDuplicateMatches);
@@ -1250,7 +1299,7 @@ function buildConsolidatedRowsFromFiles(
         reportKind: "ignored",
         rows: Math.max(rows.length - 1, 0),
         matchedHeaderAliases: recognizedHeaders,
-        note: rows.length < 2 ? "No data rows were found." : "No supported ProCare import columns were recognized.",
+        note: rows.length < 2 ? "No data rows were found." : "No supported school-data import columns were recognized.",
       });
       continue;
     }
@@ -1419,7 +1468,11 @@ function combineStandardAndSupplementalProcareRows(
   }));
 }
 
-async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
+async function readImportText(
+  files: FormDataEntryValue[],
+  pastedCsv: string,
+  sourceAdapter: SchoolImportSourceAdapter,
+) {
   const uploadedFiles = files.filter((entry): entry is File => entry instanceof File && entry.size > 0);
   if (uploadedFiles.length && pastedCsv.trim()) {
     throw new Error("Choose either uploaded files or pasted CSV text before submitting the data import review.");
@@ -1435,7 +1488,12 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
     throw new Error(`The selected sources are larger than the ${MAX_PROCARE_SOURCE_LABEL} secure browser-source limit. Create one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
   }
   if (!uploadedFiles.length) {
-    return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text", datasetCoverage: null };
+    return {
+      text: pastedCsv,
+      filename: sourceAdapter === "procare" ? "pasted-procare-import.csv" : "pasted-bee-flat-file.csv",
+      sourceType: "csv_text",
+      datasetCoverage: null,
+    };
   }
 
   if (uploadedFiles.length > 1) {
@@ -1654,7 +1712,7 @@ async function GETHandler(request: NextRequest) {
       ok: true,
       mode: "continue_existing_migration",
       currentStateAt: new Date().toISOString(),
-      note: "Reports retain the selected ProCare batch as source evidence and compare it with the school's current BEE Suite records. No records are imported or changed.",
+      note: "Reports retain the selected import batch as source evidence and compare it with the school's current BEE Suite records. No records are imported or changed.",
       batches: batches.map((batch) => {
         const summary = batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)
           ? batch.summary as Record<string, Prisma.JsonValue>
@@ -1670,6 +1728,7 @@ async function GETHandler(request: NextRequest) {
           unresolvedRows: counts.needs_resolution ?? 0,
           disposedRows: counts.disposed ?? 0,
           hasRefinedSourceInventory: Boolean(summary.datasetCoverage) && summary.sourceInventoryConfirmed === true,
+          sourceAdapter: summary.sourceAdapter === "bee_flat_file_v1" ? "bee_flat_file_v1" : "procare",
         };
       }),
     }, { headers: { "Cache-Control": "no-store" } });
@@ -1706,6 +1765,12 @@ async function GETHandler(request: NextRequest) {
   if (importBatchCenterIds(batch).some((centerId) => !canAccessCenter(user, centerId))) {
     return NextResponse.json({ ok: false, error: "You do not have access to this import batch." }, { status: 403 });
   }
+  const batchSummary = batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)
+    ? batch.summary as Record<string, unknown>
+    : {};
+  const batchSourceSystem: SchoolImportSourceAdapter = batchSummary.sourceAdapter === "bee_flat_file_v1"
+    ? "bee_flat_file_v1"
+    : "procare";
 
   if (reportType === "reconciliation" || reportType === "fleet-verification") {
     const touchedCenterIds = importBatchCenterIds(batch);
@@ -1870,45 +1935,42 @@ async function GETHandler(request: NextRequest) {
     const classroomScopes = [...classroomExternalIds].map(scopedIdentityParts);
     const balanceScopes = [...balancesByFamily.keys()].map(scopedIdentityParts);
     const procareRelationshipRowsAcrossSourceFamilies = familyScopes.map(({ centerId, externalId }) => ({
-      family: { centerId, sourceSystem: "procare", externalId },
-      sourceSystem: "procare",
+      family: { centerId, sourceSystem: batchSourceSystem, externalId },
+      sourceSystem: batchSourceSystem,
       externalId: { not: null },
     }));
     const [families, children, guardians, emergencyContacts, authorizedPickups, staff, classrooms, billingAccounts, openingBalanceInvoices] = await Promise.all([
-      familyScopes.length ? prisma.family.count({ where: { OR: familyScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
-      childScopes.length ? prisma.child.count({ where: { OR: childScopes.map(({ centerId, externalId }) => ({ family: { centerId }, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
+      familyScopes.length ? prisma.family.count({ where: { OR: familyScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: batchSourceSystem, externalId })) } }) : Promise.resolve(0),
+      childScopes.length ? prisma.child.count({ where: { OR: childScopes.map(({ centerId, externalId }) => ({ family: { centerId }, sourceSystem: batchSourceSystem, externalId })) } }) : Promise.resolve(0),
       procareRelationshipRowsAcrossSourceFamilies.length ? prisma.guardian.count({ where: { OR: procareRelationshipRowsAcrossSourceFamilies } }) : Promise.resolve(0),
       procareRelationshipRowsAcrossSourceFamilies.length ? prisma.emergencyContact.count({ where: { OR: procareRelationshipRowsAcrossSourceFamilies } }) : Promise.resolve(0),
       procareRelationshipRowsAcrossSourceFamilies.length ? prisma.authorizedPickup.count({ where: { OR: procareRelationshipRowsAcrossSourceFamilies } }) : Promise.resolve(0),
-      staffScopes.length ? prisma.staffProfile.count({ where: { OR: staffScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
-      classroomScopes.length ? prisma.classroom.count({ where: { OR: classroomScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
+      staffScopes.length ? prisma.staffProfile.count({ where: { OR: staffScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: batchSourceSystem, externalId })) } }) : Promise.resolve(0),
+      classroomScopes.length ? prisma.classroom.count({ where: { OR: classroomScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: batchSourceSystem, externalId })) } }) : Promise.resolve(0),
       balanceScopes.length
         ? prisma.billingAccount.findMany({
-            where: { OR: balanceScopes.map(({ centerId, externalId }) => ({ family: { centerId, sourceSystem: "procare", externalId } })) },
+            where: { OR: balanceScopes.map(({ centerId, externalId }) => ({ family: { centerId, sourceSystem: batchSourceSystem, externalId } })) },
             select: { balanceCents: true },
           })
         : Promise.resolve([]),
       familyScopes.length
         ? prisma.invoice.aggregate({
             where: {
-              sourceSystem: "procare",
-              externalId: { startsWith: "procare-opening-balance:" },
+              sourceSystem: batchSourceSystem,
+              externalId: { startsWith: `${batchSourceSystem}-opening-balance:` },
               status: PaymentStatus.OPEN,
               billingAccount: {
-                family: { OR: familyScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) },
+                family: { OR: familyScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: batchSourceSystem, externalId })) },
               },
             },
             _sum: { totalCents: true },
           })
         : Promise.resolve({ _sum: { totalCents: null } }),
     ]);
-    const summary = batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)
-      ? batch.summary as Record<string, unknown>
-      : {};
     const sourceBalanceValues = [...balancesByFamily.values()];
     const report = buildProcareReconciliationReport({
       batchId: batch.id,
-      sourceSha256: typeof summary.sourceSha256 === "string" ? summary.sourceSha256 : undefined,
+      sourceSha256: typeof batchSummary.sourceSha256 === "string" ? batchSummary.sourceSha256 : undefined,
       batchStatus: batch.status,
       importedRows: batch.rows.filter((row) => row.status === "imported").length,
       errorRows: batch.rows.filter((row) => row.status !== "imported").length,
@@ -1941,14 +2003,15 @@ async function GETHandler(request: NextRequest) {
       },
     });
     if (reportType === "fleet-verification") {
-      const datasetCoverage = summary.datasetCoverage && typeof summary.datasetCoverage === "object" && !Array.isArray(summary.datasetCoverage)
-        ? summary.datasetCoverage as { sourceInventory?: Array<{ sourceName?: string; reportKind?: string; rows?: number; note?: string }> }
+      const datasetCoverage = batchSummary.datasetCoverage && typeof batchSummary.datasetCoverage === "object" && !Array.isArray(batchSummary.datasetCoverage)
+        ? batchSummary.datasetCoverage as { sourceInventory?: Array<{ sourceName?: string; reportKind?: string; rows?: number; note?: string }> }
         : null;
       const sourceCoverage = assessProcareFleetSourceCoverage(importedRecords.map((record) => record.raw), datasetCoverage);
       const exceptionsWithoutEvidence = batch.rows.filter((row) => (
         row.status === "disposed"
         && (!row.resolutionCategory || !row.resolutionReason || !row.resolutionEvidenceReference || !row.resolvedBy || !row.resolvedAt)
       )).length;
+      const targetDataFingerprint = await loadSchoolDataFingerprint({ centerId: batch.centerId });
       const fleetReport = buildProcareFleetVerificationReport({
         batchId: batch.id,
         centerId: batch.centerId,
@@ -1956,8 +2019,9 @@ async function GETHandler(request: NextRequest) {
         sourceFilename: batch.filename,
         importedAt: batch.createdAt.toISOString(),
         sourceSha256: report.sourceSha256,
+        targetDataFingerprint,
         batchStatus: batch.status,
-        sourceInventoryConfirmed: summary.sourceInventoryConfirmed === true,
+        sourceInventoryConfirmed: batchSummary.sourceInventoryConfirmed === true,
         sourceCoverage,
         reconciliation: report,
         exceptionsWithoutEvidence,
@@ -1967,7 +2031,27 @@ async function GETHandler(request: NextRequest) {
         action: "procare.import.fleet_verification_exported",
         resource: "ProcareImportBatch",
         resourceId: batch.id,
-        metadata: { status: fleetReport.status, blockerCount: fleetReport.blockers.length, sourceSha256: fleetReport.sourceSha256 },
+        metadata: {
+          status: fleetReport.status,
+          blockerCount: fleetReport.blockers.length,
+          sourceSha256: fleetReport.sourceSha256,
+          targetDataFingerprint: fleetReport.targetDataFingerprint,
+          reviewFingerprint: typeof batchSummary.reviewFingerprint === "string" ? batchSummary.reviewFingerprint : null,
+          verificationRevision: schoolDataImportVerificationRevision({
+            id: batch.id,
+            filename: batch.filename,
+            status: batch.status,
+            createdAt: batch.createdAt.toISOString(),
+            totalRows: batch.rows.length,
+            importedRows: report.importedRows,
+            unresolvedRows: report.unresolvedRows,
+            disposedRows: report.disposedRows,
+            errorRows: report.errorRows,
+            sourceSha256: report.sourceSha256,
+            reviewFingerprint: typeof batchSummary.reviewFingerprint === "string" ? batchSummary.reviewFingerprint : null,
+            sourceAdapter: batchSourceSystem,
+          }),
+        },
       });
       return NextResponse.json({
         ok: true,
@@ -2050,6 +2134,10 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const formData = await request.formData();
+  const sourceAdapter = schoolImportSourceAdapter(formData.get("sourceAdapter"));
+  if (!sourceAdapter) {
+    return NextResponse.json({ ok: false, error: "Choose the source format before reviewing the import." }, { status: 400 });
+  }
   const requestedCenterId = clean(formData.get("centerId"));
   const dryRun = clean(formData.get("dryRun")).toLowerCase() === "true";
   const duplicateMode = duplicateMatchMode(clean(formData.get("duplicateMatchMode")));
@@ -2112,16 +2200,26 @@ async function POSTHandler(request: NextRequest) {
     ? visibleCenters[0] ?? null
     : visibleCenters.find((item) => item.id === centerId) ?? null;
   if (!center) return NextResponse.json({ ok: false, error: "Center not found." }, { status: 404 });
+  if (!autoMap) {
+    const setupError = schoolImportSetupError(center, sourceAdapter);
+    if (setupError) return NextResponse.json({ ok: false, error: setupError }, { status: 409 });
+  }
   const centerByAlias = buildCenterAliasMap(visibleCenters);
 
   let importPayload: Awaited<ReturnType<typeof readImportText>>;
   try {
-    importPayload = await readImportText(files, pastedCsv);
+    importPayload = await readImportText(files, pastedCsv, sourceAdapter);
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Source export could not be read." },
       { status: 400 },
     );
+  }
+  if (sourceAdapter === "bee_flat_file_v1" && importPayload.datasetCoverage) {
+    return NextResponse.json({
+      ok: false,
+      error: "The BEE flat-file adapter accepts one reviewed table at a time. Choose a single CSV, TSV, spreadsheet, or pasted table instead of a multi-report package.",
+    }, { status: 400 });
   }
   const text = importPayload.text;
   if (!text) return NextResponse.json({ ok: false, error: "Upload source CSV files, a ZIP export, or paste CSV text." }, { status: 400 });
@@ -2148,11 +2246,31 @@ async function POSTHandler(request: NextRequest) {
   if (duplicateTargets.length) {
     return NextResponse.json({ ok: false, error: `Each source column must map to a different BEE Suite field. Duplicate mapping: ${[...new Set(duplicateTargets)].join(", ")}.` }, { status: 400 });
   }
-  const mappingSignature = JSON.stringify(Object.entries(fieldMapping).sort(([a], [b]) => a.localeCompare(b)));
+  if (autoMap) {
+    const mappedImportTargets = new Map<string, ImportCenter>();
+    for (const row of rows.slice(1)) {
+      const rawData = Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""]));
+      const sourceCenterValue = value(rawData, [
+        "location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site",
+      ]);
+      const targetCenter = resolveImportCenter(centerByAlias, sourceCenterValue);
+      if (targetCenter) mappedImportTargets.set(targetCenter.id, targetCenter);
+    }
+    for (const targetCenter of mappedImportTargets.values()) {
+      const setupError = schoolImportSetupError(targetCenter, sourceAdapter);
+      if (setupError) {
+        return NextResponse.json({ ok: false, error: `${targetCenter.name}: ${setupError}` }, { status: 409 });
+      }
+    }
+  }
+  const mappingSignature = JSON.stringify({
+    sourceAdapter,
+    fields: Object.entries(fieldMapping).sort(([a], [b]) => a.localeCompare(b)),
+  });
   const sourceSha256 = procareSourceSha256(text);
   const buildReviewFingerprint = (warningRowNumbers: number[], duplicateReviewRowNumbers: number[]) => (
     procareImportReviewFingerprint({
-      text: importReviewEvidence({ sourceSha256, mappingSignature, warningRowNumbers, duplicateReviewRowNumbers }),
+      text: importReviewEvidence({ sourceAdapter, sourceSha256, mappingSignature, warningRowNumbers, duplicateReviewRowNumbers }),
       requestedCenterId,
       duplicateMode,
       secret: process.env.AUTH_SECRET || "development-procare-import-review",
@@ -2169,6 +2287,7 @@ async function POSTHandler(request: NextRequest) {
       sourceType: importPayload.sourceType,
       filename: importPayload.filename,
       duplicateMode,
+      sourceSystem: sourceAdapter,
     });
     const previewRecords = rows.slice(1).map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
     const fleetSourceCoverage = assessProcareFleetSourceCoverage(previewRecords, importPayload.datasetCoverage ?? null);
@@ -2176,7 +2295,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       dryRun: true,
-      summary: { ...preview, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS, correlationReview, datasetCoverage: importPayload.datasetCoverage ?? null, fleetSourceCoverage },
+      summary: { ...preview, sourceAdapter, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS, correlationReview, datasetCoverage: importPayload.datasetCoverage ?? null, fleetSourceCoverage },
     });
   }
 
@@ -2222,7 +2341,9 @@ async function POSTHandler(request: NextRequest) {
       const summary = candidate.summary && typeof candidate.summary === "object" && !Array.isArray(candidate.summary)
         ? candidate.summary as Record<string, unknown>
         : {};
-      return summary.sourceSha256 === sourceSha256 && summary.reviewFingerprint === reviewFingerprint;
+      return summary.sourceSha256 === sourceSha256
+        && summary.reviewFingerprint === reviewFingerprint
+        && (summary.sourceAdapter === "bee_flat_file_v1" ? "bee_flat_file_v1" : "procare") === sourceAdapter;
     })
     .sort((left, right) => right._count.rows - left._count.rows)[0] ?? null;
   const existingSummary = existingBatch?.summary && typeof existingBatch.summary === "object" && !Array.isArray(existingBatch.summary)
@@ -2231,6 +2352,7 @@ async function POSTHandler(request: NextRequest) {
   if (existingBatch && (
     existingSummary.sourceSha256 !== sourceSha256
     || existingSummary.reviewFingerprint !== reviewFingerprint
+    || (existingSummary.sourceAdapter === "bee_flat_file_v1" ? "bee_flat_file_v1" : "procare") !== sourceAdapter
   )) {
     return NextResponse.json({ ok: false, error: "The reviewed files, field mapping, or duplicate mode changed while the import was running. Start a new import with one unchanged review." }, { status: 409 });
   }
@@ -2284,6 +2406,7 @@ async function POSTHandler(request: NextRequest) {
       filename: importPayload.filename,
       status: "processing",
       summary: {
+        sourceAdapter,
         sourceType: importPayload.sourceType,
         importMethod: guardedRenderedImport ? "guarded_rendered_package" : undefined,
         excludedUnresolvedRows,
@@ -2424,6 +2547,7 @@ async function POSTHandler(request: NextRequest) {
           centerId: targetCenter.id,
           externalId: employeeExternalId,
           contactEmail: staffContactEmail,
+          sourceSystem: sourceAdapter,
           rejectAmbiguous: true,
         });
         if (existingStaff && existingStaff.user.tenantId !== targetCenter.tenantId) {
@@ -2445,7 +2569,7 @@ async function POSTHandler(request: NextRequest) {
             name: employeeName,
             password: generatedLogin.temporary_password,
             role: UserRole.TEACHER,
-            source: "bee_suite_procare_staff_import",
+            source: sourceAdapter === "procare" ? "bee_suite_procare_staff_import" : "bee_suite_flat_file_staff_import",
           });
           createdStaffLogins += 1;
         }
@@ -2465,6 +2589,7 @@ async function POSTHandler(request: NextRequest) {
               name: staffClassroomName,
               ageGroup: procareAgeGroup(rawData, "Staff assignment"),
               rawData,
+              sourceSystem: sourceAdapter,
             }, tx);
             staffClassroomId = classroom.id;
             createdStaffClassroom = classroom.created;
@@ -2497,9 +2622,11 @@ async function POSTHandler(request: NextRequest) {
               tenantId: targetCenter.tenantId,
               organizationId: targetCenter.organizationId,
               centerId: targetCenter.id,
+              sourceAdapter,
             }, tx);
           }
           const importedCustomFields = metadataFromRow(rawData, {
+            sourceAdapter,
             mappedCenterId: targetCenter.id,
             ...(staffContactEmail ? { staffContactEmail } : {}),
             employeeStatus,
@@ -2516,8 +2643,7 @@ async function POSTHandler(request: NextRequest) {
                 ...(staffTitle ? { title: staffTitle } : {}),
                 ...(staffPhone ? { phone: staffPhone } : {}),
                 ...(backgroundCheckStatus ? { backgroundCheckStatus } : {}),
-                sourceSystem: "procare",
-                ...(employeeExternalId ? { externalId: employeeExternalId } : {}),
+                ...(employeeExternalId ? { sourceSystem: sourceAdapter, externalId: employeeExternalId } : {}),
                 customFields: mergeCustomFields(existingStaff.customFields, importedCustomFields),
               },
             });
@@ -2530,7 +2656,7 @@ async function POSTHandler(request: NextRequest) {
                 title: staffTitle || "Teacher",
                 phone: staffPhone || null,
                 backgroundCheckStatus: backgroundCheckStatus || null,
-                sourceSystem: "procare",
+                sourceSystem: sourceAdapter,
                 externalId: employeeExternalId,
                 customFields: importedCustomFields,
               },
@@ -2547,7 +2673,8 @@ async function POSTHandler(request: NextRequest) {
                 resourceId: staffUser.id,
                 metadata: {
                   email: generatedLogin.email,
-                  source: "procare_import",
+                  source: sourceAdapter === "procare" ? "procare_import" : "bee_flat_file_import",
+                  sourceAdapter,
                   batchId: batch.id,
                 },
               },
@@ -2589,7 +2716,7 @@ async function POSTHandler(request: NextRequest) {
       const balanceValue = value(rawData, ["balance", "account balance", "ledger balance", "amount due"]);
       const parsedBalance = parseCurrencyCents(balanceValue);
       if (parsedBalance.present && !parsedBalance.valid) {
-        throw new Error("The ProCare balance is not a valid currency amount. Correct the source value before importing this row.");
+        throw new Error("The source balance is not a valid currency amount. Correct the source value before importing this row.");
       }
       const balanceCents = parsedBalance.cents;
       const classroomAliases = ["classroom", "classroom name", "room", "room name", "class", "assigned classroom", "assigned room"];
@@ -2625,7 +2752,7 @@ async function POSTHandler(request: NextRequest) {
           });
       const externalFamilies = accountExternalId
         ? await prisma.family.findMany({
-            where: { centerId: targetCenter.id, sourceSystem: "procare", externalId: accountExternalId },
+            where: { centerId: targetCenter.id, sourceSystem: sourceAdapter, externalId: accountExternalId },
             take: 2,
             select: {
               id: true,
@@ -2637,14 +2764,16 @@ async function POSTHandler(request: NextRequest) {
           })
         : [];
       if (externalFamilies.length > 1) {
-        throw new Error("Multiple existing families use this ProCare Account ID. Resolve the duplicate records before importing.");
+        throw new Error("Multiple existing families use this source account ID. Resolve the duplicate records before importing.");
       }
       if (fallbackFamilies.length > 1) {
-        throw new Error("Multiple existing families match this row without a ProCare Account ID. Add the account relationship before importing.");
+        throw new Error("Multiple existing families match this row without a stable source account ID. Add the account relationship before importing.");
       }
       const familyMetadata = metadataFromRow(rawData, {
+        sourceAdapter,
         mappedCenterId: targetCenter.id,
-        procareAccountKey: accountExternalId,
+        sourceAccountKey: accountExternalId,
+        ...(sourceAdapter === "procare" ? { procareAccountKey: accountExternalId } : {}),
         accountTracking: value(rawData, ["tracking", "account tracking", "family tracking"]),
       });
       const existing = accountExternalId
@@ -2666,8 +2795,7 @@ async function POSTHandler(request: NextRequest) {
               billingEmail: email || undefined,
               address: address || undefined,
               custodyNotes: custodyNotes || undefined,
-              sourceSystem: "procare",
-              externalId: accountExternalId || undefined,
+              ...(accountExternalId ? { sourceSystem: sourceAdapter, externalId: accountExternalId } : {}),
               customFields: mergeCustomFields(existing.customFields, familyMetadata),
             },
           })
@@ -2677,9 +2805,9 @@ async function POSTHandler(request: NextRequest) {
               name: familyDisplayName,
               billingEmail: email || null,
               address: address || null,
-              notes: "Imported from ProCare export.",
+              notes: sourceAdapter === "procare" ? "Imported from ProCare export." : "Imported from reviewed BEE flat-file source.",
               custodyNotes: custodyNotes || null,
-              sourceSystem: "procare",
+              sourceSystem: sourceAdapter,
               externalId: accountExternalId,
               customFields: familyMetadata,
             },
@@ -2715,7 +2843,7 @@ async function POSTHandler(request: NextRequest) {
         ].filter(Boolean) as Array<{ email?: string; phone?: string; fullName?: string }>;
         const externalGuardians = externalId
           ? await prisma.guardian.findMany({
-              where: { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId },
+              where: { family: { centerId: targetCenter.id }, sourceSystem: sourceAdapter, externalId },
               take: 2,
               include: { user: { select: { email: true } } },
             })
@@ -2728,13 +2856,13 @@ async function POSTHandler(request: NextRequest) {
               include: { user: { select: { email: true } } },
             });
         if (externalGuardians.length > 1) {
-          throw new Error("Multiple existing guardians use this ProCare Person ID. Resolve the duplicate records before importing.");
+          throw new Error("Multiple existing guardians use this source person ID. Resolve the duplicate records before importing.");
         }
         if (fallbackGuardians.length > 1) {
-          throw new Error("Multiple guardians match this row without a ProCare Person ID. Add the relationship ID before importing.");
+          throw new Error("Multiple guardians match this row without a stable source person ID. Add the relationship ID before importing.");
         }
         if (externalGuardians[0] && fallbackGuardians[0] && externalGuardians[0].id !== fallbackGuardians[0].id) {
-          throw new Error("The ProCare Person ID and parent contact fields match different guardians. Resolve the guardian records before importing.");
+          throw new Error("The source person ID and parent contact fields match different guardians. Resolve the guardian records before importing.");
         }
         const existingGuardian = externalId
           ? externalGuardians[0] ?? fallbackGuardians[0] ?? null
@@ -2745,7 +2873,7 @@ async function POSTHandler(request: NextRequest) {
         ) {
           throw new Error("Reserved App Review families can only be changed by the dedicated provisioning workflow.");
         }
-        const guardianMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
+        const guardianMetadata = metadataFromRow(rawData, { sourceAdapter, mappedCenterId: targetCenter.id, accountExternalId });
         if (!existingGuardian) {
           const createdGuardian = await prisma.guardian.create({
             data: {
@@ -2757,7 +2885,7 @@ async function POSTHandler(request: NextRequest) {
               relation,
               preferredCommunication: guardianEmail ? "email" : guardianPhone ? "phone" : null,
               isBillingContact: billingContact,
-              sourceSystem: "procare",
+              sourceSystem: sourceAdapter,
               externalId,
               customFields: guardianMetadata,
             },
@@ -2776,8 +2904,7 @@ async function POSTHandler(request: NextRequest) {
               relation,
               preferredCommunication: guardianEmail ? "email" : guardianPhone ? "phone" : undefined,
               isBillingContact: billingContact || existingGuardian.isBillingContact,
-              sourceSystem: "procare",
-              externalId: externalId || undefined,
+              ...(externalId ? { sourceSystem: sourceAdapter, externalId } : {}),
               customFields: mergeCustomFields(existingGuardian.customFields, guardianMetadata),
             },
             select: { id: true },
@@ -2801,6 +2928,7 @@ async function POSTHandler(request: NextRequest) {
             name: classroomName,
             ageGroup,
             rawData,
+            sourceSystem: sourceAdapter,
           }, prisma);
           classroomId = !enrollmentStatusProvided || isActiveProcareEnrollmentStatus(enrollmentStatus) ? classroom.id : null;
           if (classroom.created) createdClassrooms += 1;
@@ -2812,9 +2940,11 @@ async function POSTHandler(request: NextRequest) {
         const photoPermissionValue = value(rawData, photoPermissionAliases);
         const fieldTripPermissionValue = value(rawData, fieldTripPermissionAliases);
         const childMetadata = metadataFromRow(rawData, {
+          sourceAdapter,
           mappedCenterId: targetCenter.id,
           accountExternalId,
-          procareChildId: childExternalId,
+          sourceChildId: childExternalId,
+          ...(sourceAdapter === "procare" ? { procareChildId: childExternalId } : {}),
           dateOfBirthMissing: !childDob,
           childTracking: value(rawData, ["child tracking", "tracking", "additional tracking"]),
           childFirstName: value(rawData, ["first name", "child first name", "student first name"]),
@@ -2833,16 +2963,16 @@ async function POSTHandler(request: NextRequest) {
           });
         const externalChildren = childExternalId
           ? await prisma.child.findMany({
-            where: { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: childExternalId },
+            where: { family: { centerId: targetCenter.id }, sourceSystem: sourceAdapter, externalId: childExternalId },
             take: 2,
             select: { id: true, dateOfBirth: true, customFields: true, enrollmentStatus: true, classroomId: true },
           })
           : [];
         if (fallbackChildren.length > 1) {
-          throw new Error("Multiple children match this name without a ProCare Child ID. Add the child ID before importing.");
+          throw new Error("Multiple children match this name without a stable source child ID. Add the child ID before importing.");
         }
         if (externalChildren.length > 1) {
-          throw new Error("Multiple existing children use this ProCare Child ID. Resolve the duplicate records before importing.");
+          throw new Error("Multiple existing children use this source child ID. Resolve the duplicate records before importing.");
         }
         const existingChild = childExternalId
           ? externalChildren[0] ?? null
@@ -2878,7 +3008,7 @@ async function POSTHandler(request: NextRequest) {
               feedingNotes: value(rawData, ["feeding notes", "dietary notes", "food notes"]) || null,
               pottyNotes: value(rawData, ["potty notes", "toilet notes", "diaper notes"]) || null,
               developmentalNotes: value(rawData, ["developmental notes", "behavior notes", "observation notes"]) || null,
-              sourceSystem: "procare",
+              sourceSystem: sourceAdapter,
               externalId: childExternalId,
               customFields: childMetadata,
             },
@@ -2909,8 +3039,7 @@ async function POSTHandler(request: NextRequest) {
               developmentalNotes: value(rawData, ["developmental notes", "behavior notes", "observation notes"]) || undefined,
               ...(hasImportField(rawData, photoPermissionAliases) ? { photoVideoPermission: boolValue(photoPermissionValue) } : {}),
               ...(hasImportField(rawData, fieldTripPermissionAliases) ? { fieldTripPermission: boolValue(fieldTripPermissionValue) } : {}),
-              sourceSystem: "procare",
-              externalId: childExternalId || undefined,
+              ...(childExternalId ? { sourceSystem: sourceAdapter, externalId: childExternalId } : {}),
               customFields: mergeCustomFields(existingChild.customFields, childMetadata),
             },
           });
@@ -2953,7 +3082,7 @@ async function POSTHandler(request: NextRequest) {
 
         const medicalText = value(rawData, ["medical notes", "medications", "medication", "medicine", "doctor notes", "health notes", "physician", "insurance"]);
         if (medicalText && childId) {
-          const medicalCategory = value(rawData, ["medical category", "health category"]) || "ProCare import";
+          const medicalCategory = value(rawData, ["medical category", "health category"]) || "Source data import";
           const existingMedical = await prisma.childMedicalNote.findFirst({
             where: { childId, category: medicalCategory, note: medicalText },
             select: { id: true },
@@ -2982,20 +3111,33 @@ async function POSTHandler(request: NextRequest) {
             },
             select: { id: true },
           });
+          const attendanceExternalId = externalValue(rawData, ["attendance id", "attendance key"]);
           const attendanceData = {
             childId,
             classroomId,
             date: startOfDay(attendanceDate),
             status: attendanceStatus || (absenceReason ? "absent" : "present"),
             absenceReason: absenceReason || null,
-            sourceSystem: "procare",
-            externalId: externalValue(rawData, ["attendance id", "attendance key"]) || `${childExternalId || childId}:${startOfDay(attendanceDate).toISOString()}`,
-            metadata: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+            metadata: metadataFromRow(rawData, { sourceAdapter, mappedCenterId: targetCenter.id, accountExternalId }),
           };
           if (existingAttendance) {
-            await prisma.attendanceRecord.update({ where: { id: existingAttendance.id }, data: attendanceData });
+            await prisma.attendanceRecord.update({
+              where: { id: existingAttendance.id },
+              data: {
+                ...attendanceData,
+                ...(attendanceExternalId
+                  ? { sourceSystem: sourceAdapter, externalId: attendanceExternalId }
+                  : {}),
+              },
+            });
           } else {
-            await prisma.attendanceRecord.create({ data: attendanceData });
+            await prisma.attendanceRecord.create({
+              data: {
+                ...attendanceData,
+                sourceSystem: sourceAdapter,
+                externalId: attendanceExternalId || `${childExternalId || childId}:${startOfDay(attendanceDate).toISOString()}`,
+              },
+            });
             attendanceRows += 1;
           }
         }
@@ -3027,12 +3169,12 @@ async function POSTHandler(request: NextRequest) {
                 occurredAt: checkEntry.occurredAt,
                 pickupName: pickupNameFromLog || null,
                 signaturePlaceholder: Boolean(value(rawData, ["signature", "signed by"])),
-                verificationStatus: "imported_from_procare",
+                verificationStatus: sourceAdapter === "procare" ? "imported_from_procare" : "imported_from_flat_file",
                 pinVerified: false,
                 notes: value(rawData, ["attendance notes", "sign in notes", "check in notes"]) || null,
-                sourceSystem: "procare",
+                sourceSystem: sourceAdapter,
                 externalId: externalValue(rawData, ["check log id", "sign in out id", "attendance id"]) || `${childExternalId || childId}:${checkEntry.type}:${checkEntry.occurredAt.toISOString()}`,
-                metadata: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+                metadata: metadataFromRow(rawData, { sourceAdapter, mappedCenterId: targetCenter.id, accountExternalId }),
               },
             });
             checkLogRows += 1;
@@ -3049,23 +3191,30 @@ async function POSTHandler(request: NextRequest) {
           const contactExternalId = clean(relationship.externalId) || null;
           const existingContacts = await prisma.emergencyContact.findMany({
             where: contactExternalId
-              ? { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: contactExternalId }
+              ? { family: { centerId: targetCenter.id }, sourceSystem: sourceAdapter, externalId: contactExternalId }
               : { familyId: family.id, fullName: name, phone: contactPhone },
             take: 2,
             select: { id: true, customFields: true },
           });
           if (existingContacts.length > 1) {
-            throw new Error("Multiple emergency contacts use this ProCare Person ID. Resolve the duplicate records before importing.");
+            throw new Error("Multiple emergency contacts use this source person ID. Resolve the duplicate records before importing.");
           }
           const existingContact = existingContacts[0] ?? null;
-          const contactMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId, livesWith: Boolean(relationship.livesWith) });
+          const contactMetadata = metadataFromRow(rawData, { sourceAdapter, mappedCenterId: targetCenter.id, accountExternalId, livesWith: Boolean(relationship.livesWith) });
           if (existingContact) {
             await prisma.emergencyContact.update({
               where: { id: existingContact.id },
-              data: { familyId: family.id, fullName: name, phone: contactPhone, relation: clean(relationship.relation) || "Emergency Contact", sourceSystem: "procare", externalId: contactExternalId || undefined, customFields: mergeCustomFields(existingContact.customFields, contactMetadata) },
+              data: {
+                familyId: family.id,
+                fullName: name,
+                phone: contactPhone,
+                relation: clean(relationship.relation) || "Emergency Contact",
+                ...(contactExternalId ? { sourceSystem: sourceAdapter, externalId: contactExternalId } : {}),
+                customFields: mergeCustomFields(existingContact.customFields, contactMetadata),
+              },
             });
           } else {
-            await prisma.emergencyContact.create({ data: { familyId: family.id, fullName: name, phone: contactPhone, relation: clean(relationship.relation) || "Emergency Contact", sourceSystem: "procare", externalId: contactExternalId, customFields: contactMetadata } });
+            await prisma.emergencyContact.create({ data: { familyId: family.id, fullName: name, phone: contactPhone, relation: clean(relationship.relation) || "Emergency Contact", sourceSystem: sourceAdapter, externalId: contactExternalId, customFields: contactMetadata } });
             emergencyContacts += 1;
           }
         }
@@ -3074,23 +3223,31 @@ async function POSTHandler(request: NextRequest) {
           const pickupExternalId = clean(relationship.externalId) || null;
           const existingPickups = await prisma.authorizedPickup.findMany({
             where: pickupExternalId
-              ? { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: pickupExternalId }
+              ? { family: { centerId: targetCenter.id }, sourceSystem: sourceAdapter, externalId: pickupExternalId }
               : { familyId: family.id, fullName: name, phone: pickupPhone },
             take: 2,
             select: { id: true, customFields: true },
           });
           if (existingPickups.length > 1) {
-            throw new Error("Multiple authorized pickups use this ProCare Person ID. Resolve the duplicate records before importing.");
+            throw new Error("Multiple authorized pickups use this source person ID. Resolve the duplicate records before importing.");
           }
           const existingPickup = existingPickups[0] ?? null;
-          const pickupMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
+          const pickupMetadata = metadataFromRow(rawData, { sourceAdapter, mappedCenterId: targetCenter.id, accountExternalId });
           if (existingPickup) {
             await prisma.authorizedPickup.update({
               where: { id: existingPickup.id },
-              data: { familyId: family.id, fullName: name, phone: pickupPhone, relation: clean(relationship.relation) || null, verificationNotes: "Imported from ProCare; director should verify identity requirements.", sourceSystem: "procare", externalId: pickupExternalId || undefined, customFields: mergeCustomFields(existingPickup.customFields, pickupMetadata) },
+              data: {
+                familyId: family.id,
+                fullName: name,
+                phone: pickupPhone,
+                relation: clean(relationship.relation) || null,
+                verificationNotes: "Imported from reviewed source data; director should verify identity requirements.",
+                ...(pickupExternalId ? { sourceSystem: sourceAdapter, externalId: pickupExternalId } : {}),
+                customFields: mergeCustomFields(existingPickup.customFields, pickupMetadata),
+              },
             });
           } else {
-            await prisma.authorizedPickup.create({ data: { familyId: family.id, fullName: name, phone: pickupPhone, relation: clean(relationship.relation) || null, verificationNotes: "Imported from ProCare; director should verify identity requirements.", sourceSystem: "procare", externalId: pickupExternalId, customFields: pickupMetadata } });
+            await prisma.authorizedPickup.create({ data: { familyId: family.id, fullName: name, phone: pickupPhone, relation: clean(relationship.relation) || null, verificationNotes: "Imported from reviewed source data; director should verify identity requirements.", sourceSystem: sourceAdapter, externalId: pickupExternalId, customFields: pickupMetadata } });
             authorizedPickups += 1;
           }
         }
@@ -3104,16 +3261,16 @@ async function POSTHandler(request: NextRequest) {
         const contactRelation = value(rawData, ["emergency relation", "emergency contact relation"]) || "Emergency Contact";
         const existingEmergencyContacts = await prisma.emergencyContact.findMany({
           where: emergencyExternalId
-            ? { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: emergencyExternalId }
+            ? { family: { centerId: targetCenter.id }, sourceSystem: sourceAdapter, externalId: emergencyExternalId }
             : { familyId: family.id, fullName: contact, phone: contactPhone },
           take: 2,
           select: { id: true, customFields: true },
         });
         if (existingEmergencyContacts.length > 1) {
-          throw new Error("Multiple emergency contacts use this ProCare ID. Resolve the duplicate records before importing.");
+          throw new Error("Multiple emergency contacts use this source ID. Resolve the duplicate records before importing.");
         }
         const existingEmergencyContact = existingEmergencyContacts[0] ?? null;
-        const emergencyMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
+        const emergencyMetadata = metadataFromRow(rawData, { sourceAdapter, mappedCenterId: targetCenter.id, accountExternalId });
         if (existingEmergencyContact) {
           await prisma.emergencyContact.update({
             where: { id: existingEmergencyContact.id },
@@ -3122,8 +3279,7 @@ async function POSTHandler(request: NextRequest) {
               fullName: contact,
               phone: contactPhone,
               relation: contactRelation,
-              sourceSystem: "procare",
-              externalId: emergencyExternalId || undefined,
+              ...(emergencyExternalId ? { sourceSystem: sourceAdapter, externalId: emergencyExternalId } : {}),
               customFields: mergeCustomFields(existingEmergencyContact.customFields, emergencyMetadata),
             },
           });
@@ -3134,7 +3290,7 @@ async function POSTHandler(request: NextRequest) {
             fullName: contact,
             phone: contactPhone,
             relation: contactRelation,
-            sourceSystem: "procare",
+            sourceSystem: sourceAdapter,
             externalId: emergencyExternalId,
             customFields: emergencyMetadata,
             },
@@ -3150,16 +3306,16 @@ async function POSTHandler(request: NextRequest) {
         const pickupRelation = value(rawData, ["pickup relation", "authorized pickup relation"]) || null;
         const existingPickups = await prisma.authorizedPickup.findMany({
           where: pickupExternalId
-            ? { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: pickupExternalId }
+            ? { family: { centerId: targetCenter.id }, sourceSystem: sourceAdapter, externalId: pickupExternalId }
             : { familyId: family.id, fullName: pickup, phone: pickupPhone || null },
           take: 2,
           select: { id: true, customFields: true },
         });
         if (existingPickups.length > 1) {
-          throw new Error("Multiple authorized pickups use this ProCare ID. Resolve the duplicate records before importing.");
+          throw new Error("Multiple authorized pickups use this source ID. Resolve the duplicate records before importing.");
         }
         const existingPickup = existingPickups[0] ?? null;
-        const pickupMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
+        const pickupMetadata = metadataFromRow(rawData, { sourceAdapter, mappedCenterId: targetCenter.id, accountExternalId });
         if (existingPickup) {
           await prisma.authorizedPickup.update({
             where: { id: existingPickup.id },
@@ -3168,9 +3324,8 @@ async function POSTHandler(request: NextRequest) {
               fullName: pickup,
               phone: pickupPhone || null,
               relation: pickupRelation,
-              verificationNotes: "Imported from ProCare export; director should verify identity requirements.",
-              sourceSystem: "procare",
-              externalId: pickupExternalId || undefined,
+              verificationNotes: "Imported from reviewed source data; director should verify identity requirements.",
+              ...(pickupExternalId ? { sourceSystem: sourceAdapter, externalId: pickupExternalId } : {}),
               customFields: mergeCustomFields(existingPickup.customFields, pickupMetadata),
             },
           });
@@ -3181,8 +3336,8 @@ async function POSTHandler(request: NextRequest) {
             fullName: pickup,
             phone: pickupPhone || null,
             relation: pickupRelation,
-            verificationNotes: "Imported from ProCare export; director should verify identity requirements.",
-            sourceSystem: "procare",
+            verificationNotes: "Imported from reviewed source data; director should verify identity requirements.",
+            sourceSystem: sourceAdapter,
             externalId: pickupExternalId,
             customFields: pickupMetadata,
             },
@@ -3200,7 +3355,7 @@ async function POSTHandler(request: NextRequest) {
           const linkedStaleGuardian = await prisma.guardian.findFirst({
             where: {
               familyId: family.id,
-              sourceSystem: "procare",
+              sourceSystem: sourceAdapter,
               externalId: staleGuardianExternalIds,
               OR: [
                 { checkLogs: { some: {} } },
@@ -3210,19 +3365,19 @@ async function POSTHandler(request: NextRequest) {
             select: { id: true },
           });
           if (linkedStaleGuardian) {
-            throw new Error("A stale ProCare guardian has retained check-in or privacy-request history. Resolve that historical relationship before importing this family.");
+            throw new Error("A stale imported guardian has retained check-in or privacy-request history. Resolve that historical relationship before importing this family.");
           }
           await prisma.guardian.deleteMany({
             where: {
               familyId: family.id,
-              sourceSystem: "procare",
+              sourceSystem: sourceAdapter,
               externalId: staleGuardianExternalIds,
             },
           });
           await prisma.emergencyContact.deleteMany({
             where: {
               familyId: family.id,
-              sourceSystem: "procare",
+              sourceSystem: sourceAdapter,
               externalId: desiredRelationships.emergency.size
                 ? { notIn: [...desiredRelationships.emergency] }
                 : { not: null },
@@ -3231,7 +3386,7 @@ async function POSTHandler(request: NextRequest) {
           await prisma.authorizedPickup.deleteMany({
             where: {
               familyId: family.id,
-              sourceSystem: "procare",
+              sourceSystem: sourceAdapter,
               externalId: desiredRelationships.pickup.size
                 ? { notIn: [...desiredRelationships.pickup] }
                 : { not: null },
@@ -3241,19 +3396,20 @@ async function POSTHandler(request: NextRequest) {
       }
 
       if (parsedBalance.present) {
-        const importedBillingFields = metadataFromRow(rawData, { mappedCenterId: targetCenter.id });
-        const legacyInvoiceExternalId = `procare-opening-balance:${accountExternalId || family.id}`;
-        const invoiceExternalId = `procare-opening-balance:${targetCenter.id}:${accountExternalId || family.id}`;
+        const importedBillingFields = metadataFromRow(rawData, { sourceAdapter, mappedCenterId: targetCenter.id });
+        const openingBalancePrefix = `${sourceAdapter}-opening-balance`;
+        const legacyInvoiceExternalId = `${openingBalancePrefix}:${accountExternalId || family.id}`;
+        const invoiceExternalId = `${openingBalancePrefix}:${targetCenter.id}:${accountExternalId || family.id}`;
         const existingInvoice = await prisma.invoice.findFirst({
           where: {
             billingAccount: { family: { centerId: targetCenter.id } },
-            sourceSystem: "procare",
+            sourceSystem: sourceAdapter,
             externalId: { in: [invoiceExternalId, legacyInvoiceExternalId] },
           },
           select: { id: true, customFields: true },
         });
         if (existingInvoice && invoiceResponsibilitySeparation(existingInvoice.customFields)) {
-          throw new Error("A separated ProCare opening-balance invoice cannot be overwritten by a later import.");
+          throw new Error("A separated source opening-balance invoice cannot be overwritten by a later import.");
         }
         const existingBillingAccount = await prisma.billingAccount.findUnique({
           where: { familyId: family.id },
@@ -3266,20 +3422,19 @@ async function POSTHandler(request: NextRequest) {
           where: { familyId: family.id },
           update: {
             balanceCents,
-            sourceSystem: "procare",
-            externalId: accountExternalId || undefined,
+            ...(accountExternalId ? { sourceSystem: sourceAdapter, externalId: accountExternalId } : {}),
             customFields: mergeCustomFields(existingBillingFields, importedBillingFields),
           },
           create: {
             familyId: family.id,
             balanceCents,
-            sourceSystem: "procare",
+            sourceSystem: sourceAdapter,
             externalId: accountExternalId,
             customFields: importedBillingFields,
           },
         });
         let importedInvoiceId: string | null = null;
-        const importedInvoiceFields = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
+        const importedInvoiceFields = metadataFromRow(rawData, { sourceAdapter, mappedCenterId: targetCenter.id, accountExternalId });
         const reconciliationProtectedInvoice = existingInvoice
           && typeof jsonObject(existingInvoice.customFields).staleImportedOpeningBalanceVoidedAt === "string";
         if (reconciliationProtectedInvoice) {
@@ -3304,7 +3459,7 @@ async function POSTHandler(request: NextRequest) {
                 customFields: mergeCustomFields(existingInvoice.customFields, importedInvoiceFields),
                 items: {
                   deleteMany: {},
-                  create: [{ description: "Imported ProCare opening balance", amountCents: balanceCents }],
+                  create: [{ description: "Imported source opening balance", amountCents: balanceCents }],
                 },
               },
             });
@@ -3313,17 +3468,17 @@ async function POSTHandler(request: NextRequest) {
             const invoice = await prisma.invoice.create({
               data: {
                 billingAccountId: account.id,
-                number: `PC-${targetCenter.id.slice(-6)}-${invoiceNumberKey || index}`,
+                number: `${sourceAdapter === "procare" ? "PC" : "BF"}-${targetCenter.id.slice(-6)}-${invoiceNumberKey || index}`,
                 status: PaymentStatus.OPEN,
                 dueDate: parseDate(value(rawData, ["due date", "payment due date"])) ?? new Date(),
                 totalCents: balanceCents,
-                sourceSystem: "procare",
+                sourceSystem: sourceAdapter,
                 externalId: invoiceExternalId,
                 customFields: importedInvoiceFields,
                 items: {
                   create: [
                     {
-                      description: "Imported ProCare opening balance",
+                      description: "Imported source opening balance",
                       amountCents: balanceCents,
                     },
                   ],
@@ -3345,32 +3500,32 @@ async function POSTHandler(request: NextRequest) {
               customFields: mergeCustomFields(existingInvoice.customFields, importedInvoiceFields),
               items: {
                 deleteMany: {},
-                create: [{ description: "Imported ProCare opening balance", amountCents: 0 }],
+                create: [{ description: "Imported source opening balance", amountCents: 0 }],
               },
             },
           });
           importedInvoiceId = existingInvoice.id;
         }
-        const ledgerExternalId = `procare-opening-balance:${targetCenter.id}:${accountExternalId || family.id}`;
+        const ledgerExternalId = `${openingBalancePrefix}:${targetCenter.id}:${accountExternalId || family.id}`;
         await prisma.ledgerEntry.upsert({
-          where: { sourceSystem_externalId: { sourceSystem: "procare", externalId: ledgerExternalId } },
+          where: { sourceSystem_externalId: { sourceSystem: sourceAdapter, externalId: ledgerExternalId } },
           update: {
             billingAccountId: account.id,
             invoiceId: importedInvoiceId,
             amountCents: balanceCents,
             balanceAfterCents: balanceCents,
-            metadata: { ...rawData, mappedCenterId: targetCenter.id },
+            metadata: { ...rawData, mappedCenterId: targetCenter.id, sourceAdapter },
           },
           create: {
             billingAccountId: account.id,
             invoiceId: importedInvoiceId,
-            type: "procare_balance",
-            description: "Imported ProCare balance",
+            type: sourceAdapter === "procare" ? "procare_balance" : "imported_opening_balance",
+            description: "Imported source balance",
             amountCents: balanceCents,
             balanceAfterCents: balanceCents,
-            sourceSystem: "procare",
+            sourceSystem: sourceAdapter,
             externalId: ledgerExternalId,
-            metadata: { ...rawData, mappedCenterId: targetCenter.id },
+            metadata: { ...rawData, mappedCenterId: targetCenter.id, sourceAdapter },
           },
         });
         ledgerRows += 1;
@@ -3379,7 +3534,7 @@ async function POSTHandler(request: NextRequest) {
       if (childId) {
         const linkedChildCount = await prisma.child.count({ where: { id: childId, familyId: family.id } });
         if (linkedChildCount !== 1) {
-          throw new Error("The child profile was not linked to its ProCare family. This row was rolled back safely.");
+          throw new Error("The child profile was not linked to its source family. This row was rolled back safely.");
         }
       }
       if (guardianImports.length) {
@@ -3387,7 +3542,7 @@ async function POSTHandler(request: NextRequest) {
           where: { familyId: family.id, id: { in: [...linkedGuardianRecordIds] } },
         });
         if (linkedGuardianRecordIds.size !== guardianImports.length || linkedGuardianCount !== linkedGuardianRecordIds.size) {
-          throw new Error("One or more parent profiles were not linked to the correct ProCare family. This row was rolled back safely.");
+          throw new Error("One or more parent profiles were not linked to the correct source family. This row was rolled back safely.");
         }
       }
 
@@ -3448,7 +3603,8 @@ async function POSTHandler(request: NextRequest) {
     select: { rowNumber: true, message: true },
   });
   const summary = {
-    center: autoMap ? "Auto-mapped from ProCare export" : center.crmLocationId ?? center.name,
+    sourceAdapter,
+    center: autoMap ? "Auto-mapped from source export" : center.crmLocationId ?? center.name,
     sourceType: importPayload.sourceType,
     importMethod: guardedRenderedImport
       ? "guarded_rendered_package"

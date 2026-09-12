@@ -1,12 +1,14 @@
 # School Transition Setup And Cutover SOP - The BEE Suite
 
-**Updated:** August 24, 2026
+**Updated:** September 11, 2026
 **Audience:** owners, directors, billing owners, and BEE Suite implementation support  
-**Purpose:** move one school from ProCare to The BEE Suite without duplicating tuition, skipping safety validation, or treating technical setup as launch approval.
+**Purpose:** prepare one school in The BEE Suite through either a guarded existing-record import or a clean start, without inventing data, duplicating tuition, skipping safety validation, or treating technical setup as launch approval.
 
 > CURRENT GUIDE
 >
 > Complete and approve each gate for the named school. An import, invitation, payout connection, or successful software test does not approve the other gates.
+
+The BEE Suite setup team should complete every reversible business-configuration step supported by approved school information. The school retains the final word on family and child facts, source exceptions, payout-bank entry on the provider-hosted page, invitation scope, and school-specific activation.
 
 ![Independent school launch gates](../../public/brand/the-bee-suite/explainers/current/school-launch-gates.png)
 
@@ -20,14 +22,40 @@ Record these items before setup work begins:
 - Billing owner
 - BEE Suite implementation owner
 - Support owner and first-week coverage
-- ProCare export date
+- Previous-system export date, when importing
+- Data starting point: `MOVE EXISTING RECORDS` or `START WITH A CLEAN WORKSPACE`
+- Previous system and export/as-of date, when importing
 - Target transition date
-- Last tuition service period to be invoiced or collected in ProCare
+- Last tuition service period to be invoiced or collected in the previous system, when importing
 - First tuition service period to be invoiced or collected in The BEE Suite
 
-Do not use a corporate-wide approval as a substitute for the named school's approval. If the last ProCare cycle and first BEE Suite cycle overlap, stop until the billing owner resolves the boundary in writing.
+Do not use a corporate-wide approval as a substitute for the named school's approval. For an imported school, if the last previous-system cycle and first BEE Suite cycle overlap, stop until the billing owner resolves the boundary in writing.
 
-## 2. Director ProCare Export And Import Review
+## 2. Choose And Save One Data Starting Point
+
+Open `School setup` for the named school and choose exactly one path. Do not create a placeholder import for a new school and do not re-enter an operating school's roster by hand merely to avoid import review.
+
+### Path A - Move Existing Records
+
+Use this path when an operating school has families, children, balances, schedules, staff, or history in another system.
+
+- The BEE Suite setup team prepares the supported source adapter, mapping, duplicate review, and technical verification.
+- The school supplies the complete, unchanged school-scoped source package through the approved secure workflow and confirms facts or exceptions that cannot be proven automatically.
+- A source from a provider other than ProCare must have a reviewed adapter before upload. Directors are not expected to reshape exports or guess field mappings.
+- The path is not complete until the latest exact import state has a whole-school verification marked `READY_FOR_DIRECTOR_REVIEW` and the director records final school-data confirmation.
+
+### Path B - Start With A Clean Workspace
+
+Use this path for a new school that has no prior operating roster to import.
+
+- The BEE Suite setup team prepares the school profile, classrooms, business configuration, forms, tuition and billing rules, integrations, templates, and technical checks from approved business information.
+- The school adds real families, children, guardians, pickups, safety details, schedules, and classroom assignments as enrollment begins.
+- If no current families are expected yet, record that fact explicitly. Do not create sample or placeholder people to make setup appear complete.
+- Before final school-data confirmation, resolve any current family without a guardian, guardian without a reachable email or phone, or current child without a classroom.
+
+Changing the saved path or changing roster/import evidence invalidates the prior data confirmation and requires a fresh review. Data confirmation does not activate any other launch gate.
+
+## 3. Director ProCare Export And Import Review
 
 The director or approved ProCare administrator must confirm that the export package belongs to the correct location and contains the records the school relies on.
 
@@ -53,7 +81,9 @@ For every spot-check, verify:
 
 Stop and hold the affected records if a guardian, payer, pickup, emergency contact, family relationship, date of birth, classroom, balance, or safety field is missing or ambiguous. Do not invent a value to make the import appear complete.
 
-## 3. Owner Payout Setup
+Skip this section only when the saved starting point is `START WITH A CLEAN WORKSPACE` and the school has confirmed that no prior records are expected.
+
+## 4. Owner Payout Setup
 
 School payout onboarding is completed by the owner or another authorized business representative. It is separate from a parent's payment method and separate from any corporate software-fee ACH authorization.
 
@@ -70,7 +100,7 @@ School payout onboarding is completed by the owner or another authorized busines
 
 If Stripe does not show both charges and payouts ready, parent checkout remains off for that school. A connected account alone is not payout approval.
 
-## 4. Director School And Staff Setup
+## 5. Director School And Staff Setup
 
 The director validates the operational workspace before teachers, parents, or the lobby kiosk depend on it.
 
@@ -84,7 +114,7 @@ The director validates the operational workspace before teachers, parents, or th
 
 Wrong-school, wrong-classroom, or wrong-family visibility is an immediate stop condition.
 
-## 5. Parent Portal Readiness
+## 6. Parent Portal Readiness
 
 Parent invitations are a separate gate even when family data has been imported.
 
@@ -99,7 +129,7 @@ Parent invitations are a separate gate even when family data has been imported.
 
 Stop if a parent sees another family or child, if a guardian email belongs to the wrong person, or if a missing child would require creating a duplicate record.
 
-## 6. Teacher Portal And Attendance Readiness
+## 7. Teacher Portal And Attendance Readiness
 
 1. Confirm each teacher is assigned to the correct school and classroom.
 2. Confirm classroom rosters match the approved enrollment list.
@@ -110,7 +140,7 @@ Stop if a parent sees another family or child, if a guardian email belongs to th
 
 Do not launch teacher attendance if a child is missing, assigned to the wrong classroom, or visible outside the teacher's authorized scope.
 
-## 7. Kiosk Check-In And Check-Out Readiness
+## 8. Kiosk Check-In And Check-Out Readiness
 
 Kiosk use is independent from parent invitations and teacher access.
 
@@ -124,7 +154,7 @@ Kiosk use is independent from parent invitations and teacher access.
 
 Do not work around a custody, pickup, wrong-family, missing-child, or duplicate-attendance warning.
 
-## 8. Billing And Payment Cutover
+## 9. Billing And Payment Cutover
 
 Billing configuration, live payments, and payouts are separate approvals.
 
@@ -132,7 +162,7 @@ Billing configuration, live payments, and payouts are separate approvals.
 2. Reconcile opening balances, credits, open invoices, subsidies, fees, discounts, and recent payments with ProCare.
 3. Confirm the recurring tuition assignment for each child, including amount, plan, start week, due date, and enabled status.
 4. Confirm the family total equals the active per-child assignments.
-5. Confirm the last ProCare tuition cycle and first BEE Suite tuition cycle in writing. For four-week cadence, confirm every covered service week and the next unbilled period.
+5. For an imported school, confirm the last previous-system tuition cycle and first BEE Suite tuition cycle in writing. For four-week cadence, confirm every covered service week and the next unbilled period. For a clean-start school, record that no previous-system cycle exists.
 6. Preview the first BEE Suite invoice cycle and review family count, child count, service period, amounts, exceptions, and duplicate risk.
 7. Confirm payout readiness for the exact school.
 8. Confirm the school absorbs Stripe processing costs, no parent processing surcharge is configured, and the refund, failed-payment, dispute, duplicate-payment, reconciliation, and parent-support owners are assigned.
@@ -141,12 +171,13 @@ Billing configuration, live payments, and payouts are separate approvals.
 
 Do not process the same tuition cycle in both systems. Do not enable autopay, create a live charge, retry a pending payment, or use `Charge This Child Now` merely because an invoice or payment method exists.
 
-## 9. School-Specific GO Or NO-GO Record
+## 10. School-Specific GO Or NO-GO Record
 
 Record each gate separately:
 
-- [ ] Import package accepted
-- [ ] Imported data validated
+- [ ] Data starting point selected and saved for the named school
+- [ ] Import package accepted and imported data validated, or clean-start state explicitly confirmed
+- [ ] Latest school-data review is confirmed and has not become stale
 - [ ] Director access tested
 - [ ] Teacher access and rosters tested
 - [ ] Parent invitations approved or intentionally held off
@@ -155,9 +186,9 @@ Record each gate separately:
 - [ ] Tuition, balances, credits, and first-cycle preview approved
 - [ ] School payout status shows charges and payouts ready, or live payments are intentionally held off
 - [ ] Live payments approved or intentionally held off
-- [ ] Last ProCare cycle and first BEE Suite cycle recorded with no overlap
+- [ ] Previous-system/BEE Suite billing boundary recorded with no overlap, or clean start recorded
 - [ ] First-week support and reconciliation owners assigned
-- [ ] ProCare retirement approved or intentionally held off
+- [ ] Previous-system retirement approved or intentionally held off, or not applicable for a clean start
 
 Final decision: **GO / NO-GO**
 
@@ -165,20 +196,20 @@ Record:
 
 - School / decision date and time:
 - Modules approved for GO / modules held off:
-- Last ProCare tuition cycle / first BEE Suite tuition cycle:
+- Last previous-system tuition cycle / first BEE Suite tuition cycle, or clean-start note:
 - Owner / director / billing / implementation approvers:
 - Open exceptions, owner, due date, and exact retest:
 
-`HELD OFF` is not `PASS`. Technical readiness is not approval to send invitations, activate the kiosk, bill families, process payments, or retire ProCare.
+`HELD OFF` is not `PASS`. Technical readiness is not approval to send invitations, activate the kiosk, bill families, process payments, or retire a previous system.
 
-## 10. Launch-Day And First-Cycle Review
+## 11. Launch-Day And First-Cycle Review
 
 1. Confirm the school, approved modules, and support contacts at opening.
 2. Monitor login, attendance, kiosk, parent access, invoice, payment, and payout exceptions.
 3. Reconcile the first BEE Suite invoice and payment cycle against the approved cutover record.
 4. Preserve all ledger, payment, import, and audit history when correcting an issue.
 5. Record every exception with school, user, time, page, attempted action, expected result, actual result, affected record, screenshot or error, fallback, owner, and retest.
-6. Keep ProCare available as required by the written transition and records plan; discontinue its billing workflow only after the approved cutover boundary has passed and reconciliation is complete.
+6. For an imported school, keep the previous system available as required by the written transition and records plan; discontinue its billing workflow only after the approved cutover boundary has passed and reconciliation is complete. For a clean-start school, retain the approved setup and enrollment evidence instead.
 
 ## Stop And Escalate Immediately
 

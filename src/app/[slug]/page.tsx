@@ -224,6 +224,12 @@ import { canAccessModule, canAccessResolvedModuleRoute } from "@/lib/rbac";
 import { assetKind, canManageAssetHub, CORPORATE_ASSET_TYPE, readAssetMetadata } from "@/lib/asset-hub";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
+import {
+  assessSchoolDataSetup,
+  emptySchoolDataReviewEvidence,
+  readSchoolDataSetup,
+} from "@/lib/school-data-setup";
+import { loadSchoolDataReviewEvidence } from "@/lib/school-data-setup-server";
 import { stripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
 import { terminalStoreEnabled, terminalStoreReturnState } from "@/lib/feature-availability";
@@ -331,6 +337,8 @@ async function getVisibleCenters(user: CurrentUser) {
       city: true,
       state: true,
       postalCode: true,
+      address: true,
+      phone: true,
       timezone: true,
       email: true,
       status: true,
@@ -480,7 +488,7 @@ function setupActionLabel(field: string) {
     classroomSetup: "Open classrooms",
     programSetup: "Open calendar",
     staffSetup: "Open teachers",
-    familyImportSetup: "Open families",
+    familyImportSetup: "Open data starting point",
     tuitionRateSetup: "Open billing settings",
     subsidyRules: "Open billing",
     balanceRules: "Open invoices",
@@ -1060,10 +1068,72 @@ async function renderLivePage(
       setup: normalizeSchoolOnboardingSetup({}),
       capturedAt: null,
     };
+    const [schoolDataEvidence, setupCounts] = await Promise.all([
+      selectedCenter
+        ? loadSchoolDataReviewEvidence({ centerId: selectedCenter.id, tenantId: user.tenantId })
+        : Promise.resolve(emptySchoolDataReviewEvidence()),
+      selectedCenter ? Promise.all([
+        prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } }, userId: { not: null } } }),
+        prisma.staffProfile.count({ where: { centerId: selectedCenter.id, user: { isActive: true } } }),
+        prisma.staffSchedule.count({ where: { centerId: selectedCenter.id, staff: { user: { isActive: true } } } }),
+        prisma.tuitionPlan.count({ where: { centerId: selectedCenter.id } }),
+        prisma.product.count(),
+        prisma.billingAccount.count({ where: { family: { centerId: selectedCenter.id } } }),
+        prisma.invoice.count({ where: { billingAccount: { family: { centerId: selectedCenter.id } } } }),
+        prisma.document.count({
+          where: {
+            OR: [
+              { family: { centerId: selectedCenter.id } },
+              { child: { family: { centerId: selectedCenter.id } } },
+            ],
+          },
+        }),
+        prisma.form.count({ where: { status: "active" } }),
+        prisma.fteReport.count({ where: { centerId: selectedCenter.id } }),
+        prisma.integration.count({
+          where: {
+            tenantId: user.tenantId,
+            OR: [{ centerId: null }, { centerId: selectedCenter.id }],
+          },
+        }),
+        prisma.integration.count({
+          where: {
+            tenantId: user.tenantId,
+            OR: [{ centerId: null }, { centerId: selectedCenter.id }],
+            status: { in: ["verified", "connected", "ready_to_install", "platform_managed"] },
+          },
+        }),
+        prisma.messageTemplate.count({ where: { centerId: selectedCenter.id } }),
+        prisma.classroom.count({
+          where: activeClassroomWhere({
+            centerId: selectedCenter.id,
+            OR: [
+              { ageGroup: "" },
+              { capacity: { lte: 0 } },
+              { ratioRule: null },
+              { ratioRule: "" },
+            ],
+          }),
+        }),
+        prisma.staffProfile.count({
+          where: {
+            centerId: selectedCenter.id,
+            user: { isActive: true },
+            OR: [
+              { title: "" },
+              { backgroundCheckStatus: null },
+              { backgroundCheckStatus: "" },
+              { schedules: { none: {} } },
+              { certifications: { none: {} } },
+              { AND: [{ user: { role: UserRole.TEACHER, isActive: true } }, { classroomId: null }] },
+              { customFields: { equals: Prisma.DbNull } },
+              { customFields: { path: ["staffKioskPinHash"], equals: Prisma.AnyNull } },
+            ],
+          },
+        }),
+      ]) : Promise.resolve(Array(15).fill(0) as number[]),
+    ]);
     const [
-      familyCount,
-      childCount,
-      guardianCount,
       guardianLoginCount,
       staffCount,
       staffScheduleCount,
@@ -1076,39 +1146,23 @@ async function renderLivePage(
       fteReportCount,
       integrationCount,
       readyIntegrationCount,
-      procareImportCount,
       messageTemplateCount,
-    ] = selectedCenter ? await Promise.all([
-      prisma.family.count({ where: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } } }),
-      prisma.child.count({ where: { ...currentlyEnrolledChildWhere(), family: { centerId: selectedCenter.id } } }),
-      prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } } } }),
-      prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } }, userId: { not: null } } }),
-      prisma.staffProfile.count({ where: { centerId: selectedCenter.id, user: { isActive: true } } }),
-      prisma.staffSchedule.count({ where: { centerId: selectedCenter.id, staff: { user: { isActive: true } } } }),
-      prisma.tuitionPlan.count(),
-      prisma.product.count(),
-      prisma.billingAccount.count({ where: { family: { centerId: selectedCenter.id } } }),
-      prisma.invoice.count({ where: { billingAccount: { family: { centerId: selectedCenter.id } } } }),
-      prisma.document.count({
-        where: {
-          OR: [
-            { family: { centerId: selectedCenter.id } },
-            { child: { family: { centerId: selectedCenter.id } } },
-          ],
-        },
-      }),
-      prisma.form.count({ where: { status: "active" } }),
-      prisma.fteReport.count({ where: { centerId: selectedCenter.id } }),
-      prisma.integration.count({ where: { tenantId: user.tenantId } }),
-      prisma.integration.count({
-        where: {
-          tenantId: user.tenantId,
-          status: { in: ["verified", "connected", "ready_to_install", "platform_managed"] },
-        },
-      }),
-      prisma.procareImportBatch.count({ where: { centerId: selectedCenter.id } }),
-      prisma.messageTemplate.count({ where: { centerId: selectedCenter.id } }),
-    ]) : Array(17).fill(0) as number[];
+      incompleteClassroomCount,
+      incompleteStaffCount,
+    ] = setupCounts;
+    const {
+      familyCount,
+      childCount,
+      guardianCount,
+      importBatchCount: procareImportCount,
+    } = schoolDataEvidence;
+    const schoolDataSetup = selectedCenter ? readSchoolDataSetup(selectedCenter.customFields) : readSchoolDataSetup({});
+    const schoolDataAssessment = assessSchoolDataSetup(schoolDataSetup, schoolDataEvidence);
+    const confirmedEmptyCleanStart = schoolDataSetup.path === "start_clean"
+      && schoolDataSetup.noCurrentFamiliesExpected
+      && schoolDataAssessment.confirmationCurrent
+      && schoolDataEvidence.relevantFamilyCount === 0
+      && schoolDataEvidence.relevantChildCount === 0;
 
     const licensingConfiguration = selectedCenter
       ? readCenterLicensingConfiguration(selectedCenter.customFields, {
@@ -1121,6 +1175,10 @@ async function renderLivePage(
     const manualComplete = (storageKey: keyof typeof schoolSetup.setup.sections) => setupValue(storageKey).trim().length > 0;
     const classroomCount = selectedCenter?._count.classrooms ?? 0;
     const leadCount = selectedCenter?._count.leads ?? 0;
+    const payoutSetupFlow = stripePayoutSetupFlowForCenters(selectedCenter ? [{
+      ...selectedCenter,
+      stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(selectedCenter.id) || canUseCorporateStripeVerification(user),
+    }] : [], { userEmail: user.email });
     const readyData: Record<string, {
       recordReady: boolean;
       evidence: string;
@@ -1128,21 +1186,36 @@ async function renderLivePage(
       requiredActions: string[];
     }> = {
       schoolProfileSetup: {
-        recordReady: Boolean(selectedCenter?.email && selectedCenter?.state && selectedCenter.licensedCapacity > 0 && manualComplete("schoolProfile")),
+        recordReady: Boolean(
+          selectedCenter?.name
+          && selectedCenter?.address
+          && selectedCenter?.city
+          && selectedCenter?.email
+          && selectedCenter?.state
+          && selectedCenter?.postalCode
+          && selectedCenter?.phone
+          && selectedCenter?.timezone
+          && selectedCenter.licensedCapacity > 0
+          && manualComplete("schoolProfile")
+          && !setupValue("schoolProfile").toLocaleLowerCase("en-US").includes("needs confirmation"),
+        ),
         evidence: selectedCenter
           ? `${selectedCenter.status} school record · ${selectedCenter.licensedCapacity} licensed capacity · ${selectedCenter.email || "missing email"}`
           : "No school record is visible for this login.",
         metrics: [
           `Status: ${selectedCenter?.status ?? "No school"}`,
+          `Address: ${selectedCenter ? [selectedCenter.address, selectedCenter.city, selectedCenter.state, selectedCenter.postalCode].filter(Boolean).join(", ") || "Missing" : "Missing"}`,
+          `Phone: ${selectedCenter?.phone ?? "Missing"}`,
+          `Timezone: ${selectedCenter?.timezone ?? "Missing"}`,
           `Licensed capacity: ${selectedCenter?.licensedCapacity ?? 0}`,
           `Contact email: ${selectedCenter?.email ?? "Missing"}`,
         ],
         requiredActions: ["Confirm school contact details, operating hours, timezone, launch owner, and target go-live date."],
       },
       classroomSetup: {
-        recordReady: classroomCount > 0 && Boolean(selectedCenter?.licensedCapacity),
-        evidence: `${classroomCount} classroom records · ${selectedCenter?.licensedCapacity ?? 0} licensed capacity`,
-        metrics: [`Classrooms: ${classroomCount}`, `Licensed capacity: ${selectedCenter?.licensedCapacity ?? 0}`],
+        recordReady: classroomCount > 0 && incompleteClassroomCount === 0 && Boolean(selectedCenter?.licensedCapacity),
+        evidence: `${classroomCount} classroom records · ${incompleteClassroomCount} missing required setup · ${selectedCenter?.licensedCapacity ?? 0} licensed capacity`,
+        metrics: [`Classrooms: ${classroomCount}`, `Incomplete classrooms: ${incompleteClassroomCount}`, `Licensed capacity: ${selectedCenter?.licensedCapacity ?? 0}`],
         requiredActions: ["Create every classroom with age group, capacity, and ratio rule before attendance, daily reports, and staffing go live."],
       },
       programSetup: {
@@ -1152,21 +1225,21 @@ async function renderLivePage(
         requiredActions: ["Provide program names, age groups, operating schedules, holiday closures, and after-school/VPK rules."],
       },
       staffSetup: {
-        recordReady: staffCount > 0 && staffScheduleCount > 0,
-        evidence: `${staffCount} staff profiles · ${staffScheduleCount} staff schedule rows`,
-        metrics: [`Staff profiles: ${staffCount}`, `Schedules: ${staffScheduleCount}`],
+        recordReady: staffCount > 0 && incompleteStaffCount === 0,
+        evidence: `${staffCount} staff profiles · ${staffScheduleCount} staff schedule rows · ${incompleteStaffCount} incomplete staff records`,
+        metrics: [`Staff profiles: ${staffCount}`, `Schedules: ${staffScheduleCount}`, `Incomplete staff: ${incompleteStaffCount}`],
         requiredActions: ["Add teachers and staff, assign classrooms, confirm schedules, background checks, credentials, and time clock rules."],
       },
       familyImportSetup: {
-        recordReady: familyCount > 0 && childCount > 0 && guardianCount > 0,
-        evidence: `${familyCount} families · ${childCount} children · ${guardianCount} guardians · ${procareImportCount} data imports`,
+        recordReady: schoolDataAssessment.confirmationCurrent,
+        evidence: `${familyCount} families · ${childCount} children · ${guardianCount} guardians · ${procareImportCount} data imports · ${schoolDataAssessment.label}`,
         metrics: [`Families: ${familyCount}`, `Children: ${childCount}`, `Guardians: ${guardianCount}`],
-        requiredActions: ["Import the approved source exports and review family, guardian, child, emergency contact, allergy, schedule, and classroom mappings."],
+        requiredActions: [schoolDataAssessment.detail],
       },
       tuitionRateSetup: {
-        recordReady: tuitionPlanCount > 0 || productCount > 0,
-        evidence: `${tuitionPlanCount} tuition plans · ${productCount} billing products`,
-        metrics: [`Tuition plans: ${tuitionPlanCount}`, `Products/fees: ${productCount}`],
+        recordReady: tuitionPlanCount > 0,
+        evidence: `${tuitionPlanCount} school-specific tuition plans · ${productCount} shared billing products available`,
+        metrics: [`School tuition plans: ${tuitionPlanCount}`, `Shared products/fees: ${productCount}`],
         requiredActions: ["Load tuition by age/program/cadence, registration fees, deposits, sibling discounts, late fees, and other charges."],
       },
       subsidyRules: {
@@ -1176,20 +1249,24 @@ async function renderLivePage(
         requiredActions: ["Document subsidy programs, parent copays, agency billing cadence, and how subsidy balances are communicated."],
       },
       balanceRules: {
-        recordReady: billingAccountCount > 0 && manualComplete("balanceRules"),
-        evidence: `${billingAccountCount} billing accounts · ${invoiceCount} invoices`,
+        recordReady: manualComplete("balanceRules"),
+        evidence: `${billingAccountCount} billing accounts · ${invoiceCount} invoices · opening-balance policy ${manualComplete("balanceRules") ? "captured" : "missing"}`,
         metrics: [`Billing accounts: ${billingAccountCount}`, `Opening invoices: ${invoiceCount}`],
         requiredActions: ["Confirm opening balance cutover date, credits, refunds, ledger adjustments, and imported balances."],
       },
       invoiceRules: {
-        recordReady: invoiceCount > 0 && manualComplete("invoiceRules"),
+        recordReady: manualComplete("invoiceRules"),
         evidence: `${invoiceCount} invoices · payment policy ${manualComplete("invoiceRules") ? "captured" : "missing"}`,
         metrics: [`Invoices: ${invoiceCount}`, `Payment policy: ${manualComplete("invoiceRules") ? "Captured" : "Missing"}`],
         requiredActions: ["Confirm invoice cadence, due dates, late fee policy, ACH/card options, autopay expectations, and disclosures."],
       },
       parentPortalSetup: {
-        recordReady: guardianLoginCount > 0,
-        evidence: `${guardianLoginCount} guardians linked to login accounts out of ${guardianCount} guardians`,
+        recordReady: schoolDataAssessment.confirmationCurrent
+          && schoolDataEvidence.guardiansMissingContactCount === 0
+          && manualComplete("parentPortal"),
+        evidence: confirmedEmptyCleanStart
+          ? "The parent-access plan is captured; no family invitations are expected yet."
+          : `${guardianLoginCount} guardians already linked to login accounts out of ${guardianCount} guardians; invitation timing remains a separate approval.`,
         metrics: [`Guardian logins: ${guardianLoginCount}`, `Guardians: ${guardianCount}`],
         requiredActions: ["Choose which guardians receive parent portal invites and collect missing parent emails before launch."],
       },
@@ -1200,8 +1277,12 @@ async function renderLivePage(
         requiredActions: ["Confirm message templates, announcement approval rules, notification preferences, SMS/email sender identity, and response ownership."],
       },
       formsDocumentsSetup: {
-        recordReady: formCount > 0 && documentCount > 0,
-        evidence: `${formCount} active forms · ${documentCount} school-linked documents`,
+        recordReady: formCount > 0
+          && manualComplete("formsDocuments")
+          && (documentCount > 0 || confirmedEmptyCleanStart),
+        evidence: confirmedEmptyCleanStart
+          ? `${formCount} active forms · required-document plan captured · no family documents expected yet`
+          : `${formCount} active forms · ${documentCount} school-linked documents · document plan ${manualComplete("formsDocuments") ? "captured" : "missing"}`,
         metrics: [`Forms: ${formCount}`, `Documents: ${documentCount}`],
         requiredActions: ["Load final registration packets, parent policies, medical/allergy forms, media releases, and staff onboarding forms."],
       },
@@ -1218,15 +1299,18 @@ async function renderLivePage(
         requiredActions: ["Confirm license number, agency, drill cadence, inspection/renewal dates, medication rules, and document retention requirements."],
       },
       fteReportingSetup: {
-        recordReady: fteReportCount > 0 && manualComplete("fteReporting"),
+        recordReady: manualComplete("fteReporting"),
         evidence: `${fteReportCount} FTE reports · FTE process ${manualComplete("fteReporting") ? "captured" : "missing"}`,
         metrics: [`FTE reports: ${fteReportCount}`, `Current FTE status: ${fteDueState.label}`],
         requiredActions: ["Confirm FTE submission owner, weekly due date, correction workflow, attendance cutoff, and export cadence."],
       },
       integrationSetup: {
-        recordReady: integrationCount > 0 && readyIntegrationCount > 0 && manualComplete("integrations"),
-        evidence: `${readyIntegrationCount} ready integrations out of ${integrationCount} setup records`,
-        metrics: [`Integration records: ${integrationCount}`, `Ready integrations: ${readyIntegrationCount}`],
+        recordReady: integrationCount > 0
+          && readyIntegrationCount === integrationCount
+          && payoutSetupFlow.complete
+          && manualComplete("integrations"),
+        evidence: `${readyIntegrationCount} ready integrations out of ${integrationCount} setup records · school payout setup ${payoutSetupFlow.complete ? "complete" : "required"}`,
+        metrics: [`Integration records: ${integrationCount}`, `Ready integrations: ${readyIntegrationCount}`, `School payout setup: ${payoutSetupFlow.complete ? "Complete" : "Required"}`],
         requiredActions: ["Connect or verify payout processing, email sender/domain, SMS sender, Google Sheets/Calendar, storage, and signature provider accounts."],
       },
       launchSmokeTestSetup: {
@@ -1237,10 +1321,6 @@ async function renderLivePage(
       },
     };
 
-    const payoutSetupFlow = stripePayoutSetupFlowForCenters(selectedCenter ? [{
-      ...selectedCenter,
-      stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(selectedCenter.id) || canUseCorporateStripeVerification(user),
-    }] : [], { userEmail: user.email });
     const sections = schoolOnboardingSetupSections.map((definition) => {
       const saved = schoolSetup.setup.sections[definition.storageKey];
       const readiness = readyData[definition.field] ?? {
@@ -1270,49 +1350,55 @@ async function renderLivePage(
       };
     });
     const completedSections = sections.filter((section) => section.status === "complete").length;
-    const blockingSections = sections.filter((section) => section.status === "missing").length;
+    const blockingSections = sections.filter((section) => section.status !== "complete").length;
     const progress = sections.length ? Math.round((completedSections / sections.length) * 100) : 0;
     const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
-      centerCount: selectedCenter ? 1 : 0,
-      schoolProfileReady: Boolean(selectedCenter?.email && selectedCenter?.state && selectedCenter.licensedCapacity > 0),
-      classroomCount,
-      teacherStaffCount: staffCount,
-      importedFamilyCount: familyCount,
-      importedChildCount: childCount,
-      documentCount,
-      tuitionPlanCount,
-      productCount,
-      billingAccountCount,
-      invoiceCount,
-      guardianLoginCount,
-      messageTemplateCount,
-      calendarEventCount: selectedCenter?._count.calendarEvents ?? 0,
-      fteReportCount,
-      licensingReady: licensingConfiguration?.status === "ready_for_review",
-      leadCount,
-      dashboardConfigured: true,
+      schoolProfileReady: readyData.schoolProfileSetup.recordReady,
+      classroomsReady: readyData.classroomSetup.recordReady,
+      staffReady: readyData.staffSetup.recordReady,
+      schoolDataReady: schoolDataAssessment.confirmationCurrent,
+      documentsReady: readyData.formsDocumentsSetup.recordReady && manualComplete("formsDocuments"),
+      tuitionBillingReady: readyData.tuitionRateSetup.recordReady
+        && readyData.subsidyRules.recordReady
+        && readyData.balanceRules.recordReady
+        && readyData.invoiceRules.recordReady,
+      parentPortalReady: readyData.parentPortalSetup.recordReady,
+      communicationsReady: readyData.communicationSetup.recordReady,
+      calendarFteReady: readyData.fteReportingSetup.recordReady,
+      complianceReady: readyData.licensingSetup.recordReady,
       payoutReady: payoutSetupFlow.complete,
     });
     const externalNeeds = [
       selectedCenter && readSchoolEin(selectedCenter.customFields) ? null : "School EIN for customer payment receipts and ledger printouts.",
-      procareImportCount ? null : "Approved source data files for each school: families, children, guardians, classrooms, balances, and staff.",
-      tuitionPlanCount || productCount ? null : "Final tuition and fee sheet by program, age group, cadence, discounts, deposits, and late fees.",
+      schoolDataAssessment.confirmationCurrent ? null : schoolDataAssessment.blockedReason ?? "Final school-scoped family and child data review.",
+      tuitionPlanCount ? null : "Final tuition and fee sheet by program, age group, cadence, discounts, deposits, and late fees.",
       staffCount ? null : "Current staff roster with emails, titles, classroom assignments, schedules, certifications, and background-check status.",
-      guardianLoginCount ? null : "Approved parent/guardian invite list and any missing parent email addresses.",
-      readyIntegrationCount ? null : "External account credentials or admin access for payment processing, SendGrid/email domain, Twilio/SMS, Google Sheets/Calendar, storage, and signature provider setup.",
-      formCount && documentCount ? null : "Final registration packet, policy acknowledgements, medical/allergy forms, media releases, and staff onboarding forms.",
+      readyData.parentPortalSetup.recordReady ? null : "Approved parent/guardian invite plan and any missing parent contact details. No invitations are sent during setup review.",
+      readyData.integrationSetup.recordReady ? null : "Approved provider admin access or OAuth authorization for payment processing, email/SMS, Google services, storage, and signatures. The payout owner enters bank details only on the hosted provider page; never place passwords or bank details in setup notes.",
+      readyData.formsDocumentsSetup.recordReady ? null : "Final registration packet, policy acknowledgements, medical/allergy forms, media releases, and staff onboarding forms.",
       manualComplete("launchSmokeTest") ? null : "Target go-live date and the person who will sign off after the role-by-role school smoke test.",
     ].filter((item): item is string => Boolean(item));
     const data: SchoolSetupCommandCenterData = {
       centerId: selectedCenter?.id ?? null,
       centerLabel: selectedCenter ? formatCenterName(selectedCenter) : "No visible school",
-      setupStatus: blockingSections ? "needs_director_input" : "ready_for_review",
+      setupStatus: blockingSections ? "needs_setup" : "ready_for_review",
       progress,
       completedSections,
       totalSections: sections.length,
       blockingSections,
       lastCapturedAt: formatSavedAt(schoolSetup.capturedAt, readCenterLocationTimeZone(selectedCenter)),
       schoolEin: selectedCenter ? readSchoolEin(selectedCenter.customFields) : null,
+      businessProfile: {
+        name: selectedCenter?.name ?? "",
+        address: selectedCenter?.address ?? "",
+        city: selectedCenter?.city ?? "",
+        state: selectedCenter?.state ?? "",
+        postalCode: selectedCenter?.postalCode ?? "",
+        phone: selectedCenter?.phone ?? "",
+        email: selectedCenter?.email ?? "",
+        timezone: selectedCenter?.timezone ?? "",
+        licensedCapacity: selectedCenter?.licensedCapacity ? String(selectedCenter.licensedCapacity) : "",
+      },
       stats: [
         { label: "Classrooms", value: String(classroomCount), detail: `${selectedCenter?.licensedCapacity ?? 0} licensed capacity` },
         { label: "People imported", value: `${familyCount}/${childCount}/${guardianCount}`, detail: "Families / children / guardians" },
@@ -1321,9 +1407,20 @@ async function renderLivePage(
         { label: "Documents", value: String(documentCount), detail: `${formCount} active forms` },
         { label: "Integrations", value: `${readyIntegrationCount}/${integrationCount}`, detail: "Ready setup records" },
       ],
+      dataSetup: {
+        centerId: selectedCenter?.id ?? null,
+        centerLabel: selectedCenter ? formatCenterName(selectedCenter) : "No visible school",
+        setup: schoolDataSetup,
+        evidence: schoolDataEvidence,
+        assessment: schoolDataAssessment,
+      },
       sections,
       externalNeeds,
-      directorChecklistCompletedIds: readCompletedSetupChecklistIds(setupChecklistUser?.customFields, "director_launch"),
+      directorChecklistCompletedIds: readCompletedSetupChecklistIds(
+        setupChecklistUser?.customFields,
+        "director_launch",
+        { centerId: selectedCenter?.id, allowLegacyFallback: selectedCenter?.id === user.primaryCenterId },
+      ),
       directorChecklistAutomaticCompletedIds,
       directorChecklistTasks: directorLaunchChecklistTasksForPayoutSetup(payoutSetupFlow),
     };

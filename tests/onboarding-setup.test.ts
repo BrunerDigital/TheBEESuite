@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "../src/lib/onboarding-setup";
-import { directorLaunchChecklistTasks, directorLaunchChecklistTasksForPayoutSetup, teacherProfileChecklistTasks } from "../src/lib/setup-checklists";
+import { directorLaunchChecklistTasks, directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklistIds, teacherProfileChecklistTasks } from "../src/lib/setup-checklists";
 
 function completeSetupInput(overrides: SchoolOnboardingSetupInput = {}) {
   return {
@@ -33,6 +33,7 @@ test("school onboarding setup normalizes director-provided setup sections", () =
   assert.equal(setup.sections.licensingConfiguration.href, "/forms?view=compliance");
   assert.equal(setup.sections.integrations.href, "/billing-settings?view=integrations");
   assert.equal(setup.sections.parentPortal.href, "/family-detail#family-guardians");
+  assert.equal(setup.sections.familyImport.href, "/billing-settings?view=setup#school-data-setup");
 });
 
 test("school onboarding setup is ready when all school-specific sections are present", () => {
@@ -93,9 +94,32 @@ test("school dashboard setup steps use current consolidated routes", () => {
   assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "attendance-kiosk")?.href, "/classroom-dashboard?view=attendance");
   assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "compliance-incidents")?.href, "/forms?view=compliance");
   assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "parent-portal")?.href, "/family-detail#family-guardians");
+  assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "procare-import")?.href, "/billing-settings?view=setup#school-data-setup");
+  assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "procare-import")?.requiresVerifiedEvidence, true);
+  assert.equal(directorLaunchChecklistTasks.find((task) => task.id === "payout-bank-account")?.requiresVerifiedEvidence, true);
 });
 
 test("teacher setup links stay within teacher-accessible workspaces", () => {
   const scheduleTask = teacherProfileChecklistTasks.find((task) => task.id === "schedule-coverage");
   assert.equal(scheduleTask?.href, "/teacher-portal");
+});
+
+test("director checklist progress is isolated by school with primary-school legacy fallback", () => {
+  const customFields = {
+    setupChecklists: {
+      director_launch: {
+        completedIds: ["legacy-primary"],
+        centers: {
+          school_a: { completedIds: ["classrooms-ratios"] },
+          school_b: { completedIds: ["teachers-staff"] },
+        },
+      },
+      teacher_profile: { completedIds: ["teacher-login"] },
+    },
+  };
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "director_launch", { centerId: "school_a" }), ["classrooms-ratios"]);
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "director_launch", { centerId: "school_b" }), ["teachers-staff"]);
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "director_launch", { centerId: "school_c" }), []);
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "director_launch", { centerId: "school_c", allowLegacyFallback: true }), ["legacy-primary"]);
+  assert.deepEqual(readCompletedSetupChecklistIds(customFields, "teacher_profile"), ["teacher-login"]);
 });

@@ -8,6 +8,7 @@ export type SetupChecklistTask = {
   title: string;
   description: string;
   href?: string;
+  requiresVerifiedEvidence?: boolean;
 };
 
 export type PayoutSetupChecklistFlow = {
@@ -36,9 +37,10 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   },
   {
     id: "procare-import",
-    title: "Review imported families and children",
-    description: "Import approved source data, review duplicate matches, and confirm families, guardians, children, contacts, allergies, schedules, and classroom assignments.",
-    href: "/family-detail",
+    title: "Load and confirm family & child data",
+    description: "Choose the guarded import path or a clean start, then confirm families, guardians, children, contacts, safety details, schedules, and classroom assignments.",
+    href: "/billing-settings?view=setup#school-data-setup",
+    requiresVerifiedEvidence: true,
   },
   {
     id: "required-documents",
@@ -57,6 +59,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     title: "Finish the school's Stripe account setup",
     description: "The Stripe account already exists. Sign in to The BEE Suite with the school login, open this school-specific step, then use the school email and its existing Stripe password—or create the Stripe login if no password was set—to finish payout verification.",
     href: PAYOUT_SETUP_SETTINGS_PATH,
+    requiresVerifiedEvidence: true,
   },
   {
     id: "parent-portal",
@@ -207,14 +210,34 @@ export function setupChecklistTasksForKey(key: SetupChecklistKey) {
   return key === "director_launch" ? directorLaunchChecklistTasks : teacherProfileChecklistTasks;
 }
 
-export function readCompletedSetupChecklistIds(customFields: unknown, key: SetupChecklistKey) {
+export function readCompletedSetupChecklistIds(
+  customFields: unknown,
+  key: SetupChecklistKey,
+  options: { centerId?: string | null; allowLegacyFallback?: boolean } = {},
+) {
   if (!customFields || typeof customFields !== "object" || Array.isArray(customFields)) return [];
   const fields = customFields as Record<string, unknown>;
   const setupChecklists = fields.setupChecklists;
   if (!setupChecklists || typeof setupChecklists !== "object" || Array.isArray(setupChecklists)) return [];
   const entry = (setupChecklists as Record<string, unknown>)[key];
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-  const completedIds = (entry as Record<string, unknown>).completedIds;
+  const entryRecord = entry as Record<string, unknown>;
+  const centerEntries = entryRecord.centers;
+  const centerEntry = key === "director_launch"
+    && options.centerId
+    && centerEntries
+    && typeof centerEntries === "object"
+    && !Array.isArray(centerEntries)
+      ? (centerEntries as Record<string, unknown>)[options.centerId]
+      : null;
+  const centerCompletedIds = centerEntry && typeof centerEntry === "object" && !Array.isArray(centerEntry)
+    ? (centerEntry as Record<string, unknown>).completedIds
+    : null;
+  const completedIds = Array.isArray(centerCompletedIds)
+    ? centerCompletedIds
+    : options.allowLegacyFallback || key === "teacher_profile"
+      ? entryRecord.completedIds
+      : [];
   return Array.isArray(completedIds)
     ? completedIds.filter((value): value is string => typeof value === "string")
     : [];

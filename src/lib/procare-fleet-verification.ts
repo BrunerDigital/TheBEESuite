@@ -229,6 +229,7 @@ export type ProcareFleetVerificationInput = {
   sourceFilename?: string | null;
   importedAt?: string | null;
   sourceSha256?: string | null;
+  targetDataFingerprint?: string | null;
   batchStatus: string;
   sourceInventoryConfirmed: boolean;
   sourceCoverage: ReturnType<typeof assessProcareFleetSourceCoverage>;
@@ -245,9 +246,17 @@ export type ProcareFleetVerificationInput = {
 
 export function buildProcareFleetVerificationReport(input: ProcareFleetVerificationInput) {
   const blockers: string[] = [];
+  const reviewItems: string[] = [];
+  const nonDispositionErrorRows = Math.max(input.reconciliation.errorRows - input.reconciliation.disposedRows, 0);
+  const batchFinished = input.batchStatus === "completed"
+    || (
+      input.batchStatus === "completed_with_errors"
+      && input.reconciliation.unresolvedRows === 0
+      && nonDispositionErrorRows === 0
+    );
   if (!input.sourceSha256) blockers.push("The exact source SHA-256 is missing.");
   if (!input.sourceInventoryConfirmed) blockers.push("The source inventory was not confirmed by the importer.");
-  if (input.batchStatus !== "completed") blockers.push(`The import batch status is ${input.batchStatus}, not completed.`);
+  if (!batchFinished) blockers.push(`The import batch status is ${input.batchStatus}; unresolved or failed rows remain.`);
   for (const domain of input.sourceCoverage.domains) {
     if (domain.requiredForSchoolVerification && domain.status !== "present") {
       blockers.push(`${domain.label} source evidence is missing: ${domain.missingEvidence.join("; ")}.`);
@@ -259,10 +268,19 @@ export function buildProcareFleetVerificationReport(input: ProcareFleetVerificat
   if (input.sourceCoverage.evidenceOnlySources.length) {
     blockers.push(`${input.sourceCoverage.evidenceOnlySources.length} source file(s) still require a safe destination mapping or approved exclusion.`);
   }
-  if (input.reconciliation.decision !== "reconciled") blockers.push("The automated source-to-target reconciliation is not fully matched.");
+  const reconciledWithEvidencedExclusions = input.reconciliation.disposedRows > 0
+    && input.reconciliation.unresolvedRows === 0
+    && nonDispositionErrorRows === 0
+    && input.exceptionsWithoutEvidence === 0
+    && input.reconciliation.measures.every((measure) => measure.status === "match");
+  if (input.reconciliation.decision !== "reconciled" && !reconciledWithEvidencedExclusions) {
+    blockers.push("The automated source-to-target reconciliation is not fully matched.");
+  }
   if (input.reconciliation.unresolvedRows) blockers.push(`${input.reconciliation.unresolvedRows} import row(s) remain unresolved.`);
-  if (input.reconciliation.disposedRows) blockers.push(`${input.reconciliation.disposedRows} import row(s) were excluded and require signed exception review.`);
   if (input.exceptionsWithoutEvidence) blockers.push(`${input.exceptionsWithoutEvidence} excluded row(s) lack complete reason, category, evidence reference, reviewer, or timestamp evidence.`);
+  if (reconciledWithEvidencedExclusions) {
+    reviewItems.push(`${input.reconciliation.disposedRows} evidenced source exclusion(s) require director confirmation.`);
+  }
 
   return {
     reportType: "bee_suite_procare_fleet_verification",
@@ -273,8 +291,10 @@ export function buildProcareFleetVerificationReport(input: ProcareFleetVerificat
     sourceFilename: input.sourceFilename ?? null,
     importedAt: input.importedAt ?? null,
     sourceSha256: input.sourceSha256 ?? null,
+    targetDataFingerprint: input.targetDataFingerprint ?? null,
     status: blockers.length ? "NOT_VERIFIED" : "READY_FOR_DIRECTOR_REVIEW",
     blockers,
+    reviewItems,
     sourceCoverage: input.sourceCoverage,
     reconciliation: input.reconciliation,
     manualApprovalGates: [

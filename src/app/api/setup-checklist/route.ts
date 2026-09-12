@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { getCurrentUser } from "@/lib/auth";
+import { canAccessCenter, getCurrentUser } from "@/lib/auth";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { setupChecklistTasksForKey, type SetupChecklistKey } from "@/lib/setup-checklists";
 
@@ -25,10 +26,28 @@ async function PATCHHandler(request: NextRequest) {
   if (!key || !allowedKeys.has(key)) {
     return NextResponse.json({ ok: false, error: "Checklist key is not valid." }, { status: 400 });
   }
+  const centerId = key === "director_launch" && typeof body?.centerId === "string" ? body.centerId.trim() : null;
+  if (key === "director_launch" && !centerId) {
+    return NextResponse.json({ ok: false, error: "Choose a school before saving its launch checklist." }, { status: 400 });
+  }
+  if (centerId && !canAccessCenter(user, centerId)) {
+    return NextResponse.json({ ok: false, error: "You do not have access to that school." }, { status: 403 });
+  }
+  if (centerId) {
+    const scopedCenter = await prisma.center.findFirst({
+      where: { id: centerId, organization: { tenantId: user.tenantId } },
+      select: { id: true },
+    });
+    if (!scopedCenter) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
+  }
 
-  const allowedTaskIds = new Set(setupChecklistTasksForKey(key).map((task) => task.id));
+  const checklistTasks = setupChecklistTasksForKey(key);
+  const allowedTaskIds = new Set(checklistTasks.map((task) => task.id));
+  const allowedManualTaskIds = new Set(checklistTasks
+    .filter((task) => !task.requiresVerifiedEvidence)
+    .map((task) => task.id));
   const completedIds = Array.isArray(body?.completedIds)
-    ? Array.from(new Set(body.completedIds.filter((value): value is string => typeof value === "string" && allowedTaskIds.has(value))))
+    ? Array.from(new Set(body.completedIds.filter((value): value is string => typeof value === "string" && allowedManualTaskIds.has(value))))
     : [];
 
   const savedAt = new Date().toISOString();
@@ -44,16 +63,26 @@ async function PATCHHandler(request: NextRequest) {
 
     const customFields = record(existingUser.customFields);
     const setupChecklists = record(customFields.setupChecklists);
+    const existingChecklist = record(setupChecklists[key]);
+    const checklistProgress = {
+      completedIds,
+      completedCount: completedIds.length,
+      totalCount: allowedTaskIds.size,
+      updatedAt: savedAt,
+    };
     const nextCustomFields = {
       ...customFields,
       setupChecklists: {
         ...setupChecklists,
-        [key]: {
-          completedIds,
-          completedCount: completedIds.length,
-          totalCount: allowedTaskIds.size,
-          updatedAt: savedAt,
-        },
+        [key]: key === "director_launch" && centerId
+          ? {
+              ...existingChecklist,
+              centers: {
+                ...record(existingChecklist.centers),
+                [centerId]: checklistProgress,
+              },
+            }
+          : checklistProgress,
       },
     };
 
@@ -74,9 +103,18 @@ async function PATCHHandler(request: NextRequest) {
     );
   }
 
+  await writeAuditLog(user, {
+    action: "school_setup.checklist.saved",
+    resource: "User",
+    resourceId: user.id,
+    centerId,
+    metadata: { key, completedIds, savedAt },
+  });
+
   return NextResponse.json({
     ok: true,
     key,
+    centerId,
     completedIds,
     completedCount: completedIds.length,
     totalCount: allowedTaskIds.size,

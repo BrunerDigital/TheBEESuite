@@ -87,8 +87,10 @@ test("director setup edits are included in the main save and reconciled after pe
   assert.match(setupRoute, /status: 409/);
   assert.match(setupRoute, /sections: setup \? responseSections\(setup\)/);
   assert.match(setupPage, /key=\{data\.centerId \?\? "no-school"\}/);
-  assert.match(checklistComponent, /disabled=\{automatic \|\| isPending\}/);
+  assert.match(checklistComponent, /disabled=\{automatic \|\| evidenceRequired \|\| isPending\}/);
+  assert.match(checklistComponent, /Evidence required/);
   assert.match(checklistComponent, /Checklist progress saved/);
+  assert.match(checklistRoute, /allowedManualTaskIds/);
   assert.match(checklistRoute, /updateMany/);
   assert.match(checklistRoute, /updatedAt: existingUser\.updatedAt/);
   assert.match(checklistRoute, /status: 409/);

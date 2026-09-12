@@ -907,21 +907,19 @@ test("parent document request emails use guardian personal emails and private pa
 
 test("director launch setup checklist auto-completes from app evidence", () => {
   const automatic = deriveDirectorLaunchAutoCompletedIds({
-    centerCount: 1,
     schoolProfileReady: true,
-    classroomCount: 4,
-    teacherStaffCount: 8,
-    importedFamilyCount: 30,
-    importedChildCount: 42,
-    documentCount: 12,
-    tuitionPlanCount: 2,
-    guardianLoginCount: 10,
-    attendanceRecordCount: 5,
-    messageTemplateCount: 3,
-    fteReportCount: 1,
-    licensingReady: true,
-    leadCount: 4,
-    dashboardConfigured: true,
+    classroomsReady: true,
+    staffReady: true,
+    schoolDataReady: true,
+    documentsReady: true,
+    tuitionBillingReady: true,
+    parentPortalReady: true,
+    attendanceReady: true,
+    communicationsReady: true,
+    calendarFteReady: true,
+    complianceReady: true,
+    enrollmentReady: true,
+    reportsReady: true,
   });
 
   assert.ok(automatic.includes("login-school-profile"));
@@ -935,6 +933,23 @@ test("director launch setup checklist auto-completes from app evidence", () => {
     }).filter((id) => id === "parent-portal"),
     ["parent-portal"],
   );
+});
+
+test("director launch checklist does not infer readiness from the existence of partial records", () => {
+  const automatic = deriveDirectorLaunchAutoCompletedIds({
+    schoolProfileReady: false,
+    classroomsReady: false,
+    staffReady: false,
+    schoolDataReady: false,
+    documentsReady: false,
+    tuitionBillingReady: false,
+    parentPortalReady: false,
+    communicationsReady: false,
+    calendarFteReady: false,
+    complianceReady: false,
+    payoutReady: false,
+  });
+  assert.deepEqual(automatic, []);
 });
 
 test("parent portal navigation is limited to the parent portal workspace", () => {

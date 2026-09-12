@@ -61,7 +61,9 @@ test("directors can enter cash details and families see a clear payment label", 
 test("manual cash timestamps use the selected school's local date and time", () => {
   assert.match(workbench, /resolveSchoolTimeZone\(centerId\)/);
   assert.match(workbench, /zonedDateTimeLocalValue\(new Date\(\), timeZone\)/);
-  assert.match(workbench, /const localNow = currentLocalDateTime\(resolveSchoolTimeZone\(value\)\);[\s\S]*setCheckPaidAt\(localNow\);[\s\S]*setCashPaidAt\(localNow\);[\s\S]*setPayrollPaidAt\(localNow\);/);
+  assert.match(workbench, /const dates = billingDraftDates\(resolveSchoolTimeZone\(nextCenterId\)\);[\s\S]*setCheckPaidAt\(dates\.localNow\);[\s\S]*setCashPaidAt\(dates\.localNow\);[\s\S]*setPayrollPaidAt\(dates\.localNow\);/);
+  assert.match(workbench, /handleCenterChange[\s\S]*resetFamilyBoundBillingDrafts\(nextFamily, value\)/);
+  assert.match(workbench, /handleFamilyChange[\s\S]*resetFamilyBoundBillingDrafts\(nextFamily, centerId\)/);
   assert.match(workbench, /manualPaymentTimestamp\(cashPaidAt, timeZone\)/);
   assert.match(workbench, /type="datetime-local" value=\{cashPaidAt\}/);
 });

@@ -24,14 +24,15 @@ test("family relationship map stays read-only and opens the existing controlled 
   assert.match(editor, /findChildDuplicateCandidates/);
 });
 
-test("dedicated terminal uses current-family data and preserves explicit card-present confirmation", () => {
+test("dedicated terminal uses scoped billing-eligible data and preserves explicit card-present confirmation", () => {
   const page = source("src/app/[slug]/page.tsx");
   const workspace = source("src/components/director-payment-terminal-workspace.tsx");
   const terminal = source("src/components/stripe-terminal-payment.tsx");
 
   assert.match(page, /children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
   assert.match(page, /requestedBillingWorkspace[\s\S]*=== "terminal"/);
-  assert.match(workspace, /Only currently enrolled families in your visible school scope appear here/);
+  assert.match(workspace, /Only billing-eligible families in your authorized school scope appear here/);
+  assert.match(workspace, /resolveBillingFamilySelection/);
   assert.match(workspace, /presentation="embedded"/);
   assert.match(terminal, /parentPresent: true/);
   assert.match(terminal, /Confirm that the parent is present/);

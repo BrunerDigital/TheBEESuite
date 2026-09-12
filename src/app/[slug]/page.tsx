@@ -4100,6 +4100,8 @@ async function renderLivePage(
   }
 
   if (slug === "billing-invoices") {
+    const requestedBillingFamilyId = firstSearchParam(searchParams.familyId) || "";
+    const requestedBillingCenterId = firstSearchParam(searchParams.centerId) || "";
     const billingAccountWhere = visibleBillingAccountWhere(visibleCenterIds);
     const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
@@ -4117,6 +4119,92 @@ async function renderLivePage(
         },
       ],
     };
+    const billingWorkbenchFamilySelect = {
+          id: true,
+          centerId: true,
+          name: true,
+          billingEmail: true,
+          updatedAt: true,
+          guardians: {
+            select: { id: true, fullName: true, email: true, userId: true },
+            orderBy: { fullName: "asc" },
+          },
+          billingAccount: {
+            select: {
+              id: true,
+              balanceCents: true,
+              autopayPlaceholder: true,
+              customFields: true,
+              invoices: {
+                where: { status: PaymentStatus.OPEN },
+                orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+                take: 20,
+                select: {
+                  id: true,
+                  number: true,
+                  status: true,
+                  dueDate: true,
+                  totalCents: true,
+                  items: {
+                    orderBy: { id: "asc" },
+                    select: { id: true, description: true, amountCents: true, productId: true },
+                  },
+                },
+              },
+              payments: {
+                where: {
+                  provider: { in: ["stripe", "stripe_terminal"] },
+                  OR: [
+                    { status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
+                    {
+                      status: PaymentStatus.DRAFT,
+                      OR: [
+                        { customFields: { path: ["status"], equals: "autopay_pending" } },
+                        { customFields: { path: ["status"], equals: "autopay_processing" } },
+                        { customFields: { path: ["status"], equals: "autopay_succeeded_pending_webhook" } },
+                        { customFields: { path: ["status"], equals: "autopay_submission_unknown" } },
+                        { customFields: { path: ["status"], equals: "stored_method_pending" } },
+                        { customFields: { path: ["status"], equals: "stored_method_processing" } },
+                        { customFields: { path: ["status"], equals: "stored_method_succeeded_pending_webhook" } },
+                        { customFields: { path: ["status"], equals: "stored_method_submission_unknown" } },
+                      ],
+                    },
+                  ],
+                },
+                orderBy: [{ paidAt: "desc" }, { id: "desc" }],
+                take: 20,
+                select: {
+                  id: true,
+                  amountCents: true,
+                  status: true,
+                  provider: true,
+                  paidAt: true,
+                  externalIdPlaceholder: true,
+                  customFields: true,
+                },
+              },
+            },
+          },
+          children: {
+            where: {
+              OR: [
+                currentlyEnrolledChildWhere(),
+                prospectiveEnrollmentChildWhere(),
+              ],
+            },
+            orderBy: { fullName: "asc" },
+            select: {
+              id: true,
+              fullName: true,
+              ageGroup: true,
+              enrollmentStatus: true,
+              classroomId: true,
+              startDate: true,
+              schedule: true,
+              customFields: true,
+            },
+          },
+        } satisfies Prisma.FamilySelect;
     const [
       invoices,
       ledgerEntries,
@@ -4126,7 +4214,8 @@ async function renderLivePage(
       openRows,
       ledgerRollupRows,
       billingAccountRows,
-      billingFamilies,
+      listedBillingFamilies,
+      requestedEligibleBillingFamily,
       needsEnrollmentSetupFamilies,
       billingProducts,
       tuitionPlans,
@@ -4230,95 +4319,14 @@ async function renderLivePage(
       }),
       prisma.family.findMany({
         where: workbenchFamilyWhere,
-        orderBy: { name: "asc" },
+        orderBy: [{ name: "asc" }, { id: "asc" }],
         take: 1000,
-        select: {
-          id: true,
-          centerId: true,
-          name: true,
-          billingEmail: true,
-          updatedAt: true,
-          guardians: {
-            select: { id: true, fullName: true, email: true, userId: true },
-            orderBy: { fullName: "asc" },
-          },
-          billingAccount: {
-            select: {
-              id: true,
-              balanceCents: true,
-              autopayPlaceholder: true,
-              customFields: true,
-              invoices: {
-                where: { status: PaymentStatus.OPEN },
-                orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-                take: 20,
-                select: {
-                  id: true,
-                  number: true,
-                  status: true,
-                  dueDate: true,
-                  totalCents: true,
-                  items: {
-                    orderBy: { id: "asc" },
-                    select: { id: true, description: true, amountCents: true, productId: true },
-                  },
-                },
-              },
-              payments: {
-                where: {
-                  provider: { in: ["stripe", "stripe_terminal"] },
-                  OR: [
-                    { status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
-                    {
-                      status: PaymentStatus.DRAFT,
-                      OR: [
-                        { customFields: { path: ["status"], equals: "autopay_pending" } },
-                        { customFields: { path: ["status"], equals: "autopay_processing" } },
-                        { customFields: { path: ["status"], equals: "autopay_succeeded_pending_webhook" } },
-                        { customFields: { path: ["status"], equals: "autopay_submission_unknown" } },
-                        { customFields: { path: ["status"], equals: "stored_method_pending" } },
-                        { customFields: { path: ["status"], equals: "stored_method_processing" } },
-                        { customFields: { path: ["status"], equals: "stored_method_succeeded_pending_webhook" } },
-                        { customFields: { path: ["status"], equals: "stored_method_submission_unknown" } },
-                      ],
-                    },
-                  ],
-                },
-                orderBy: [{ paidAt: "desc" }, { id: "desc" }],
-                take: 20,
-                select: {
-                  id: true,
-                  amountCents: true,
-                  status: true,
-                  provider: true,
-                  paidAt: true,
-                  externalIdPlaceholder: true,
-                  customFields: true,
-                },
-              },
-            },
-          },
-          children: {
-            where: {
-              OR: [
-                currentlyEnrolledChildWhere(),
-                prospectiveEnrollmentChildWhere(),
-              ],
-            },
-            orderBy: { fullName: "asc" },
-            select: {
-              id: true,
-              fullName: true,
-              ageGroup: true,
-              enrollmentStatus: true,
-              classroomId: true,
-              startDate: true,
-              schedule: true,
-              customFields: true,
-            },
-          },
-        },
+        select: billingWorkbenchFamilySelect,
       }),
+      requestedBillingFamilyId ? prisma.family.findFirst({
+        where: { AND: [workbenchFamilyWhere, { id: requestedBillingFamilyId }, ...(requestedBillingCenterId ? [{ centerId: requestedBillingCenterId }] : [])] },
+        select: billingWorkbenchFamilySelect,
+      }) : Promise.resolve(null),
       prisma.family.findMany({
         where: {
           centerId: scopedCenterIds,
@@ -4359,6 +4367,9 @@ async function renderLivePage(
       getStripeSecretKey({ tenantId: user.tenantId }).then(Boolean),
       getStripeWebhookSecret({ tenantId: user.tenantId }).then(Boolean),
     ]);
+    const billingFamilies = requestedEligibleBillingFamily && !listedBillingFamilies.some((family) => family.id === requestedEligibleBillingFamily.id)
+      ? [...listedBillingFamilies, requestedEligibleBillingFamily]
+      : listedBillingFamilies;
     const historicalFamilyLookupKeys = Array.from(new Map(
       invoices
         .filter((invoice) => invoice.billingAccount.family._count.children === 0)
@@ -4476,8 +4487,6 @@ async function renderLivePage(
         cronSchedule: "Daily at 13:15 UTC",
       },
     );
-    const requestedBillingFamilyId = firstSearchParam(searchParams.familyId) || "";
-    const requestedBillingCenterId = firstSearchParam(searchParams.centerId) || "";
     const requestedBillingChildId = firstSearchParam(searchParams.childId) || "";
     const requestedBillingSearch = firstSearchParam(searchParams.q) || "";
     const requestedBillingWorkspace = firstSearchParam(searchParams.workspace) === "terminal" ? "terminal" as const : undefined;
@@ -4506,6 +4515,8 @@ async function renderLivePage(
       <BillingInvoicesPage
         data={{
           readOnly: !canManageBilling(user),
+          canOpenFamilyProfile: canAccessModule(user, "family-detail"),
+          canManageEnrollment: canManageOperations(user) && canAccessModule(user, "family-detail"),
           invoiceStatus,
           receiptSchools: centers.map((center) => ({
             id: center.id,
@@ -4865,6 +4876,8 @@ async function renderLivePage(
     return (
       <PaymentsPage
         data={{
+          readOnly: !canManageBilling(user),
+          canOpenFamilyProfile: canAccessModule(user, "family-detail"),
           receiptSchools: centers.map((center) => ({
             id: center.id,
             name: formatCenterName(center),

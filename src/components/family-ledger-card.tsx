@@ -9,6 +9,8 @@ import {
   LedgerPrintButton,
   type BillingReceiptSchool,
 } from "@/components/billing-print-actions";
+import { BILLING_TARGET_UNAVAILABLE } from "@/lib/billing-family-selection";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +62,8 @@ export function FamilyLedgerCard({
   families,
   schools,
   initialFamilyId = "",
+  initialCenterId = "",
+  canOpenFamilyProfile,
   readOnly = false,
 }: {
   entries: FamilyLedgerEntry[];
@@ -73,13 +77,16 @@ export function FamilyLedgerCard({
   families: FamilyOption[];
   schools: BillingReceiptSchool[];
   initialFamilyId?: string;
+  initialCenterId?: string;
+  canOpenFamilyProfile: boolean;
   readOnly?: boolean;
 }) {
   const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
-  const validInitialFamilyId = families.some((family) => family.id === initialFamilyId)
+  const validInitialFamilyId = families.some((family) => family.id === initialFamilyId && (!initialCenterId || family.centerId === initialCenterId))
     ? initialFamilyId
     : "";
   const [familyId, setFamilyId] = useState(validInitialFamilyId);
+  const [selectionError, setSelectionError] = useState(Boolean(initialFamilyId && !validInitialFamilyId));
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const selectedFamily = families.find((family) => family.id === familyId) ?? null;
@@ -130,7 +137,7 @@ export function FamilyLedgerCard({
         <div className="flex w-full flex-col gap-3 lg:w-auto">
           <div className="grid min-w-0 flex-1 gap-1.5 sm:min-w-72">
             <Label htmlFor="family-ledger-family">Family</Label>
-            <Select value={familyId} onValueChange={(value) => setFamilyId(value ?? "")}>
+            <Select value={familyId} onValueChange={(value) => { if (value && families.some((family) => family.id === value)) { setFamilyId(value); setSelectionError(false); } }}>
               <SelectTrigger id="family-ledger-family" className="w-full">
                 <SelectValue placeholder="Choose a family" />
               </SelectTrigger>
@@ -167,6 +174,7 @@ export function FamilyLedgerCard({
         </div>
       </CardHeader>
       <CardContent>
+        {selectionError || (familyId && !selectedFamily) ? <Alert variant="destructive" className="mb-4"><AlertTitle>Family selection needed</AlertTitle><AlertDescription>{BILLING_TARGET_UNAVAILABLE}</AlertDescription></Alert> : null}
         {selectedFamily ? (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2">
             <div>
@@ -175,7 +183,7 @@ export function FamilyLedgerCard({
                 {rangedEntries.length} ledger entr{rangedEntries.length === 1 ? "y" : "ies"} in the selected date range
               </div>
             </div>
-            {!readOnly ? (
+            {!readOnly && canOpenFamilyProfile ? (
               <Link
                 href={`/family-detail?familyId=${encodeURIComponent(selectedFamily.id)}#family-editor`}
                 className={buttonVariants({ variant: "outline", size: "sm" })}

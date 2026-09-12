@@ -834,7 +834,7 @@ async function paymentStatus(body: Record<string, unknown>) {
     return NextResponse.json({ ok: true, status: "succeeded", paymentId: payment.id });
   }
   if (payment.status === PaymentStatus.FAILED || payment.status === PaymentStatus.VOID) {
-    return NextResponse.json({ ok: false, status: "failed", error: clean(fields.stripeError) || "The in-person payment did not complete." });
+    return NextResponse.json({ ok: false, status: "failed", paymentId: payment.id, error: clean(fields.stripeError) || "The in-person payment did not complete." });
   }
   const intent = await retrieveStripePaymentIntent({
     paymentIntentId,

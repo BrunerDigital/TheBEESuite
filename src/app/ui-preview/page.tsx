@@ -273,6 +273,8 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
               products={[{ id: "preview-registration", name: "Registration fee", type: "registration_fee", amountCents: 7500 }]}
               tuitionPlans={[{ id: "preview-plan", centerId: terminalCenter.id, name: "Pre-K Weekly", ageGroup: "Pre-K", cadence: "weekly", amountCents: 24500 }]}
               currentRole="CENTER_DIRECTOR"
+              canOpenFamilyProfile
+              canManageEnrollment
               initialCenterId={terminalCenter.id}
               initialFamilyId={terminalFamily.id}
             />
@@ -291,6 +293,8 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
               products={[{ id: "preview-registration", name: "Registration fee", type: "registration_fee", amountCents: 15000 }]}
               tuitionPlans={[{ id: "preview-plan", centerId: terminalCenter.id, name: "Infant Weekly", ageGroup: "Infant", cadence: "weekly", amountCents: 32500 }]}
               currentRole="CENTER_DIRECTOR"
+              canOpenFamilyProfile
+              canManageEnrollment
               initialCenterId={terminalCenter.id}
               initialFamilyId={prospectiveBillingFamily.id}
             />

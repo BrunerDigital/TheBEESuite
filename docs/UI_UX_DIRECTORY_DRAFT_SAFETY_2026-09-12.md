@@ -10,7 +10,11 @@
 - Concurrent school-setup PR #353 (`09f2cc34`) was incorporated normally. The validated PR #352 branch was also incorporated for shared recovery/guard code, followed by its protected main merge. Unrelated work remains preserved.
 - A read-only fake-data teacher test then reproduced silent draft reassignment: selecting child B after preparing a photo, incident, and report for child A retained all content but changed recipients without confirmation. A 42-child selection silently discarded two children. These became priority corrections in this wave before automation work.
 
-## Implemented, not yet released
+## Released and production-verified
+
+Protected PR #355 merged as `40c48a9aaa9d2f06d211862bb7e90093612698f3` on September 12 at 04:19 UTC. CI and CodeQL passed; Vercel deployment `dpl_73M8wfzhCChdcktnrJF4RxHGJC3Z` is Ready with `thebeesuite.io`, `www.thebeesuite.io`, and the existing project aliases. `/api/health` reported `ok: true`, database connected at 04:23 UTC. Scoped runtime error/fatal counts were empty after deployment; filtered build logs reported completion.
+
+Post-release reserved fake-account checks passed 20/20 Parent/Teacher navigation cases and 2/2 Teacher report-control cases at phone/desktop sizes. Fresh fake-scope proof passed both accounts; zero HTTP errors, client exceptions, overflow, blocked requests, or product writes. Only two logins and 12 known session heartbeats were performed. Evidence: `output/playwright/app-review-production-after-pr355/results.json` and 22 fake-only screenshots. General directory authenticated UI remains unverified because its separate QA credentials are unavailable; actual scoped read-only Prisma queries and local real-component tests cover that path. No physical-device or signed-native claim is made.
 
 - Team directory: server search, independent 50-row directory/session pages, complete scoped counts, stable ordering, no false-empty database fallback, and nested school-level privacy filtering. Unused IP/browser/revoker data is no longer sent to the client.
 - Teacher: explicit discard confirmation for affected drafts before changing child/report recipients; attendance no longer changes drafting selection; missing roster recipients fail closed; oversized report batches show an error without changing the prior selection; controls lock during pending requests; file input clears with a successful or explicitly discarded photo draft. Enlarged summary text can reflow into readable columns.
@@ -19,7 +23,7 @@
 - The directory component and existing record-label/stat-card presentation were extracted into narrow reusable modules without changing default shared presentation. Compact directory metrics and enlarged text reflow reduce unnecessary vertical space.
 - No real sessions revoked, reports/photos/incidents sent, identities changed, messages delivered, or provider/financial actions taken.
 
-## Validation contract
+## Validation history (earlier pending statements below are historical)
 
 - Focused scope, pagination, and teacher draft tests pass; read-only exact Prisma queries against the verified isolated demo scope passed for center-scoped and tenant-wide users/grants/staff profiles and paginated sessions. No live rows or credentials are included in evidence.
 - Real-component local browser harness passes 23 behavior groups, including staff-only backdates, recipient cancellation/discard, pending controls, canonical directory search/paging, read-only/current-device explanations, and session recovery/success announcements. Ten write attempts were intercepted entirely in the localhost fixture; none reached an API/provider/database. A malformed HTTP 200 cannot announce that a session ended.

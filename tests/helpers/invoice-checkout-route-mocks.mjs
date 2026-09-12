@@ -7,7 +7,9 @@ const { stripeBillingApprovalCustomFieldPatch } = approvalModule;
 const { APP_REVIEW_PARENT_CONTACT } = targetingModule;
 
 let user, center, family, invoice, details, providers, captured, currentActor, currentDevice, guardianLinked;
+let familyRouteMode = false, familyDrafts = [], familyClaims = [], familyResolutions = [];
 function reset() {
+  familyRouteMode = false; familyDrafts = []; familyClaims = []; familyResolutions = [];
   const now = new Date().toISOString();
   user = { id: "fake-director", tenantId: "fake-tenant", email: "fake-director@example.test", role: "CENTER_DIRECTOR", centerIds: ["fake-school"],
     deviceSessionId: "fake-device", workspace: { mode: "center", activeCenterId: "fake-school" } };
@@ -33,22 +35,27 @@ const prisma = {
     async findFirst({ where }) { details++; assert.equal(where.billingAccountId, "fake-account"); return invoice; },
   },
   center: { async findUnique() { return center; }, async findFirst({ where }) { assert.equal(where.organization.tenantId, center.organization.tenantId); return center; },
-    async update() { throw new Error("School config must not be written during provider readiness inspection"); } },
+    async update() { if (familyRouteMode) return center; throw new Error("School config must not be written during provider readiness inspection"); } },
   family: { async findUnique() { return family; }, async findFirst() { return family; } },
   guardian: { async findFirst() { return guardianLinked ? { id: "fake-guardian" } : null; } },
   user: { async findFirst() { return currentActor ? { id: user.id } : null; } },
   deviceSession: { async findFirst() { return currentDevice ? { id: "fake-device" } : null; } },
-  billingAccount: { async upsert() { throw new Error("No synthetic account creation expected"); } },
+  billingAccount: { async upsert() { throw new Error("No synthetic account creation expected"); },
+    async findFirst() { return { ...family.billingAccount, family: { ...family, _count: { children: 0 } }, invoices: [], autopayPlaceholder: false }; } },
+  payment: { async findMany() { return familyDrafts; } },
+  ledgerEntry: { async findMany() { return []; } },
 };
 mock.module("@/lib/prisma", { namedExports: { prisma } });
 mock.module("@/lib/auth", { namedExports: {
   async getCurrentUser() { return user; }, isParentGuardian(value) { return value.role === "PARENT_GUARDIAN"; },
   canManageBilling(value) { return ["CENTER_DIRECTOR", "BILLING_ADMIN", "BRAND_ADMIN", "PLATFORM_OWNER"].includes(value.role); },
   canAccessAllCenters(value) { return ["BRAND_ADMIN", "PLATFORM_OWNER"].includes(value.role) && value.workspace?.mode === "all"; },
+  canAccessCenter(value, centerId) { return value.centerIds.includes(centerId); },
 } });
 mock.module("@/lib/request-response-logging", { namedExports: { withApiLogging(_method, handler) { return handler; } } });
 mock.module("@/lib/parent-portal-family-scope", { namedExports: {
   async getParentPortalPaymentFamilyScope() { return { ok: guardianLinked, familyId: "fake-family", guardianIds: ["fake-guardian"] }; },
+  async getParentPortalFamilyScope() { return { ok: guardianLinked, familyId: "fake-family", guardianIds: ["fake-guardian"] }; },
 } });
 const integrationModule = await import("@/lib/integrations");
 const realIntegrations = integrationModule.default ?? integrationModule;
@@ -62,9 +69,17 @@ mock.module("@/lib/integrations", { namedExports: { ...realIntegrations,
 mock.module("@/lib/invoice-checkout-service", { namedExports: {
   async startInvoiceCheckout(input) { captured.push(input); return { ok: true, statusCode: 200, paymentId: "fake-payment", stripeSessionId: "cs_fake", url: "https://checkout.stripe.com/c/pay_fake" }; },
 } });
+const claimModule = await import("@/lib/stripe-payment-claims");
+mock.module("@/lib/stripe-payment-claims", { namedExports: { ...(claimModule.default ?? claimModule),
+  async createStripePaymentClaim(input) { familyClaims.push(input); return { created: false, reason: "active_family_balance", blockingPaymentId: "fake-boundary-stop" }; },
+} });
+mock.module("@/lib/stripe-checkout-drafts", { namedExports: {
+  async resolveStripeCheckoutDraftBlocker(input) { familyResolutions.push(input); return { blocked: true, message: "Fake existing session is pending" }; },
+} });
 const { createPaymentMethodRequestToken } = await import("@/lib/payment-method-request-forms");
 const direct = await import("../../src/app/api/billing/checkout-session/route.ts");
 const signed = await import("../../src/app/api/billing/payment-method-request/checkout/route.ts");
+const familyPayment = await import("../../src/app/api/billing/family-payment/route.ts");
 globalThis.fetch = async () => { throw new Error("Unexpected network request in fake route harness"); };
 function request(body, origin = "https://thebeesuite.io") { return new NextRequest("https://thebeesuite.io/api/billing/checkout-session", {
   method: "POST", headers: { "Content-Type": "application/json", origin }, body: JSON.stringify(body),
@@ -127,4 +142,26 @@ test("ordinary parent invoice checkout remains product-only", async () => {
   invoice.customFields = { checkoutPurpose: "product_purchase", itemSummary: "Fake school shirt", productId: "fake-shirt" };
   assert.equal((await direct.POST(request({ invoiceId: "fake-invoice" }))).status, 200);
   assert.equal(captured[0].request.metadata.productId, "fake-shirt"); assert.match(captured[0].request.checkoutBranding.productDescription, /Fake school shirt/);
+});
+
+for (const kind of ["unknown-no-session", "unknown-known-session", "pending-no-session", "created-no-session"]) test(`family Checkout routes ${kind} to its correct recovery boundary`, async () => {
+  reset(); familyRouteMode = true; user.role = "PARENT_GUARDIAN"; user.id = "fake-parent";
+  familyDrafts = [{ id: "fake-original-payment", billingAccountId: "fake-account", amountCents: 10000, provider: "stripe", status: "DRAFT",
+    externalIdPlaceholder: "checkout_session_pending", customFields: { paymentScope: "family_balance",
+      status: kind === "created-no-session" ? "checkout_created" : kind === "pending-no-session" ? "checkout_pending" : "checkout_submission_unknown",
+      stripeCustomerId: "cus_fake", stripeConnectedAccountId: "acct_fake", familyPaymentMethod: "card_checkout", paymentMethodCategory: "card",
+      ...(kind === "unknown-known-session" ? { stripeCheckoutSessionId: "cs_fake" } : {}) } }];
+  const customerScopeModule = await import("@/lib/stripe-customer-scope");
+  const { stripeCustomerCustomFieldPatch } = customerScopeModule.default ?? customerScopeModule;
+  family.billingAccount.customFields = stripeCustomerCustomFieldPatch({}, "cus_fake", "acct_fake");
+  for (let retry = 0; retry < 2; retry++) {
+    const response = await familyPayment.POST(request({ familyId: "fake-family", billingAccountId: "fake-account", method: "card_checkout", amountCents: 10000 }));
+    assert.equal(response.status, 409, JSON.stringify(await response.clone().json()));
+  }
+  if (kind === "unknown-no-session") {
+    assert.equal(familyResolutions.length, 0); assert.equal(familyClaims.length, 2);
+    assert.ok(familyClaims.every(claim => claim.existingPaymentId === "fake-original-payment" && claim.scope === "family_balance"));
+    assert.ok(familyClaims.every(claim => claim.paymentData.amountCents === 10000));
+  } else { assert.equal(familyResolutions.length, 2); assert.equal(familyClaims.length, 0); }
+  assert.equal(familyDrafts.length, 1); // The fake claim boundary refuses writes/provider submission.
 });

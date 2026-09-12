@@ -2,7 +2,7 @@ import { parseOperationalDate } from "@/lib/date-guardrails";
 import { zonedDateTimeLocalToUtc } from "@/lib/zoned-date-time";
 
 const MAX_CARE_ENTRIES = 12;
-const MAX_CHILDREN_PER_REPORT_BATCH = 40;
+export const MAX_CHILDREN_PER_REPORT_BATCH = 40;
 
 export type DailyReportMealInput = {
   mealType: string;

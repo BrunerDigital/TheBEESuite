@@ -95,6 +95,22 @@ async function main() {
         await profileMenuItem.focus(); await page.keyboard.press("Enter"); await profileMenuItem.waitFor({ state: "hidden" });
         await waitHash("#teacher-profile-setup", null, "teacher-profile-setup");
         await clickTask("Today", "#teacher-home-heading", "teacher-home-heading");
+        // A nested account menu must close the modal drawer before revealing its
+        // same-document target, without discarding any classroom/profile draft.
+        await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+        const drawer = page.getByRole("dialog", { name: "Navigation", exact: true }); await drawer.waitFor();
+        const scopePrompt = page.waitForEvent("dialog"), scopeClick = drawer.locator("a.app-scope-context-mobile").click();
+        const canceledScope = await scopePrompt; assert.match(canceledScope.message(), /unsaved profile or classroom drafts/); await canceledScope.dismiss(); await scopeClick;
+        assert.equal(await drawer.isVisible(), true, "Canceled scope navigation retains the modal and draft");
+        assert.equal(await page.locator("#teacher-profile-name").inputValue(), "Fake retained teacher name");
+        await drawer.getByRole("button", { name: "Open account menu", exact: true }).click();
+        await profileMenuItem.waitFor(); await profileMenuItem.focus(); await page.keyboard.press("Enter");
+        await drawer.waitFor({ state: "hidden" }); await profileMenuItem.waitFor({ state: "hidden" });
+        await waitHash("#teacher-profile-setup", null, "teacher-profile-setup");
+        assert.equal(await page.locator("#teacher-profile-name").inputValue(), "Fake retained teacher name");
+        assert.equal(await page.locator("#teacher-note-for-parents").inputValue(), "Fake daily-report draft retained");
+        assert.deepEqual(await recipientIdentities(), recipients);
+        await clickTask("Today", "#teacher-home-heading", "teacher-home-heading");
         await expand("teacher-photo", page.getByRole("link", { name: "Share photo", exact: true }));
         await waitHash("#teacher-photo", "Log", "teacher-photo");
         await measureHeader("teacher-photo");

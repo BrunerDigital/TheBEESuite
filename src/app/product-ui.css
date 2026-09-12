@@ -141,21 +141,131 @@
       flex-shrink: 0;
     }
 
-    /* Keep all five parent destinations readable at enlarged text sizes.
+    /* Keep every role's destinations readable at enlarged text sizes.
        Intrinsic label widths wrap only when needed; non-text padding stays
        compact while font size and the existing 48px targets are preserved. */
-    .bee-app-frame[data-role="PARENT_GUARDIAN"] .app-bottom-navigation {
+    .bee-app-frame .app-bottom-navigation {
       padding: 8px 8px max(8px, env(safe-area-inset-bottom));
     }
 
-    .bee-app-frame[data-role="PARENT_GUARDIAN"] .app-bottom-navigation > div {
+    .bee-app-frame .app-bottom-navigation > div {
       display: flex;
       flex-wrap: wrap;
     }
 
-    .bee-app-frame[data-role="PARENT_GUARDIAN"] .app-bottom-navigation > div > :is(a, button) {
+    .bee-app-frame .app-bottom-navigation > div > :is(a, button) {
       flex: 1 0 44px;
       min-width: max-content;
+    }
+
+    .app-header-scope {
+      padding: 6px 12px;
+    }
+
+    .app-scope-context-mobile {
+      min-height: 44px;
+      gap: 6px;
+      padding: 8px;
+    }
+
+    .app-scope-context-mobile > span:first-child {
+      display: none;
+    }
+
+    .app-scope-context-mobile > span > span {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      overflow-wrap: anywhere;
+    }
+
+    .app-scope-context-mobile > svg {
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
+    }
+
+    .app-mobile-drawer .app-drawer-account {
+      padding: 8px;
+    }
+
+    .app-mobile-drawer .app-drawer-account > div {
+      gap: 8px;
+      padding: 8px;
+    }
+
+    .app-mobile-drawer .app-header-avatar {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+    }
+
+    .app-mobile-drawer button[data-size^="icon"] {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      min-height: 44px;
+    }
+
+    :is(.app-mobile-drawer, .app-more-navigation) [data-slot="sheet-close"] {
+      top: 12px;
+      right: 12px;
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      min-height: 44px;
+    }
+
+    :is(.app-mobile-drawer, .app-more-navigation) [data-slot="sheet-close"] > svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .app-mobile-drawer [data-slot="scroll-area"] {
+      padding-inline: 8px;
+    }
+
+    .app-mobile-drawer nav :is(a, summary) {
+      min-width: 0;
+      min-height: 44px;
+      gap: 12px;
+      padding: 10px 12px;
+    }
+
+    .app-mobile-drawer nav :is(a, summary) > span {
+      min-width: 0;
+      white-space: normal;
+      overflow: visible;
+      overflow-wrap: anywhere;
+      text-overflow: clip;
+    }
+
+    .app-mobile-drawer nav :is(a, summary) > svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .bee-app-frame:not([data-role="PARENT_GUARDIAN"]):not([data-role="AUTHORIZED_PICKUP"]):has(.app-bottom-navigation) #workspace-main {
+      padding-inline: 16px;
+    }
+
+    .bee-app-frame .dashboard-workspace h1 {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .bee-app-frame:not([data-role="PARENT_GUARDIAN"]):not([data-role="AUTHORIZED_PICKUP"]):has(.app-bottom-navigation) .dashboard-workspace > div > section:first-child {
+      min-width: 0;
+      padding-inline: 16px;
+    }
+
+    .bee-app-frame:not([data-role="PARENT_GUARDIAN"]):not([data-role="AUTHORIZED_PICKUP"]):has(.app-bottom-navigation) .dashboard-workspace > div > section:first-child [data-slot="badge"] {
+      max-width: 100%;
+      height: auto;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      padding-inline: 8px;
     }
   }
 
@@ -398,7 +508,7 @@
   /* A short phone viewport needs room for the form itself, particularly with
      enlarged text. Keep the header in document flow; navigation stays available. */
   @media (max-height: 640px) and (max-width: 1023px) {
-    .bee-app-frame:has(:is(.parent-portal-workspace, .teacher-mobile-workspace)) .app-header {
+    .bee-app-frame:has(.app-bottom-navigation) .app-header {
       position: relative;
     }
   }

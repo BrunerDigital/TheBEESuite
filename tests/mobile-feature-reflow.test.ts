@@ -24,8 +24,8 @@ test("the full authenticated toolbar fits small phones with 44px icon targets", 
 });
 
 test("enlarged bottom navigation reflows into readable touch-sized rows", () => {
-  assert.match(quality, /\[data-role="PARENT_GUARDIAN"\] \.app-bottom-navigation > div\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap/);
-  assert.match(quality, /\[data-role="PARENT_GUARDIAN"\] \.app-bottom-navigation > div > :is\(a, button\)\s*\{[^}]*flex: 1 0 44px;[^}]*min-width: max-content/);
+  assert.match(quality, /\.bee-app-frame \.app-bottom-navigation > div\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap/);
+  assert.match(quality, /\.bee-app-frame \.app-bottom-navigation > div > :is\(a, button\)\s*\{[^}]*flex: 1 0 44px;[^}]*min-width: max-content/);
   assert.match(quality, /\.app-bottom-navigation > div > :is\(a, button\)\s*\{[^}]*min-height: 48px/);
   assert.match(readFileSync("scripts/qa-mobile-features.ts", "utf8"), /\.app-bottom-navigation :is\(a,button\)/);
 });

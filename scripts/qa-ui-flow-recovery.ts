@@ -6,6 +6,8 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import postcss from "postcss";
 import tailwindcss from "@tailwindcss/postcss";
+import { automationConfigurationData } from "../src/lib/automation-workflow-state";
+import { fakeAutomations } from "../tests/fixtures/automation-workflows";
 
 // No credentials or backend: real components, fake props, intercepted requests only.
 async function main() {
@@ -49,6 +51,7 @@ async function main() {
   let terminalPollFailure: "http" | "malformed" | null = null;
   let holdReaderQuotes = false;
   let wrongProfileTarget = false;
+  let wrongAutomationReceipt: "id" | "configuration" | null = null;
   const releaseReaderQuotes: Array<() => void> = [];
   await context.route("**/*", async (route) => {
     const request = route.request(), url = new URL(request.url());
@@ -60,6 +63,16 @@ async function main() {
       writes.push({ path: url.pathname, body: request.postData() });
       if (outcome === "abort") return route.abort("failed");
       if (outcome === "hold") await new Promise<void>((resolve) => { releaseHeld = resolve; });
+      if (url.pathname === "/api/operations/records" && JSON.parse(request.postData() || "{}").entity === "automation" && (outcome === "success" || outcome === "hold")) {
+        const input = JSON.parse(request.postData() || "{}");
+        const existing = fakeAutomations.find(record => record.id === input.id);
+        const record = { id: wrongAutomationReceipt === "id" ? "wrong-fake-id" : input.id || "fake-automation-new", ...automationConfigurationData(input, existing) };
+        if (wrongAutomationReceipt === "configuration") {
+          const alteredCondition = { ...record.condition, unexpected: true };
+          record.condition = alteredCondition;
+        }
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, configurationOnly: true, entity: "automation", mode: input.id ? "updated" : "created", record }) });
+      }
       if (url.pathname === "/api/billing/terminal-payment" && terminalPollFailure && JSON.parse(request.postData() || "{}").action === "payment_status") return route.fulfill({ status: terminalPollFailure === "http" ? 500 : 200, contentType: "application/json", body: "{}" });
       if (url.pathname === "/api/billing/terminal-payment" && outcome === "success") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, paymentId: "fake-payment", status: JSON.parse(request.postData() || "{}").action === "payment_status" ? "succeeded" : "processing" }) });
       if (url.pathname === "/api/teacher/profile" && (outcome === "success" || outcome === "hold")) {
@@ -660,6 +673,85 @@ async function main() {
     await page.getByRole("link", { name: "Leave fake teacher" }).click(); await page.waitForURL("**/?view=home");
     assert.equal(profileDialogs, 1, "An exact successful receipt clears only the profile draft guard");
     page.off("dialog", rejectProfileExit);
+    await openFixture(`${base}/?view=automation`);
+    const workflowName = page.getByLabel("Workflow Name", { exact: true });
+    await workflowName.waitFor();
+    for (const id of ["automation-audience", "automation-condition", "automation-delay", "automation-subject", "automation-body"]) assert.equal(await page.locator(`#${id}`).inputValue(), "", "Saved blanks never inherit example campaign text");
+    assert.match(await page.locator("#automation-trigger").innerText(), /Legacy trigger/);
+    await workflowName.fill("Fake unsaved workflow");
+    let workflowDialogs = 0, acceptWorkflowDiscard = false;
+    const workflowDialog = async (dialog: import("playwright").Dialog) => { workflowDialogs++; if (acceptWorkflowDiscard) await dialog.accept(); else await dialog.dismiss(); };
+    page.on("dialog", workflowDialog);
+    const selectWorkflow = async (label: string) => {
+      await page.locator("#automation-saved-workflow").click();
+      await page.getByRole("option", { name: label, exact: true }).click();
+      await page.waitForFunction(() => document.querySelector("#automation-saved-workflow")?.getAttribute("aria-expanded") === "false");
+    };
+    await selectWorkflow("Fake configured workflow");
+    assert.equal(await workflowName.inputValue(), "Fake unsaved workflow");
+    await selectWorkflow("New workflow");
+    assert.equal(await workflowName.inputValue(), "Fake unsaved workflow");
+    await page.getByRole("link", { name: "Next workflows", exact: true }).click();
+    assert.equal(new URL(page.url()).searchParams.get("automationPage"), null);
+    assert.equal(workflowDialogs, 3, "Record/New/page transitions all protect the same unsaved draft");
+    acceptWorkflowDiscard = true; await selectWorkflow("Fake configured workflow"); acceptWorkflowDiscard = false;
+    assert.equal(await workflowName.inputValue(), "Fake configured workflow");
+    await page.locator("#automation-template").click();
+    await page.getByRole("option", { name: "Inquiry nurture", exact: true }).click();
+    assert.equal(await page.locator("#automation-body").inputValue(), "Fake saved body", "Template replacement can be cancelled");
+    assert.equal(workflowDialogs, 5);
+    await workflowName.fill("  Fake confirmed workflow  ");
+    const beforeWorkflowWrites = writes.length;
+    for (const invalid of ["abort", "invalid-success", "id", "configuration"] as const) {
+      outcome = invalid === "abort" || invalid === "invalid-success" ? invalid : "success";
+      wrongAutomationReceipt = invalid === "id" || invalid === "configuration" ? invalid : null;
+      await page.getByRole("button", { name: "Save Workflow", exact: true }).click();
+      await page.getByRole("alert").filter({ hasText: "could not confirm" }).waitFor();
+      await page.getByRole("button", { name: "Save Workflow", exact: true }).waitFor();
+      assert.equal(await workflowName.inputValue(), "  Fake confirmed workflow  ");
+      assert.equal(await page.locator("#automation-body").inputValue(), "Fake saved body");
+      assert.equal(await page.evaluate(() => (window as unknown as { __refreshes?: number }).__refreshes ?? 0), 0);
+      assert.equal(await page.getByRole("button", { name: "Save Workflow", exact: true }).isDisabled(), true, "Unknown save cannot be retried into a duplicate");
+      acceptWorkflowDiscard = true;
+      await page.getByRole("button", { name: "Discard changes", exact: true }).click();
+      acceptWorkflowDiscard = false;
+      await workflowName.fill("  Fake confirmed workflow  ");
+    }
+    outcome = "hold"; wrongAutomationReceipt = null; releaseHeld = undefined;
+    await page.getByRole("button", { name: "Save Workflow", exact: true }).evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+    await page.getByRole("button", { name: "Saving configuration…", exact: true }).waitFor();
+    for (const control of await page.locator("#automation-builder input, #automation-builder textarea, #automation-builder [role=combobox], #automation-builder [role=switch]").all()) assert.equal(await control.isDisabled(), true, `Pending workflow control is locked: ${await control.getAttribute("id") ?? await control.getAttribute("role") ?? "input"}`);
+    assert.equal(await page.getByRole("link", { name: "Next workflows", exact: true }).count(), 0, "Pending pagination cannot leave an unconfirmed save");
+    for (let attempt = 0; !releaseHeld && attempt < 30; attempt++) await page.waitForTimeout(25);
+    releaseHeldResponse();
+    await page.getByText("Workflow configuration saved. No action or message was dispatched.", { exact: true }).waitFor();
+    assert.equal(await workflowName.inputValue(), "Fake confirmed workflow");
+    assert.equal(await page.getByText("Unsaved changes", { exact: true }).count(), 0);
+    assert.equal(await page.evaluate(() => (window as unknown as { __refreshes?: number }).__refreshes ?? 0), 1);
+    assert.equal(writes.length, beforeWorkflowWrites + 5, "Same-tick duplicate save did not send a second request");
+    assert.equal(JSON.parse(writes.at(-1)!.body!).id, "fake-automation-b");
+    await selectWorkflow("New workflow");
+    assert.equal(workflowDialogs, 9, "Confirmed save resets the draft baseline");
+    for (const id of ["automation-name", "automation-audience", "automation-condition", "automation-delay", "automation-subject", "automation-body"]) assert.equal(await page.locator(`#${id}`).inputValue(), "", "New resets every inherited field");
+    assert.equal((await page.locator("#automation-status").innerText()).trim(), "Draft");
+    await workflowName.fill("Fake new draft"); outcome = "abort";
+    await page.getByRole("button", { name: "Save Workflow", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "could not confirm" }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Save Workflow", exact: true }).isDisabled(), true, "An unknown create cannot be submitted again");
+    assert.equal(await workflowName.inputValue(), "Fake new draft");
+    assert.equal(JSON.parse(writes.at(-1)!.body!).id, undefined);
+    acceptWorkflowDiscard = true; await page.getByRole("button", { name: "Discard changes", exact: true }).click(); acceptWorkflowDiscard = false;
+    assert.equal(await workflowName.inputValue(), "", "Only explicit discard starts a fresh draft after an unknown create");
+    await workflowName.fill("Fake new draft"); outcome = "success";
+    await page.getByRole("button", { name: "Save Workflow", exact: true }).click();
+    await page.getByText("Workflow configuration saved. No action or message was dispatched.", { exact: true }).waitFor();
+    const createdWorkflow = JSON.parse(writes.at(-1)!.body!); assert.equal(createdWorkflow.id, undefined); assert.equal(createdWorkflow.status, "draft");
+    await page.screenshot({ path: path.join(evidenceDirectory, "workflow-confirmed-390.png"), fullPage: true });
+    await page.getByRole("link", { name: "Next workflows", exact: true }).click(); await page.waitForURL("**automationPage=2");
+    await page.locator('html[data-fixture-ready="true"]').waitFor();
+    assert.equal(await workflowName.inputValue(), "Fake older workflow");
+    assert.equal(workflowDialogs, 10);
+    page.off("dialog", workflowDialog);
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ passed: true, checks: ["exact historical school/week", "saved zero retained", "uncertain save preserves draft", "no automatic retry", "discard cancel/confirm", "approved director locked", "auditor read-only", "family school timezone", "earlier announcements keyboard disclosure", "reply context preserves draft and attachment", "acknowledgment reject/success with refresh held", "teacher profile failure retains inputs", "teacher photo failure retains selection and caption", "teacher recipient discard guards", "attendance never retargets drafts", "pending controls locked", "report batches never silently truncate", "staff-only backdate settings survive save and child changes", "destination-only location draft guarded", "directory and session totals and paging", "directory canonical search and role disclosure", "read-only and current-device explanations", "session recovery and success announcement", "billing exact family and school", "billing route-key state refresh", "historical ledger without activity", "billing-only and enrollment permissions", "child exact targeting and discard guards", "confirmed context change clears financial drafts", "date-only billing draft guard", "pending reader target and confirmation lock", "unknown terminal result stays locked", "successful terminal charge cannot repeat"], interceptedWrites: writes.length }));
   } finally { await browser.close(); await new Promise<void>((done) => server.close(() => done())); }

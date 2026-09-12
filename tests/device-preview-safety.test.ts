@@ -28,7 +28,7 @@ test("device preview is development-only and uses fake identifiers", () => {
   assert.match(previewSource, /familyOnly=\{role === ["']kiosk["']\}/);
   assert.match(previewSource, /initialMode=\{role === ["']kiosk-staff["'] \? ["']staff["'] : ["']family["']\}/);
   assert.match(workflowSource, /if \(readOnly\)/);
-  assert.match(workflowSource, /disabled=\{readOnly \|\| isPending \|\| !name\}/);
+  assert.match(workflowSource, /disabled=\{readOnly \|\| isPending \|\| saveUnknown \|\| !name\}/);
   assert.match(kioskSource, /if \(previewMode\)/);
   assert.match(kioskSource, /if \(previewMode \|\| activeKioskMode/);
   assert.match(appShellSource, /const searchUserEmail = previewMode \? ""/);

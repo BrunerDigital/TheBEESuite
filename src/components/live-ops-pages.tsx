@@ -2599,20 +2599,20 @@ export function AutomationsPage({ data }: { data: AutomationsPageData }) {
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <Bot data-icon="inline-start" />
-          Human-approved workflows
+          Workflow configuration
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Automations</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Workflow builder for lead routing, tour reminders, document follow-ups, billing reminders, and Mr. Bee summaries. Sensitive decisions still require staff review.
+          Prepare account-wide workflow rules and drafts, not limited to the selected school. These saved configurations do not automatically send messages, charge payments, schedule work, or change records.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Workflows" value={data.stats.total} />
-        <StatCard label="Active" value={data.stats.active} />
+        <StatCard label="Configured" value={data.stats.active} />
         <StatCard label="Paused" value={data.stats.paused} />
-        <StatCard label="Recent runs" value={data.stats.recentRuns} />
+        <StatCard label="Recorded events" value={data.stats.recentRuns} />
       </div>
-      <AutomationWorkflowBuilder data={data} />
+      <AutomationWorkflowBuilder key={data.pagination?.page ?? 1} data={data} />
     </div>
   );
 }

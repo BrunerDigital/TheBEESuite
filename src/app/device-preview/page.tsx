@@ -28,9 +28,9 @@ const workflowData: AutomationWorkflowBuilderData = {
     delay: "1 day",
     status: "active",
     brand: { name: "Sunshine Academy" },
-    runs: [{ id: "run-preview", status: "completed", createdAt: "2026-08-09T16:30:00.000Z", logs: { matched: 12, reviewed: 12, sent: 12 } }],
+    runs: [],
   }],
-  stats: { total: 8, active: 6, paused: 2, recentRuns: 14 },
+  stats: { total: 1, active: 1, paused: 0, recentRuns: 0 },
 };
 
 const previewPortfolioWorkspace: WorkspaceState = {

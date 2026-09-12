@@ -1,5 +1,7 @@
 // Local browser-test entry point only. Never imported by the application.
 import { createRoot } from "react-dom/client";
+import { AutomationWorkflowBuilder } from "../../src/components/automation-workflow-builder";
+import { fakeAutomations } from "./automation-workflows";
 import { ParentPortalWorkspace } from "../../src/components/parent-portal-workspace";
 import { TeacherMobileWorkspace } from "../../src/components/teacher-mobile-workspace";
 import { FteReportForm, type FteReportRow } from "../../src/components/fte-report-form";
@@ -91,10 +93,24 @@ function Fixture() {
   </>;
   if (["billing", "terminal", "ledger"].includes(view ?? "")) return <BillingFixture />;
   if (view === "team") return <TeamPermissionsPage data={team} />;
+  if (view === "automation") return <AutomationFixture />;
   if (view === "fte") return <FteReportForm centers={query.get("single-school") ? centers.filter((center) => center.id === "b") : centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" allowCenterSelect={!query.get("director")} mode={query.get("director") ? "director" : "executive"} />;
   if (view === "fte-reader") return <FteReportExplorer centers={centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" canEdit={false} />;
   if (view === "teacher") return <><a href="?view=home">Leave fake teacher</a><TeacherMobileWorkspace teacherName="Fake Teacher" roster={teacherRoster} teacherProfile={{ id: "fake-teacher", name: "Fake Teacher", loginEmail: "teacher@example.com", contactEmail: "teacher@example.com", phone: "", title: "Teacher", centerId: "fake-center", centerName: "Fake School", classroomId: "fake-room", hasStaffKioskCode: true }} classroomOptions={[{ id: "fake-room", name: "Fake Classroom", ageGroup: "Preschool" }]} /></>;
   return <ParentFixture />;
+}
+
+function AutomationFixture() {
+  const [requestedPage, setRequestedPage] = useState(query.get("automationPage"));
+  const pagination = recordPagination(requestedPage, fakeAutomations.length, 2);
+  // Model App Router props changing without reloading the surrounding page.
+  return <div onClick={event => {
+    const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+    if (event.defaultPrevented || !link || event.button !== 0 || event.metaKey || event.ctrlKey) return;
+    const destination = new URL(link.href);
+    if (destination.searchParams.get("view") !== "automation") return;
+    event.preventDefault(); history.pushState(null, "", destination); setRequestedPage(destination.searchParams.get("automationPage"));
+  }}><a href="?view=home">Leave fake workflow</a><AutomationWorkflowBuilder key={pagination.page} data={{ automations: fakeAutomations.slice(pagination.skip, pagination.skip + pagination.pageSize), stats: { total: 3, active: 1, paused: 1, recentRuns: 0 }, pagination: { ...pagination, previousHref: pagination.page > 1 ? "?view=automation" : null, nextHref: pagination.page < pagination.totalPages ? "?view=automation&automationPage=2" : null } }} /></div>;
 }
 
 function ParentFixture() {

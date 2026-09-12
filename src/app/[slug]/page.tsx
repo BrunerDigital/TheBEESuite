@@ -1,3 +1,4 @@
+import { readAutomationPage } from "@/lib/automation-page";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
@@ -4065,40 +4066,8 @@ async function renderLivePage(
   }
 
   if (slug === "automations") {
-    const automationWhere: Prisma.AutomationWhereInput = {
-      OR: [{ tenantId: user.tenantId }, { brand: { is: { tenantId: user.tenantId } } }],
-    };
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    const [automations, total, active, paused, recentRuns] = await Promise.all([
-      prisma.automation.findMany({
-        where: automationWhere,
-        orderBy: [{ status: "asc" }, { name: "asc" }],
-        take: 100,
-        include: {
-          brand: {
-            select: {
-              name: true,
-            },
-          },
-          runs: {
-            orderBy: { createdAt: "desc" },
-            take: 3,
-          },
-        },
-      }),
-      prisma.automation.count({ where: automationWhere }),
-      prisma.automation.count({ where: { ...automationWhere, status: "active" } }),
-      prisma.automation.count({ where: { ...automationWhere, status: "paused" } }),
-      prisma.automationRun.count({
-        where: {
-          automation: automationWhere,
-          createdAt: { gte: thirtyDaysAgo },
-        },
-      }),
-    ]);
-
-    return <AutomationsPage data={{ automations, stats: { total, active, paused, recentRuns } }} />;
+    const data = await prisma.$transaction(tx => readAutomationPage(tx, user.tenantId, firstSearchParam(searchParams.automationPage), today), { isolationLevel: "RepeatableRead" });
+    return <AutomationsPage data={data} />;
   }
 
   if (slug === "billing-invoices") {

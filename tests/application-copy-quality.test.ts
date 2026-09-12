@@ -87,7 +87,9 @@ test("upload failures do not expose storage-provider errors", () => {
 test("automation summaries use readable actions and statuses", () => {
   const automation = source("src/components/automation-workflow-builder.tsx");
 
-  assert.match(automation, /Choose when an automation runs/);
+  assert.match(automation, /Saving configuration does not run a workflow/);
+  assert.match(automation, /No action or message was dispatched/);
+  assert.doesNotMatch(automation, /Auto-run allowed|Execution snapshots/);
   assert.match(automation, /actionSummary\(automation\.action\)/);
   assert.match(automation, /displayTokenLabel\(automation\.status\)/);
   assert.match(automation, /displayTokenLabel\(automation\.runs\[0\]\.status\)/);

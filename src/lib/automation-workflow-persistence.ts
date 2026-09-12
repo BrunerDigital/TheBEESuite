@@ -1,5 +1,5 @@
 import { Prisma, type PrismaClient, type UserRole } from "@prisma/client";
-import { automationConfigurationData, automationRecordSignature, type AutomationDraft } from "./automation-workflow-state";
+import { automationConfigurationData, automationObject, automationRecordSignature, type AutomationDraft } from "./automation-workflow-state";
 import { automationTenantScopeWhere } from "./automation-tenant-scope";
 
 export class AutomationConfigurationError extends Error {
@@ -27,7 +27,9 @@ export async function saveAutomationConfiguration(options: {
       const existing = id ? await tx.automation.findFirst({ where: { AND: [scope, { id }] } }) : null;
       if (id && !existing) throw new AutomationConfigurationError("Workflow not found for this account.", 404);
       if (existing && (typeof options.expectedRecordSignature !== "string" || automationRecordSignature(existing) !== options.expectedRecordSignature)) throw new AutomationConfigurationError(conflictMessage, 409);
-      if (existing && ((existing.condition !== null && !isJsonObject(existing.condition)) || !isJsonObject(existing.action))) {
+      const existingReview = automationObject(existing?.condition).requiresReview;
+      if (existing && ((existing.condition !== null && !isJsonObject(existing.condition)) || !isJsonObject(existing.action)
+        || (existingReview !== undefined && existingReview !== null && typeof existingReview !== "boolean"))) {
         throw new AutomationConfigurationError("This saved workflow uses a configuration format that this editor cannot safely change. Contact support; the saved record has not been modified.", 409);
       }
       const next = automationConfigurationData(draft, existing ?? undefined);

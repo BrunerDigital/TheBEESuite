@@ -30,7 +30,7 @@ async function main() {
   });
   const server = createServer((request, response) => {
     if (request.url === "/fixture.js") { response.setHeader("Content-Type", "text/javascript"); response.end(bundle.outputFiles.find((file) => file.path.endsWith(".js"))!.contents); return; }
-    if (request.url === "/fixture.css") { response.setHeader("Content-Type", "text/css"); response.end(fixtureStyle); return; }
+    if (request.url === "/fixture.css") { response.setHeader("Content-Type", "text/css"); response.end(fixtureStyle + "\n" + (bundle.outputFiles.find((file) => file.path.endsWith(".css"))?.text ?? "")); return; }
     if (request.url === "/fixture-font.woff2") { response.setHeader("Content-Type", "font/woff2"); response.end(fixtureFont); return; }
     response.setHeader("Content-Type", "text/html");
     response.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>');
@@ -746,6 +746,7 @@ async function main() {
     await page.getByRole("button", { name: "Save Workflow", exact: true }).click();
     await page.getByText("Workflow configuration saved. No action or message was dispatched.", { exact: true }).waitFor();
     const createdWorkflow = JSON.parse(writes.at(-1)!.body!); assert.equal(createdWorkflow.id, undefined); assert.equal(createdWorkflow.status, "draft");
+    await page.waitForFunction(() => document.querySelector("#automation-builder fieldset")?.getAttribute("aria-busy") === "false");
     await page.screenshot({ path: path.join(evidenceDirectory, "workflow-confirmed-390.png"), fullPage: true });
     await page.getByRole("link", { name: "Next workflows", exact: true }).click(); await page.waitForURL("**automationPage=2");
     await page.locator('html[data-fixture-ready="true"]').waitFor();

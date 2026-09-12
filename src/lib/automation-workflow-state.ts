@@ -60,6 +60,13 @@ export function normalizeAutomationDraft(value: unknown, mode: "create" | "updat
 export function automationConfigurationData(input: AutomationDraft, existing?: Pick<AutomationRecord, "condition" | "action">) {
   const draft = normalizeAutomationDraft(input, existing ? "update" : "create");
   const action = { ...automationObject(existing?.action) };
+  const condition = { ...automationObject(existing?.condition), requiresReview: draft.requiresReview } as Record<string, unknown>;
+  // Structured legacy rules/audiences are not representable by these text
+  // inputs. A blank input must not erase them during an unrelated edit.
+  for (const [key, value] of Object.entries({ rule: draft.condition, audience: draft.audience })) {
+    if (value) condition[key] = value;
+    else if (!(key in condition) || condition[key] === null || typeof condition[key] === "string") condition[key] = null;
+  }
   // Existing absent/null action choices remain unset until deliberately chosen.
   // A blank editable text field clears a prior string, not unrelated legacy JSON.
   for (const [key, value] of Object.entries({ type: draft.actionType, channel: draft.channel, templateKey: draft.templateKey, subject: draft.subject, body: draft.body })) {
@@ -68,7 +75,7 @@ export function automationConfigurationData(input: AutomationDraft, existing?: P
   }
   return {
     name: draft.name, trigger: draft.trigger, delay: draft.delay || null, status: draft.status,
-    condition: { ...automationObject(existing?.condition), rule: draft.condition || null, audience: draft.audience || null, requiresReview: draft.requiresReview },
+    condition,
     action,
   };
 }

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { automationConfigurationData, automationDraftFromRecord, automationDraftSignature, automationRecordSignature, newAutomationDraft, normalizeAutomationDraft, readAutomationSaveReceipt } from "../src/lib/automation-workflow-state";
 
 test("new workflow resets every field and starts as a reviewed draft", () => {
@@ -70,4 +71,27 @@ test("workflow receipts prove preservation of the full unrelated nested configur
   for (const condition of [{ rule: null, audience: null, requiresReview: true }, { ...record.condition, custom: { school: "changed" } }, { ...record.condition, added: true }]) assert.equal(readAutomationSaveReceipt({ ...receipt, record: { ...record, condition } }, expected), null);
   assert.equal(readAutomationSaveReceipt({ ...receipt, record: { ...record, action: { ...record.action, legacy: null } } }, expected), null);
   assert.ok(readAutomationSaveReceipt({ ...receipt, record: { ...record, condition: Object.fromEntries(Object.entries(record.condition).reverse()) } }, expected), "JSON key ordering is not a change");
+});
+
+test("name-only updates preserve structured legacy rules and audiences through exact receipts", () => {
+  for (const value of [{ all: [{ stage: "tour" }] }, ["fake-a", "fake-b"], 0, 42, false, true]) {
+    const existing = { id: "fake-legacy", name: "Before", trigger: "manual", delay: null, status: "draft", condition: { rule: value, audience: value, requiresReview: false }, action: {} };
+    const draft = { ...automationDraftFromRecord(existing), name: "After" };
+    const record = { id: existing.id, ...automationConfigurationData(draft, existing) };
+    assert.deepEqual(record.condition, existing.condition);
+    const expected = { id: existing.id, draft, existing };
+    assert.ok(readAutomationSaveReceipt({ ok: true, configurationOnly: true, entity: "automation", mode: "updated", record }, expected));
+    assert.equal(readAutomationSaveReceipt({ ok: true, configurationOnly: true, entity: "automation", mode: "updated", record: { ...record, condition: { ...record.condition, rule: null } } }, expected), null);
+    assert.equal(automationConfigurationData({ ...draft, condition: "Explicit replacement" }, existing).condition.rule, "Explicit replacement");
+  }
+});
+
+test("workflow mobile reflow constrains grid tracks and allows complete labels and touch targets", () => {
+  const component = readFileSync("src/components/automation-workflow-builder.tsx", "utf8");
+  const css = readFileSync("src/components/automation-workflow.module.css", "utf8");
+  assert.match(component, /grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2/);
+  assert.match(component, /flex flex-wrap items-center justify-between gap-3/);
+  assert.match(css, /-webkit-line-clamp: unset/);
+  assert.match(css, /height: auto;[\s\S]*min-height: 44px/);
+  assert.match(readFileSync("src/components/ui/select.tsx", "utf8"), /relative flex min-h-\[44px\]/);
 });

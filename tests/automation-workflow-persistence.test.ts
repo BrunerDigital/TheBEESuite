@@ -103,7 +103,7 @@ test("automation conflicts and authorization changes fail closed without a commi
 
 test("automation audit errors roll back and incompatible legacy JSON is never discarded", async () => {
   const f = fixture(); f.failAudit(); await assert.rejects(f.save(), /Fake audit failure/); assert.deepEqual(f.state(), original); assert.deepEqual(f.audits, []);
-  for (const values of [{ condition: [] }, { action: "legacy-action" }, { action: null }]) {
+  for (const values of [{ condition: [] }, { condition: { requiresReview: "false" } }, { condition: { requiresReview: { manager: true } } }, { action: "legacy-action" }, { action: null }]) {
     const incompatible = fixture(); incompatible.setState(values); await assert.rejects(incompatible.save(), status(409)); assert.equal(incompatible.writes(), 0);
   }
   const database = { $transaction: async () => { throw new Prisma.PrismaClientKnownRequestError("Fake conflict", { code: "P2034", clientVersion: "test" }); } } as unknown as Pick<PrismaClient, "$transaction">;

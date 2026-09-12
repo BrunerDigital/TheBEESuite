@@ -20,6 +20,7 @@ import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { requestWithNetworkRecovery } from "@/lib/client-request-recovery";
 import { automationDraftFromRecord, automationDraftSignature, automationRecordSignature, newAutomationDraft, normalizeAutomationDraft, readAutomationSaveReceipt, type AutomationDraft, type AutomationRecord } from "@/lib/automation-workflow-state";
 import { campaignTemplates } from "@/lib/marketing-workflows";
+import styles from "./automation-workflow.module.css";
 
 type AutomationRow = {
   id: string;
@@ -102,7 +103,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
   const [isPending, startTransition] = useTransition();
   const inFlight = useRef(false);
   const dirty = automationDraftSignature(draft) !== baseline;
-  useUnsavedChangesGuard(!readOnly && dirty, "Discard your unsaved workflow configuration and leave this page?");
+  useUnsavedChangesGuard(dirty || saveUnknown, "Discard your unsaved workflow configuration and leave this page?");
   const automations: AutomationRow[] = data.automations.map(row => confirmed?.record.id === row.id && confirmed.source === data.automations ? { ...row, ...confirmed.record } : row);
   if (confirmed && !automations.some(row => row.id === confirmed.record.id)) automations.push({ ...confirmed.record, brand: null, runs: [] });
 
@@ -164,7 +165,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
   }
 
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className={`${styles.workspace} grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_420px]`}>
       <Card id="automation-builder" className="glass-panel min-w-0 overflow-hidden">
         <CardHeader>
           <CardTitle as="h1">Automation workflow builder</CardTitle>
@@ -178,7 +179,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
           {message ? <div role="status" aria-live="polite" className="rounded-lg border bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{message}</div> : null}
           {error ? <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
           {saveUnknown ? <div className="space-y-2 text-sm"><p>Saving is paused to prevent duplicate workflows. Refresh the saved list, then choose the saved workflow to continue. Your current entries stay here until you explicitly discard them.</p><Button type="button" variant="outline" onClick={() => router.refresh()}>Refresh saved list</Button></div> : null}
-          <div className="grid min-w-0 gap-3 md:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 [&>div]:min-w-0">
             <div className="space-y-1">
               <Label htmlFor="automation-saved-workflow">Saved workflow</Label>
               <Select disabled={isPending} value={selectedId || "new"} onValueChange={(value) => {
@@ -240,8 +241,8 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
               <Label htmlFor="automation-condition">Condition Rule</Label>
               <Textarea id="automation-condition" value={condition} onChange={(event) => updateDraft("condition", event.target.value)} placeholder="Example: Lead has completed tour and no application after 24 hours" />
             </div>
-            <div className="flex items-center justify-between rounded-xl border bg-background/40 p-3 md:col-span-2">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/40 p-3 md:col-span-2">
+              <div className="min-w-0 flex-1 basis-40">
                 <Label htmlFor="automation-requires-review">Require Staff Review</Label>
                 <div id="automation-requires-review-help" className="text-xs text-muted-foreground">Record a review checkpoint for this configuration. Saving does not execute any action.</div>
               </div>

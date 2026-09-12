@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { build } from "esbuild";
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import postcss from "postcss";
@@ -9,7 +9,8 @@ import tailwindcss from "@tailwindcss/postcss";
 
 // No credentials or backend: real components, fake props, intercepted requests only.
 async function main() {
-  const evidenceDirectory = path.resolve("output/playwright/ui-flow-recovery");
+  const browserEngine = process.env.QA_BROWSER_ENGINE === "webkit" ? "webkit" : "chromium";
+  const evidenceDirectory = path.resolve(`output/playwright/ui-flow-recovery${browserEngine === "webkit" ? "-webkit" : ""}`);
   await mkdir(evidenceDirectory, { recursive: true });
   const stylePath = path.resolve("src/app/globals.css");
   const style = await postcss([tailwindcss()]).process(await readFile(stylePath, "utf8"), { from: stylePath });
@@ -36,13 +37,18 @@ async function main() {
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   const base = `http://127.0.0.1:${address.port}`;
-  const browser = await chromium.launch();
+  const browser = await (browserEngine === "webkit" ? webkit : chromium).launch();
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: "Asia/Tokyo", serviceWorkers: "block" });
   const writes: Array<{ path: string; body: string | null }> = [];
   let outcome: "abort" | "reject" | "success" | "hold" | "invalid-success" = "abort";
   let releaseHeld: (() => void) | undefined;
+  function releaseHeldResponse() {
+    assert.ok(releaseHeld, "Held save reached the intercepted boundary");
+    releaseHeld();
+  }
   let terminalPollFailure: "http" | "malformed" | null = null;
   let holdReaderQuotes = false;
+  let wrongProfileTarget = false;
   const releaseReaderQuotes: Array<() => void> = [];
   await context.route("**/*", async (route) => {
     const request = route.request(), url = new URL(request.url());
@@ -56,6 +62,13 @@ async function main() {
       if (outcome === "hold") await new Promise<void>((resolve) => { releaseHeld = resolve; });
       if (url.pathname === "/api/billing/terminal-payment" && terminalPollFailure && JSON.parse(request.postData() || "{}").action === "payment_status") return route.fulfill({ status: terminalPollFailure === "http" ? 500 : 200, contentType: "application/json", body: "{}" });
       if (url.pathname === "/api/billing/terminal-payment" && outcome === "success") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, paymentId: "fake-payment", status: JSON.parse(request.postData() || "{}").action === "payment_status" ? "succeeded" : "processing" }) });
+      if (url.pathname === "/api/teacher/profile" && (outcome === "success" || outcome === "hold")) {
+        const input = JSON.parse(request.postData() || "{}");
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, mode: "updated", profile: {
+          id: "fake-teacher", centerId: wrongProfileTarget ? "other-fake-center" : "fake-center", name: input.name, title: input.title,
+          contactEmail: input.contactEmail, phone: input.phone, classroomId: input.classroomId ?? "fake-room", hasStaffKioskCode: true,
+        } }) });
+      }
       if (/^\/api\/parent\/documents\/[^/]+\/submit$/.test(url.pathname) && outcome === "success") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, document: { id: decodeURIComponent(url.pathname.split("/")[4]), status: "SUBMITTED" } }) });
       return route.fulfill({ status: outcome === "reject" ? 403 : 200, contentType: "application/json", body: JSON.stringify(outcome === "reject" ? { error: "Fake test denial" } : outcome === "invalid-success" ? { ok: false } : { ok: true, ...(url.pathname === "/api/device-sessions" ? { revokedAt: new Date().toISOString() } : {}) }) });
     }
@@ -63,10 +76,14 @@ async function main() {
     return route.continue();
   });
   const page = await context.newPage();
+  async function openFixture(url: string) {
+    await page.goto(url);
+    await page.locator('html[data-fixture-ready="true"]').waitFor();
+  }
   const errors: string[] = [];
   page.on("pageerror", (error) => { errors.push(error.message); console.error("Local fixture error:", error.message); });
   try {
-    await page.goto(`${base}/?view=shortcuts`);
+    await openFixture(`${base}/?view=shortcuts`);
     await page.getByRole("link", { name: "First fake task", exact: true }).waitFor();
     await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
     const deferredFocus = await page.evaluate(async () => {
@@ -89,7 +106,7 @@ async function main() {
     assert.equal(deferredFocus.focused, true, "Deferred focus cannot steal the user's next shortcut");
     await page.getByRole("link", { name: "Next fake task", exact: true }).press("Enter");
     await page.locator('#fake-task-b [aria-expanded="true"]').waitFor();
-    await page.goto(`${base}/?view=fte`);
+    await openFixture(`${base}/?view=fte`);
     await page.getByText("Historical reporting week", { exact: true }).waitFor();
     assert.equal(await page.getByLabel("Week start", { exact: true }).inputValue(), "2026-04-08");
     assert.equal(await page.getByLabel("Week end", { exact: true }).inputValue(), "2026-04-15");
@@ -113,27 +130,27 @@ async function main() {
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Restore saved report" }).click();
     assert.equal(await notes.inputValue(), "Fake saved historical notes");
-    await page.goto(`${base}/?view=fte&director=1&approved=1`);
+    await openFixture(`${base}/?view=fte&director=1&approved=1`);
     await page.getByText("Approved report · read-only", { exact: true }).waitFor();
     assert.equal(await page.getByRole("combobox", { name: "School", exact: true }).isDisabled(), true, "Director picker remains locked even when multiple schools are readable");
     assert.equal(await page.getByRole("button", { name: "Save FTE Correction", exact: true }).isDisabled(), true);
     assert.equal(await page.getByPlaceholder("Optional context or correction notes").isDisabled(), true);
-    await page.goto(`${base}/?view=fte&single-school=1&approved=1`);
+    await openFixture(`${base}/?view=fte&single-school=1&approved=1`);
     await page.getByText("Historical reporting week", { exact: true }).waitFor();
     assert.equal(await page.getByRole("button", { name: "Save FTE Correction", exact: true }).isEnabled(), true, "Executive approval permissions survive a single-school workspace");
     assert.equal(await page.getByPlaceholder("Optional context or correction notes").isEnabled(), true);
-    await page.goto(`${base}/?view=fte-reader`);
+    await openFixture(`${base}/?view=fte-reader`);
     await page.getByText("Historical FTE Explorer", { exact: true }).last().waitFor();
     assert.equal(await page.getByRole("button", { name: /^Correct FTE/ }).count(), 0);
 
     for (const [zone, expectedDays] of [["America/New_York", 1], ["Asia/Tokyo", 2]] as const) {
-      await page.goto(`${base}/?view=updates&tz=${encodeURIComponent(zone)}`);
+      await openFixture(`${base}/?view=updates&tz=${encodeURIComponent(zone)}`);
       await page.getByRole("combobox", { name: "Choose update day" }).click();
       await page.getByRole("option").first().waitFor();
       assert.equal(await page.getByRole("option").count(), expectedDays, "Update days follow the selected family's school, not the AppShell default");
       await page.keyboard.press("Escape");
     }
-    await page.goto(`${base}/?view=home`);
+    await openFixture(`${base}/?view=home`);
     const earlier = page.locator("[data-earlier-announcements]");
     await earlier.waitFor();
     assert.equal(await earlier.getAttribute("open"), null);
@@ -141,7 +158,7 @@ async function main() {
     assert.ok(await earlier.getAttribute("open") !== null);
     await page.getByText("Fake earlier classroom news remains available.", { exact: true }).waitFor();
 
-    await page.goto(`${base}/?view=messages`);
+    await openFixture(`${base}/?view=messages`);
     const message = page.locator("#portal-message");
     await message.fill("Fake unsent reply retained");
     await page.locator("#portal-message-attachments").setInputFiles({ name: "fake-note.txt", mimeType: "text/plain", buffer: Buffer.from("Fake attachment only") });
@@ -158,7 +175,7 @@ async function main() {
     assert.equal(await page.locator('[aria-label="Selected attachments"]').getByText("fake-note.txt", { exact: true }).count(), 1);
     assert.equal(writes.length, 1, "Changing reply context never sends the draft");
 
-    await page.goto(`${base}/?view=children`);
+    await openFixture(`${base}/?view=children`);
     outcome = "reject";
     await page.getByRole("button", { name: "Acknowledge", exact: true }).click();
     await page.getByText("Fake test denial", { exact: true }).waitFor();
@@ -168,7 +185,7 @@ async function main() {
     await page.getByRole("status").filter({ hasText: "Acknowledged" }).waitFor();
     assert.equal(await page.getByRole("button", { name: "Acknowledge", exact: true }).count(), 0, "Receipt updates even with router refresh held");
 
-    await page.goto(`${base}/?view=teacher`);
+    await openFixture(`${base}/?view=teacher`);
     outcome = "abort";
     await page.locator("#teacher-profile-setup").getByRole("button", { expanded: false }).first().click();
     await page.getByLabel("Full name", { exact: true }).fill("Fake Teacher Draft");
@@ -231,7 +248,7 @@ async function main() {
     await page.waitForFunction(() => !document.querySelector<HTMLInputElement>("#teacher-child-photo")?.matches(":disabled"));
     assert.equal(await page.getByLabel("Photo caption for parents", { exact: true }).inputValue(), "Fake caption bound to child two");
     page.once("dialog", (dialog) => dialog.accept());
-    await page.goto(`${base}/?view=teacher&large-roster=1`);
+    await openFixture(`${base}/?view=teacher&large-roster=1`);
     await page.locator("#teacher-daily-report").waitFor();
     const collapsedReport = page.locator("#teacher-daily-report").getByRole("button", { expanded: false }).first();
     if (await collapsedReport.count()) await collapsedReport.click();
@@ -276,7 +293,7 @@ async function main() {
     assert.match(await page.locator("#teacher-location-target").innerText(), /Playground/);
     assert.equal(writes.length, 7, "Only the explicit fake report save added a request");
 
-    await page.goto(`${base}/?view=team`);
+    await openFixture(`${base}/?view=team`);
     await page.getByRole("heading", { name: "Team, users, and permissions", exact: true }).waitFor();
     assert.equal(await page.getByRole("link", { name: "Previous users", exact: true }).first().getAttribute("href"), "/staff?view=permissions&q=Fake&peoplePage=5&sessionPage=3#user-directory");
     assert.equal(await page.getByRole("link", { name: "Previous sessions", exact: true }).first().getAttribute("href"), "/staff?view=permissions&q=Fake&peoplePage=6&sessionPage=2#device-sessions");
@@ -307,10 +324,10 @@ async function main() {
     assert.equal(searched.searchParams.get("sessionPage"), "3");
     assert.equal(searched.searchParams.get("peoplePage"), null);
     assert.equal(searched.hash, "#user-directory");
-    await page.goto(`${base}/?view=team&manage=1&current-device=1`);
+    await openFixture(`${base}/?view=team&manage=1&current-device=1`);
     await page.getByText("Use Sign out", { exact: true }).waitFor();
     assert.equal(await page.getByRole("button", { name: /^Revoke / }).count(), 0);
-    await page.goto(`${base}/?view=team&manage=1`);
+    await openFixture(`${base}/?view=team&manage=1`);
     outcome = "abort";
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Revoke Fake classroom tablet", exact: true }).click();
@@ -328,7 +345,7 @@ async function main() {
     await page.getByRole("status").filter({ hasText: "Device session ended" }).waitFor();
     assert.equal(writes.length, 10);
     const billingWriteBaseline = writes.length;
-    await page.goto(`${base}/?view=billing&family=a&director=1`);
+    await openFixture(`${base}/?view=billing&family=a&director=1`);
     await page.locator("#billing-payment-description").fill("Fake payment for family A only");
     await page.getByRole("tab", { name: "Check payment", exact: true }).click();
     await page.locator("#billing-check-amount").fill("125.00");
@@ -359,7 +376,7 @@ async function main() {
     await page.getByRole("tab", { name: "Check payment", exact: true }).click();
     assert.notEqual(await page.locator("#billing-check-received-date").inputValue(), "2026-09-01T10:00");
     assert.equal(writes.length, billingWriteBaseline, "Confirmed family/school changes discard drafts but never submit them");
-    await page.goto(`${base}/?view=billing&family=a&director=1&selectors=1`);
+    await openFixture(`${base}/?view=billing&family=a&director=1&selectors=1`);
     await page.getByRole("tab", { name: "Check payment", exact: true }).click();
     await page.locator("#billing-check-reference").fill("FAKE-NAV-DRAFT");
     const draftUrl = page.url();
@@ -398,7 +415,7 @@ async function main() {
     for (const view of ["billing", "terminal", "ledger"]) {
       const selector = view === "billing" ? "#billing-workbench-family" : view === "terminal" ? "#terminal-family" : "#family-ledger-family";
       for (const suffix of ["family=missing", "family=b&center=a"]) {
-        await page.goto(`${base}/?view=${view}&${suffix}`);
+        await openFixture(`${base}/?view=${view}&${suffix}`);
         await page.getByText("Family selection needed", { exact: true }).waitFor();
         assert.doesNotMatch(await page.locator(selector).innerText(), /Fake Family [AB]/, `${view}: exact missing/mismatch must stay unselected`);
         await page.locator(selector).click();
@@ -406,7 +423,7 @@ async function main() {
         assert.match(await page.locator(selector).innerText(), /Fake Family A/);
         assert.equal(await page.getByText("Family selection needed", { exact: true }).count(), 0);
       }
-      await page.goto(`${base}/?view=${view}&family=a`);
+      await openFixture(`${base}/?view=${view}&family=a`);
       await page.locator(selector).waitFor();
       await page.getByRole("button", { name: "Navigate to missing", exact: true }).click();
       await page.getByText("Family selection needed", { exact: true }).waitFor();
@@ -422,16 +439,16 @@ async function main() {
       }
       await page.screenshot({ path: path.join(evidenceDirectory, `billing-target-${view}-390.png`), fullPage: true });
     }
-    await page.goto(`${base}/?view=ledger&family=past`);
+    await openFixture(`${base}/?view=ledger&family=past`);
     await page.getByText("No ledger entries match this family and date range.", { exact: true }).waitFor();
     assert.match(await page.locator("#family-ledger-family").innerText(), /Fake Historical Family/);
     assert.equal(await page.getByText("Fake ledger for a", { exact: true }).count(), 0);
-    await page.goto(`${base}/?view=billing&family=a&director=1`);
+    await openFixture(`${base}/?view=billing&family=a&director=1`);
     await page.getByRole("link", { name: "Open family", exact: true }).waitFor();
     assert.equal(await page.getByRole("button", { name: "Save child setup", exact: true }).count(), 1);
     assert.equal(writes.length, billingWriteBaseline, "All billing target, role, and historical checks perform zero writes");
     for (const child of ["missing-child", "child-b"]) {
-      await page.goto(`${base}/?view=billing&family=a&director=1&child=${child}`);
+      await openFixture(`${base}/?view=billing&family=a&director=1&child=${child}`);
       await page.getByText("Child selection needed", { exact: true }).waitFor();
       assert.doesNotMatch(await page.locator("#billing-assignment-child").innerText(), /Fake Child/);
       assert.equal(await page.getByRole("button", { name: "Save child setup", exact: true }).isDisabled(), true);
@@ -462,7 +479,7 @@ async function main() {
     (releaseHeld as (() => void) | undefined)?.();
     await page.getByRole("status").filter({ hasText: "Program, classroom, and care schedule saved" }).waitFor();
     assert.equal(writes.length, billingWriteBaseline + 1, "Only the explicit mocked child-setup save added a request");
-    await page.goto(`${base}/?view=terminal&family=a&request-boundary=1`);
+    await openFixture(`${base}/?view=terminal&family=a&request-boundary=1`);
     await page.getByRole("combobox", { name: "School card reader", exact: true }).waitFor();
     await page.locator("#terminal-payment-target").click();
     await page.getByRole("option", { name: "Custom family account payment", exact: true }).click();
@@ -482,7 +499,7 @@ async function main() {
     assert.equal(writes.length, billingWriteBaseline + 1, "Slow quote recovery never submits a payment");
     for (const receipt of ["invalid-success", "success", "status-http", "status-malformed"] as const) {
       terminalPollFailure = receipt === "status-http" ? "http" : receipt === "status-malformed" ? "malformed" : null;
-      await page.goto(`${base}/?view=terminal&family=a&request-boundary=1`);
+      await openFixture(`${base}/?view=terminal&family=a&request-boundary=1`);
       await page.getByRole("combobox", { name: "School card reader", exact: true }).waitFor();
       await page.locator("#terminal-payment-target").click();
       await page.getByRole("option", { name: "Custom family account payment", exact: true }).click();
@@ -525,18 +542,19 @@ async function main() {
       }
     }
     const beforeDocuments = writes.length;
-    await page.goto(`${base}/?view=home&document-case=approved&attention-case=hidden`);
+    await openFixture(`${base}/?view=home&document-case=approved&attention-case=hidden`);
     await page.locator("#parent-home-attention").getByText("12 items to review", { exact: true }).waitFor();
     await page.getByRole("link", { name: /5 incident reports to review/ }).waitFor();
     await page.getByRole("link", { name: /Upcoming payment.*FAKE-OLDER-OPEN/ }).waitFor();
     assert.equal(await page.getByText("You’re all caught up", { exact: true }).count(), 0);
-    await page.goto(`${base}/?view=payments&document-case=approved&attention-case=hidden`);
+    await openFixture(`${base}/?view=payments&document-case=approved&attention-case=hidden`);
     await page.getByText(/7 open invoices on this account; 20 records shown/).waitFor();
     assert.ok(await page.getByText("FAKE-OLDER-OPEN", { exact: true }).count());
-    await page.goto(`${base}/?view=children&document-case=approved&attention-case=hidden`);
+    await openFixture(`${base}/?view=children&document-case=approved&attention-case=hidden`);
     await page.locator('#incidents [data-slot="card-content"] > div').first().getByText("Fake older report still needs acknowledgment", { exact: false }).waitFor();
     assert.equal(await page.locator("#incidents").getByRole("button", { name: "Acknowledge", exact: true }).count(), 1);
-    await page.goto(`${base}/?view=home&document-case=many-required&multi-child=1`);
+    await openFixture(`${base}/?view=home&document-case=many-required&multi-child=1`);
+    await page.locator("#today article").first().waitFor();
     assert.equal(await page.locator("#today article").count(), 3);
     const actionsBox = await page.locator('[data-parent-home-actions="true"]').boundingBox();
     const childrenBox = await page.locator("#today").boundingBox();
@@ -544,7 +562,7 @@ async function main() {
     const requiredLink = page.getByRole("link", { name: /25 documents to review/ });
     assert.equal(new URL((await requiredLink.getAttribute("href"))!, base).searchParams.get("documentId"), "fake-required-1");
     for (const state of ["submitted", "approved"]) {
-      await page.goto(`${base}/?view=documents&document-case=${state}&documentId=fake-document`);
+      await openFixture(`${base}/?view=documents&document-case=${state}&documentId=fake-document`);
       await page.getByText("No documents need your action.", { exact: false }).waitFor();
       const target = page.locator('[data-parent-document="fake-document"]');
       assert.equal(await target.getAttribute("open"), "");
@@ -557,20 +575,20 @@ async function main() {
         assert.equal(await target.locator("input,textarea,button").count(), 0, "Approved legacy signature markers cannot reopen submission controls");
       }
     }
-    await page.goto(`${base}/?view=documents&document-case=history`);
+    await openFixture(`${base}/?view=documents&document-case=history`);
     assert.match(await page.locator("[data-parent-document] > summary").first().innerText(), /Fake required form/);
     await page.getByText("1 document needs your action.", { exact: false }).waitFor();
     assert.equal(new URL((await page.getByRole("link", { name: "Next documents", exact: true }).getAttribute("href"))!, base).searchParams.get("documentsPage"), "2");
-    await page.goto(`${base}/?view=documents&document-case=many-required&documentsPage=2`);
+    await openFixture(`${base}/?view=documents&document-case=many-required&documentsPage=2`);
     await page.getByText("25 documents need your action.", { exact: false }).waitFor();
     assert.equal(await page.locator("[data-parent-document]").count(), 5);
     assert.match(await page.locator("[data-parent-document] > summary").first().innerText(), /Fake required form 21/);
-    await page.goto(`${base}/?view=documents&document-case=many-required&documentId=fake-required-25`);
+    await openFixture(`${base}/?view=documents&document-case=many-required&documentId=fake-required-25`);
     assert.equal(await page.locator('[data-parent-document="fake-required-25"]').getAttribute("open"), "");
-    await page.goto(`${base}/?view=documents&document-case=many-required&documentId=outside`);
+    await openFixture(`${base}/?view=documents&document-case=many-required&documentId=outside`);
     await page.getByText("Document not available", { exact: true }).waitFor();
     assert.equal(await page.locator("details[data-parent-document][open]").count(), 0);
-    await page.goto(`${base}/?view=documents&document-case=many-required&documentId=fake-required-1`);
+    await openFixture(`${base}/?view=documents&document-case=many-required&documentId=fake-required-1`);
     const signature = page.locator("#parent-document-signature-fake-required-1");
     await signature.fill("Fake Guardian");
     await page.locator('[data-parent-document="fake-required-1"]').getByRole("checkbox").check();
@@ -598,6 +616,50 @@ async function main() {
     }
     assert.equal(writes.length, beforeDocuments + 2, "Only two explicit fake document submissions were intercepted");
     await page.screenshot({ path: path.join(evidenceDirectory, "parent-documents-confirmed-submit-390.png"), fullPage: true });
+    await openFixture(`${base}/?view=teacher`);
+    let profileDialogs = 0;
+    const rejectProfileExit = async (dialog: import("playwright").Dialog) => { profileDialogs++; await dialog.dismiss(); };
+    page.on("dialog", rejectProfileExit);
+    await page.getByRole("link", { name: "Leave fake teacher" }).click();
+    await page.waitForURL("**/?view=home");
+    assert.equal(profileDialogs, 0, "An untouched profile starts clean");
+    await openFixture(`${base}/?view=teacher`);
+    const profileCard = page.locator("#teacher-profile-setup");
+    await profileCard.waitFor();
+    if (await profileCard.getByRole("button", { expanded: false }).count()) await profileCard.getByRole("button", { expanded: false }).first().click();
+    await page.getByLabel("Full name", { exact: true }).fill("");
+    assert.equal(await profileCard.getByText("Ready", { exact: true }).count(), 1, "Readiness describes saved data, not an unsaved input");
+    await page.getByLabel("Full name", { exact: true }).fill("  Fake Teacher Confirmed  ");
+    await page.getByLabel("Staff kiosk code", { exact: true }).fill("1234");
+    await page.getByRole("link", { name: "Leave fake teacher" }).click();
+    assert.equal(profileDialogs, 1); assert.match(page.url(), /view=teacher/);
+    const beforeProfileWrites = writes.length;
+    for (const invalid of ["invalid-success", "wrong-center"] as const) {
+      outcome = invalid === "invalid-success" ? "invalid-success" : "success"; wrongProfileTarget = invalid === "wrong-center";
+      await page.getByRole("button", { name: "Save profile", exact: true }).click();
+      await page.getByText(/could not confirm whether your profile was saved/).waitFor();
+      await page.waitForFunction(() => document.querySelector<HTMLButtonElement>('#teacher-profile-setup button[type="submit"]')?.disabled === false);
+      assert.equal(await page.getByLabel("Full name", { exact: true }).inputValue(), "  Fake Teacher Confirmed  ");
+      assert.equal(await page.getByLabel("Staff kiosk code", { exact: true }).inputValue(), "1234");
+      assert.equal(await page.evaluate(() => (window as unknown as { __refreshes?: number }).__refreshes ?? 0), 0);
+    }
+    wrongProfileTarget = false; outcome = "hold"; releaseHeld = undefined;
+    await page.getByRole("button", { name: "Save profile", exact: true }).click();
+    await page.getByRole("button", { name: "Save profile", exact: true }).evaluate((button: HTMLButtonElement) => { if (!button.disabled) throw new Error("Pending profile button was not locked"); });
+    for (const input of await profileCard.locator("input").all()) assert.equal(await input.isDisabled(), true, "Every pending profile field remains locked");
+    assert.equal(await page.locator("#teacher-profile-classroom").isDisabled(), true);
+    for (let attempt = 0; !releaseHeld && attempt < 30; attempt++) await page.waitForTimeout(25);
+    releaseHeldResponse();
+    await page.getByText("Teacher profile setup saved.", { exact: true }).waitFor();
+    assert.equal(await page.getByLabel("Full name", { exact: true }).inputValue(), "Fake Teacher Confirmed");
+    assert.equal(await page.getByLabel("Staff kiosk code", { exact: true }).inputValue(), "");
+    assert.equal(await page.evaluate(() => (window as unknown as { __refreshes?: number }).__refreshes ?? 0), 1);
+    assert.equal(writes.length, beforeProfileWrites + 3, "Exactly one intercepted request per explicit profile save");
+    assert.equal(await profileCard.getByText("Unsaved changes", { exact: true }).count(), 0);
+    await page.screenshot({ path: path.join(evidenceDirectory, "teacher-profile-confirmed-390.png"), fullPage: true });
+    await page.getByRole("link", { name: "Leave fake teacher" }).click(); await page.waitForURL("**/?view=home");
+    assert.equal(profileDialogs, 1, "An exact successful receipt clears only the profile draft guard");
+    page.off("dialog", rejectProfileExit);
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ passed: true, checks: ["exact historical school/week", "saved zero retained", "uncertain save preserves draft", "no automatic retry", "discard cancel/confirm", "approved director locked", "auditor read-only", "family school timezone", "earlier announcements keyboard disclosure", "reply context preserves draft and attachment", "acknowledgment reject/success with refresh held", "teacher profile failure retains inputs", "teacher photo failure retains selection and caption", "teacher recipient discard guards", "attendance never retargets drafts", "pending controls locked", "report batches never silently truncate", "staff-only backdate settings survive save and child changes", "destination-only location draft guarded", "directory and session totals and paging", "directory canonical search and role disclosure", "read-only and current-device explanations", "session recovery and success announcement", "billing exact family and school", "billing route-key state refresh", "historical ledger without activity", "billing-only and enrollment permissions", "child exact targeting and discard guards", "confirmed context change clears financial drafts", "date-only billing draft guard", "pending reader target and confirmation lock", "unknown terminal result stays locked", "successful terminal charge cannot repeat"], interceptedWrites: writes.length }));
   } finally { await browser.close(); await new Promise<void>((done) => server.close(() => done())); }

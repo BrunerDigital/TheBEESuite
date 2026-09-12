@@ -18,6 +18,7 @@ import { CollapsibleCard } from "@/components/workspace-preferences";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import { requestWithNetworkRecovery } from "@/lib/client-request-recovery";
+import { normalizeTeacherProfileSetupPayload, readTeacherProfileSaveReceipt, teacherProfileDraftFromReceipt, teacherProfileDraftSignature } from "@/lib/teacher-profile-setup";
 import { sameTeacherDraftTargets, teacherReportDraftSignature, validateTeacherDraftTargets } from "@/lib/teacher-draft-targets";
 import { MAX_CHILDREN_PER_REPORT_BATCH } from "@/lib/teacher-daily-report";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
@@ -63,6 +64,7 @@ type Props = {
 };
 
 type TeacherProfileSetup = {
+  id: string | null;
   name: string;
   loginEmail: string;
   contactEmail: string | null;
@@ -270,6 +272,12 @@ export function TeacherMobileWorkspace({
   const [profileClassroomId, setProfileClassroomId] = useState(teacherProfile?.classroomId ?? "none");
   const [profileKioskPin, setProfileKioskPin] = useState("");
   const [hasStaffKioskCode, setHasStaffKioskCode] = useState(Boolean(teacherProfile?.hasStaffKioskCode));
+  const [savedProfileId, setSavedProfileId] = useState(teacherProfile?.id ?? null);
+  const [savedClassroomId, setSavedClassroomId] = useState(teacherProfile?.classroomId ?? null);
+  const [profileReady, setProfileReady] = useState(() => Boolean(teacherProfile?.name.trim() && teacherProfile.centerId && teacherProfile.title.trim() && teacherProfile.classroomId && (appReviewMode || teacherProfile.hasStaffKioskCode)));
+  const profileDraft = { name: profileName, contactEmail: profileContactEmail, phone: profilePhone, title: profileTitle, classroomId: profileClassroomId, staffKioskPin: profileKioskPin };
+  const [profileDraftBaseline, setProfileDraftBaseline] = useState(() => teacherProfileDraftSignature(profileDraft));
+  const hasProfileDraft = teacherProfileDraftSignature(profileDraft) !== profileDraftBaseline;
   const [selectedChildId, setSelectedChildId] = useState(firstChild);
   const [selectedDailyReportChildIds, setSelectedDailyReportChildIds] = useState<string[]>(() => firstChild ? [firstChild] : []);
   const [attendanceOverrides, setAttendanceOverrides] = useState<Record<string, AttendanceSnapshot>>({});
@@ -302,7 +310,7 @@ export function TeacherMobileWorkspace({
   const [reportDraftBaseline, setReportDraftBaseline] = useState(() => teacherReportDraftSignature(dailyReportDraft));
   const hasReportDraft = teacherReportDraftSignature(dailyReportDraft) !== reportDraftBaseline;
   const hasSingleChildDraft = Boolean(photo || photoCaption || incidentDescription || actionTaken || incidentType !== "Minor injury" || locationReason || locationTarget !== "area:Playground");
-  useUnsavedChangesGuard(!previewMode && (hasReportDraft || hasSingleChildDraft), "Leave this page and discard your unsaved classroom drafts?");
+  useUnsavedChangesGuard(!previewMode && (hasReportDraft || hasSingleChildDraft || hasProfileDraft), "Leave this page and discard your unsaved profile or classroom drafts?");
   const offlineCredentialsRef = useRef<{ key: string; scopeId: string } | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isPending, startTransition] = useTransition();
@@ -328,13 +336,6 @@ export function TeacherMobileWorkspace({
     return Object.values(grouped);
   }, [roster]);
   const selectedProfileClassroom = classroomOptions.find((classroom) => classroom.id === profileClassroomId);
-  const profileReady = Boolean(
-    profileName.trim() &&
-    teacherProfile?.centerId &&
-    profileTitle.trim() &&
-    profileClassroomId !== "none" &&
-    (appReviewMode || hasStaffKioskCode),
-  );
 
   const showStatus = useCallback((next: string) => {
     setError("");
@@ -566,6 +567,7 @@ export function TeacherMobileWorkspace({
 
   function saveTeacherProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isPending) return;
     if (previewMode) {
       showStatus("Preview only — no profile was changed.");
       return;
@@ -574,50 +576,52 @@ export function TeacherMobileWorkspace({
       showError("Profile and staff kiosk-code changes are disabled for the shared App Review account.");
       return;
     }
+    if (!teacherProfile?.centerId) {
+      showError("A school assignment is required before saving your profile.");
+      return;
+    }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       showError("Reconnect this tablet before saving teacher profile setup.");
       return;
     }
+    const normalized = normalizeTeacherProfileSetupPayload({ ...profileDraft, classroomId: profileClassroomId === "none" ? null : profileClassroomId });
+    if (!normalized.ok) {
+      showError(normalized.error);
+      return;
+    }
+    const expected = { profileId: savedProfileId, centerId: teacherProfile.centerId, retainedClassroomId: savedClassroomId, input: normalized.input };
+    const recoveryMessage = "We could not confirm whether your profile was saved. Your entries are still here. Reconnect and check your saved profile before trying again.";
     startTransition(async () => {
       setStatus("");
       setError("");
       const response = await requestWithNetworkRecovery("/api/teacher/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: profileName,
-          contactEmail: profileContactEmail,
-          phone: profilePhone,
-          title: profileTitle,
-          classroomId: profileClassroomId === "none" ? null : profileClassroomId,
-          staffKioskPin: profileKioskPin || null,
-        }),
-      }, "We could not confirm whether your profile was saved. Your entries are still here. Reconnect and check your saved profile before trying again.");
-      const json = await response.json().catch(() => null) as {
-        error?: string;
-        profile?: {
-          name?: string;
-          contactEmail?: string | null;
-          phone?: string | null;
-          title?: string;
-          classroomId?: string | null;
-          hasStaffKioskCode?: boolean;
-        };
-      } | null;
+        body: JSON.stringify(normalized.input),
+      }, recoveryMessage);
+      const json: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        showError(json?.error || "Teacher profile setup could not be saved.");
+        const responseError = json && typeof json === "object" && "error" in json ? json.error : null;
+        showError(typeof responseError === "string" ? responseError : "Teacher profile setup could not be saved.");
         return;
       }
-
-      if (json?.profile) {
-        setProfileName(json.profile.name ?? profileName);
-        setProfileContactEmail(json.profile.contactEmail ?? "");
-        setProfilePhone(json.profile.phone ?? "");
-        setProfileTitle(json.profile.title ?? profileTitle);
-        setProfileClassroomId(json.profile.classroomId ?? "none");
-        setHasStaffKioskCode(Boolean(json.profile.hasStaffKioskCode));
+      const receipt = readTeacherProfileSaveReceipt(json, expected);
+      if (!receipt) {
+        showError(recoveryMessage);
+        return;
       }
+      const savedDraft = teacherProfileDraftFromReceipt(receipt);
+      setProfileName(savedDraft.name);
+      setProfileContactEmail(savedDraft.contactEmail);
+      setProfilePhone(savedDraft.phone);
+      setProfileTitle(savedDraft.title);
+      setProfileClassroomId(savedDraft.classroomId);
       setProfileKioskPin("");
+      setSavedProfileId(receipt.id);
+      setSavedClassroomId(receipt.classroomId);
+      setHasStaffKioskCode(receipt.hasStaffKioskCode);
+      setProfileReady(Boolean(receipt.name && receipt.centerId && receipt.title && receipt.classroomId && receipt.hasStaffKioskCode));
+      setProfileDraftBaseline(teacherProfileDraftSignature(savedDraft));
       showStatus("Teacher profile setup saved.");
       router.refresh();
     });
@@ -1699,6 +1703,7 @@ export function TeacherMobileWorkspace({
         headerActions={(
           <div className="flex flex-wrap gap-2">
             <Badge variant={profileReady ? "default" : "outline"}>{profileReady ? "Ready" : "Needs setup"}</Badge>
+            {!previewMode && hasProfileDraft ? <Badge variant="outline">Unsaved changes</Badge> : null}
             <Badge variant={appReviewMode || hasStaffKioskCode ? "default" : "destructive"}>
               {appReviewMode ? "Staff code disabled" : hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}
             </Badge>
@@ -1772,12 +1777,13 @@ export function TeacherMobileWorkspace({
               </div>
               <div className="space-y-1">
                 <Label htmlFor="teacher-profile-classroom">Classroom</Label>
-                <Select value={profileClassroomId} onValueChange={(value) => setProfileClassroomId(value || "none")}>
-                  <SelectTrigger id="teacher-profile-classroom" className="h-11 w-full">
+                <Select value={profileClassroomId} disabled={isPending || Boolean(savedClassroomId)} onValueChange={(value) => setProfileClassroomId(value || "none")}>
+                  <SelectTrigger id="teacher-profile-classroom" aria-describedby={savedClassroomId ? "teacher-profile-classroom-help" : undefined} className="h-11 w-full">
                     <SelectValue placeholder="Choose a classroom" />
                   </SelectTrigger>
                   <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
-                    <SelectItem value="none">Director will assign later</SelectItem>
+                    <SelectItem value="none">{savedClassroomId ? "Keep saved classroom" : "Director will assign later"}</SelectItem>
+                    {savedClassroomId && !classroomOptions.some((classroom) => classroom.id === savedClassroomId) ? <SelectItem value={savedClassroomId}>Assigned classroom</SelectItem> : null}
                     {classroomOptions.map((classroom) => (
                       <SelectItem key={classroom.id} value={classroom.id}>
                         {classroom.name} - {classroom.ageGroup}
@@ -1785,9 +1791,10 @@ export function TeacherMobileWorkspace({
                     ))}
                   </SelectContent>
                 </Select>
+                {savedClassroomId ? <p id="teacher-profile-classroom-help" className="text-xs text-muted-foreground">Your director manages changes to this classroom.</p> : null}
                 {selectedProfileClassroom ? (
                   <p className="text-xs text-muted-foreground">
-                    Roster access will use {selectedProfileClassroom.name}.
+                    {savedClassroomId === selectedProfileClassroom.id ? "Saved classroom:" : "After a confirmed save, classroom:"} {selectedProfileClassroom.name}.
                   </p>
                 ) : null}
               </div>
@@ -1796,9 +1803,11 @@ export function TeacherMobileWorkspace({
                 <Input
                   id="teacher-profile-kiosk-pin"
                   value={profileKioskPin}
-                  onChange={(event) => setProfileKioskPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                  onChange={(event) => setProfileKioskPin(event.target.value)}
                   className="h-11"
                   inputMode="numeric"
+                  type="password"
+                  pattern="[0-9]{4}"
                   autoComplete="off"
                   placeholder={hasStaffKioskCode ? "Leave blank to keep current code" : "Choose a 4 digit code"}
                 />

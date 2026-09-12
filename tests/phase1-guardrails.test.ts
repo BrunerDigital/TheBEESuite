@@ -1641,7 +1641,10 @@ test("teacher web surfaces preserve capabilities while failing closed to assigne
   assert.match(dashboard, /usesDedicatedTeacherWorkspace\(user\.role\)\) redirect\("\/teacher-portal"\)/);
   assert.ok((livePage.match(/__no_assigned_teacher_classroom__/g) ?? []).length >= 2);
   assert.match(livePage, /teacherMessageScope\s*\? \{ id: user\.id, tenantId: user\.tenantId, isActive: true \}/);
-  assert.match(profileRoute, /existingProfile\?\.classroomId\s*\? \[existingProfile\.classroomId\]/);
+  assert.match(profileRoute, /currentProfile\.classroomId !== existingProfile\.classroomId/);
+  assert.match(profileRoute, /currentProfile\?\.classroomId && input\.classroomId && currentProfile\.classroomId !== input\.classroomId\) throw new TeacherProfileConflict/);
+  assert.match(profileRoute, /input\.classroomId \?\? currentProfile\?\.classroomId \?\? null/);
+  assert.match(profileRoute, /activeClassroomWhere\(roomScope\)/);
   assert.match(livePage, /user\.role === UserRole\.TEACHER\s*\? \{ child: \{ classroomId: teacherAssignedClassroomId \} \}/);
   assert.match(livePage, /teacherMessageScope\s*\? \{ id: teacherAssignedClassroomId \?\? "__no_assigned_teacher_classroom__" \}/);
   assert.match(livePage, /visibleNotificationWhere\(user, now\)/);

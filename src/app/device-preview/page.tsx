@@ -188,7 +188,7 @@ function TeacherPreview({ scenario }: { scenario?: string }) {
     },
   }));
   return <TeacherMobileWorkspace previewMode appReviewMode={scenario === "review"} teacherName="Morgan Lee" roster={roster}
-    teacherProfile={{ name: "Morgan Lee", loginEmail: "morgan@example.com", contactEmail: "morgan@example.com", phone: "", title: "Teacher", centerId: "preview-center", centerName: "Sunshine Academy", classroomId: "preview-classroom", hasStaffKioskCode: true }}
+    teacherProfile={{ id: "preview-teacher", name: "Morgan Lee", loginEmail: "morgan@example.com", contactEmail: "morgan@example.com", phone: "", title: "Teacher", centerId: "preview-center", centerName: "Sunshine Academy", classroomId: "preview-classroom", hasStaffKioskCode: true }}
     classroomOptions={[{ id: "preview-classroom", name: "Butterflies", ageGroup: "Preschool" }]}
     classroomRatios={[{ classroomId: "preview-classroom", name: "Butterflies", capacity: 20, ratioRule: "1:10", assignedStaff: 1 }]}
     kioskAccess={{ centerId: "preview-center", centerName: "Sunshine Academy", kioskPath: "/device-preview?view=kiosk-staff", hasStaffKioskCode: true, clockStatus: "clocked_in", lastActionAt: "2026-09-10T12:00:00Z", timeClockSummary: { totalMinutes: 240, closedShiftCount: 1, openShiftMinutes: 60, openShiftStartedAt: "2026-09-10T12:00:00Z" } }}

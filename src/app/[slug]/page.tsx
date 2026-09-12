@@ -2518,6 +2518,7 @@ async function renderLivePage(
           balanceCents: true,
           autopayPlaceholder: true,
           customFields: true,
+          _count: { select: { payments: { where: { status: PaymentStatus.DRAFT } } } },
           invoices: {
             where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.PAID, PaymentStatus.VOID] } },
             select: {
@@ -3229,6 +3230,7 @@ async function renderLivePage(
         dailyReports={parentDailyReports}
         incidents={incidents}
         attentionSummary={{ openInvoiceCount, unacknowledgedIncidentCount }}
+        paymentActivitySummary={{ pendingCount: billingAccount?._count.payments ?? 0, provisionalCreditCents: pendingAchCreditCents }}
         messages={paymentContinuityAccess ? [] : signedMessages}
         centerName={familyCenter ? formatCenterName(familyCenter) : parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
         centerEin={familyCenter ? readSchoolEin(familyCenter.customFields) : parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}

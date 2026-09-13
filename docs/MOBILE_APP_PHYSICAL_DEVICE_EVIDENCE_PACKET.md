@@ -2,6 +2,8 @@
 
 Last updated: September 8, 2026
 
+Current web-release evidence is tracked in the [September 13 index](SCHOOL_UI_RELEASE_EVIDENCE_2026-09-13.md). Do not paste browser layout passes or the printable browser packet into physical-device result fields. Run this packet on the exact signed candidate; preserve the distinction from [unsigned native verification](IOS_NATIVE_VERIFICATION_AND_HANDOFF.md).
+
 Use one copy per release candidate, platform, and role app. Use fake review data only. Attach screenshots/log exports separately; do not place passwords, signing keys, provisioning profiles, service-account files, device tokens, or private child/family data in this packet.
 
 ## Release identity

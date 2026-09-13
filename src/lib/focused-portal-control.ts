@@ -16,3 +16,11 @@ export function revealFocusedPortalControl(trigger: HTMLElement | null) {
   trigger.scrollIntoView({ block: "nearest", behavior: "instant" });
   return true;
 }
+
+/** Focus may scroll before a sticky shell or a newly selected panel has settled. */
+export function scheduleFocusedPortalControlReveal(trigger: HTMLElement | null) {
+  if (!trigger?.matches("a, button, input, select, textarea, summary, [role=combobox]")) return;
+  const viewport = trigger.ownerDocument.defaultView;
+  if (!viewport || !trigger.closest(".bee-app-frame")) return;
+  viewport.requestAnimationFrame(() => viewport.requestAnimationFrame(() => revealFocusedPortalControl(trigger)));
+}

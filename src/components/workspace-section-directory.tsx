@@ -31,14 +31,14 @@ export function WorkspaceSectionDirectory({
     <nav
       id={id}
       aria-labelledby={titleId}
-      className={cn("scroll-mt-28 rounded-2xl border bg-card/70 p-4 shadow-sm sm:p-5", className)}
+      className={cn("workspace-section-directory scroll-mt-28 rounded-2xl border bg-card/70 p-4 shadow-sm sm:p-5", className)}
     >
       <div className="max-w-3xl">
         <h2 id={titleId} className="text-lg font-semibold tracking-tight">{title}</h2>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+      <div className="workspace-section-directory-grid mt-4 grid grid-cols-1 gap-4">
         {reviewDestinations.length ? (
           <section aria-labelledby={`${id}-review-title`}>
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold">

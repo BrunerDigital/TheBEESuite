@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { BILLING_TARGET_UNAVAILABLE, resolveBillingFamilySelection } from "@/lib/billing-family-selection";
+import { scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
 
 type Props = {
   families: BillingWorkbenchFamily[];
@@ -102,7 +103,7 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="director-payment-terminal-workspace space-y-5" onFocusCapture={event => scheduleFocusedPortalControlReveal(event.target)}>
       <section className="relative overflow-hidden rounded-[2rem] border border-primary/25 bg-gradient-to-br from-primary/16 via-card to-amber-500/12 p-5 shadow-2xl shadow-primary/8 sm:p-7">
         <div className="pointer-events-none absolute -right-10 -top-12 size-48 rotate-12 bg-primary/8 [clip-path:polygon(25%_6.7%,75%_6.7%,100%_50%,75%_93.3%,25%_93.3%,0%_50%)]" aria-hidden="true" />
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -129,8 +130,8 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
         <WorkflowStep number={4} title="Receipt" detail={paymentRecorded ? "Payment recorded; receipt is ready" : "Recorded after approval"} complete={paymentRecorded} active={paymentRecorded} />
       </ol>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(28rem,1.15fr)]">
-        <div className="space-y-5">
+      <div className="terminal-payment-layout grid grid-cols-1 gap-5">
+        <div className="min-w-0 space-y-5">
           <Card className="glass-panel">
             <CardHeader>
               <h2 className="font-heading text-base font-medium leading-snug">1. Choose Family & Balance</h2>
@@ -211,11 +212,11 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
             </CardHeader>
             <CardContent className="space-y-2">
               {reviewRows.map((row) => (
-                <div key={row.label} className="flex items-center gap-3 rounded-xl border bg-background/55 p-3">
+                <div key={row.label} className="terminal-review-row flex items-center gap-3 rounded-xl border bg-background/55 p-3">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary" aria-hidden="true">{row.icon}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs text-muted-foreground">{row.label}</span>
-                    <span className="block truncate font-semibold">{row.value}</span>
+                    <span className="terminal-review-value block font-semibold">{row.value}</span>
                   </span>
                 </div>
               ))}

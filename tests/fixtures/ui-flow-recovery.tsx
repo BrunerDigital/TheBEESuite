@@ -1,5 +1,6 @@
 // Local browser-test entry point only. Never imported by the application.
 import { createRoot } from "react-dom/client";
+import { AppShell } from "../../src/components/app-shell";
 import { AutomationWorkflowBuilder } from "../../src/components/automation-workflow-builder";
 import { fakeAutomations } from "./automation-workflows";
 import { ParentPortalWorkspace } from "../../src/components/parent-portal-workspace";
@@ -66,11 +67,14 @@ const team: TeamPermissionsData = {
   canManageDeviceSessions: query.has("manage"),
 };
 
-const billingCenters: BillingWorkbenchCenter[] = ["a", "b"].map((id) => ({ id, name: `Fake School ${id.toUpperCase()}`, crmLocationId: null, classrooms: [{ id: `room-${id}`, name: `Room ${id}`, ageGroup: "Preschool" }], hardwareTerminalConfigured: false }));
+const officeLongNames = query.has("office-long-names");
+const billingCenters: BillingWorkbenchCenter[] = ["a", "b"].map((id) => ({ id, name: officeLongNames ? `Fake School ${id.toUpperCase()} North River Early Learning and Development Campus` : `Fake School ${id.toUpperCase()}`, crmLocationId: null, classrooms: [{ id: `room-${id}`, name: `Room ${id}`, ageGroup: "Preschool" }], hardwareTerminalConfigured: false }));
 const billingFamilies: BillingWorkbenchFamily[] = ["a", "b", "c"].map((id) => ({
-  id, centerId: id === "c" ? "a" : id, name: `Fake Family ${id.toUpperCase()}`, billingEmail: null, guardians: [],
+  id, centerId: id === "c" ? "a" : id, name: officeLongNames ? `Fake Family ${id.toUpperCase()} Alexandra Gabriella Montgomery-Santiago` : `Fake Family ${id.toUpperCase()}`, billingEmail: null, guardians: [],
   children: [1, 2].map((index) => ({ id: `child-${id}${index === 1 ? "" : "-2"}`, fullName: `Fake Child ${id.toUpperCase()}${index === 1 ? "" : " Two"}`, ageGroup: "Preschool", classroomId: `room-${id}`, enrollmentStatus: "active", startDate: null, careScheduleType: "full_time" as const, scheduledDaysPerWeek: 5 as const })),
-  billingAccount: { id: `account-${id}`, balanceCents: 10000, autopayPlaceholder: false, openInvoices: [1, ...(query.has("selectors") ? [2] : [])].map((index) => ({ id: `invoice-${id}${index === 1 ? "" : "-2"}`, number: `FAKE-${id}${index === 1 ? "" : "-2"}`, status: "OPEN", dueDate: "2026-09-14", totalCents: 10000 })) },
+  billingAccount: { id: `account-${id}`, balanceCents: 10000, autopayPlaceholder: false, openInvoices: [1, ...(query.has("selectors") ? [2] : [])].map((index) => ({ id: `invoice-${id}${index === 1 ? "" : "-2"}`, number: `FAKE-${id}${index === 1 ? "" : "-2"}`, status: "OPEN", dueDate: "2026-09-14", totalCents: 10000 })),
+    ...(query.has("office-refund-example") ? { recentPayments: [{ id: `fake-payment-${id}`, amountCents: 10000, refundedCents: 0, refundableCents: 10000, status: "PAID", provider: "stripe", paidAt: "2026-09-10T12:00:00Z", paymentMethodLabel: "Fake card", stripePaymentIntentId: `pi_fake_local_${id}` }] } : {}),
+  },
 }));
 
 function BillingFixture() {
@@ -109,7 +113,10 @@ function Fixture() {
     <CollapsibleCard id="fake-task-a" title="First fake task" defaultCollapsed><input aria-label="First fake input" /></CollapsibleCard>
     <CollapsibleCard id="fake-task-b" title="Next fake task" defaultCollapsed><input aria-label="Next fake input" /></CollapsibleCard>
   </>;
-  if (["billing", "terminal", "ledger"].includes(view ?? "")) return <BillingFixture />;
+  if (["billing", "terminal", "ledger"].includes(view ?? "")) {
+    const office = <BillingFixture />;
+    return query.has("office-shell") ? <AppShell previewMode previewHrefBase={location.pathname + location.search} currentUser={{ name: "Fake Office Reviewer", email: "fake-office@example.invalid", role: query.has("director") ? "CENTER_DIRECTOR" : "BILLING_ADMIN", centerIds: ["a", "b"], timeZone: "America/New_York", scopeContext: { kind: "school", label: billingCenters[0].name, detail: "Fake school workspace", href: "/billing-invoices" } }}>{office}</AppShell> : office;
+  }
   if (view === "team") return <TeamPermissionsPage data={team} />;
   if (view === "automation") return <AutomationFixture />;
   if (view === "fte") return <FteReportForm centers={query.get("single-school") ? centers.filter((center) => center.id === "b") : centers} reports={[report]} initialCenterId="b" initialWeekStart="2026-04-08" allowCenterSelect={!query.get("director")} mode={query.get("director") ? "director" : "executive"} />;

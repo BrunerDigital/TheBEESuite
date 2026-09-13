@@ -12,12 +12,14 @@ import { fakeAutomations } from "../tests/fixtures/automation-workflows";
 // No credentials or backend: real components, fake props, intercepted requests only.
 async function main() {
   const browserEngine = process.env.QA_BROWSER_ENGINE === "webkit" ? "webkit" : "chromium";
-  const evidenceDirectory = path.resolve(`output/playwright/ui-flow-recovery${browserEngine === "webkit" ? "-webkit" : ""}`);
+  const evidenceDirectory = path.resolve(`output/playwright/ui-flow-recovery-${browserEngine}-${new Date().toISOString().replace(/[:.]/g, "-")}`);
   await mkdir(evidenceDirectory, { recursive: true });
-  const stylePath = path.resolve("src/app/globals.css");
-  const style = await postcss([tailwindcss()]).process(await readFile(stylePath, "utf8"), { from: stylePath });
+  const styles = await Promise.all(["globals", "product-ui"].map(async name => {
+    const from = path.resolve(`src/app/${name}.css`);
+    return (await postcss([tailwindcss()]).process(await readFile(from, "utf8"), { from })).css;
+  }));
   const fixtureFont = await readFile(path.resolve("node_modules/next/dist/next-devtools/server/font/geist-latin.woff2"));
-  const fixtureStyle = `${style.css}\n@font-face{font-family:FixtureGeist;src:url('/fixture-font.woff2') format('woff2');font-weight:100 900;font-display:swap} :root{--font-geist-sans:FixtureGeist,Arial,sans-serif;--font-geist-mono:monospace}`;
+  const fixtureStyle = `${styles.join("\n")}\n@font-face{font-family:FixtureGeist;src:url('/fixture-font.woff2') format('woff2');font-weight:100 900;font-display:swap} :root{--font-geist-sans:FixtureGeist,Arial,sans-serif;--font-geist-mono:monospace}`;
   const bundle = await build({
     entryPoints: ["tests/fixtures/ui-flow-recovery.tsx"], outfile: "fixture.js", bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
     define: { "process.env": "{}", "process.env.NODE_ENV": '"test"' },

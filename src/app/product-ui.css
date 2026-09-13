@@ -513,6 +513,163 @@
     }
   }
 
+  /* Billing task names are separate actions, not equal-width navigation icons. */
+  #billing-action-tabs {
+    width: 100%;
+    height: auto;
+  }
+
+  #billing-action-tabs > [role="tab"] {
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  :is(.director-payment-terminal-workspace, .office-billing-workspace),
+  :is(.director-payment-terminal-workspace, .office-billing-workspace) :is([data-slot="card"], [data-slot="card-header"], [data-slot="card-content"]),
+  :is(.director-payment-terminal-workspace, .office-billing-workspace) .grid > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .director-payment-terminal-workspace .terminal-payment-layout {
+    /* Text enlargement collapses columns before the protected target shrinks. */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  }
+
+  :is(.director-payment-terminal-workspace, .office-billing-workspace) :is([data-slot="select-trigger"], [data-slot="button"]:not([data-size^="icon"])) {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  :is(.director-payment-terminal-workspace, .office-billing-workspace) [data-slot="select-value"] {
+    min-width: 0;
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: unset;
+  }
+
+  :is(.director-payment-terminal-workspace, .office-billing-workspace) :is([data-slot="input"], [data-slot="textarea"]) {
+    min-height: 44px;
+  }
+
+  :is(.director-payment-terminal-workspace, .office-billing-workspace) :is(a, button, input, select, textarea, summary, [role="combobox"]) {
+    scroll-margin-block: calc(var(--bee-app-header-height, 4.75rem) + 1rem) 8rem;
+  }
+
+  .office-billing-workspace label:has(input[type="checkbox"]) {
+    min-height: 44px;
+  }
+
+  .office-billing-workspace .billing-additional-line {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  }
+
+  @media (max-height: 640px) and (max-width: 1023px) {
+    :is(.director-payment-terminal-workspace, .office-billing-workspace) :is(a, button, input, select, textarea, summary, [role="combobox"]) {
+      /* The short-phone header is in normal flow, so do not reserve its height. */
+      scroll-margin-top: 12px;
+    }
+  }
+
+  .director-payment-terminal-workspace .terminal-review-value {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .office-billing-workspace [data-slot="badge"] {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    min-height: 1.25rem;
+    border-radius: var(--radius-lg);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #billing-family-overview .truncate {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+
+  #billing-family-overview > section > div:first-child > div:first-child {
+    flex-wrap: wrap;
+  }
+
+  #billing-family-overview > section > div:first-child > div:first-child > div:last-child {
+    flex: 1 1 12rem;
+  }
+
+  #billing-family-overview .billing-summary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  }
+
+  #family-ledger .ledger-heading-layout {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  }
+
+  #family-ledger .ledger-date-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  }
+
+  #family-ledger input[type="date"] {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    padding-inline: 10px;
+  }
+
+  .workspace-section-directory .workspace-section-directory-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  }
+
+  .workspace-section-directory .grid > *,
+  .workspace-section-directory a {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .workspace-section-directory a {
+    min-height: 44px;
+  }
+
+  @media (max-width: 639px) {
+    /* Decorative gutters and icons stay compact while the user's text grows. */
+    :is(.director-payment-terminal-workspace, .office-billing-workspace) :is([data-slot="card-header"], [data-slot="card-content"], [data-slot="tabs-content"]),
+    #billing-family-overview > section {
+      padding-inline: 12px;
+    }
+
+    .director-payment-terminal-workspace .terminal-review-row {
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .director-payment-terminal-workspace .terminal-review-row > span:first-child {
+      width: 36px;
+      height: 36px;
+    }
+
+    #billing-family-overview > section > div:first-child > div:first-child > div:first-child {
+      width: 44px;
+      height: 44px;
+    }
+  }
+
   /* Feature forms must reflow as text grows, including controls inside nested
      cards. Keep these overrides within the two mobile portal workspaces. */
   :is(.parent-portal-workspace, .teacher-mobile-workspace) {

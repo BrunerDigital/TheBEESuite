@@ -2,6 +2,8 @@
 
 Last updated: September 9, 2026
 
+Web evidence reconciled September 13: [current school UI/release index](SCHOOL_UI_RELEASE_EVIDENCE_2026-09-13.md). Fresh fake-account navigation, report-recipient and individual child-picker browser checks pass. A printable browser packet is available; it is not native screenshot, signed archive, device testing or Apple submission evidence.
+
 This packet is for the iOS App Store submission whose purpose is to make the classroom teacher portal easier for staff to access on mobile devices.
 
 ## Submission Status

@@ -2,6 +2,8 @@
 
 Last updated: September 9, 2026
 
+Web evidence reconciled September 13: [current school UI/release index](SCHOOL_UI_RELEASE_EVIDENCE_2026-09-13.md). Parent Updates now includes scoped older-day history; new product-shop orders remain unavailable while existing invoices can still be paid. Fresh fake-account browser evidence and a printable packet are available. These do not replace native screenshots, signed archive, device testing or final owner/legal App Store answers.
+
 This packet is for the first iOS App Store submission whose purpose is to make the parent portal easier for parents and guardians to access.
 
 ## Submission Status

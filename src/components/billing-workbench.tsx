@@ -7,6 +7,7 @@ import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, C
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
+import { scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
 import { formatZonedDateTime, unambiguousZonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -1826,7 +1827,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       </DialogContent>
     </Dialog>
 
-    <Card id="billing-workbench" className="glass-panel scroll-mt-28">
+    <Card id="billing-workbench" className="office-billing-workspace glass-panel scroll-mt-28" onFocusCapture={event => scheduleFocusedPortalControlReveal(event.target)}>
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -1898,7 +1899,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             ) : null
           }
         >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="billing-summary-grid grid gap-3">
             <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} />
             <SummaryMetric label="Last updated" value={formatShortDate(selectedFamily?.updatedAt)} detail="Family billing information" />
             <SummaryMetric label="Balance" value={money(familyBalanceCents)} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
@@ -2783,7 +2784,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {assignmentAdditionalCharges.map((line, index) => (
-                  <div key={index} className="grid gap-2 rounded-md border bg-background/60 p-2 sm:grid-cols-[1fr_9rem]">
+                  <div key={index} className="billing-additional-line grid grid-cols-1 gap-2 rounded-md border bg-background/60 p-2">
                     <div className="space-y-1">
                       <Label htmlFor={`billing-tuition-additional-description-${index}`}>Line {index + 1} label</Label>
                       <Input

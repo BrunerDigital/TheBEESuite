@@ -1,5 +1,13 @@
 # Parent product-order creation boundary — September 12, 2026
 
+## Verified release — September 13, 2026
+
+Protected PR #370 merged candidate `a8b8abc5f2c7c1e96e028ccf31fda6c4114c4462` as main `f1f1ca21f8345cc73b430e3d0913a65435a37213` at 21:40:44 UTC after successful CI `34719845254`, CodeQL, Ready preview and no unresolved review threads. Production `dpl_GcUnHjAwDq8DFf5JJLsReNgmRycj` was Ready at 21:43:11 UTC on all five canonical aliases. Database health passed at 21:53:43 UTC; post-Ready error/fatal and 5xx log counts were empty, and build error filtering showed only the completion line.
+
+Freshly preflighted fake Parent/Teacher production verification passed at 21:49:39 UTC: 20 routes, 52 Parent layout checks, eight shared-shell checks, four Teacher navigation checks, four message-history checks, four message-layout checks, 12 report-target checks, 16 individual child-picker checks, four Updates GET outcomes and four date/history navigation layouts. The allowlist admitted only two matched logins, 91 verified session heartbeats, six empty-body billing denials, two status reads, three message-history reads and four Updates reads. No product writes, blocked requests, HTTP failures or client exceptions. The ordinary-parent product gate was proven by actual-handler local tests; no live product-order POST or invoice creation was performed.
+
+Evidence: `output/playwright/app-review-production-after-parent-updates-pr370/results.json`, `output/wave17-production-verification.log`. The new 14-page printable fake-data browser packet is `output/pdf/BEE_Suite_Current_Mobile_UI_2026-09-13_PR370.pdf`; all pages were rendered and visually inspected. This supersedes the pending release status in the historical candidate section below, not the remaining product-order activation requirements.
+
 ## Current state recorded before changes
 
 - Isolated branch `work/parent-product-purchase-gate-20260912` starts at protected PR #369 main `8ad3169c92a00f978d6b5171af57f1246414f946`. That release is deploying; latest fully verified production remains PR #368 until the separate live Updates check completes.

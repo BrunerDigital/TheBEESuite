@@ -10,6 +10,7 @@ import {
   type BillingReceiptSchool,
 } from "@/components/billing-print-actions";
 import { BILLING_TARGET_UNAVAILABLE } from "@/lib/billing-family-selection";
+import { scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -126,16 +127,16 @@ export function FamilyLedgerCard({
   );
 
   return (
-    <Card id="family-ledger" className="glass-panel scroll-mt-24">
-      <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <Card id="family-ledger" className="office-billing-workspace glass-panel scroll-mt-24" onFocusCapture={event => scheduleFocusedPortalControlReveal(event.target)}>
+      <CardHeader className="ledger-heading-layout grid grid-cols-1 gap-4">
         <div>
         <CardTitle as="h2">Family Ledger</CardTitle>
           <CardDescription>
             Select one family to see only that family&apos;s tuition, credits, payments, and adjustments.
           </CardDescription>
         </div>
-        <div className="flex w-full flex-col gap-3 lg:w-auto">
-          <div className="grid min-w-0 flex-1 gap-1.5 sm:min-w-72">
+        <div className="flex min-w-0 w-full flex-col gap-3">
+          <div className="grid min-w-0 flex-1 gap-1.5">
             <Label htmlFor="family-ledger-family">Family</Label>
             <Select value={familyId} onValueChange={(value) => { if (value && families.some((family) => family.id === value)) { setFamilyId(value); setSelectionError(false); } }}>
               <SelectTrigger id="family-ledger-family" className="w-full">
@@ -150,7 +151,7 @@ export function FamilyLedgerCard({
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="ledger-date-grid grid grid-cols-1 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="family-ledger-start-date">From</Label>
               <Input id="family-ledger-start-date" type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} />

@@ -14,6 +14,134 @@
   --bee-shadow-md: 0 8px 24px color-mix(in oklch, var(--foreground) 8%, transparent);
 }
 
+/* Secure public payment links keep full labels at enlarged text sizes. */
+.public-payment-page,
+.public-payment-form,
+.school-help-page {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.public-payment-form :is([data-slot="card-header"], [data-slot="card-content"], [data-slot="alert"] > *) {
+  min-width: 0;
+}
+.public-payment-form [data-slot="card-header"] > div > div,
+.public-payment-grid > *,
+.public-payment-method-info > div {
+  min-width: 0;
+}
+.public-payment-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+.public-payment-form [data-slot="button"] {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 12px 10px;
+  gap: 8px;
+}
+.public-payment-form [data-slot="button"] > svg,
+.public-payment-method-info > svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.public-payment-form [data-slot="button"][data-variant="outline"]:hover {
+  color: #fff;
+}
+.public-payment-page [data-slot="alert"][role="alert"],
+.public-payment-page [data-slot="alert"][role="alert"] [data-slot="alert-description"] {
+  color: #fecaca;
+}
+.public-payment-page button[aria-haspopup="dialog"],
+.public-payment-form button[aria-haspopup="dialog"] {
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+.public-payment-form [data-slot="badge"] {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-lg);
+}
+.public-payment-form [data-slot="card-header"] [data-slot="badge"][data-variant="outline"] {
+  color: #f4f4f5;
+  border-color: #a1a1aa;
+}
+.public-payment-form [data-slot="alert"],
+.public-payment-page > div > [data-slot="alert"] {
+  grid-template-columns: 20px minmax(0, 1fr);
+  padding: 10px;
+  gap: 8px;
+}
+.public-payment-form [data-slot="alert"] > svg,
+.public-payment-page > div > [data-slot="alert"] > svg {
+  width: 20px;
+  height: 20px;
+}
+.public-payment-page > div > section,
+.public-payment-page h1 {
+  min-width: 0;
+}
+.public-payment-page > div > section [data-slot="badge"] {
+  height: auto;
+  max-width: 100%;
+  white-space: normal;
+  border-radius: var(--radius-lg);
+}
+.public-payment-method-info > div {
+  flex: 1;
+}
+.public-payment-form .flex.items-center {
+  flex-wrap: wrap;
+}
+.school-help-links {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+.school-help-page [data-slot="card-content"] a {
+  min-height: 44px;
+  align-items: center;
+}
+.operations-action-hub,
+.operations-action-grid > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.operations-action-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+.operations-action-hub :is(input:not([type="hidden"]):not([aria-hidden="true"]), textarea, select, [data-slot="select-trigger"]) {
+  min-width: 0;
+  min-height: 44px;
+  max-width: 100%;
+  width: 100%;
+}
+.operations-action-hub [data-slot="button"] {
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+  max-width: 100%;
+}
+@media (max-width: 639px) {
+  .public-payment-page {
+    padding-inline: 12px;
+  }
+  .public-payment-form :is([data-slot="card-header"], [data-slot="card-content"]) {
+    padding-inline: 12px;
+  }
+  .public-payment-form [data-slot="card-content"] > div.rounded-lg {
+    padding: 12px;
+  }
+  .public-payment-method-info {
+    gap: 8px;
+  }
+}
+
 @layer base {
   html {
     color-scheme: light;

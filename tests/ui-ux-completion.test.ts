@@ -5,7 +5,7 @@ import test from "node:test";
 const login = readFileSync("src/components/login-form.tsx", "utf8");
 const forgotPassword = readFileSync("src/components/forgot-password-form.tsx", "utf8");
 const resetPassword = readFileSync("src/components/reset-password-form.tsx", "utf8");
-const paymentRequest = readFileSync("src/app/payment-method-form/[token]/page.tsx", "utf8");
+const paymentRequest = readFileSync("src/components/public-payment-page-shell.tsx", "utf8");
 const paymentShortLink = readFileSync("src/app/payment-method-form/r/[code]/page.tsx", "utf8");
 const parentWorkspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
 const previewQa = readFileSync("scripts/qa-device-preview.ts", "utf8");

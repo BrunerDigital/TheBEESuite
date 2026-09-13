@@ -11,7 +11,8 @@ test("reauthorization links cannot be mistaken for payment completion", () => {
   const checkout = source("src/app/api/billing/payment-method-request/checkout/route.ts");
 
   assert.match(form, /nextOpenInvoice && !reauthorization/);
-  assert.match(form, /Payment received — method update still required/);
+  assert.match(form, /Review payment status — method update still required/);
+  assert.doesNotMatch(form, /Payment received — method update still required/);
   assert.match(form, /This reauthorization link will not start a tuition payment/);
   assert.match(checkout, /payload\.intent === "payment_method_reauthorization"/);
   assert.match(checkout, /code: "payment_method_reauthorization_required"/);

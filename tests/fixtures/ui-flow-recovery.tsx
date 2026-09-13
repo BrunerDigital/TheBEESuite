@@ -22,6 +22,11 @@ import { CollapsibleCard } from "../../src/components/workspace-preferences";
 import { parentPaymentFixture } from "./parent-payment-status";
 import { PaymentMethodRequestForm } from "../../src/components/payment-method-request-form";
 import { AccountsReceivablePanel } from "../../src/components/accounts-receivable-panel";
+import { HelpPage } from "../../src/components/help-page";
+import { OperationsActionHub } from "../../src/components/operations-action-hub";
+import { helpNavigationCardsFor } from "../../src/lib/help-navigation";
+import { publicPaymentCases } from "./public-payment-form";
+import { InvalidPaymentSetupLink, PublicPaymentPageShell } from "../../src/components/public-payment-page-shell";
 
 const query = new URLSearchParams(location.search);
 const view = query.get("view");
@@ -111,7 +116,22 @@ function Fixture() {
     const frame = requestAnimationFrame(() => { document.documentElement.dataset.fixtureReady = "true"; });
     return () => { cancelAnimationFrame(frame); delete document.documentElement.dataset.fixtureReady; };
   }, []);
-  if (view === "invoice-payment-link") return <main className="min-h-dvh bg-[#090b10] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))] text-white sm:pb-[calc(2rem+env(safe-area-inset-bottom))]"><PaymentMethodRequestForm token="fake-local-token-not-a-credential" familyName="Fake Family A" centerLabel="Fake School A" recipientEmail="fake@example.invalid" autopayStatus="disabled" bankVerificationPending={false} openInvoices={billingFamilies[0].billingAccount!.openInvoices} /></main>;
+  if (view === "invalid-payment-link") return <InvalidPaymentSetupLink message="This fake link has expired." />;
+  if (view === "invoice-payment-link") {
+    const scenario = publicPaymentCases[query.get("public-payment-case") ?? "normal"];
+    const form = <PaymentMethodRequestForm token="fake-local-token-not-a-credential" familyName="Fake Family A" centerLabel="Fake School A" recipientEmail="fake@example.invalid" autopayStatus="disabled" bankVerificationPending={false} openInvoices={billingFamilies[0].billingAccount!.openInvoices} {...scenario} />;
+    return query.has("public-payment-case")
+      ? <PublicPaymentPageShell familyName={scenario?.familyName ?? "Fake Family A"} centerLabel={scenario?.centerLabel ?? "Fake School A"} childNames="Fake Child A">{form}</PublicPaymentPageShell>
+      : <main className="public-payment-page min-h-dvh bg-[#090b10] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))] text-white sm:pb-[calc(2rem+env(safe-area-inset-bottom))]">{form}</main>;
+  }
+  if (view === "help" || view === "announcements") {
+    const role = query.get("help-role") ?? "CENTER_DIRECTOR";
+    const canManageOperations = ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"].includes(role);
+    return <AppShell previewMode previewHrefBase={location.pathname + location.search} currentUser={{ name: "Fake Help Reviewer", email: "fake-help@example.invalid", role, centerIds: ["a", "b"], timeZone: "America/New_York", scopeContext: { kind: "school", label: "Fake School A", detail: "Fake school workspace", href: "/help" } }}>
+      {view === "help" ? <HelpPage data={{ links: helpNavigationCardsFor(role), canManageOperations, notifications: query.has("help-empty") ? [] : [{ id: "fake-alert", title: "Fake school reminder", body: "Fake account alert with the complete instructions visible.", type: "school", priority: "normal", createdAt: "2026-09-13T12:00:00Z" }], supportEvents: query.has("help-empty") ? [] : [{ id: "fake-event", action: "support_access_requested", resource: "school", resourceId: "fake-school", createdAt: "2026-09-13T12:00:00Z", metadata: null, user: { name: "Fake Reviewer", email: "fake-help@example.invalid" }, center: { name: "Fake School A", crmLocationId: null } }] }} />
+        : <OperationsActionHub title="Create or Edit Announcement" defaultEntity="announcement" centers={centers} compact />}
+    </AppShell>;
+  }
   if (view === "invoice-receivables") return <AccountsReceivablePanel snapshot={{ schools: [], totalAccountCount: 1, owingAccountCount: 1, currentAccountCount: 0, creditAccountCount: 0, overdueAccountCount: 0, totalOwedCents: 10000, totalCreditCents: 0, netBalanceCents: 10000, asOf: "2026-09-13T12:00:00Z", accounts: [{ id: "fake-account", familyId: "a", familyName: "Fake Family A", centerId: "a", centerName: "Fake School A", balanceCents: 10000, hasBillingAccount: true, openInvoiceCount: 1, overdueInvoiceCount: 0, oldestOpenDueDate: invoiceDate ?? "2026-09-14", status: "owes" }] }} />;
   if (view === "shortcuts") return <>
     <nav aria-label="Fake task shortcuts"><a href="#fake-task-a">First fake task</a><a href="#fake-task-b">Next fake task</a></nav>
@@ -167,6 +187,7 @@ function ParentFixture() {
   return <ParentPortalWorkspace {...executiveParentPortalDemo}
     invoices={invoiceDate ? executiveParentPortalDemo.invoices.map(invoice => ({ ...invoice, dueDate: invoiceDate, familyDocumentAmountCents: invoice.totalCents })) : attentionCase ? prioritizeParentAttentionRecords(priorInvoiceRows, hiddenOpenInvoice) : executiveParentPortalDemo.invoices}
     {...(invoiceDate ? { previewMode: true } : {})}
+    {...(query.has("app-review-billing") ? { appReviewMode: true, previewMode: true } : {})}
     incidents={attentionCase ? prioritizeParentAttentionRecords<{ id: string; occurredAt: string | Date; type: string; description: string; actionTaken: string; parentAcknowledgedAt: string | Date | null; child: { fullName: string } }>(priorIncidentRows, hiddenIncident) : executiveParentPortalDemo.incidents}
     attentionSummary={attentionCase ? { openInvoiceCount: 7, unacknowledgedIncidentCount: 5 } : undefined}
     family={paymentFamilyId ? { ...executiveParentPortalDemo.family!, id: paymentFamilyId } : query.has("multi-child") ? { ...executiveParentPortalDemo.family!, children: Array.from({ length: 3 }, (_, index) => ({ ...executiveParentPortalDemo.family!.children[0], id: `fake-sibling-${index}`, preferredName: null, fullName: `Fake Sibling ${index + 1} With A Long Family Name` })) } : executiveParentPortalDemo.family}

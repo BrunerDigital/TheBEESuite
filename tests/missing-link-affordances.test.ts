@@ -10,10 +10,14 @@ const liveOps = source("src/components/live-ops-pages.tsx");
 const conversationInbox = source("src/components/message-conversation-inbox.tsx");
 
 test("payment form alerts link only when the notification contains a URL", () => {
-  assert.match(liveOps, /function PaymentFormDestination[\s\S]*const href = notificationBodyUrl\(body\)/);
-  assert.match(liveOps, /if \(!href\)[\s\S]*Payment form link unavailable/);
-  assert.match(liveOps, /href=\{href\}[\s\S]*Open payment form/);
-  assert.equal((liveOps.match(/<PaymentFormDestination body=/g) ?? []).length, 2);
+  const destination = source("src/components/payment-form-destination.tsx");
+  const help = source("src/components/help-page.tsx");
+  assert.match(destination, /function PaymentFormDestination[\s\S]*const href = notificationBodyUrl\(body\)/);
+  assert.match(destination, /if \(!href\)[\s\S]*Payment form link unavailable/);
+  assert.match(destination, /href=\{href\}[\s\S]*Open payment form/);
+  assert.equal((liveOps.match(/<PaymentFormDestination body=/g) ?? []).length, 1);
+  assert.equal((help.match(/<PaymentFormDestination body=/g) ?? []).length, 1);
+  assert.match(destination, /min-h-11/);
   assert.doesNotMatch(liveOps, /href=\{notificationBodyUrl\([^}]+\) \?\? undefined\}/);
 });
 

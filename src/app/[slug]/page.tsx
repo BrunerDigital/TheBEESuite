@@ -1,4 +1,5 @@
 import { readAutomationPage } from "@/lib/automation-page";
+import { helpNavigationCardsFor } from "@/lib/help-navigation";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
@@ -3872,6 +3873,7 @@ async function renderLivePage(
     return (
       <AnnouncementsPage
         data={{
+          centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           announcements: visibleAnnouncements,
           stats: demoMode
             ? {
@@ -7253,31 +7255,14 @@ async function renderLivePage(
           : { OR: [{ centerId: scopedCenterIds }, { userId: user.id }] }
         : { userId: user.id }),
     };
-    const documentScopeWhere: Prisma.DocumentWhereInput = {
-      expiresAt: {
-        gte: today,
-        lte: thirtyDays,
-      },
-      OR: [
-        { family: { centerId: scopedCenterIds } },
-        { child: { family: { centerId: scopedCenterIds } } },
-      ],
-    };
     const userNotificationWhere: Prisma.NotificationWhereInput = {
       userId: user.id,
       ...activeNotificationWhere(today),
     };
     const [
-      unreadNotifications,
       notifications,
-      openTasks,
-      unreadMessages,
-      expiringDocuments,
       supportEvents,
     ] = await Promise.all([
-      prisma.notification.count({
-        where: userNotificationWhere,
-      }),
       prisma.notification.findMany({
         where: userNotificationWhere,
         orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
@@ -7291,19 +7276,6 @@ async function renderLivePage(
           createdAt: true,
         },
       }),
-      prisma.task.count({
-        where: {
-          status: { not: "done" },
-          lead: { centerId: scopedCenterIds },
-        },
-      }),
-      prisma.message.count({
-        where: {
-          readAt: null,
-          family: { centerId: scopedCenterIds },
-        },
-      }),
-      prisma.document.count({ where: documentScopeWhere }),
       prisma.auditLog.findMany({
         where: supportAuditWhere,
         orderBy: { createdAt: "desc" },
@@ -7324,14 +7296,8 @@ async function renderLivePage(
     return (
       <HelpPage
         data={{
-          canManageOperations: canManageOperations(user),
-          centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
-          stats: {
-            unreadNotifications,
-            openTasks,
-            unreadMessages,
-            expiringDocuments,
-          },
+          canManageOperations: canManageOperations(user) && canAccessModule(user, "announcements"),
+          links: helpNavigationCardsFor(user),
           notifications,
           supportEvents,
         }}

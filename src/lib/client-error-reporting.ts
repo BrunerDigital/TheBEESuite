@@ -1,7 +1,8 @@
+import { decodeDiagnosticText, isCredentialDiagnosticPath, normalizeDiagnosticPath } from "./telemetry-privacy";
+
 const REDACTED = "[REDACTED]";
 const MAX_FIELD_LENGTH = 160;
 const MAX_STACK_LENGTH = 1_500;
-const MAX_PATH_LENGTH = 180;
 const MAX_METADATA_KEYS = 20;
 
 const piiPatterns = [
@@ -11,16 +12,9 @@ const piiPatterns = [
   /\b\d{13,19}\b/g,
 ];
 
-const sensitivePathSegments = new Set([
-  "children",
-  "families",
-  "guardians",
-  "incidents",
-  "documents",
-  "billing",
-  "payment-method-form",
-  "parent-portal",
-]);
+const diagnosticErrorTypes = new Set(["Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError", "URIError", "EvalError", "AggregateError", "ChunkLoadError", "AbortError", "NetworkError", "ClientError"]);
+const numericMetadataKeys = new Set(["line", "column", "attempt", "statusCode"]);
+const diagnosticStatuses = new Set(["failed", "pending", "loading", "ready", "success", "error", "offline"]);
 
 const allowedSources = new Set([
   "window.error",
@@ -47,45 +41,34 @@ function cleanString(value: unknown, maxLength = MAX_FIELD_LENGTH) {
 }
 
 export function redactClientDiagnosticText(value: unknown, maxLength = MAX_FIELD_LENGTH) {
-  let cleaned = cleanString(value, maxLength);
+  let cleaned = typeof value === "string" ? decodeDiagnosticText(value.replace(/\s+/g, " ").trim()).replace(/\s+/g, " ").trim() : "";
   if (!cleaned) return "";
 
+  // Never keep an arbitrary URL (including a copied relative/nested recovery
+  // URL), credential assignment, or two/three-part signed bearer in free text.
+  cleaned = cleaned.replace(/(?:https?:\/\/|\/\/|\/)[^\s<>"']+/gi, "[URL]");
+  // Quoted JSON, Basic/Bearer schemes and values containing spaces cannot be
+  // safely bounded by a word regex. Suppress that entire free-text field.
+  if (/\b(?:token(?:_hash)?|tokenHash|access_token|refresh_token|provider_token|provider_refresh_token|password|code|secret|authorization)["']?\s*[:=]|\b(?:Bearer|Basic)\s+\S/i.test(cleaned)) return REDACTED;
+  cleaned = cleaned.replace(/\b[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}(?:\.[A-Za-z0-9_-]{6,})?\b/g, REDACTED);
   for (const pattern of piiPatterns) {
     cleaned = cleaned.replace(pattern, REDACTED);
   }
 
-  return cleaned;
-}
-
-function normalizePath(value: unknown) {
-  const raw = cleanString(value, MAX_PATH_LENGTH);
-  if (!raw || !raw.startsWith("/")) return null;
-
-  const pathname = raw.split(/[?#]/)[0] || "/";
-  const parts = pathname.split("/").filter(Boolean);
-  if (!parts.length) return "/";
-
-  const sanitized: string[] = [];
-  for (let index = 0; index < parts.length; index += 1) {
-    const segment = parts[index];
-    const previous = sanitized[sanitized.length - 1];
-    const looksLikeIdentifier = /^[a-z0-9_-]{12,}$/i.test(segment) || /^[0-9]+$/.test(segment);
-    sanitized.push(previous && sensitivePathSegments.has(previous) && looksLikeIdentifier ? ":id" : segment);
-  }
-
-  return `/${sanitized.join("/")}`.slice(0, MAX_PATH_LENGTH);
+  return cleaned.slice(0, maxLength);
 }
 
 function normalizeMetadata(input: unknown) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const metadata: Record<string, string | number | boolean> = {};
   for (const [key, value] of Object.entries(input as Record<string, unknown>).slice(0, MAX_METADATA_KEYS)) {
-    const cleanKey = cleanString(key, 50);
-    if (!cleanKey) continue;
-    if (typeof value === "number" || typeof value === "boolean") {
-      metadata[cleanKey] = value;
-    } else if (typeof value === "string") {
-      metadata[cleanKey] = redactClientDiagnosticText(value, MAX_FIELD_LENGTH);
+    // Keys are also attacker-controlled. Keep only documented diagnostic fields.
+    if (numericMetadataKeys.has(key) && typeof value === "number" && Number.isFinite(value)) {
+      metadata[key] = value;
+    } else if (key === "status" && typeof value === "string" && diagnosticStatuses.has(value)) {
+      metadata.status = value;
+    } else if (key === "digest" && typeof value === "string" && /^\d{1,20}$/.test(value)) {
+      metadata.digest = value;
     }
   }
   return Object.keys(metadata).length ? metadata : null;
@@ -96,10 +79,11 @@ export function normalizeClientErrorReportPayload(input: unknown): NormalizedCli
   const requestedSource = cleanString(payload.source, 60);
   const source = allowedSources.has(requestedSource) ? requestedSource : "manual";
   const severity = payload.severity === "warning" ? "warning" : "error";
-  const errorType = redactClientDiagnosticText(payload.errorType, 80) || "ClientError";
-  const message = redactClientDiagnosticText(payload.message, MAX_FIELD_LENGTH) || null;
-  const stackSample = redactClientDiagnosticText(payload.stackSample, MAX_STACK_LENGTH) || null;
-  const componentStack = redactClientDiagnosticText(payload.componentStack, MAX_STACK_LENGTH) || null;
+  const suppressed = isCredentialDiagnosticPath(payload.path);
+  const errorType = !suppressed && typeof payload.errorType === "string" && diagnosticErrorTypes.has(payload.errorType) ? payload.errorType : "ClientError";
+  const message = suppressed ? null : redactClientDiagnosticText(payload.message, MAX_FIELD_LENGTH) || null;
+  const stackSample = suppressed ? null : redactClientDiagnosticText(payload.stackSample, MAX_STACK_LENGTH) || null;
+  const componentStack = suppressed ? null : redactClientDiagnosticText(payload.componentStack, MAX_STACK_LENGTH) || null;
 
   return {
     source,
@@ -108,8 +92,8 @@ export function normalizeClientErrorReportPayload(input: unknown): NormalizedCli
     message,
     stackSample,
     componentStack,
-    path: normalizePath(payload.path),
-    metadata: normalizeMetadata(payload.metadata),
+    path: normalizeDiagnosticPath(payload.path),
+    metadata: suppressed ? null : normalizeMetadata(payload.metadata),
   };
 }
 

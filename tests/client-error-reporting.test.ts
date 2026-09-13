@@ -37,7 +37,6 @@ test("client error reports strip query strings and sensitive identifiers from pa
   assert.equal(report.path, "/parent-portal/families/:id");
   assert.deepEqual(report.metadata, {
     status: "failed",
-    email: "[REDACTED]",
     attempt: 2,
   });
 });

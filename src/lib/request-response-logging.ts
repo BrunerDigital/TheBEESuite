@@ -200,7 +200,7 @@ export function redactHeadersForOperationalLog(headers: Headers) {
     accept: cleanHeaderValue(headers, "accept"),
     contentType: cleanHeaderValue(headers, "content-type"),
     origin: cleanHeaderValue(headers, "origin"),
-    referer: cleanHeaderValue(headers, "referer"),
+    referer: headers.has("referer") ? REDACTED : null,
     xRequestId: cleanHeaderValue(headers, "x-request-id"),
     authorization: headers.has("authorization") ? REDACTED : null,
     cookie: headers.has("cookie") ? REDACTED : null,

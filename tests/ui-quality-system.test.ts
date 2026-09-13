@@ -30,8 +30,9 @@ test("the restrained product layer is authoritative across legacy screen styles"
   assert.ok(globalIndex >= 0);
   assert.ok(productIndex > globalIndex);
   assert.match(layout, /const collectVercelTelemetry = process\.env\.NODE_ENV === "production"/);
-  assert.match(layout, /collectVercelTelemetry \? <Analytics \/> : null/);
-  assert.match(layout, /collectVercelTelemetry \? <SpeedInsights \/> : null/);
+  assert.match(layout, /collectVercelTelemetry \? <Suspense fallback=\{null\}><PrivacySafeTelemetry \/><\/Suspense> : null/);
+  assert.match(source("src/components/privacy-safe-telemetry.tsx"), /<Analytics beforeSend=\{beforeAnalytics\}/);
+  assert.match(source("src/components/privacy-safe-telemetry.tsx"), /<SpeedInsights beforeSend=\{beforeSpeedInsights\}/);
   assert.match(css, /body \{[\s\S]*background-image: none/);
   assert.match(css, /\.app-sidebar[\s\S]*backdrop-filter: none/);
   assert.match(css, /\.app-header[\s\S]*backdrop-filter: none/);

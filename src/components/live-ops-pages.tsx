@@ -94,6 +94,8 @@ import { DeveloperSubscriptionConsole, type DeveloperSubscriptionSchool } from "
 import { StatCard } from "@/components/record-stat-card";
 import { formatRecordLabel } from "@/lib/record-label";
 import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
+import { PaymentFormDestination } from "@/components/payment-form-destination";
+export { HelpPage, type HelpPageData } from "@/components/help-page";
 export { TeamPermissionsPage, type TeamPermissionsData } from "@/components/team-permissions-page";
 import { DirectorPaymentTerminalWorkspace } from "@/components/director-payment-terminal-workspace";
 import { DocumentReviewActions } from "@/components/document-review-actions";
@@ -359,26 +361,6 @@ export type NotificationCenterData = {
   canManageRoleDefaults: boolean;
 };
 
-function notificationBodyUrl(body: string) {
-  return body.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
-}
-
-function PaymentFormDestination({ body }: { body: string }) {
-  const href = notificationBodyUrl(body);
-
-  if (!href) {
-    return <span className="mt-2 inline-flex text-xs text-muted-foreground">Payment form link unavailable</span>;
-  }
-
-  return (
-    <a
-      className="mt-2 inline-flex rounded-sm text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      href={href}
-    >
-      Open payment form
-    </a>
-  );
-}
 
 export function NotificationCenterPage({ data }: { data: NotificationCenterData }) {
   const items = [...data.derived, ...data.notifications].slice(0, 50);
@@ -1413,169 +1395,6 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
   );
 }
 
-export type HelpPageData = {
-  canManageOperations: boolean;
-  centers: Array<{ id: string; name: string }>;
-  stats: {
-    unreadNotifications: number;
-    openTasks: number;
-    unreadMessages: number;
-    expiringDocuments: number;
-  };
-  notifications: Array<{
-    id: string;
-    title: string;
-    body: string;
-    type: string;
-    priority: string;
-    createdAt: Date | string;
-  }>;
-  supportEvents: Array<{
-    id: string;
-    action: string;
-    resource: string;
-    resourceId: string | null;
-    createdAt: Date | string;
-    metadata: unknown;
-    user: { name: string; email: string } | null;
-    center: { name: string; crmLocationId: string | null } | null;
-  }>;
-};
-
-export function HelpPage({ data }: { data: HelpPageData }) {
-  const moduleLinks = [
-    { href: "/school-setup", label: "School setup", detail: "Director launch readiness and required configuration" },
-    { href: "/family-detail", label: "Families", detail: "Family, guardian, custody, document, and change-request records" },
-    { href: "/attendance", label: "Attendance", detail: "Kiosk, QR/PIN, check-in/out, and classroom status" },
-    { href: "/billing-invoices", label: "Billing", detail: "Tuition plans, invoices, payments, payment follow-up, and account history" },
-    { href: "/compliance", label: "Compliance", detail: "Incidents, medication logs, drills, licensing, and reminders" },
-    { href: "/analytics", label: "Reports", detail: "Enrollment, attendance, billing, response-time, and export reports" },
-  ];
-
-  return (
-    <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
-          <BookOpen data-icon="inline-start" />
-          Help
-        </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Help and Documentation</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Find school setup tasks, current alerts, support history, and areas that still need configuration.
-        </p>
-      </section>
-
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Unread alerts" value={data.stats.unreadNotifications.toLocaleString()} />
-        <StatCard label="Open tasks" value={data.stats.openTasks.toLocaleString()} />
-        <StatCard label="Unread messages" value={data.stats.unreadMessages.toLocaleString()} />
-        <StatCard label="Expiring docs" value={data.stats.expiringDocuments.toLocaleString()} />
-      </div>
-
-      {data.canManageOperations ? (
-        <OperationsActionHub
-          title="Create or Update Help Announcement"
-          defaultEntity="announcement"
-          compact
-          centers={data.centers}
-        />
-      ) : null}
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {moduleLinks.map((item) => (
-          <Link key={item.href} href={item.href} className="block rounded-lg border bg-card/80 p-4 transition-colors hover:bg-accent/60">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-medium">{item.label}</div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.detail}</p>
-              </div>
-              <Badge variant="outline">Open</Badge>
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle as="h2">Current Alerts</CardTitle>
-            <CardDescription>Notifications assigned to this user account</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Alert</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Created</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.notifications.map((notification) => (
-                  <TableRow key={notification.id}>
-                    <TableCell>
-                      <div className="font-medium">{notification.title}</div>
-                      <div className="text-xs text-muted-foreground">{notification.body}</div>
-                      {notification.type === "payment_method_form" ? <PaymentFormDestination body={notification.body} /> : null}
-                    </TableCell>
-                    <TableCell>{formatRecordLabel(notification.type)}</TableCell>
-                    <TableCell>
-                      <Badge variant={notification.priority === "high" ? "destructive" : "outline"}>{formatRecordLabel(notification.priority)}</Badge>
-                    </TableCell>
-                    <TableCell>{formatDateTime(notification.createdAt, notification)}</TableCell>
-                  </TableRow>
-                ))}
-                {!data.notifications.length ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">No unread support alerts are assigned to this user.</TableCell>
-                  </TableRow>
-                ) : null}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle as="h2">Support Access History</CardTitle>
-            <CardDescription>Audited support-access requests and related support events</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Event</TableHead>
-                  <TableHead>Actor</TableHead>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>When</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.supportEvents.map((event) => (
-                  <TableRow key={event.id}>
-                    <TableCell>
-                      <div className="font-medium">{formatRecordLabel(event.action)}</div>
-                      <div className="text-xs text-muted-foreground">{event.resource} {event.resourceId ?? ""}</div>
-                    </TableCell>
-                    <TableCell>{event.user?.email ?? "System"}</TableCell>
-                    <TableCell>{event.center?.crmLocationId ?? event.center?.name ?? "All locations"}</TableCell>
-                    <TableCell>{formatDateTime(event.createdAt, event)}</TableCell>
-                  </TableRow>
-                ))}
-                {!data.supportEvents.length ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">No support-access activity has been recorded for this account.</TableCell>
-                  </TableRow>
-                ) : null}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 export type CenterDashboardData = {
   canManageFte?: boolean;
@@ -2479,6 +2298,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
 }
 
 export type AnnouncementsPageData = {
+  centers: Array<{ id: string; name: string }>;
   announcements: Array<{
     id: string;
     title: string;
@@ -2561,7 +2381,7 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
           </Table>
         </CardContent>
       </Card>
-      <OperationsActionHub title="Create or Edit Announcement" defaultEntity="announcement" compact />
+      <OperationsActionHub title="Create or Edit Announcement" defaultEntity="announcement" centers={data.centers} compact />
     </div>
   );
 }

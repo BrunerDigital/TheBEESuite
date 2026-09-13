@@ -50,7 +50,9 @@ export function PaymentMethodRequestForm({
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const nextOpenInvoice = openInvoices[0] ?? null;
-  const showPendingBankVerification = bankVerificationPending && paymentMethodStatus !== "success";
+  // A return URL is not evidence that the bank has finished verification.
+  const showPendingBankVerification = bankVerificationPending;
+  const setupMethods = focus === "instant-bank" ? ["link_bank", "card"] as const : ["card", "link_bank"] as const;
   const autopayLabel = reauthorization && reauthorizationPreservesAutopay
     ? "Autopay consent preserved"
     : autopayStatus === "enabled"
@@ -117,7 +119,7 @@ export function PaymentMethodRequestForm({
   }
 
   return (
-    <Card className="border-white/12 bg-white/[0.05] text-white shadow-2xl shadow-black/30">
+    <Card className="public-payment-form border-white/12 bg-white/[0.05] text-white shadow-2xl shadow-black/30">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -159,10 +161,10 @@ export function PaymentMethodRequestForm({
             ? "border-amber-300/40 bg-amber-300/10 text-amber-50"
             : "border-emerald-400/40 bg-emerald-400/10 text-emerald-50"}>
             {reauthorization ? <AlertCircle className="size-4" /> : <CheckCircle2 className="size-4" />}
-            <AlertTitle>{reauthorization ? "Payment received — method update still required" : "Payment submitted"}</AlertTitle>
+            <AlertTitle>{reauthorization ? "Review payment status — method update still required" : "Payment submitted"}</AlertTitle>
             <AlertDescription className={reauthorization ? "text-amber-100" : "text-emerald-100"}>
               {reauthorization
-                ? "That payment did not replace the saved method. Use one of the replacement buttons below; no additional payment will be charged during the update."
+                ? "A tuition payment does not replace the saved method. Check Payments in the Parent Portal for the current payment status. Complete the saved-method update separately; no additional payment is charged during setup."
                 : "Confirmed card payments appear as paid. Bank payments may appear as processing until the bank confirms settlement. Sign in to the Parent Portal and choose Payments to review the current status and receipt."}
               <Link href="/parents" className="mt-2 inline-flex min-h-11 items-center font-semibold underline underline-offset-4">
                 Open the Parent Portal
@@ -204,11 +206,15 @@ export function PaymentMethodRequestForm({
             <AlertDescription className="text-amber-100">
               {reauthorization && reauthorizationPreservesAutopay
                 ? "Stripe is still verifying the replacement bank account. Your existing autopay authorization remains in place and will resume automatically after verification. You do not need to turn autopay on again."
-                : "Connect your bank account to complete verification. Saving a bank account does not turn on autopay; you can choose autopay separately in the Parent Portal or with your school. Open invoices do not block verification."}
+                : "Your bank account is already being verified. New setup is paused until verification finishes. Saving a bank account does not turn on autopay, and open invoices do not block verification."}
+              <p className="mt-2">Check the latest status below. If verification remains pending or you need help with a verification step, contact your school office.</p>
+              <Button type="button" variant="outline" disabled={isPending} className="mt-2 border-white/20 bg-white/5 text-white hover:bg-white/10" onClick={() => window.location.reload()}>
+                Check status
+              </Button>
             </AlertDescription>
           </Alert>
         ) : null}
-        {focus === "instant-bank" ? (
+        {focus === "instant-bank" && !showPendingBankVerification ? (
           <Alert role="status" className="border-sky-300/40 bg-sky-300/10 text-sky-50">
             <Building2 className="size-4" />
             <AlertTitle>Bank verification requested</AlertTitle>
@@ -225,19 +231,13 @@ export function PaymentMethodRequestForm({
           </Alert>
         ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-            <div className="text-xs uppercase tracking-normal text-zinc-400">Family</div>
-            <div className="mt-1 text-sm font-medium">{familyName}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-            <div className="text-xs uppercase tracking-normal text-zinc-400">Recipient</div>
-            <div className="mt-1 break-all text-sm font-medium">{recipientEmail}</div>
-          </div>
-        </div>
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
+          <dt className="text-zinc-400">Family</dt><dd className="min-w-0 font-medium">{familyName}</dd>
+          <dt className="text-zinc-400">Recipient</dt><dd className="min-w-0 break-all font-medium">{recipientEmail}</dd>
+        </dl>
 
         <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-          <div className="flex items-start gap-3">
+          <div className="public-payment-method-info flex items-start gap-3">
             <ShieldCheck className="mt-0.5 size-5 text-amber-300" />
             <div>
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -253,9 +253,11 @@ export function PaymentMethodRequestForm({
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="public-payment-grid grid gap-2 sm:grid-cols-2">
+          {setupMethods.map(method => method === "link_bank" ? (
           <Button
-            className={focus === "instant-bank" ? "order-1 h-11 bg-sky-500 text-white hover:bg-sky-400" : "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10"}
+            key={method}
+            className={focus === "instant-bank" ? "bg-sky-700 text-white hover:bg-sky-800" : "border-white/15 bg-white/5 text-white hover:bg-white/10"}
             disabled={isPending || bankVerificationPending}
             onClick={() => startSetup("link_bank")}
             variant={focus === "instant-bank" ? "default" : "outline"}
@@ -263,8 +265,10 @@ export function PaymentMethodRequestForm({
             <Building2 data-icon="inline-start" />
             {reauthorization ? "Replace with bank account" : "Connect bank account"}
           </Button>
+          ) : (
           <Button
-            className={focus === "instant-bank" ? "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" : "order-1 h-11"}
+            key={method}
+            className={focus === "instant-bank" ? "border-white/15 bg-white/5 text-white hover:bg-white/10" : undefined}
             disabled={isPending || bankVerificationPending}
             onClick={() => startSetup("card")}
             variant={focus === "instant-bank" ? "outline" : "default"}
@@ -272,6 +276,7 @@ export function PaymentMethodRequestForm({
             <CreditCard data-icon="inline-start" />
             {reauthorization ? "Replace card" : "Save card"}
           </Button>
+          ))}
         </div>
 
         {nextOpenInvoice && !reauthorization ? (
@@ -287,7 +292,7 @@ export function PaymentMethodRequestForm({
                 {money(nextOpenInvoice.totalCents)}
               </Badge>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="public-payment-grid mt-3 grid grid-cols-2 gap-2">
               <Button className="h-11" disabled={isPending} onClick={() => startPayment(nextOpenInvoice.id, "card")}>
                 <CreditCard data-icon="inline-start" />
                 <span className="sm:hidden">Card</span>

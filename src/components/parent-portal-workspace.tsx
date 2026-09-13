@@ -3029,7 +3029,15 @@ function ParentPortalWorkspaceView({
                 </AlertDescription>
               </Alert>
             ) : null}
-            {checkoutBlocked ? (
+            {appReviewMode ? (
+              <Alert>
+                <ShieldCheck className="size-4" />
+                <AlertTitle>Demo billing preview</AlertTitle>
+                <AlertDescription>
+                  Explore this fake family&apos;s invoices and payment history. Payments, saved-method changes and autopay changes are disabled in this review account.
+                </AlertDescription>
+              </Alert>
+            ) : checkoutBlocked ? (
               <Alert variant="destructive">
                 <AlertCircle className="size-4" />
                 <AlertTitle>

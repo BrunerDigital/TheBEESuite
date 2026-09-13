@@ -125,7 +125,7 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
   }
 
   return (
-    <Card className={embedded ? "gap-0 border-0 bg-transparent py-0 ring-0 shadow-none" : undefined}>
+    <Card className={`operations-action-hub ${embedded ? "gap-0 border-0 bg-transparent py-0 ring-0 shadow-none" : ""}`}>
       {embedded ? null : (
         <CardHeader>
           <CardTitle as="h2">{title}</CardTitle>
@@ -149,7 +149,7 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
-        <div className={`grid gap-3 ${compact ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+        <div className={`operations-action-grid grid gap-3 ${compact ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
           <div className="space-y-1">
             <Label htmlFor={`${formId}-module`}>Module</Label>
             <Select value={entity} onValueChange={(value) => value && setEntity(value)}>

@@ -44,7 +44,7 @@ test("billing action labels name the real action and hide internal identifiers",
 
 test("public payment form copy separates saved methods from autopay", () => {
   const form = source("src/components/payment-method-request-form.tsx");
-  const page = source("src/app/payment-method-form/[token]/page.tsx");
+  const page = source("src/components/public-payment-page-shell.tsx");
 
   assert.match(form, /Connect bank account/);
   assert.match(form, /Pay with Link/);

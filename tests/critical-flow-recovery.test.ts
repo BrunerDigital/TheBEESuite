@@ -6,7 +6,7 @@ test("critical onboarding and payment entry points explain connection failures",
   const login = readFileSync("src/components/login-form.tsx", "utf8");
   const parentSetup = readFileSync("src/components/parent-portal-setup-form.tsx", "utf8");
   const paymentSetup = readFileSync("src/components/payment-method-request-form.tsx", "utf8");
-  const paymentPage = readFileSync("src/app/payment-method-form/[token]/page.tsx", "utf8");
+  const paymentPage = readFileSync("src/components/public-payment-page-shell.tsx", "utf8");
 
   assert.match(login, /could not reach the sign-in service/i);
   assert.match(parentSetup, /Your entries are still here/i);
@@ -88,7 +88,7 @@ test("parent sign-in and setup use invitation-specific credentials and current i
 
 test("payment return states cover expiry, cancellation, failure, retry, and confirmation", () => {
   const paymentForm = readFileSync("src/components/payment-method-request-form.tsx", "utf8");
-  const paymentPage = readFileSync("src/app/payment-method-form/[token]/page.tsx", "utf8");
+  const paymentPage = readFileSync("src/components/public-payment-page-shell.tsx", "utf8");
   const checkoutRoute = readFileSync("src/app/api/billing/payment-method-request/checkout/route.ts", "utf8");
 
   assert.match(paymentPage, /payment setup link unavailable/i);

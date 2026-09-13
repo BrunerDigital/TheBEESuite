@@ -19,6 +19,7 @@ import { canCompactParentAccount } from "@/lib/parent-home-account";
 import { parentActivePaymentSummary, parentPaymentStatusMessage, parentPaymentStatusTitle, type ParentAccountPaymentBlocker, type ParentPendingPayment } from "@/lib/parent-payment-status";
 import { activeItemScrollDelta } from "@/lib/horizontal-active-item";
 import { revealFocusedPortalControl } from "@/lib/focused-portal-control";
+import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 import { InvoicePrintButton, PaymentReceiptPrintButton } from "@/components/billing-print-actions";
 import { formatZonedDateTime, zonedDateKey, zonedDateInputToUtc } from "@/lib/zoned-date-time";
 import {
@@ -1979,7 +1980,7 @@ function ParentPortalWorkspaceView({
                         {accountPaymentBlocker ? "Payment status" : "Upcoming payment"}
                       </span>
                       <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {accountPaymentBlocker ? parentPaymentStatusTitle(accountPaymentBlocker, "account") : openInvoices[0] ? `${openInvoices[0].number} · due ${formatDate(openInvoices[0].dueDate)}` : "Review your account’s open invoices"}
+                        {accountPaymentBlocker ? parentPaymentStatusTitle(accountPaymentBlocker, "account") : openInvoices[0] ? `${openInvoices[0].number} · due ${formatInvoiceDueDate(openInvoices[0].dueDate)}` : "Review your account’s open invoices"}
                       </span>
                     </span>
                     <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
@@ -3483,7 +3484,7 @@ function ParentPortalWorkspaceView({
                         <>
                           Family balance {money(balanceCents)} ·{" "}
                           {nextOpenInvoice.number} due{" "}
-                          {formatDate(nextOpenInvoice.dueDate)}
+                          {formatInvoiceDueDate(nextOpenInvoice.dueDate)}
                         </>
                       ) : (
                         <>
@@ -3889,7 +3890,7 @@ function ParentPortalWorkspaceView({
                     <div className="font-medium">{invoice.number}</div>
                     <div className="text-xs text-muted-foreground">
                       {invoice.purposeLabel ? `${invoice.purposeLabel} · ` : ""}
-                      Due {formatDate(invoice.dueDate)}
+                      Due {formatInvoiceDueDate(invoice.dueDate)}
                     </div>
                   </div>
                   <Badge

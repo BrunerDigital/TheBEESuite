@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoTip } from "@/components/ui/info-tip";
+import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 
 type Props = {
   token: string;
@@ -60,10 +61,6 @@ export function PaymentMethodRequestForm({
 
   function money(cents: number) {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
-  }
-
-  function formatDate(value: Date | string) {
-    return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
   }
 
   function startSetup(paymentMethodCategory: "link_bank" | "card") {
@@ -283,7 +280,7 @@ export function PaymentMethodRequestForm({
               <div>
                 <div className="text-sm font-medium">Optional: pay tuition today</div>
                 <p className="mt-1 text-sm leading-6 text-zinc-200">
-                  {nextOpenInvoice.number} is due {formatDate(nextOpenInvoice.dueDate)} for {money(nextOpenInvoice.totalCents)}. Paying this invoice is separate from bank verification above.
+                  {nextOpenInvoice.number} is due {formatInvoiceDueDate(nextOpenInvoice.dueDate)} for {money(nextOpenInvoice.totalCents)}. Paying this invoice is separate from bank verification above.
                 </p>
               </div>
               <Badge className="border-amber-300/30 bg-black/20 text-amber-100" variant="outline">

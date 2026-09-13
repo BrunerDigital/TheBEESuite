@@ -2,7 +2,13 @@
 
 This is the current web-release evidence index. Older audit dates and completed checklist boxes are historical, not proof that every school, role or native app is ready. The overall mission is **in progress**: actionable technical work remains. Primary checkout changes, unrelated PR #311, other worktrees and recoverable history remain untouched.
 
-## Latest verified production
+## Latest protected production deployment
+
+Office UI PR [#371](https://github.com/BrunerDigital/TheBEESuite/pull/371) is deployed at main `a942b997c4dd6b32b05c42f6064e2b28a7d322a2`. Exact production `dpl_2ssNpkh3HTr5zTWA2xt6wbiEqyzi` was Ready September 13 at 22:22:18.886 UTC on all five canonical aliases listed below. Protected CI `34786163110`, CodeQL, local 2,186-test full build, 84 two-engine office cases, 308 task-panel checks and 216 focused-control observations passed. Guarded reserved Parent/Teacher production regression passed at 22:28:57.275 UTC; health was database-connected at 22:29:50.355 UTC and post-verification error/fatal and 5xx counts were empty. No product, money, identity or provider mutation was made.
+
+The office flow itself has **local real-component proof, not authenticated management production proof**; approved management QA access remains unavailable. Evidence and exact scope: [office billing UI](OFFICE_BILLING_MOBILE_FLOW_2026-09-13.md). This distinction prevents treating deployment health as proof of every changed office workflow.
+
+## Previous verified release
 
 Protected PR [#370](https://github.com/BrunerDigital/TheBEESuite/pull/370), main `f1f1ca21f8345cc73b430e3d0913a65435a37213`, closes dormant new Parent product-order creation before request parsing or billing work. Existing invoices, Payments, provider webhooks and director invoicing are unchanged. The feature was not activated and no live order/payment was attempted. It follows verified Parent Updates PR [#369](https://github.com/BrunerDigital/TheBEESuite/pull/369).
 
@@ -26,7 +32,9 @@ These are 390 × 844 browser views, **not** native App Store screenshots, Dynami
 | --- | --- | --- | --- | --- |
 | Parent Home, navigation, document/history/message surfaces | Implemented; recent compact/recovery/history corrections retained | Focused tests and both browser engines; 101-row history continuation | Reserved fake graph, canonical role navigation and date/recovery checks | Authenticated device/offline/keyboard checks remain |
 | Teacher Home, role navigation, report/individual child targets and protected profile | Implemented; exact target/draft locks retained | Focused tests and both browser engines | Reserved fake Teacher navigation, 12 report-target and 16 picker checks | Camera, interrupted upload, device session lifecycle remain |
-| Office Billing, Terminal, Ledger and shared task directory reflow | Current UI implementation under final verification | 320/390/768/1280/1440px, 100/200% text, long labels, keyboard and recovery checks in progress | Not yet a released office candidate; no valid management QA session | See [office UI work](OFFICE_BILLING_MOBILE_FLOW_2026-09-13.md); no money/provider changes |
+| Office Billing, Terminal, Ledger and shared task directory reflow | Implemented and deployed in protected PR #371 | 84 actual-shell cases, 308 task panels, 216 focused controls; full 2,186-test gate | Exact Ready deployment and reserved Parent/Teacher regression; office management authentication not available | See [office UI work](OFFICE_BILLING_MOBILE_FLOW_2026-09-13.md); no money/provider changes |
+| Invoice calendar-date consistency | Shared pure formatter implemented across 14 display/print sites | 130 two-engine cases, four rendered Letter PDFs and full 2,191-test gate passed | Protected release next | No stored date, payment timestamp, balance or authorization changes; [date evidence](INVOICE_CALENDAR_DATE_CONSISTENCY_2026-09-13.md) |
+| Role-aware Help and complete audit history | Further technical work identified | Help has denied-role links; audit viewer only filters newest 100 events | Not yet corrected | Safe scoped implementation remains; do not reduce this to a human-only blocker |
 | Legacy family-balance payment attempts | Existing path still needs target-tenant, fresh authority and durable provider-attempt recovery work | Concrete code evidence; next separate financial safety wave | Not claimed repaired by the product-order gate | No test charges/refunds; no production migration required for code preparation |
 | New Parent shop orders | Closed in code; no runtime activation flag; catalog remains hidden | Actual handler: malformed, foreign and concurrent attempts touch no purchase boundary | Deployed gate; ordinary-parent denial proven locally, not by live order POST | Full order/fulfillment/refund/support approval and safe implementation required before activation |
 | Director/executive/support/auditor flows | Existing implementations and earlier scoped fixes retained | Further role/scenario coverage still required | General role credentials unavailable; do not infer from health | Brenden can supply an approved synthetic session through secure sign-in, not passwords in chat |

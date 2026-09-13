@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReportPrintAction } from "@/components/printable-report";
 import { cn } from "@/lib/utils";
+import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 
 type AccountFilter = "all" | SchoolAccountBalanceStatus;
 
@@ -30,10 +31,8 @@ function money(cents: number) {
   }).format(cents / 100);
 }
 
-function shortDate(value: string, options: { dateOnly?: boolean; timeZone?: string } = {}) {
-  const date = options.dateOnly && /^\d{4}-\d{2}-\d{2}/.test(value)
-    ? new Date(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)))
-    : new Date(value);
+function shortDate(value: string, options: { timeZone?: string } = {}) {
+  const date = new Date(value);
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -180,7 +179,7 @@ export function AccountsReceivablePanel({
                       <td>{money(account.balanceCents)}</td>
                       <td>{account.openInvoiceCount.toLocaleString("en-US")}</td>
                       <td>{account.overdueInvoiceCount.toLocaleString("en-US")}</td>
-                      <td>{account.oldestOpenDueDate ? shortDate(account.oldestOpenDueDate, { dateOnly: true }) : "No due date"}</td>
+                      <td>{formatInvoiceDueDate(account.oldestOpenDueDate, { fallback: "No due date" })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -233,7 +232,7 @@ export function AccountsReceivablePanel({
                 <div className="mt-1 text-xs text-muted-foreground">
                   {showCenterNames ? `${account.centerName} · ` : ""}
                   {account.openInvoiceCount
-                    ? `${account.openInvoiceCount} open invoice${account.openInvoiceCount === 1 ? "" : "s"}${account.oldestOpenDueDate ? ` · oldest due ${shortDate(account.oldestOpenDueDate)}` : ""}`
+                    ? `${account.openInvoiceCount} open invoice${account.openInvoiceCount === 1 ? "" : "s"}${account.oldestOpenDueDate ? ` · oldest due ${formatInvoiceDueDate(account.oldestOpenDueDate)}` : ""}`
                     : account.hasBillingAccount
                       ? "No open invoices"
                       : "No billing activity yet"}

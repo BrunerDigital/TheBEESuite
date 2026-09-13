@@ -324,7 +324,7 @@ test("director and executive dashboard billing widgets use current-family balanc
   assert.match(panel, /Status/);
   assert.match(panel, /Balance/);
   assert.match(panel, /reportSchoolIds = new Set/);
-  assert.match(panel, /dateOnly: true/);
+  assert.match(panel, /formatInvoiceDueDate\(account\.oldestOpenDueDate, \{ fallback: "No due date" \}\)/);
   assert.match(panel, /timeZone: "UTC"/);
   assert.match(panel, /account\.familyName/);
   assert.match(panel, /money\(account\.balanceCents\)/);

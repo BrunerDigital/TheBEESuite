@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { clientErrorFingerprintParts, normalizeClientErrorReportPayload } from "@/lib/client-error-reporting";
+import { isCredentialDiagnosticPath } from "@/lib/telemetry-privacy";
 
 type ReportSource =
   | "window.error"
@@ -8,15 +10,6 @@ type ReportSource =
   | "react.error_boundary"
   | "react.global_error"
   | "manual";
-
-type ClientErrorReportInput = {
-  source: ReportSource;
-  errorType?: string;
-  message?: string;
-  stackSample?: string;
-  componentStack?: string;
-  metadata?: Record<string, unknown>;
-};
 
 const reportedKeys = new Set<string>();
 
@@ -47,29 +40,22 @@ function errorLike(input: unknown) {
   };
 }
 
-function reportKey(payload: ClientErrorReportInput) {
-  return [
-    payload.source,
-    payload.errorType || "",
-    payload.message || "",
-    typeof window !== "undefined" ? window.location.pathname : "",
-  ].join(":").slice(0, 500);
-}
-
 export function reportClientError(error: unknown, source: ReportSource, metadata?: Record<string, unknown>) {
   if (!reportingEnabled() || typeof window === "undefined") return;
+  if (isCredentialDiagnosticPath(window.location.pathname + window.location.search + window.location.hash)) return;
 
   const normalized = errorLike(error);
-  const payload: ClientErrorReportInput & { path: string } = {
+  const payload = normalizeClientErrorReportPayload({
     source,
     errorType: normalized.errorType,
     message: normalized.message,
     stackSample: normalized.stackSample,
     path: window.location.pathname,
     metadata,
-  };
-  const key = reportKey(payload);
+  });
+  const key = clientErrorFingerprintParts(payload).join(":");
   if (reportedKeys.has(key)) return;
+  if (reportedKeys.size >= 500) reportedKeys.delete(reportedKeys.values().next().value!);
   reportedKeys.add(key);
 
   const body = JSON.stringify(payload);
@@ -83,6 +69,7 @@ export function reportClientError(error: unknown, source: ReportSource, metadata
     headers: { "Content-Type": "application/json" },
     body,
     keepalive: true,
+    referrerPolicy: "no-referrer",
   }).catch(() => undefined);
 }
 

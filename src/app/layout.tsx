@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import { ClientErrorReporter } from "@/components/client-error-reporter";
@@ -8,8 +9,7 @@ import { UnsavedChangesHistoryRuntime } from "@/components/unsaved-changes-histo
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CANONICAL_APP_BASE_URL } from "@/lib/public-app-url";
 import { UNSAVED_HISTORY_BOOTSTRAP } from "@/lib/unsaved-history-guard";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
+import { PrivacySafeTelemetry } from "@/components/privacy-safe-telemetry";
 import "./globals.css";
 import "./product-ui.css";
 import "./parent-mobile-home.css";
@@ -30,6 +30,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(CANONICAL_APP_BASE_URL),
   title: "The BEE Suite",
   applicationName: "The BEE Suite",
+  referrer: "no-referrer",
   description:
     "Childcare operations software for enrollment, billing, classrooms, family communication, and multi-location management.",
   manifest: "/manifest.webmanifest",
@@ -97,8 +98,7 @@ export default function RootLayout({
         <PwaInstallManager />
         <UnsavedChangesHistoryRuntime />
         <SubmissionFeedback />
-        {collectVercelTelemetry ? <Analytics /> : null}
-        {collectVercelTelemetry ? <SpeedInsights /> : null}
+        {collectVercelTelemetry ? <Suspense fallback={null}><PrivacySafeTelemetry /></Suspense> : null}
       </body>
     </html>
   );

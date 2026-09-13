@@ -86,5 +86,6 @@ test("notification polling uses the lightweight unread endpoint", () => {
 test("dashboard routes expose loading boundaries and passive speed telemetry", () => {
   assert.match(source("src/app/dashboard/loading.tsx"), /\.\.\/loading/);
   assert.match(source("src/app/[slug]/loading.tsx"), /\.\.\/loading/);
-  assert.match(source("src/app/layout.tsx"), /<SpeedInsights \/>/);
+  assert.match(source("src/app/layout.tsx"), /<PrivacySafeTelemetry \/>/);
+  assert.match(source("src/components/privacy-safe-telemetry.tsx"), /<SpeedInsights beforeSend=\{beforeSpeedInsights\}/);
 });

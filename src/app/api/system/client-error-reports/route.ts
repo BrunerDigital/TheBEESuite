@@ -8,6 +8,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
+import { isCredentialDiagnosticPath } from "@/lib/telemetry-privacy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,7 +63,7 @@ async function parseReportPayload(request: NextRequest) {
     return { ok: false as const, response: NextResponse.json({ ok: false, error: "Invalid report payload." }, { status: 400 }) };
   }
 
-  return { ok: true as const, report: normalizeClientErrorReportPayload(body) };
+  return { ok: true as const, suppressed: isCredentialDiagnosticPath(body.path), report: normalizeClientErrorReportPayload(body) };
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -90,6 +91,7 @@ async function POSTHandler(request: NextRequest) {
 
   const parsed = await parseReportPayload(request);
   if (!parsed.ok) return parsed.response;
+  if (parsed.suppressed) return NextResponse.json({ ok: true, suppressed: true });
 
   const user = await getCurrentUser({ allowPasswordResetRequired: true }).catch(() => null);
   const release = releaseVersion();
@@ -153,4 +155,4 @@ async function POSTHandler(request: NextRequest) {
   }
 }
 
-export const POST = withApiLogging("POST", POSTHandler);
+export const POST = withApiLogging("POST", POSTHandler, { omitRequestBody: true });

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { formatZonedTimestamp } from "@/lib/zoned-date-time";
+import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 
 export const runtime = "nodejs";
 
@@ -27,13 +28,6 @@ function textContains(query: string) {
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
-}
-
-function formatDate(value: Date | string | null | undefined) {
-  if (!value) return "No date";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "No date";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
 function familyProfileHref(familyId: string, childId?: string | null) {
@@ -294,7 +288,7 @@ async function GETHandler(request: NextRequest) {
       id: `invoice:${invoice.id}`,
       type: "invoice" as const,
       label: invoice.number,
-      detail: `${invoice.billingAccount.family.name} · ${money(invoice.totalCents)} · Due ${formatDate(invoice.dueDate)}`,
+      detail: `${invoice.billingAccount.family.name} · ${money(invoice.totalCents)} · Due ${formatInvoiceDueDate(invoice.dueDate, { fallback: "No date" })}`,
       href: billingFamilyHref(invoice.billingAccount.family),
       badge: invoice.status,
     })),

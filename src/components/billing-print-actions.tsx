@@ -5,6 +5,7 @@ import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableRe
 import { Button } from "@/components/ui/button";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
+import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 
 export type BillingReceiptSchool = {
   id: string;
@@ -383,7 +384,7 @@ export function InvoicePrintButton({
             <tr><th>Family</th><td>{familyName}</td></tr>
             <tr><th>Child</th><td>{invoice.childName ?? "Family account charge"}</td></tr>
             <tr><th>Service period</th><td>{invoice.servicePeriodStart && invoice.servicePeriodEnd ? `${invoice.servicePeriodStart} – ${invoice.servicePeriodEnd}` : "Not specified"}</td></tr>
-            <tr><th>Due date</th><td>{formatDate(invoice.dueDate, timeZone)}</td></tr>
+            <tr><th>Due date</th><td>{formatInvoiceDueDate(invoice.dueDate)}</td></tr>
             <tr><th>Status</th><td>{displayLabel(invoice.status)}</td></tr>
           </tbody>
         </table>

@@ -20,9 +20,12 @@ import { prioritizeParentAttentionRecords } from "../../src/lib/parent-attention
 import { type ComponentProps, useEffect, useState } from "react";
 import { CollapsibleCard } from "../../src/components/workspace-preferences";
 import { parentPaymentFixture } from "./parent-payment-status";
+import { PaymentMethodRequestForm } from "../../src/components/payment-method-request-form";
+import { AccountsReceivablePanel } from "../../src/components/accounts-receivable-panel";
 
 const query = new URLSearchParams(location.search);
 const view = query.get("view");
+const invoiceDate = query.get("invoice-date");
 const attentionCase = query.get("attention-case") === "hidden";
 const hiddenOpenInvoice = { ...executiveParentPortalDemo.invoices[0], id: "fake-older-open", number: "FAKE-OLDER-OPEN", status: "OPEN" };
 const hiddenIncident = { ...executiveParentPortalDemo.incidents[0], id: "fake-older-incident", description: "Fake older report still needs acknowledgment", parentAcknowledgedAt: null };
@@ -72,7 +75,7 @@ const billingCenters: BillingWorkbenchCenter[] = ["a", "b"].map((id) => ({ id, n
 const billingFamilies: BillingWorkbenchFamily[] = ["a", "b", "c"].map((id) => ({
   id, centerId: id === "c" ? "a" : id, name: officeLongNames ? `Fake Family ${id.toUpperCase()} Alexandra Gabriella Montgomery-Santiago` : `Fake Family ${id.toUpperCase()}`, billingEmail: null, guardians: [],
   children: [1, 2].map((index) => ({ id: `child-${id}${index === 1 ? "" : "-2"}`, fullName: `Fake Child ${id.toUpperCase()}${index === 1 ? "" : " Two"}`, ageGroup: "Preschool", classroomId: `room-${id}`, enrollmentStatus: "active", startDate: null, careScheduleType: "full_time" as const, scheduledDaysPerWeek: 5 as const })),
-  billingAccount: { id: `account-${id}`, balanceCents: 10000, autopayPlaceholder: false, openInvoices: [1, ...(query.has("selectors") ? [2] : [])].map((index) => ({ id: `invoice-${id}${index === 1 ? "" : "-2"}`, number: `FAKE-${id}${index === 1 ? "" : "-2"}`, status: "OPEN", dueDate: "2026-09-14", totalCents: 10000 })),
+  billingAccount: { id: `account-${id}`, balanceCents: 10000, autopayPlaceholder: false, openInvoices: [1, ...(query.has("selectors") ? [2] : [])].map((index) => ({ id: `invoice-${id}${index === 1 ? "" : "-2"}`, number: `FAKE-${id}${index === 1 ? "" : "-2"}`, status: "OPEN", dueDate: invoiceDate ?? "2026-09-14", totalCents: 10000 })),
     ...(query.has("office-refund-example") ? { recentPayments: [{ id: `fake-payment-${id}`, amountCents: 10000, refundedCents: 0, refundableCents: 10000, status: "PAID", provider: "stripe", paidAt: "2026-09-10T12:00:00Z", paymentMethodLabel: "Fake card", stripePaymentIntentId: `pi_fake_local_${id}` }] } : {}),
   },
 }));
@@ -108,6 +111,8 @@ function Fixture() {
     const frame = requestAnimationFrame(() => { document.documentElement.dataset.fixtureReady = "true"; });
     return () => { cancelAnimationFrame(frame); delete document.documentElement.dataset.fixtureReady; };
   }, []);
+  if (view === "invoice-payment-link") return <main className="min-h-dvh bg-[#090b10] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))] text-white sm:pb-[calc(2rem+env(safe-area-inset-bottom))]"><PaymentMethodRequestForm token="fake-local-token-not-a-credential" familyName="Fake Family A" centerLabel="Fake School A" recipientEmail="fake@example.invalid" autopayStatus="disabled" bankVerificationPending={false} openInvoices={billingFamilies[0].billingAccount!.openInvoices} /></main>;
+  if (view === "invoice-receivables") return <AccountsReceivablePanel snapshot={{ schools: [], totalAccountCount: 1, owingAccountCount: 1, currentAccountCount: 0, creditAccountCount: 0, overdueAccountCount: 0, totalOwedCents: 10000, totalCreditCents: 0, netBalanceCents: 10000, asOf: "2026-09-13T12:00:00Z", accounts: [{ id: "fake-account", familyId: "a", familyName: "Fake Family A", centerId: "a", centerName: "Fake School A", balanceCents: 10000, hasBillingAccount: true, openInvoiceCount: 1, overdueInvoiceCount: 0, oldestOpenDueDate: invoiceDate ?? "2026-09-14", status: "owes" }] }} />;
   if (view === "shortcuts") return <>
     <nav aria-label="Fake task shortcuts"><a href="#fake-task-a">First fake task</a><a href="#fake-task-b">Next fake task</a></nav>
     <CollapsibleCard id="fake-task-a" title="First fake task" defaultCollapsed><input aria-label="First fake input" /></CollapsibleCard>
@@ -160,7 +165,8 @@ function ParentFixture() {
   const currentPageDocuments = currentDocuments.slice(documentPage.skip, documentPage.skip + documentPage.pageSize);
   const currentLinkedDocument = currentDocuments.find((record) => record.id === requestedDocumentId) ?? null;
   return <ParentPortalWorkspace {...executiveParentPortalDemo}
-    invoices={attentionCase ? prioritizeParentAttentionRecords(priorInvoiceRows, hiddenOpenInvoice) : executiveParentPortalDemo.invoices}
+    invoices={invoiceDate ? executiveParentPortalDemo.invoices.map(invoice => ({ ...invoice, dueDate: invoiceDate, familyDocumentAmountCents: invoice.totalCents })) : attentionCase ? prioritizeParentAttentionRecords(priorInvoiceRows, hiddenOpenInvoice) : executiveParentPortalDemo.invoices}
+    {...(invoiceDate ? { previewMode: true } : {})}
     incidents={attentionCase ? prioritizeParentAttentionRecords<{ id: string; occurredAt: string | Date; type: string; description: string; actionTaken: string; parentAcknowledgedAt: string | Date | null; child: { fullName: string } }>(priorIncidentRows, hiddenIncident) : executiveParentPortalDemo.incidents}
     attentionSummary={attentionCase ? { openInvoiceCount: 7, unacknowledgedIncidentCount: 5 } : undefined}
     family={paymentFamilyId ? { ...executiveParentPortalDemo.family!, id: paymentFamilyId } : query.has("multi-child") ? { ...executiveParentPortalDemo.family!, children: Array.from({ length: 3 }, (_, index) => ({ ...executiveParentPortalDemo.family!.children[0], id: `fake-sibling-${index}`, preferredName: null, fullName: `Fake Sibling ${index + 1} With A Long Family Name` })) } : executiveParentPortalDemo.family}
@@ -172,7 +178,7 @@ function ParentFixture() {
     requestedDocumentUnavailable={Boolean(requestedDocumentId && !linkedDocument)}
     centerTimeZone={query.get("tz")}
     dailyReports={query.has("tz") ? executiveParentPortalDemo.dailyReports.map((item, index) => ({ ...item, date: `2026-09-11T${index ? "23" : "14"}:00:00.000Z` })) : executiveParentPortalDemo.dailyReports}
-    media={query.has("tz") ? [] : executiveParentPortalDemo.media}
+    media={invoiceDate || query.has("tz") ? [] : executiveParentPortalDemo.media}
     activeView={view === "payments" ? "payments" : view === "messages" ? "messages" : view === "updates" ? "updates" : view === "children" || view === "documents" ? "family" : "home"}
     familySection={view === "documents" ? "documents" : "children"}
     currentGuardianId="exec-demo-guardian-a"

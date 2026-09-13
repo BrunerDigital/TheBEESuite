@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { IScannerControls } from "@zxing/browser";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
+import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 
 type VerificationMethod = "pin" | "qr";
 type KioskMode = "family" | "staff";
@@ -92,11 +93,6 @@ function clockLabel(value: string | null | undefined, timeZone: string) {
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
-}
-
-function shortDate(value?: string | Date | null) {
-  if (!value) return "No due date";
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
 async function postKioskJson<T>(path: string, body: Record<string, unknown>) {
@@ -918,7 +914,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                             <div className="mt-2 text-2xl font-semibold">{money(lookup.billing.amountDueCents)}</div>
                             <div className="mt-1 text-xs text-muted-foreground">
                               {lookup.billing.nextInvoiceNumber
-                                ? `${lookup.billing.nextInvoiceNumber} · due ${shortDate(lookup.billing.nextInvoiceDueDate)}`
+                                ? `${lookup.billing.nextInvoiceNumber} · due ${formatInvoiceDueDate(lookup.billing.nextInvoiceDueDate, { includeYear: false, fallback: "No due date" })}`
                                 : "Current family balance"}
                             </div>
                           </div>

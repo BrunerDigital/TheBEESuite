@@ -93,6 +93,7 @@ import {
 import { DeveloperSubscriptionConsole, type DeveloperSubscriptionSchool } from "@/components/developer-subscription-console";
 import { StatCard } from "@/components/record-stat-card";
 import { formatRecordLabel } from "@/lib/record-label";
+import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 export { TeamPermissionsPage, type TeamPermissionsData } from "@/components/team-permissions-page";
 import { DirectorPaymentTerminalWorkspace } from "@/components/director-payment-terminal-workspace";
 import { DocumentReviewActions } from "@/components/document-review-actions";
@@ -5437,7 +5438,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                     ) : null}
                   </TableCell>
                   <TableCell><Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{formatRecordLabel(invoice.status)}</Badge></TableCell>
-                  <TableCell>{formatDate(invoice.dueDate)}</TableCell>
+                  <TableCell>{formatInvoiceDueDate(invoice.dueDate)}</TableCell>
                   <TableCell>
                     {invoice.responsibilitySeparation ? (
                       <div className="space-y-1">

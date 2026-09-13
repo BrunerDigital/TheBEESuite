@@ -8,6 +8,7 @@ import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/c
 import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
+import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 import { formatZonedDateTime, unambiguousZonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -1792,7 +1793,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <div className="grid gap-3 sm:grid-cols-2">
               <SummaryMetric label="Family" value={selectedFamily?.name ?? "Not selected"} detail={selectedFamily?.billingEmail ?? "No billing email"} />
               <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} detail={selectedCheckoutReadiness?.canAcceptParentPayments ? "Online payments ready" : "Online payments unavailable"} />
-              <SummaryMetric label="Apply payment to" value={directorPaymentTargetLabel} detail={selectedPaymentInvoice ? `Due ${formatShortDate(selectedPaymentInvoice.dueDate)}` : "Family balance payment"} />
+              <SummaryMetric label="Apply payment to" value={directorPaymentTargetLabel} detail={selectedPaymentInvoice ? `Due ${formatInvoiceDueDate(selectedPaymentInvoice.dueDate)}` : "Family balance payment"} />
               <SummaryMetric label="Amount" value={money(directorPaymentAmountCents)} detail={effectivePaymentTarget === "custom" ? paymentDescription : selectedPaymentInvoice?.number ?? "Balance"} />
             </div>
             <div className="rounded-lg border bg-background/45 p-3">
@@ -2055,7 +2056,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     <SelectItem value="balance">Total balance · {money(familyBalanceCents)}</SelectItem>
                     {openInvoices.map((invoice) => (
                       <SelectItem key={invoice.id} value={`invoice:${invoice.id}`}>
-                        {invoice.number} · {money(invoice.totalCents)} · due {formatShortDate(invoice.dueDate)}
+                        {invoice.number} · {money(invoice.totalCents)} · due {formatInvoiceDueDate(invoice.dueDate)}
                       </SelectItem>
                     ))}
                     <SelectItem value="custom">Custom amount</SelectItem>
@@ -2408,7 +2409,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                       <SelectContent>
                         {openInvoices.map((invoice) => (
                           <SelectItem key={invoice.id} value={invoice.id}>
-                            {invoice.number} · {money(invoice.totalCents)} · due {formatShortDate(invoice.dueDate)}
+                            {invoice.number} · {money(invoice.totalCents)} · due {formatInvoiceDueDate(invoice.dueDate)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -2429,7 +2430,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <SummaryMetric label="Current total" value={money(selectedEditableInvoice.totalCents)} detail={selectedEditableInvoice.number} />
-                  <SummaryMetric label="Updated total" value={invoiceEditAmountCents > 0 ? money(invoiceEditAmountCents) : "$0.00"} detail={formatShortDate(invoiceEditDueDate)} />
+                  <SummaryMetric label="Updated total" value={invoiceEditAmountCents > 0 ? money(invoiceEditAmountCents) : "$0.00"} detail={formatInvoiceDueDate(invoiceEditDueDate)} />
                   <SummaryMetric label="Balance change" value={money(invoiceEditDeltaCents)} detail={invoiceEditDeltaCents < 0 ? "Credit to family balance" : invoiceEditDeltaCents > 0 ? "Debit to family balance" : "No balance change"} />
                 </div>
                 <Button disabled={isPending || !selectedFamily || invoiceEditAmountCents <= 0 || !invoiceEditDescription.trim()} onClick={submitInvoiceEdit}>

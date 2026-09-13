@@ -4,6 +4,7 @@ import { canAccessAllCenters, canManageBilling, getCurrentUser, isParentGuardian
 import { writeAuditLog } from "@/lib/audit";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { jsonRecord } from "@/lib/billing-guardrails";
+import { authorizeBillingActorForTarget } from "@/lib/billing-actor-authorization";
 import {
   getStripeCheckoutAmounts,
   getStripePaymentMethodConfigurationId,
@@ -482,6 +483,7 @@ async function POSTHandler(request: NextRequest) {
       // Reuse the current session/grant/workspace resolver before each claim.
       const fresh = await getCurrentUser();
       if (!fresh || fresh.id !== user.id || fresh.role !== user.role || fresh.tenantId !== user.tenantId
+        || fresh.identityTenantId !== user.identityTenantId || fresh.sessionVersion !== user.sessionVersion
         || appReviewReservedIdentityKind(fresh.email)
         || invoiceCheckoutTenant(fresh, { id: centerId, tenantId }) !== tenantId) return false;
       if (parentCheckout) {
@@ -490,16 +492,8 @@ async function POSTHandler(request: NextRequest) {
       }
       return canManageBilling(fresh) && (canAccessAllCenters(fresh) || fresh.centerIds.includes(centerId));
     },
-    authorize: async tx => {
-      const actor = await tx.user.findFirst({ where: { id: user.id, email: user.email, tenantId: user.tenantId,
-        role: user.role, isActive: true }, select: { id: true } });
-      if (!actor) return false;
-      if (user.deviceSessionId && !await tx.deviceSession.findFirst({ where: { id: user.deviceSessionId,
-        userId: user.id, tenantId: user.tenantId, revokedAt: null }, select: { id: true } })) return false;
-      return !parentCheckout || Boolean(await tx.guardian.findFirst({
-        where: { userId: user.id, familyId: invoice.billingAccount.familyId }, select: { id: true },
-      }));
-    },
+    authorize: tx => authorizeBillingActorForTarget(tx, user, { tenantId, centerId,
+      familyId: invoice.billingAccount.familyId, billingAccountId: invoice.billingAccountId }),
     audit: async (tx, paymentId, session) => {
       await writeAuditLog({ ...user, tenantId }, {
     centerId,

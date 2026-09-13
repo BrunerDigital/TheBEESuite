@@ -251,6 +251,7 @@ test("authorization, invoice and school gates are rechecked before provider muta
     if (change === "school") f.state.center.customFields.livePaymentsEnabled = false;
     if (change === "family") f.state.account.family.centerId = "foreign-school";
     assert.equal((await startInvoiceCheckout(f.base)).ok, false); assert.equal(f.customerCalls.length, 0); assert.equal(f.checkoutCalls.length, 0);
+    assert.equal(f.state.payments.length, 0); assert.equal(f.state.audits.length, 0); assert.ok(!f.events.includes("create"));
   }
 });
 

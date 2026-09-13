@@ -33,6 +33,8 @@ export type AppSession = {
 
 export type CurrentUser = {
   id: string;
+  identityTenantId: string;
+  sessionVersion: number;
   tenantId: string;
   email: string;
   name: string;
@@ -452,6 +454,8 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
 
   const currentUser: CurrentUser = {
     id: user.id,
+    identityTenantId: user.tenantId,
+    sessionVersion: readSessionVersion(user.sessionVersion),
     tenantId: selectedPlatformCenter?.organization.tenantId ?? user.tenantId,
     email: user.email,
     name: user.name,

@@ -170,6 +170,8 @@ test("platform location selection carries the selected company context and uses 
   const selector = readFileSync("src/components/workspace-selector.tsx", "utf8");
 
   assert.match(auth, /selectedPlatformCenter\?\.organization\.tenantId \?\? user\.tenantId/);
+  assert.match(auth, /identityTenantId: user\.tenantId/);
+  assert.match(auth, /sessionVersion: readSessionVersion\(user\.sessionVersion\)/);
   assert.match(auth, /user\.role === UserRole\.PLATFORM_OWNER && workspace\.activeCenterId/);
   assert.match(auth, /const selectableCenterIds = workspace\.options\.map/);
   assert.match(auth, /effectiveOrganizationId = selectedPlatformCenter\?\.organization\.id \?\? user\.organizationId/);

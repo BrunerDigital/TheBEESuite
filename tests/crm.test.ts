@@ -23,6 +23,8 @@ test("stage nurture task falls back to family label when name is blank", () => {
 test("location CRM lead scope limits dashboard leads to the user's assigned center", () => {
   const user = {
     id: "user_holly_hill",
+    identityTenantId: "tenant_kid_city",
+    sessionVersion: 0,
     tenantId: "tenant_kid_city",
     email: "hollyhill@kidcityusa.com",
     name: "Holly Hill Director",

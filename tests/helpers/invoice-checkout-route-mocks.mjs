@@ -3,15 +3,19 @@ import { mock, test } from "node:test";
 import { NextRequest } from "next/server";
 import approvalModule from "@/lib/stripe-billing-approval";
 import targetingModule from "@/lib/app-review-targeting";
+import matcherModule from "./matches-prisma-where.ts";
+const { matchesPrismaWhere } = matcherModule;
 const { stripeBillingApprovalCustomFieldPatch } = approvalModule;
 const { APP_REVIEW_PARENT_CONTACT } = targetingModule;
 
 let user, center, family, invoice, details, providers, captured, currentActor, currentDevice, guardianLinked;
+let persistedActor, persistedDevice, authorityQueries;
 let familyRouteMode = false, familyDrafts = [], familyClaims = [], familyResolutions = [];
 function reset() {
   familyRouteMode = false; familyDrafts = []; familyClaims = []; familyResolutions = [];
   const now = new Date().toISOString();
   user = { id: "fake-director", tenantId: "fake-tenant", email: "fake-director@example.test", role: "CENTER_DIRECTOR", centerIds: ["fake-school"],
+    identityTenantId: "fake-tenant", sessionVersion: 7,
     deviceSessionId: "fake-device", workspace: { mode: "center", activeCenterId: "fake-school" } };
   center = { id: "fake-school", name: "Fake school", crmLocationId: "Fake school", organization: { tenantId: "fake-tenant",
     tenant: { name: "Fake Tenant", slug: "fake-tenant" }, brand: { name: "Fake Brand", slug: "fake-brand" } }, customFields: {
@@ -26,6 +30,10 @@ function reset() {
   invoice = { id: "fake-invoice", number: "FAKE-1", billingAccountId: "fake-account", totalCents: 10000, status: "OPEN", customFields: {}, items: [],
     billingAccount: { ...family.billingAccount, family } };
   details = 0; providers = []; captured = []; currentActor = true; currentDevice = true; guardianLinked = true;
+  authorityQueries = [];
+  persistedActor = { id: user.id, tenantId: user.identityTenantId, email: user.email, role: user.role, sessionVersion: 7,
+    isActive: true, mustResetPassword: false, staffProfile: { centerId: center.id, center }, accessGrants: [] };
+  persistedDevice = { id: "fake-device", userId: user.id, tenantId: user.identityTenantId, revokedAt: null };
 }
 reset();
 const prisma = {
@@ -34,20 +42,21 @@ const prisma = {
       return { billingAccountId: "fake-account", billingAccount: { familyId: "fake-family", family: { centerId: "fake-school" } } }; },
     async findFirst({ where }) { details++; assert.equal(where.billingAccountId, "fake-account"); return invoice; },
   },
-  center: { async findUnique() { return center; }, async findFirst({ where }) { assert.equal(where.organization.tenantId, center.organization.tenantId); return center; },
+  center: { async findUnique() { return center; }, async findFirst({ where }) { return matchesPrismaWhere(center, where) ? center : null; },
     async update() { if (familyRouteMode) return center; throw new Error("School config must not be written during provider readiness inspection"); } },
   family: { async findUnique() { return family; }, async findFirst() { return family; } },
-  guardian: { async findFirst() { return guardianLinked ? { id: "fake-guardian" } : null; } },
-  user: { async findFirst() { return currentActor ? { id: user.id } : null; } },
-  deviceSession: { async findFirst() { return currentDevice ? { id: "fake-device" } : null; } },
+  guardian: { async findFirst({ where }) { return guardianLinked && matchesPrismaWhere({ userId: "fake-parent", familyId: family.id, family }, where) ? { id: "fake-guardian" } : null; } },
+  user: { async findFirst({ where }) { authorityQueries.push({ model: "user", where }); return currentActor && matchesPrismaWhere(persistedActor, where) ? { id: persistedActor.id } : null; } },
+  deviceSession: { async findFirst({ where }) { authorityQueries.push({ model: "deviceSession", where }); return currentDevice && matchesPrismaWhere(persistedDevice, where) ? { id: persistedDevice.id } : null; } },
   billingAccount: { async upsert() { throw new Error("No synthetic account creation expected"); },
-    async findFirst() { return { ...family.billingAccount, family: { ...family, _count: { children: 0 } }, invoices: [], autopayPlaceholder: false }; } },
+    async findFirst({ where }) { const account = { ...family.billingAccount, family: { ...family, _count: { children: 0 } }, invoices: [], autopayPlaceholder: false };
+      return matchesPrismaWhere(account, where) ? account : null; } },
   payment: { async findMany() { return familyDrafts; } },
   ledgerEntry: { async findMany() { return []; } },
 };
 mock.module("@/lib/prisma", { namedExports: { prisma } });
 mock.module("@/lib/auth", { namedExports: {
-  async getCurrentUser() { return user; }, isParentGuardian(value) { return value.role === "PARENT_GUARDIAN"; },
+  async getCurrentUser() { return structuredClone(user); }, isParentGuardian(value) { return value.role === "PARENT_GUARDIAN"; },
   canManageBilling(value) { return ["CENTER_DIRECTOR", "BILLING_ADMIN", "BRAND_ADMIN", "PLATFORM_OWNER"].includes(value.role); },
   canAccessAllCenters(value) { return ["BRAND_ADMIN", "PLATFORM_OWNER"].includes(value.role) && value.workspace?.mode === "all"; },
   canAccessCenter(value, centerId) { return value.centerIds.includes(centerId); },
@@ -112,11 +121,46 @@ test("untrusted origins, pickup role, unlinked parent and no-charge-only links c
 });
 
 test("explicit platform-selected school uses its target tenant for provider and audit input", async () => {
-  reset(); user.role = "PLATFORM_OWNER"; user.tenantId = "platform-tenant";
+  reset(); user.role = persistedActor.role = "PLATFORM_OWNER";
+  user.identityTenantId = persistedActor.tenantId = persistedDevice.tenantId = "platform-tenant";
   const response = await direct.POST(request({ invoiceId: "fake-invoice" }));
   assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
   assert.equal(captured[0].topology.tenantId, "fake-tenant"); assert.ok(providers.every(call => call.tenantId === "fake-tenant"));
-  assert.equal(await captured[0].authorize(prisma), true); currentActor = false; assert.equal(await captured[0].authorize(prisma), false);
+  assert.equal(await captured[0].authorizeRequest(), true);
+  assert.equal(await captured[0].authorize(prisma), true);
+  assert.ok(authorityQueries.every(query => query.where.tenantId === "platform-tenant"));
+  persistedDevice.tenantId = "fake-tenant"; assert.equal(await captured[0].authorize(prisma), false);
+  persistedDevice.tenantId = "platform-tenant"; currentActor = false; assert.equal(await captured[0].authorize(prisma), false);
+});
+
+test("fresh resolver changes cannot silently replace invoice actor identity or session version", async () => {
+  for (const key of ["identityTenantId", "sessionVersion"]) {
+    reset(); assert.equal((await direct.POST(request({ invoiceId: "fake-invoice" }))).status, 200);
+    user[key] = key === "sessionVersion" ? 8 : "changed-identity";
+    assert.equal(await captured[0].authorizeRequest(), false);
+  }
+});
+
+test("real transactional claim denies revoked invoice actor before payment creation", async () => {
+  for (const change of ["version", "role", "password", "device", "assignment", "family"]) {
+    reset(); assert.equal((await direct.POST(request({ invoiceId: "fake-invoice" }))).status, 200);
+    if (change === "version") persistedActor.sessionVersion++;
+    if (change === "role") persistedActor.role = "TEACHER";
+    if (change === "password") persistedActor.mustResetPassword = true;
+    if (change === "device") persistedDevice.revokedAt = new Date();
+    if (change === "assignment") persistedActor.staffProfile = null;
+    if (change === "family") family.centerId = "other-school";
+    let writes = 0;
+    const tx = { ...prisma, async $queryRaw() { return [{ id: "fake-account", balanceCents: 10000 }]; },
+      payment: { async create() { writes++; throw new Error("Unauthorized payment creation"); } } };
+    const result = await (claimModule.default ?? claimModule).createStripePaymentClaim({
+      billingAccountId: "fake-account", scope: "invoice_collection", invoiceId: "fake-invoice",
+      authorize: captured[0].authorize, paymentData: { amountCents: 10000, status: "DRAFT", provider: "stripe" },
+      database: { async $transaction(run) { return run(tx); } },
+    });
+    assert.equal(result.created, false); assert.equal(result.reason, "payment_authority_changed"); assert.equal(writes, 0);
+    assert.ok(providers.every(call => ["key-read", "account-read"].includes(call.operation)));
+  }
 });
 
 test("both routes preserve canonical customer and distinct return destinations", async () => {

@@ -51,7 +51,9 @@ test("payment continuity is isolated from general parent mutations and non-payme
   const familyPaymentRoute = readFileSync(new URL("../src/app/api/billing/family-payment/route.ts", import.meta.url), "utf8");
   assert.match(familyScope, /getParentPortalPaymentFamilyScope[\s\S]*parentPortalTenantFamilyWhere\(tenantCenterIds\)[\s\S]*currentOrOutstandingFamilyWhere\(\)/);
   assert.match(checkoutRoute, /getParentPortalPaymentFamilyScope\(user\.id, user\.tenantId,/);
-  assert.match(familyPaymentRoute, /method === "saved_method"[\s\S]*getParentPortalFamilyScope[\s\S]*getParentPortalPaymentFamilyScope/);
+  assert.match(familyPaymentRoute, /parentCheckout && method === "saved_method"\) return NextResponse.json/);
+  assert.match(familyPaymentRoute, /getParentPortalPaymentFamilyScope\(user.id, user.tenantId,/);
+  assert.match(familyPaymentRoute, /target.familyId !== parentFamilyScope.familyId/);
   assert.match(page, /familyId: parentPortalContentFamilyId/);
   assert.match(page, /messages=\{paymentContinuityAccess \? \[\] : signedMessages\}/);
   assert.match(page, /announcements=\{paymentContinuityAccess \? \[\] : parentHistoryEnabled \? parentUpdateSnapshot\?\.announcements\?\.items \?\? \[\] : announcements\}/);

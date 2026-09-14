@@ -112,14 +112,16 @@ test("parent setup and saved-method mutations retain current-family scope", () =
     assert.match(readFileSync(path, "utf8"), /getParentPortalFamilyScope\(user\.id, user\.tenantId,/, path);
   }
   const familyPayment = readFileSync("src/app/api/billing/family-payment/route.ts", "utf8");
-  assert.match(familyPayment, /method === "saved_method"[\s\S]*getParentPortalFamilyScope\(user\.id, user\.tenantId,/);
+  assert.match(familyPayment, /parentCheckout && method === "saved_method"\) return NextResponse.json/);
+  assert.ok(familyPayment.indexOf('parentCheckout && method === "saved_method"') < familyPayment.indexOf("const parentFamilyScope"));
 });
 
 test("one-time parent payment routes use the outstanding-payment scope", () => {
   const checkout = readFileSync("src/app/api/billing/checkout-session/route.ts", "utf8");
   const familyPayment = readFileSync("src/app/api/billing/family-payment/route.ts", "utf8");
   assert.match(checkout, /getParentPortalPaymentFamilyScope\(user\.id, user\.tenantId,/);
-  assert.match(familyPayment, /method === "saved_method"[\s\S]*getParentPortalFamilyScope[\s\S]*getParentPortalPaymentFamilyScope\(user\.id, user\.tenantId,/);
+  assert.match(familyPayment, /getParentPortalPaymentFamilyScope\(user\.id, user\.tenantId,/);
+  assert.match(familyPayment, /target.familyId !== parentFamilyScope.familyId/);
 });
 
 test("runtime family lookup restricts guardian links to the signed-in tenant", () => {

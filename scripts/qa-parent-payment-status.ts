@@ -10,7 +10,7 @@ import tailwindcss from "@tailwindcss/postcss";
 // Actual components and CSS, synthetic props, no backend or provider access.
 async function main() {
   const engine = process.env.QA_BROWSER_ENGINE === "webkit" ? "webkit" : "chromium";
-  const output = path.resolve(`output/playwright/parent-payment-status-${engine}`);
+  const output = path.resolve(`output/playwright/parent-payment-status-${engine}-${new Date().toISOString().replace(/[:.]/g, "-")}`);
   await mkdir(output, { recursive: true });
   const stylePath = path.resolve("src/app/globals.css");
   const style = await postcss([tailwindcss()]).process(await readFile(stylePath, "utf8"), { from: stylePath });

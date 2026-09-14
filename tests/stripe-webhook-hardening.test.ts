@@ -316,17 +316,17 @@ test("parent ledger query includes every provisional ACH processing state", asyn
 
 test("off-session request completion cannot overwrite webhook terminal states", async () => {
   const autopay = await readFile("src/lib/autopay-processing.ts", "utf8");
-  const familyPayment = await readFile("src/app/api/billing/family-payment/route.ts", "utf8");
+  const familyPayment = await readFile("src/lib/family-payment-service.ts", "utf8");
   assert.match(autopay, /payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/);
   assert.match(autopay, /submissionUpdate\.count !== 1[\s\S]*payment\.findUnique[\s\S]*terminalPaymentStatus/);
   assert.match(autopay, /terminalPaymentStatus === PaymentStatus\.PAID[\s\S]*appliedImmediately = true/);
   assert.match(autopay, /processingAccepted[\s\S]*blockedBillingAccountIds\.add/);
-  assert.equal(
-    familyPayment.match(/payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/g)?.length,
-    4,
-  );
-  assert.match(familyPayment, /submissionUpdate\.count !== 1[\s\S]*payment\.findUnique[\s\S]*terminalPaymentStatus/);
-  assert.match(familyPayment, /terminalFailure[\s\S]*status: "failed"/);
+  assert.match(familyPayment, /FROM "Payment"[\s\S]*FOR UPDATE[\s\S]*FROM "BillingAccount"[\s\S]*FOR UPDATE/);
+  assert.match(familyPayment, /tx.payment.findUnique\(\{ where: \{ id: payment.id \} \}\)/);
+  assert.match(familyPayment, /if \(fresh.status === PaymentStatus.PAID\) return storedId === intent.id/);
+  assert.match(familyPayment, /if \(fresh.status !== PaymentStatus.DRAFT && !\(fresh.status === PaymentStatus.FAILED/);
+  assert.match(familyPayment, /if \(fresh.status !== PaymentStatus.DRAFT \|\| advanced\(saved\) \|\| saved.submissionStateUnknownAt/);
+  assert.match(familyPayment, /if \(fresh.status !== PaymentStatus.DRAFT\) return false/);
 });
 
 test("canceled processing PaymentIntents clear provisional payment state", async () => {

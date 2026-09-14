@@ -8,7 +8,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   const livePages = readFileSync("src/components/live-ops-pages.tsx", "utf8");
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
-  const familyPayment = readFileSync("src/app/api/billing/family-payment/route.ts", "utf8");
+  const familyPaymentRoute = readFileSync("src/app/api/billing/family-payment/route.ts", "utf8");
+  const familyPayment = readFileSync("src/lib/family-payment-service.ts", "utf8");
   const terminalPayment = readFileSync("src/app/api/billing/terminal-payment/route.ts", "utf8");
   const paymentClaims = readFileSync("src/lib/stripe-payment-claims.ts", "utf8");
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
@@ -46,6 +47,7 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(processing, /createStripePaymentClaim/);
   assert.match(processing, /scope: "invoice_collection"/);
   assert.match(familyPayment, /createStripePaymentClaim/);
+  assert.match(familyPaymentRoute, /startFamilyPayment\(/);
   assert.match(familyPayment, /scope: "family_balance"/);
   assert.match(paymentClaims, /FROM "BillingAccount"[\s\S]*FOR UPDATE/);
   assert.match(paymentClaims, /FROM "Invoice"[\s\S]*FOR UPDATE/);
@@ -68,7 +70,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(processing, /paymentMethodId: stripePaymentMethodId/);
   assert.match(familyPayment, /checkout_submission_unknown/);
   assert.match(familyPayment, /director_saved_method_submission_unknown/);
-  assert.match(familyPayment, /amountCents = retryableFamilySubmission[\s\S]*retryableFamilySubmission\.amountCents/);
+  assert.match(familyPayment, /familyPaymentAttemptIdentityMatches\(jsonRecord\(existing.customFields\).familyPaymentPreparationV1, preparation\)/);
+  assert.match(familyPayment, /familyPaymentAttemptMatches\(submissionFields.familyPaymentAttemptV1, candidate, now\(\)\)/);
   assert.doesNotMatch(familyPayment, /item\.amountCents === amountCents[\s\S]*isStripeSubmissionUnknownPayment\(item\)/);
   assert.match(terminalPayment, /createStripePaymentClaim/);
   assert.match(terminalPayment, /scope: paymentIsInvoice \? "invoice_collection" : "family_balance"/);
@@ -81,9 +84,10 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(processing, /activeStripeAccountCreditReservationCents\(payment\)/);
   assert.match(paymentClaims, /activeStripeAccountCreditReservationCents\(payment\)/);
   assert.ok(
-    familyPayment.indexOf("const activeFamilyCheckout") < familyPayment.lastIndexOf('if (method === "saved_method")'),
-    "expired family Checkout drafts must be reconciled before saved-method claims",
+    familyPayment.indexOf("const knownSessionId") < familyPayment.indexOf("const claimed = await claim"),
+    "known family Checkout must be proven or held before any new claim",
   );
+  assert.match(familyPayment, /if \(kind !== "checkout"\) return held\(existing.id\)/);
   assert.match(processing, /A family balance payment is already pending or processing; autopay is paused for this account\./);
   assert.match(processing, /prior payout account/);
   assert.match(workbench, /sendPaymentMethodRequest\("payment_method_reauthorization"\)/);

@@ -56,7 +56,10 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   assert.match(checkoutSession, /audit: async \(tx, paymentId, session\)[\s\S]*writeAuditLog[\s\S]*\}, tx\)/);
   assert.match(invoiceCheckoutService, /status: PaymentStatus\.FAILED,[\s\S]*?tx\.center\.update\(\{\s*where: \{ id: topology\.centerId \}/);
   assert.match(invoiceCheckoutService, /!submission\.resolved[\s\S]*markUnknown\(\); return pending/);
-  assert.equal(familyPayment.match(/status: PaymentStatus\.FAILED,[\s\S]*?prisma\.center\.update\(\{\s*where: \{ id: center\.id \}/g)?.length, 2);
+  const familyService = source("src/lib/family-payment-service.ts");
+  assert.match(familyPayment, /audit: async \(tx:[\s\S]*writeAuditLog\(user,[\s\S]*\}, tx\)/);
+  assert.match(familyService, /status: PaymentStatus.FAILED,[\s\S]*await audit\(tx, payment.id, kind === "checkout" \? "checkout_failed" : "payment_intent_failed"/);
+  assert.match(familyService, /failed \? "payment_intent_failed" : "payment_intent_created"/);
   assert.match(billingInvoices, /include: \{ family: \{ select: \{ centerId: true \} \} \}/);
   assert.match(billingInvoices, /tx\.center\.update/);
   assert.match(registrationReview, /billingAccount\.family\.centerId/);

@@ -155,7 +155,7 @@ test("mobile sign-in presents the form before role switching and respects safe a
   assert.match(login, /env\(safe-area-inset-top\)/);
   assert.match(login, /env\(safe-area-inset-bottom\)/);
   assert.match(login, /aria-label="Choose a role-specific sign-in page" className="order-2/);
-  assert.match(login, /<form className="order-1[^\"]*sm:order-2"/);
+  assert.match(login, /<ClientAuthForm[^>]*className="order-1[^\"]*sm:order-2"/);
 });
 
 test("dashboard graphics provide text equivalents and truthful progress values", () => {

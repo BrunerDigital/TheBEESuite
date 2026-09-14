@@ -65,10 +65,10 @@ test("PIN and QR kiosk confirmation is reported separately from signature captur
 });
 
 test("guardian credential controls are semantic and fail with actionable messages", () => {
-  assert.match(credentialPanelSource, /<form[\s\S]*onSubmit=/);
+  assert.match(credentialPanelSource, /<ClientAuthForm[\s\S]*onSubmit=/);
   assert.match(credentialPanelSource, /type="submit"/);
   assert.match(credentialPanelSource, /exactly 4 numbers/);
-  assert.match(pinManagerSource, /<form[\s\S]*onSubmit=/);
+  assert.match(pinManagerSource, /<ClientAuthForm[\s\S]*onSubmit=/);
   assert.match(pinManagerSource, /type="submit"/);
   assert.match(pinManagerSource, /Check your connection and try again/);
   assert.match(credentialCardSource, /onClick=\{printCheckInCard\}/);

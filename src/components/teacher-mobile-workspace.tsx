@@ -1,4 +1,5 @@
 "use client";
+import { ClientAuthForm } from "@/components/client-auth-form";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
@@ -1711,7 +1712,7 @@ export function TeacherMobileWorkspace({
               </AlertDescription>
             </Alert>
           ) : (
-          <form className="grid gap-4" onSubmit={saveTeacherProfile}>
+          <ClientAuthForm action="/api/teacher/profile" fieldsetClassName="grid gap-4" className="grid gap-4" onSubmit={saveTeacherProfile}>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="teacher-profile-name">Full name</Label>
@@ -1816,7 +1817,7 @@ export function TeacherMobileWorkspace({
               <Save data-icon="inline-start" />
               Save profile
             </Button>
-          </form>
+          </ClientAuthForm>
           )}
       </CollapsibleCard>
       {!appReviewMode && !previewMode ? (
@@ -1834,3 +1835,4 @@ export function TeacherMobileWorkspace({
     </fieldset>
   );
 }
+

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ClientAuthForm } from "@/components/client-auth-form";
 import { FormEvent, useState, useTransition } from "react";
 import { AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { BrandIcon, BrandLogo } from "@/components/brand-logo";
@@ -96,7 +97,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={submit} aria-busy={isPending} aria-describedby="forgot-password-description">
+            <ClientAuthForm action="/api/auth/forgot-password" className="flex flex-col gap-4" onSubmit={submit} aria-busy={isPending} aria-describedby="forgot-password-description">
               {error ? (
                 <Alert variant="destructive">
                   <AlertCircle />
@@ -129,7 +130,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
               <Button className="h-11" size="lg" type="submit" disabled={isPending}>
                 {isPending ? "Sending reset link…" : "Send Reset Link"}
               </Button>
-            </form>
+            </ClientAuthForm>
             <Link
               href={next ? loginHrefForNextPath(next) : "/directors"}
               className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline"
@@ -143,3 +144,4 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
     </main>
   );
 }
+

@@ -1,4 +1,5 @@
 "use client";
+import { ClientAuthForm } from "@/components/client-auth-form";
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState, useTransition } from "react";
@@ -315,7 +316,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
             <CardDescription>Review the contact information your school has connected to this account.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="space-y-4" onSubmit={submit} aria-busy={isPending}>
+            <ClientAuthForm action="/api/parent/setup" fieldsetClassName="space-y-4" className="space-y-4" onSubmit={submit} aria-busy={isPending}>
               {status ? (
                 <Alert role="status">
                   <CheckCircle2 className="size-4" />
@@ -412,10 +413,11 @@ export function ParentPortalSetupForm({ guardians }: Props) {
                 {isPending ? "Saving…" : "Finish Setup & Open Parent Portal"}
                 <ArrowRight data-icon="inline-end" />
               </Button>
-            </form>
+            </ClientAuthForm>
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+

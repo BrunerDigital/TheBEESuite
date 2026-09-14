@@ -1,4 +1,5 @@
 "use client";
+import { ClientAuthForm } from "@/components/client-auth-form";
 
 import { useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, KeyRound, LoaderCircle } from "lucide-react";
@@ -92,7 +93,7 @@ export function GuardianPinManager({
         </div>
         <KeyRound className="size-4 text-primary" aria-hidden="true" />
       </div>
-      <form
+      <ClientAuthForm action="/api/guardians/pin" fieldsetClassName="grid gap-2"
         className="grid gap-2"
         onSubmit={(event) => {
           event.preventDefault();
@@ -126,7 +127,7 @@ export function GuardianPinManager({
             {isPending ? "Saving…" : "Save PIN"}
           </Button>
         </div>
-      </form>
+      </ClientAuthForm>
       {status === "PIN saved" ? (
         <Alert>
           <CheckCircle2 className="size-4" aria-hidden="true" />
@@ -145,3 +146,4 @@ export function GuardianPinManager({
     </div>
   );
 }
+

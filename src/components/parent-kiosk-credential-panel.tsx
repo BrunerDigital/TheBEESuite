@@ -1,4 +1,5 @@
 "use client";
+import { ClientAuthForm } from "@/components/client-auth-form";
 
 import { useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, KeyRound, LoaderCircle, QrCode } from "lucide-react";
@@ -122,7 +123,7 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
             const helpId = `parent-kiosk-pin-help-${credential.guardianId}`;
             return (
               <div key={credential.guardianId} className="space-y-3">
-                <form
+                <ClientAuthForm action="/api/parent/kiosk-credential" fieldsetClassName="block"
                   className="rounded-lg border bg-background/40 p-3"
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -161,7 +162,7 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
                   <p id={helpId} className="mt-2 text-xs text-muted-foreground">
                     Enter exactly 4 numbers. Saving replaces the current PIN and refreshes the QR code.
                   </p>
-                </form>
+                </ClientAuthForm>
                 <GuardianKioskCredentialCard credential={credential} previewMode={previewMode} />
               </div>
             );
@@ -171,3 +172,4 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
     </Card>
   );
 }
+

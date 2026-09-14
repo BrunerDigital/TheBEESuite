@@ -1,4 +1,5 @@
 "use client";
+import { ClientAuthForm } from "@/components/client-auth-form";
 
 import { createContext, FormEvent, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
@@ -516,7 +517,7 @@ export function OnlineRegistrationForm({
 
   return (
     <RegistrationErrorsContext.Provider value={result?.errors ?? {}}>
-    <form className="min-w-0 space-y-5" aria-busy={isPending} onSubmit={submitRegistration}>
+    <ClientAuthForm action="/api/registration" fieldsetClassName="space-y-5" className="min-w-0 space-y-5" aria-busy={isPending} onSubmit={submitRegistration}>
       {result?.ok ? (
         <Alert ref={resultSummaryRef} tabIndex={-1} role="status" aria-live="polite" className="scroll-mt-4 border-emerald-500/30 bg-emerald-500/10 focus:outline-none">
           <CheckCircle2 className="size-4" />
@@ -873,7 +874,8 @@ export function OnlineRegistrationForm({
           </div>
         </CardContent>
       </Card>
-    </form>
+    </ClientAuthForm>
     </RegistrationErrorsContext.Provider>
   );
 }
+

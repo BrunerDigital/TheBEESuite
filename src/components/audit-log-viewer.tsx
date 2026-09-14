@@ -48,7 +48,8 @@ export function AuditLogViewer({ data }: { data: AuditHistoryData }) {
     event.preventDefault(); if (pending || exporting) return;
     const values = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
     try {
-      const next = parseAuditHistoryFilters({ ...values, asOf: filters.asOf, page: "1" });
+      const snapshotClock = new Date(Math.max(Date.now(), Date.parse(filters.asOf)));
+      const next = parseAuditHistoryFilters({ ...values, asOf: filters.asOf, page: "1" }, snapshotClock);
       const nextKey = auditHistoryHref(next), owner = document.activeElement;
       if (nextKey === filterKey) { setStatus(resultMessage); if (event.currentTarget.contains(owner)) resultsRef.current?.focus(); return; }
       setDraft({ key: nextKey, values: { action: next.action, resource: next.resource, centerId: next.centerId } });

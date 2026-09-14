@@ -14,5 +14,5 @@ test("audit page uses the shared safe snapshot and never sends raw audit objects
   const block = page.slice(page.indexOf('if (slug === "audit-logs")'), page.indexOf('if (slug === "asset-hub")'));
   assert.match(block, /parseAuditHistoryFilters\(searchParams\)/); assert.match(block, /readAuditHistoryPage\(tx, user, filters\)/); assert.match(block, /RepeatableRead/);
   assert.doesNotMatch(block, /auditLog.findMany|include:|take: 100/); assert.match(viewer, /Print this page/); assert.match(viewer, /Export all matches/);
-  assert.doesNotMatch(viewer, /logs.filter|safeCsvCell|makeCsvRows/); assert.match(viewer, /activeExport.current\?\.abort/); assert.match(viewer, /setDraft\(\{ key: nextKey/);
+  assert.doesNotMatch(viewer, /logs.filter|safeCsvCell|makeCsvRows/); assert.match(viewer, /activeExport.current\?\.abort/); assert.match(viewer, /setDraft\(\{ key: nextKey/); assert.match(viewer, /Math\.max\(Date\.now\(\), Date\.parse\(filters\.asOf\)\)/);
 });

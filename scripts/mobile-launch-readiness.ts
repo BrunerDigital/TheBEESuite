@@ -13,8 +13,13 @@ export function readinessCsvCell(value: string) {
 
 export const MOBILE_LAUNCH_PUBLIC_PATHS = ["/mobile-apps", "/app", "/check-in", "/privacy", "/terms", "/support", "/api/health", ...["director", "teacher", "parent", "kiosk"].map(role => `/guides/mobile-${role}.pdf`)];
 
-export function launchPublicResponseIsValid(path: string, response: { status: number; url: string; contentType: string; body: string }) {
-  if (response.status !== 200 || response.url !== `https://thebeesuite.io${path}`) return false;
+export function launchPublicResponseIsValid(path: string, response: { status: number; url: string; contentType: string; body: string; location?: string | null }) {
+  if (response.url !== `https://thebeesuite.io${path}`) return false;
+  if (path === "/check-in") {
+    const login = "/directors?next=%2Fcheck-in";
+    return (response.status === 307 && response.location === login) || (response.status === 200 && response.contentType.startsWith("text/html") && response.body.includes(`NEXT_REDIRECT;replace;${login};307;`));
+  }
+  if (response.status !== 200) return false;
   const contentType = response.contentType.split(";")[0].trim().toLowerCase();
   if (path.endsWith(".pdf")) return contentType === "application/pdf" && response.body.startsWith("%PDF-");
   if (path === "/api/health") {
@@ -31,7 +36,7 @@ export function mobileLaunchHttpSmokePassed(results: Record<string, unknown>[], 
     if (!row || row.login !== "passed" || row.correctRole !== true || row.correctPortal !== true || row.sessionPersistence !== true || row.resetLinkPresent !== true || row.logoutStatus !== 200 || row.protectedAfterLogout !== true) return false;
     if (role !== "parent") return true;
     return Array.isArray(row.views) && ["updates", "messages", "payments", "family"].every(view => (row.views as Record<string, unknown>[]).some(result => result.view === view && result.status === 200 && result.retainedPortal === true));
-  }) && MOBILE_LAUNCH_PUBLIC_PATHS.every(path => publicChecks.some(check => check.path === path && check.status === 200 && check.valid));
+  }) && MOBILE_LAUNCH_PUBLIC_PATHS.every(path => publicChecks.some(check => check.path === path && (check.status === 200 || (path === "/check-in" && check.status === 307)) && check.valid));
 }
 
 export async function writeReadinessSnapshot(directory: string, csv: string, now = new Date()) {

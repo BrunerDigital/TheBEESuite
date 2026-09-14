@@ -44,6 +44,11 @@ test("HTTP smoke fails closed on blocked credentials, missing views, or broken l
 });
 
 test("public launch verification rejects redirect destinations and wrong document content", () => {
+  const kiosk = { status: 307, url: "https://thebeesuite.io/check-in", contentType: "text/html", body: "", location: "/directors?next=%2Fcheck-in" };
+  assert.equal(launchPublicResponseIsValid("/check-in", kiosk), true);
+  assert.equal(launchPublicResponseIsValid("/check-in", { ...kiosk, location: "/parents" }), false);
+  assert.equal(launchPublicResponseIsValid("/check-in", { ...kiosk, status: 200, body: "<html>Missing</html>" }), false);
+  assert.equal(launchPublicResponseIsValid("/check-in", { ...kiosk, status: 200, body: "<html>NEXT_REDIRECT;replace;/directors?next=%2Fcheck-in;307;</html>" }), true);
   const page = { status: 200, url: "https://thebeesuite.io/mobile-apps", contentType: "text/html; charset=utf-8", body: "<html><h1>The BEE Suite Mobile Apps</h1></html>" };
   assert.equal(launchPublicResponseIsValid("/mobile-apps", page), true);
   assert.equal(launchPublicResponseIsValid("/mobile-apps", { ...page, status: 307 }), false);

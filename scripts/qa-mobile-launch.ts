@@ -58,7 +58,7 @@ async function main() {
     for (const path of MOBILE_LAUNCH_PUBLIC_PATHS) {
       try {
         const response = await fetch(`https://thebeesuite.io${path}`, { redirect: "manual", signal: AbortSignal.timeout(15000) });
-        const valid = launchPublicResponseIsValid(path, { status: response.status, url: response.url, contentType: response.headers.get("content-type") ?? "", body: await response.text() });
+        const valid = launchPublicResponseIsValid(path, { status: response.status, url: response.url, contentType: response.headers.get("content-type") ?? "", location: response.headers.get("location"), body: await response.text() });
         publicChecks.push({ path, status: response.status, valid });
       } catch { publicChecks.push({ path, status: 0, valid: false }); }
     }

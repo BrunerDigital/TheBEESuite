@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 const transientErrorPatterns = [
-  /audit endpoint returned an error/i,
   /\b503\b/,
   /service unavailable/i,
   /eai_again/i,
@@ -71,20 +70,16 @@ export function classifyAuditResult({ status, stdout = "", stderr = "", error = 
   const combinedError = [extractAuditError(parsed), stderr, error?.message].filter(Boolean).join("\n").trim();
 
   if (typeof vulnerabilities?.total === "number") {
-    if (vulnerabilities.total === 0) {
+    if (vulnerabilities.total === 0 && status === 0 && !error && !parsed.error) {
       return { ok: true, kind: "clean", summary: "npm audit found no production vulnerabilities." };
     }
 
-    return {
+    if (vulnerabilities.total > 0) return {
       ok: false,
       kind: "vulnerabilities",
       summary: `npm audit found ${summarizeVulnerabilities(vulnerabilities)}.`,
       vulnerabilities,
     };
-  }
-
-  if (status === 0) {
-    return { ok: true, kind: "clean", summary: "npm audit completed successfully." };
   }
 
   if (isTransientAuditError(combinedError)) {
@@ -98,15 +93,21 @@ export function classifyAuditResult({ status, stdout = "", stderr = "", error = 
   return {
     ok: false,
     kind: "error",
-    summary: combinedError || `npm audit failed with status ${status ?? "unknown"}.`,
+    summary: combinedError || `npm audit did not return a successful vulnerability report (status ${status ?? "unknown"}).`,
   };
 }
 
 function runAuditCommand() {
-  const command = process.platform === "win32" ? "npm.cmd" : "npm";
-  return spawnSync(command, ["audit", "--omit=dev", "--json"], {
+  // npm supplies its CLI path when invoked through cloud:validate. Running it
+  // with Node avoids spawning a Windows .cmd file as a native executable.
+  const cli = process.env.npm_execpath;
+  const command = cli ? process.execPath : process.platform === "win32" ? (process.env.ComSpec || "cmd.exe") : "npm";
+  const args = cli ? [cli, "audit", "--omit=dev", "--json"] : process.platform === "win32" ? ["/d", "/s", "/c", "npm.cmd audit --omit=dev --json"] : ["audit", "--omit=dev", "--json"];
+  return spawnSync(command, args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    timeout: 60000,
+    windowsHide: true,
   });
 }
 
@@ -141,9 +142,9 @@ export async function auditProductionDependencies({ attempts = 3, retryDelayMs =
     }
 
     return {
-      ok: true,
-      kind: "transient-warning",
-      summary: `npm audit advisory service remained unavailable after ${attempts} attempts; continuing without failing validation.`,
+      ok: false,
+      kind: "error",
+      summary: `npm audit advisory service remained unavailable after ${attempts} attempts; validation cannot pass without a completed audit.`,
       detail: result.summary,
       attemptsUsed: attempt,
     };
@@ -163,9 +164,6 @@ async function main() {
   if (result.kind === "vulnerabilities" || result.kind === "error") {
     console.error(result.summary);
     process.exitCode = 1;
-  } else if (result.kind === "transient-warning") {
-    console.warn(result.summary);
-    if (result.detail) console.warn(result.detail);
   } else {
     console.log(result.summary);
   }

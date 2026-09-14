@@ -61,7 +61,7 @@ test("production audit retries transient registry outages before succeeding", as
   assert.equal(warnings.length, 2);
 });
 
-test("production audit allows validation to continue after repeated registry outages", async () => {
+test("production audit fails closed after repeated registry outages", async () => {
   const result = await auditProductionDependencies({
     attempts: 2,
     retryDelayMs: 0,
@@ -69,7 +69,34 @@ test("production audit allows validation to continue after repeated registry out
     runner: () => ({ status: 1, stderr: "503 Service Unavailable" }),
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.kind, "transient-warning");
-  assert.match(result.summary, /continuing without failing validation/);
+  assert.equal(result.ok, false);
+  assert.equal(result.kind, "error");
+  assert.match(result.summary, /cannot pass without a completed audit/);
+});
+
+test("audit does not accept incomplete reports or failed clean-looking results", () => {
+  for (const result of [
+    { status: 0, stdout: "" },
+    { status: 0, stdout: "not json" },
+    { status: 1, stdout: JSON.stringify({ metadata: { vulnerabilities: { total: 0 } } }) },
+    { status: null, error: { message: "spawn EINVAL" } },
+    { status: 1, stderr: "npm error audit endpoint returned an error: 401 Unauthorized" },
+  ]) {
+    assert.equal(classifyAuditResult(result).ok, false);
+    assert.equal(classifyAuditResult(result).kind, "error");
+  }
+});
+
+test("real vulnerability findings stop immediately even during an outage", async () => {
+  let attempts = 0;
+  const result = await auditProductionDependencies({
+    retryDelayMs: 0,
+    runner: () => {
+      attempts++;
+      return { status: 1, stderr: "503 Service Unavailable", stdout: JSON.stringify({ metadata: { vulnerabilities: { total: 1, high: 1 } } }) };
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.kind, "vulnerabilities");
+  assert.equal(attempts, 1);
 });

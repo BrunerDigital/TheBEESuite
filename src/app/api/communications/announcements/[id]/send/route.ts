@@ -1,152 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
-import { writeAuditLog } from "@/lib/audit";
-import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
-import { sendEmail, uniqueEmails } from "@/lib/integrations";
+import { canManageOperations, getCurrentUser } from "@/lib/auth";
+import { AnnouncementWorkflowError } from "@/lib/announcement-persistence";
+import { previewAnnouncementEmail, sendAnnouncementEmail } from "@/lib/announcement-email";
+import { sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
-
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
-
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
-
-async function visibleCenterIds(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>) {
-  if (!canAccessAllCenters(user)) return user.centerIds;
-  const centers = await prisma.center.findMany({
-    where: {
-      status: { not: "closed" },
-      organization: { tenantId: user.tenantId },
-    },
-    select: { id: true },
-  });
-  return centers.map((center) => center.id);
-}
-
-async function POSTHandler(request: NextRequest, context: RouteContext) {
-  if (!hasTrustedMutationOrigin(request)) {
-    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
-  }
+export const dynamic = "force-dynamic";
+type Context = { params: Promise<{ id: string }> };
+const headers = { "Cache-Control": "private, no-store" };
+async function handle(request: NextRequest, context: Context, write: boolean) {
+  if (write && !hasTrustedMutationOrigin(request)) return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403, headers });
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageOperations(user)) {
-    return NextResponse.json({ ok: false, error: "Announcement email sending is not allowed for this role." }, { status: 403 });
-  }
-
+  if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401, headers });
+  if (!canManageOperations(user)) return NextResponse.json({ ok: false, error: "Announcement email is not allowed for this role." }, { status: 403, headers });
   const { id } = await context.params;
-  const announcement = await prisma.announcement.findUnique({
-    where: { id },
-    include: {
-      center: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          crmLocationId: true,
-          organization: { select: { tenantId: true } },
-        },
-      },
-    },
-  });
-  if (!announcement) return NextResponse.json({ ok: false, error: "Announcement not found." }, { status: 404 });
-  if (!announcement.centerId) {
-    return NextResponse.json({ ok: false, error: "Choose one school before sending an announcement email." }, { status: 400 });
+  if (!id || id.length > 120) return NextResponse.json({ ok: false, error: "Invalid announcement reference." }, { status: 400, headers });
+  try {
+    const result = write
+      ? await sendAnnouncementEmail({ database: prisma, actor: user, id, input: await request.json().catch(() => null), send: mail => sendEmail(mail) })
+      : { ok: true, preview: await previewAnnouncementEmail(prisma, user, id) };
+    return NextResponse.json(result, { headers });
+  } catch (error) {
+    if (error instanceof AnnouncementWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status, headers });
+    throw error;
   }
-  if (announcement.centerId && !canAccessCenter(user, announcement.centerId)) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this announcement." }, { status: 403 });
-  }
-  if (announcement.center?.organization.tenantId && announcement.center.organization.tenantId !== user.tenantId) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this tenant announcement." }, { status: 403 });
-  }
-
-  const centerIds = announcement.centerId ? [announcement.centerId] : await visibleCenterIds(user);
-  if (!centerIds.length) return NextResponse.json({ ok: false, error: "No centers are available for this announcement." }, { status: 400 });
-
-  const families = await prisma.family.findMany({
-    where: { centerId: { in: centerIds } },
-    take: 1000,
-    select: {
-      billingEmail: true,
-      guardians: { select: { email: true } },
-    },
-  });
-  const recipients = uniqueEmails(
-    families.flatMap((family) => [
-      family.billingEmail ?? "",
-      ...family.guardians.map((guardian) => guardian.email ?? ""),
-    ]),
-  ).slice(0, 1000);
-  if (!recipients.length) {
-    return NextResponse.json({ ok: false, error: "No family email recipients were found for this announcement." }, { status: 400 });
-  }
-
-  const subject = `Announcement: ${announcement.title}`;
-  const email = await sendEmail({
-    to: recipients,
-    subject,
-    text: announcement.body,
-    replyTo: announcement.center?.email ?? user.email,
-    fromName: announcement.center?.name ?? "The BEE Suite",
-    categories: ["announcement_email"],
-    customArgs: { announcementId: announcement.id, centerId: announcement.centerId },
-    tenantId: user.tenantId,
-  });
-  const effectiveRecipientCount = email.effectiveRecipientCount ?? recipients.length;
-  const suppressedRecipientCount = email.suppressedRecipientCount ?? 0;
-
-  await recordEmailDeliveryAttempt({
-    tenantId: user.tenantId,
-    centerId: announcement.centerId,
-    purpose: "announcement_email",
-    to: recipients,
-    subject,
-    text: announcement.body,
-    replyTo: announcement.center?.email ?? user.email,
-    fromName: announcement.center?.name ?? "The BEE Suite",
-    result: email,
-    metadata: {
-      announcementId: announcement.id,
-      centerCount: centerIds.length,
-      requestedRecipientCount: recipients.length,
-      effectiveRecipientCount,
-      suppressedRecipientCount,
-    },
-  });
-
-  if (email.ok) {
-    await prisma.announcement.update({
-      where: { id: announcement.id },
-      data: { status: "sent", sendAt: new Date() },
-    });
-  }
-
-  await writeAuditLog(user, {
-    centerId: announcement.centerId,
-    action: email.ok ? "announcement.email.sent" : "announcement.email.not_sent",
-    resource: "Announcement",
-    resourceId: announcement.id,
-    metadata: {
-      recipientCount: effectiveRecipientCount,
-      requestedRecipientCount: recipients.length,
-      suppressedRecipientCount,
-      centerCount: centerIds.length,
-      provider: email.provider,
-      providerMessageId: email.id ?? null,
-      configured: email.configured,
-      error: email.error ?? null,
-    },
-  });
-
-  return NextResponse.json({
-    ok: email.ok,
-    email,
-    recipientCount: effectiveRecipientCount,
-    requestedRecipientCount: recipients.length,
-    suppressedRecipientCount,
-    error: email.ok ? undefined : email.error || "Announcement email could not be queued.",
-  }, { status: email.ok ? 200 : email.skipped ? 400 : email.configured ? 502 : 503 });
 }
-
-export const POST = withApiLogging("POST", POSTHandler);
+export const GET = withApiLogging("GET", (request: NextRequest, context: Context) => handle(request, context, false));
+export const POST = withApiLogging("POST", (request: NextRequest, context: Context) => handle(request, context, true), { omitRequestBody: true });

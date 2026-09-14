@@ -70,7 +70,8 @@ import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { aiSuggestionWhereForViewer, tenantIdsFromAiPromptContext } from "@/lib/ai-suggestion-scope";
 import { canViewPlatformPaymentTelemetry, stripeWebhookErrorWhereForViewer, stripeWebhookWhereForViewer } from "@/lib/platform-telemetry-scope";
-import { announcementWhereForViewer } from "@/lib/announcement-scope";
+import { announcementWhereForViewer, parentAnnouncementAudienceWhere } from "@/lib/announcement-scope";
+import { readAnnouncementPage } from "@/lib/announcement-page";
 import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, messageCenterIdsForUser, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { accountDeletionFingerprint } from "@/lib/account-deletion-policy";
 import {
@@ -2677,6 +2678,7 @@ async function renderLivePage(
                 { centerId: null },
               ],
               status: { in: ["active", "sent", "published"] },
+              AND: [parentAnnouncementAudienceWhere()],
             },
         orderBy: [{ sendAt: "desc" }, { id: "desc" }],
         take: 8,
@@ -3847,25 +3849,10 @@ async function renderLivePage(
       allCenters,
       centerIds: visibleCenterIds,
     });
-    const [announcements, total, draft, scheduled, sent] = await Promise.all([
-      prisma.announcement.findMany({
-        where: announcementWhere,
-        orderBy: [{ sendAt: "desc" }, { title: "asc" }],
-        take: 100,
-        include: {
-          center: {
-            select: {
-              name: true,
-              crmLocationId: true,
-            },
-          },
-        },
-      }),
-      prisma.announcement.count({ where: announcementWhere }),
-      prisma.announcement.count({ where: { ...announcementWhere, status: "draft" } }),
-      prisma.announcement.count({ where: { ...announcementWhere, status: "scheduled" } }),
-      prisma.announcement.count({ where: { ...announcementWhere, status: "sent" } }),
-    ]);
+    const { announcements, pagination } = await prisma.$transaction(
+      tx => readAnnouncementPage(tx, announcementWhere, firstSearchParam(searchParams.page)),
+      { isolationLevel: "RepeatableRead" },
+    );
 
     const demoMode = showDemoFallbackData && announcements.length === 0;
     const visibleAnnouncements = demoMode ? executiveAnnouncementDemoRows : announcements;
@@ -3875,14 +3862,9 @@ async function renderLivePage(
         data={{
           centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           announcements: visibleAnnouncements,
-          stats: demoMode
-            ? {
-                total: visibleAnnouncements.length,
-                draft: visibleAnnouncements.filter((announcement) => announcement.status === "draft").length,
-                scheduled: visibleAnnouncements.filter((announcement) => announcement.status === "scheduled").length,
-                sent: visibleAnnouncements.filter((announcement) => announcement.status === "sent").length,
-              }
-            : { total, draft, scheduled, sent },
+          pagination: demoMode ? undefined : pagination,
+          canEdit: canManageOperations(user),
+          canManagePlatform: user.role === "PLATFORM_OWNER" && canAccessAllCenters(user),
           demoMode,
         }}
       />

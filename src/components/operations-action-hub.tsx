@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
+import Link from "next/link";
 import { AlertCircle, CheckCircle2, Save } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
   const [isPending, startTransition] = useTransition();
 
   function submit() {
+    if (entity === "announcement") { setErrorMessage("Use the dedicated announcement editor to save or publish school news."); return; }
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -123,6 +125,8 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
       }
     });
   }
+
+  if (entity === "announcement") return <Card className="operations-action-hub"><CardHeader><CardTitle as="h2">School announcements</CardTitle><CardDescription>Save drafts and publish school news in the dedicated announcement workspace.</CardDescription></CardHeader><CardContent className="space-y-3"><Label htmlFor={`${formId}-module`}>Module</Label><Select value={entity} onValueChange={value => value && setEntity(value)}><SelectTrigger id={`${formId}-module`}><SelectValue /></SelectTrigger><SelectContent>{entityOptions.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select><Link href="/announcements" className="inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-medium">Open announcement editor</Link></CardContent></Card>;
 
   return (
     <Card className={`operations-action-hub ${embedded ? "gap-0 border-0 bg-transparent py-0 ring-0 shadow-none" : ""}`}>

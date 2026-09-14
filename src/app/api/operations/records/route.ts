@@ -65,7 +65,7 @@ import {
 import { withApiLogging } from "@/lib/request-response-logging";
 import { parseGuardianCommunicationPreference } from "@/lib/guardian-communication";
 import { normalizeScheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
-import { canWriteCenterlessAnnouncement } from "@/lib/announcement-scope";
+import { AnnouncementWorkflowError, saveAnnouncement } from "@/lib/announcement-persistence";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 export const runtime = "nodejs";
 
@@ -2033,32 +2033,14 @@ async function POSTHandler(request: NextRequest) {
       });
     });
   } else if (entity === "announcement") {
-    const requestedCenterId = clean(body.centerId) || null;
-    if (!requestedCenterId && !canWriteCenterlessAnnouncement(user.role)) {
-      return NextResponse.json({ ok: false, error: "Choose a school for this announcement." }, { status: 403 });
+    try {
+      const record = await saveAnnouncement({ database: prisma, actor: user, input: body });
+      revalidatePath("/announcements"); revalidatePath("/parent-portal");
+      return NextResponse.json({ ok: true, entity: "announcement", intent: body.intent, portalOnly: true, record }, { status: id ? 200 : 201 });
+    } catch (error) {
+      if (error instanceof AnnouncementWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      throw error;
     }
-    if (requestedCenterId && !canAccessCenter(user, requestedCenterId)) {
-      return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
-    }
-    centerId = requestedCenterId;
-    if (id) {
-      const existing = await prisma.announcement.findUnique({ where: { id }, select: { centerId: true } });
-      if (existing && !existing.centerId && !canWriteCenterlessAnnouncement(user.role)) {
-        return NextResponse.json({ ok: false, error: "You do not have access to this platform announcement." }, { status: 403 });
-      }
-      const guard = scopedUpdateGuard({ entity: "Announcement", expectedScopeId: requestedCenterId, actualScopeId: existing?.centerId, scopeLabel: "center" });
-      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
-    }
-    const data = {
-      centerId: requestedCenterId,
-      title: clean(body.title),
-      body: clean(body.body),
-      audience: clean(body.audience) ? { label: clean(body.audience) } : undefined,
-      status: clean(body.status) || "draft",
-      sendAt: parseDate(body.sendAt),
-    };
-    if (!data.title || !data.body) return NextResponse.json({ ok: false, error: "Title and body are required." }, { status: 400 });
-    result = id ? await prisma.announcement.update({ where: { id }, data }) : await prisma.announcement.create({ data });
   } else if (entity === "campaign") {
     const brand = await prisma.brand.findFirst({ where: { tenantId: user.tenantId }, orderBy: { createdAt: "asc" }, select: { id: true } });
     const campaignCenterId = canAccessAllCenters(user) ? clean(body.centerId) || null : user.primaryCenterId;

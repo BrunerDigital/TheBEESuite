@@ -10,6 +10,7 @@ import {
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
+import { fullyVoidedTuitionChargeIds } from "@/lib/payment-readiness-evidence";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSupabaseAuthConfig, isSupabaseAuthCompatibleEmail } from "@/lib/supabase-auth";
 
@@ -111,7 +112,11 @@ async function main() {
             select: { type: true, sourceSystem: true, amountCents: true },
           },
           invoices: {
-            select: { id: true, status: true, totalCents: true, dueDate: true, sourceSystem: true },
+            select: {
+              id: true, status: true, totalCents: true, dueDate: true, sourceSystem: true,
+              // Complete linked history, including entries without a running balance.
+              ledgerEntries: { select: { id: true, billingAccountId: true, invoiceId: true, paymentId: true, type: true, amountCents: true, sourceSystem: true } },
+            },
             orderBy: [{ dueDate: "desc" }, { id: "desc" }],
           },
         },
@@ -381,10 +386,11 @@ async function main() {
         const lastSettledIndex = chronologicalLedger.findLastIndex((entry) => (entry.balanceAfterCents ?? 0) <= 0);
         const balanceEvidenceWindow = chronologicalLedger.slice(lastSettledIndex + 1);
         const positiveBalanceEvidence = balanceEvidenceWindow.filter((entry) => entry.amountCents > 0);
+        const cancelledTuitionChargeIds = fullyVoidedTuitionChargeIds(account.id, account.invoices);
         const unsupportedPositiveBalanceEvidence = positiveBalanceEvidence.filter((entry) => !(
           entry.sourceSystem === "procare"
           && entry.type === "procare_balance_reconciliation"
-        ));
+        ) && !cancelledTuitionChargeIds.has(entry.id));
         const hasPositiveManualEntry = unsupportedPositiveBalanceEvidence.some((entry) => (
           entry.sourceSystem === "bee_suite_manual" && entry.amountCents > 0
         ));
@@ -421,6 +427,7 @@ async function main() {
             : null,
           recentLedger,
           balanceEvidenceWindowEntries: balanceEvidenceWindow.length,
+          fullyVoidedTuitionChargesExcluded: positiveBalanceEvidence.filter(entry => cancelledTuitionChargeIds.has(entry.id)).length,
           unsupportedPositiveBalanceEvidence: unsupportedPositiveBalanceEvidence.map((entry) => ({
             type: entry.type,
             sourceSystem: entry.sourceSystem,

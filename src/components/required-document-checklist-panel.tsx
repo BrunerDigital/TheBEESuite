@@ -409,8 +409,8 @@ export function RequiredDocumentChecklistPanel({
             <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
               <span>Page {currentSubjectPage + 1} of {subjectPageCount}</span>
               <div className="flex gap-2">
-                <Button type="button" size="sm" variant="outline" disabled={currentSubjectPage === 0} onClick={() => setSubjectPage((page) => Math.max(0, page - 1))}>Previous</Button>
-                <Button type="button" size="sm" variant="outline" disabled={currentSubjectPage >= subjectPageCount - 1} onClick={() => setSubjectPage((page) => Math.min(subjectPageCount - 1, page + 1))}>Next</Button>
+                <Button type="button" size="sm" variant="outline" disabled={currentSubjectPage === 0} onClick={() => setSubjectPage(Math.max(0, currentSubjectPage - 1))}>Previous</Button>
+                <Button type="button" size="sm" variant="outline" disabled={currentSubjectPage >= subjectPageCount - 1} onClick={() => setSubjectPage(Math.min(subjectPageCount - 1, currentSubjectPage + 1))}>Next</Button>
               </div>
             </div>
           ) : null}
@@ -478,8 +478,8 @@ export function RequiredDocumentChecklistPanel({
             <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
               <span>Page {currentRowPage + 1} of {rowPageCount}</span>
               <div className="flex gap-2">
-                <Button type="button" size="sm" variant="outline" disabled={currentRowPage === 0} onClick={() => setRowPage((page) => Math.max(0, page - 1))}>Previous</Button>
-                <Button type="button" size="sm" variant="outline" disabled={currentRowPage >= rowPageCount - 1} onClick={() => setRowPage((page) => Math.min(rowPageCount - 1, page + 1))}>Next</Button>
+                <Button type="button" size="sm" variant="outline" disabled={currentRowPage === 0} onClick={() => setRowPage(Math.max(0, currentRowPage - 1))}>Previous</Button>
+                <Button type="button" size="sm" variant="outline" disabled={currentRowPage >= rowPageCount - 1} onClick={() => setRowPage(Math.min(rowPageCount - 1, currentRowPage + 1))}>Next</Button>
               </div>
             </div>
           ) : null}

@@ -29,6 +29,10 @@ test("documents paginate every loaded checklist row and hide mutations for read-
   assert.match(checklist, /const \[rowPage, setRowPage\] = useState\(0\);/);
   assert.match(checklist, /detailItems\.slice\(currentRowPage \* checklistPageSize/);
   assert.match(checklist, /Page \{currentRowPage \+ 1\} of \{rowPageCount\}/);
+  assert.match(checklist, /setRowPage\(Math\.max\(0, currentRowPage - 1\)\)/);
+  assert.match(checklist, /setRowPage\(Math\.min\(rowPageCount - 1, currentRowPage \+ 1\)\)/);
+  assert.match(checklist, /setSubjectPage\(Math\.max\(0, currentSubjectPage - 1\)\)/);
+  assert.match(checklist, /setSubjectPage\(Math\.min\(subjectPageCount - 1, currentSubjectPage \+ 1\)\)/);
   assert.match(checklist, /canRequest \? "expand to review or request information" : "expand to review"/);
   assert.match(checklist, /\{canRequest && requiresChecklistAction\(item\.status\) \?/);
   assert.match(documents, /canManageDocuments: boolean;/);

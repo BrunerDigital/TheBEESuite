@@ -2,7 +2,7 @@ import "./load-env";
 import { mkdir, writeFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 import { request } from "playwright";
-import { MOBILE_LAUNCH_PUBLIC_PATHS, mobileLaunchHttpSmokePassed, writeReadinessSnapshot } from "./mobile-launch-readiness";
+import { MOBILE_LAUNCH_PUBLIC_PATHS, launchPublicResponseIsValid, mobileLaunchHttpSmokePassed, writeReadinessSnapshot } from "./mobile-launch-readiness";
 import { SYNTHETIC_ROLE_QA_ACCOUNTS, SYNTHETIC_ROLE_QA_TENANT_SLUG, hasSyntheticRoleQaMarker } from "../src/lib/synthetic-role-qa";
 
 async function main() {
@@ -40,9 +40,14 @@ async function main() {
           const response = await context.get(`/parent-portal?view=${view}`);
           extra.push({ view, status: response.status(), retainedPortal: !/NEXT_REDIRECT;/.test(await response.text()) && new URL(response.url()).pathname === account.landingPath });
         }
+        // Keep the original cookie jar in memory only, to prove server-side revocation.
+        const beforeLogout = await context.storageState();
         const logout = await context.post("/api/auth/logout");
         const afterLogout = await context.post("/api/device-sessions", { data: { action: "heartbeat" } });
-        results.push({ role: account.key, login: "passed", correctRole: loginResult.user?.role === account.role, correctPortal: loginResult.nextPath === account.landingPath, sessionPersistence: persisted, resetLinkPresent: resetLink, views: extra, logoutStatus: logout.status(), protectedAfterLogout: afterLogout.status() === 401 });
+        const replay = await request.newContext({ baseURL: "https://thebeesuite.io", timeout: 20000, storageState: beforeLogout });
+        let revoked = false;
+        try { revoked = (await replay.post("/api/device-sessions", { data: { action: "heartbeat" } })).status() === 401; } finally { await replay.dispose(); }
+        results.push({ role: account.key, login: "passed", correctRole: loginResult.user?.role === account.role, correctPortal: loginResult.nextPath === account.landingPath, sessionPersistence: persisted, resetLinkPresent: resetLink, views: extra, logoutStatus: logout.status(), protectedAfterLogout: afterLogout.status() === 401 && revoked });
       } catch { results.push({ role: account.key, status: "blocked: request smoke did not complete" }); }
       finally { await context.post("/api/auth/logout").catch(() => null); await context.dispose(); }
       await writeFile(`${output}/smoke-progress.json`, JSON.stringify(results, null, 2));
@@ -51,9 +56,10 @@ async function main() {
     const publicChecks = [];
     for (const path of MOBILE_LAUNCH_PUBLIC_PATHS) {
       try {
-        const response = await fetch(`https://thebeesuite.io${path}`, { signal: AbortSignal.timeout(15000) });
-        publicChecks.push({ path, status: response.status });
-      } catch { publicChecks.push({ path, status: 0 }); }
+        const response = await fetch(`https://thebeesuite.io${path}`, { redirect: "manual", signal: AbortSignal.timeout(15000) });
+        const valid = launchPublicResponseIsValid(path, { status: response.status, url: response.url, contentType: response.headers.get("content-type") ?? "", body: await response.text() });
+        publicChecks.push({ path, status: response.status, valid });
+      } catch { publicChecks.push({ path, status: 0, valid: false }); }
     }
     const passed = mobileLaunchHttpSmokePassed(results, publicChecks);
     await writeFile(`${output}/smoke.json`, JSON.stringify({ checkedAt: new Date().toISOString(), passed, schools: schools.length, results, publicChecks, limitations: ["HTTP session smoke, not native or visual browser validation", "No physical iOS device or approved binary", "No password-reset email sent", "No real attendance/messages/payments/invitations submitted", "School pilot approvals not inferred"] }, null, 2));

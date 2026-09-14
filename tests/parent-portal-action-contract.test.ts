@@ -45,7 +45,6 @@ test("parent billing and setup actions resolve one linked family before mutation
     "src/app/api/parent/products/purchase/route.ts",
     "src/app/api/parent/kiosk-credential/route.ts",
     "src/app/api/parent/setup/route.ts",
-    "src/app/api/billing/family-payment/route.ts",
     "src/app/api/billing/payment-method-session/route.ts",
   ]) {
     const route = readFileSync(routePath, "utf8");
@@ -57,7 +56,9 @@ test("parent billing and setup actions resolve one linked family before mutation
   assert.match(checkoutRoute, /getCurrentUser\(\)/);
   assert.match(checkoutRoute, /getParentPortalPaymentFamilyScope\(user\.id, user\.tenantId,/);
   const familyPaymentRoute = readFileSync("src/app/api/billing/family-payment/route.ts", "utf8");
-  assert.match(familyPaymentRoute, /method === "saved_method"[\s\S]*getParentPortalFamilyScope[\s\S]*getParentPortalPaymentFamilyScope/);
+  assert.match(familyPaymentRoute, /parentCheckout && method === "saved_method"\) return NextResponse.json/);
+  assert.match(familyPaymentRoute, /getParentPortalPaymentFamilyScope\(user.id, user.tenantId,/);
+  assert.match(familyPaymentRoute, /readAuthorizedFamilyPaymentTarget\(tx, user/);
 });
 
 test("record-level parent actions recheck the signed-in guardian link", () => {

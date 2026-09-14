@@ -45,10 +45,11 @@ async function main() {
           assert.ok(["exec-demo-family", "fake-second-family"].includes(familyId!)); assert.ok([null, "notice-009", "notice-001"].includes(cursor));
           const start = cursor === null ? 16 : cursor === "notice-009" ? 8 : 0, count = start === 0 ? 1 : 8;
           const items = Array.from({ length: count }, (_, index) => ({ id: "notice-" + String(start - index).padStart(3, "0"), title: "Fake school notice " + (start - index), body: "Fake earlier notice.\nSchool information stays available to its own family.", sendAt: "2026-09-13T14:00:00.000Z" }));
-          const body = { ok: mode !== "malformed", familyId: mode === "wrong-family" ? "foreign-family" : familyId, requestCursor: cursor, items: mode === "newer-row" ? [{ ...items[0], sendAt: "2026-09-14T14:00:00.000Z" }] : items, nextCursor: count === 8 ? items.at(-1)!.id : null };
+          const empty = ["empty", "empty-deferred"].includes(mode);
+          const body = { ok: mode !== "malformed", familyId: mode === "wrong-family" ? "foreign-family" : familyId, requestCursor: cursor, items: empty ? [] : mode === "newer-row" ? [{ ...items[0], sendAt: "2026-09-14T14:00:00.000Z" }] : items, nextCursor: !empty && count === 8 ? items.at(-1)!.id : null };
           const status = mode === "failure" ? 503 : mode === "expired" ? 401 : 200;
           const fulfill = () => route.fulfill({ status, json: body });
-          if (mode === "deferred") { release = fulfill; return; }
+          if (mode === "deferred" || mode === "empty-deferred") { release = fulfill; return; }
           return fulfill();
         }
         if (url.pathname.startsWith("/api/") || request.method() !== "GET") { unexpected.push(request.method() + " " + url.pathname); return route.abort(); }
@@ -118,6 +119,22 @@ async function main() {
       await card().getByRole("status").filter({ hasText: "8 announcements loaded." }).waitFor(); assert.equal(await card().locator("[data-announcement-id]").count(), 8);
       assert.equal(await page.evaluate(() => (document.activeElement as HTMLElement)?.dataset.announcementId), "notice-016");
       results.push({ initialFailure: "retry recovered without false empty state" });
+      for (const initial of [false, true]) {
+        mode = "empty"; await open(320, 200, initial ? "?unavailable" : "");
+        if (!initial) await expand();
+        const button = initial ? card().getByRole("button", { name: "Retry announcements" }) : earlier();
+        await button.focus(); await button.press("Enter");
+        await card().getByRole("status").filter({ hasText: "You have reached the end of the available notices." }).waitFor(); await settle();
+        assert.equal(await card().locator("[data-announcement-id]").count(), initial ? 0 : 8);
+        assert.equal(await card().getByRole("status").evaluate(node => document.activeElement === node), true);
+        if (initial) assert.match(await card().innerText(), /No new announcements from your school/);
+        results.push({ emptyInitial: initial, emptyPageFocus: "stable status", retainedNotices: initial ? 0 : 8 });
+      }
+      mode = "empty-deferred"; await open(); await expand(); await focusClick();
+      await card().locator("[data-earlier-announcements] > summary").focus(); await finishDeferred();
+      await card().getByRole("status").filter({ hasText: "You have reached the end of the available notices." }).waitFor(); await settle();
+      assert.equal(await card().locator("[data-earlier-announcements] > summary").evaluate(node => document.activeElement === node), true);
+      results.push({ emptyPageUserMovedFocus: "not stolen" });
       for (const variant of ["reviewer", "demo", "preview"]) {
         const beforeRequests = requests.length; await open(390, 100, "?" + variant); await expand();
         assert.equal(await earlier().count(), 0); assert.equal(requests.length, beforeRequests);

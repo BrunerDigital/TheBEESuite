@@ -22,11 +22,13 @@ The first full gate correctly rejected test-fixture memoization derived from a m
 
 `npm run vercel-build` passed: Prisma 6.19.3 generation, lint (zero errors; one pre-existing unrelated `_row` warning), TypeScript, **2,352 tests**, and optimized Next.js 16.3.4 build. Log: `output/wave24-vercel-build-final.log`. Final focused history/recovery/payment-continuity suite: **36 passed**, `output/wave24-focused-final.log`. `npm run mobile:store:check` passed for both apps, including synchronized generated shell assets, identities, HTTPS/offline, privacy declarations and no-alpha icons/splashes; native source unchanged.
 
-The final real-shell run passed **20 cases per engine**, 31 intercepted fake GETs each, zero writes, external requests or client errors, with unchanged source hashes:
+After the empty-result focus correction below, the real-shell run passed **23 cases per engine**, 34 intercepted fake GETs each, zero writes, external requests or client errors, with unchanged source hashes:
 
-- Chromium: `output/playwright/parent-announcement-history-chromium-2026-09-14T00-37-35-418Z/results.json`.
-- WebKit: `output/playwright/parent-announcement-history-webkit-2026-09-14T00-37-45-185Z/results.json`.
+- Chromium: `output/playwright/parent-announcement-history-chromium-2026-09-14T00-43-10-121Z/results.json`.
+- WebKit: `output/playwright/parent-announcement-history-webkit-2026-09-14T00-43-22-148Z/results.json`.
 
 Fresh collapsed Home and expanded-history captures are in those folders; root visually inspected 390px default text and 320px enlarged text evidence. These are browser fake-data fixtures, not App Store screenshots or physical-device/Dynamic Type evidence. Earlier failed browser/gate evidence remains preserved in task output.
 
 Protected production verification will use the existing reserved fake graph with a separate exact-query, same-origin, one-shot announcement GET permission and a pre-screenshot zero-announcement-row guard. The offline checker passed **57 safety assertions** with no network/database access. It will test empty correlated reviewer success, malformed/unknown cursor denials and teacher-role denial without enumerating real notices or another family. Populated and cross-family cases remain local actual-route proof; no live notice creation or email is needed.
+
+An independent final review found that an empty successful continuation or retry removed its focused button without a new row to focus. The stable live result now receives focus only if the initiating control still owned it. Added empty-initial, empty-continuation and moved-focus-on-empty cases pass in both engines. The previous 2,352-test full gate above predates this small correction; its repeat is recorded in `output/wave24-vercel-build-focus-final.log` and must pass before protected merge. PR [#377](https://github.com/BrunerDigital/TheBEESuite/pull/377) is not yet production evidence.

@@ -9,6 +9,7 @@ const item = { id: "notice-010", title: "Fake notice", body: "Fake school inform
 const page = { ok: true, familyId: "fake-family", requestCursor: "notice-011", items: [item], nextCursor: null };
 test("announcement receipts reject wrong correlation, leaks, invalid dates and unordered or oversized pages", () => {
   assert.equal(isParentAnnouncementPage(page, "fake-family", "notice-011"), true);
+  assert.equal(isParentAnnouncementPage({ ...page, items: [] }, "fake-family", "notice-011"), true);
   for (const patch of [{ ok: false }, { familyId: "foreign" }, { requestCursor: null }, { nextCursor: "random" }, { secret: true }, { items: [...Array(9)].map((_, i) => ({ ...item, id: `notice-${i}` })) },
     { items: [item, item] }, { items: [{ ...item, centerId: "private" }] }, { items: [{ ...item, id: "notice-011" }] }, { items: [{ ...item, body: null }] },
     ...["bad", "2026-02-31T00:00:00.000Z", "2026-09-13T14:00:00Z", new Date(item.sendAt)].map(sendAt => ({ items: [{ ...item, sendAt }] })),

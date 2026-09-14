@@ -2530,7 +2530,7 @@ function ParentPortalWorkspaceView({
               {announcementHistory.unavailable && announcementHistoryEnabled && !appReviewMode && !demoMode && !previewMode ? <Button type="button" variant="outline" className="mt-2 min-h-11 h-auto max-w-full whitespace-normal py-2" aria-disabled={announcementHistory.loading} aria-busy={announcementHistory.loading} onClick={event => void announcementHistory.loadEarlier(event.currentTarget)}>
                 {announcementHistory.loading ? "Loading announcements…" : "Retry announcements"}
               </Button> : null}
-              <p role="status" aria-live="polite" aria-atomic="true" className="mt-2 text-sm leading-6 text-muted-foreground empty:hidden">{announcementHistory.notice}</p>
+              <p role="status" aria-live="polite" aria-atomic="true" data-announcement-history-status tabIndex={-1} className="mt-2 scroll-mt-28 rounded-lg text-sm leading-6 text-muted-foreground empty:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{announcementHistory.notice}</p>
             </section>
           </div>
         </>

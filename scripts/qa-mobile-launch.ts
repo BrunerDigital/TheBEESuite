@@ -2,14 +2,14 @@ import "./load-env";
 import { mkdir, writeFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 import { request } from "playwright";
-import { writeReadinessSnapshot } from "./mobile-launch-readiness";
+import { MOBILE_LAUNCH_PUBLIC_PATHS, mobileLaunchHttpSmokePassed, writeReadinessSnapshot } from "./mobile-launch-readiness";
 import { SYNTHETIC_ROLE_QA_ACCOUNTS, SYNTHETIC_ROLE_QA_TENANT_SLUG, hasSyntheticRoleQaMarker } from "../src/lib/synthetic-role-qa";
 
 async function main() {
   const prisma = new PrismaClient();
   const output = "outputs/ios-launch";
   await mkdir(output, { recursive: true });
-  const results: unknown[] = [];
+  const results: Record<string, unknown>[] = [];
   try {
     // Only school identifiers/names are exported, never family/contact/financial records.
     const schools = await prisma.center.findMany({ where: { status: { notIn: ["closed", "archived", "inactive"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } });
@@ -48,12 +48,16 @@ async function main() {
       console.log(JSON.stringify(results[results.length - 1]));
     }
     const publicChecks = [];
-    for (const path of ["/app", "/check-in", "/privacy", "/terms", "/support", "/api/health"]) {
-      const response = await fetch(`https://thebeesuite.io${path}`, { signal: AbortSignal.timeout(15000) });
-      publicChecks.push({ path, status: response.status });
+    for (const path of MOBILE_LAUNCH_PUBLIC_PATHS) {
+      try {
+        const response = await fetch(`https://thebeesuite.io${path}`, { signal: AbortSignal.timeout(15000) });
+        publicChecks.push({ path, status: response.status });
+      } catch { publicChecks.push({ path, status: 0 }); }
     }
-    await writeFile(`${output}/smoke.json`, JSON.stringify({ checkedAt: new Date().toISOString(), schools: schools.length, results, publicChecks, limitations: ["HTTP session smoke, not native or visual browser validation", "No physical iOS device or approved binary", "No password-reset email sent", "No real attendance/messages/payments/invitations submitted", "School pilot approvals not inferred"] }, null, 2));
-    console.log(JSON.stringify({ schools: schools.length, results, publicChecks }, null, 2));
+    const passed = mobileLaunchHttpSmokePassed(results, publicChecks);
+    await writeFile(`${output}/smoke.json`, JSON.stringify({ checkedAt: new Date().toISOString(), passed, schools: schools.length, results, publicChecks, limitations: ["HTTP session smoke, not native or visual browser validation", "No physical iOS device or approved binary", "No password-reset email sent", "No real attendance/messages/payments/invitations submitted", "School pilot approvals not inferred"] }, null, 2));
+    console.log(JSON.stringify({ passed, schools: schools.length, results, publicChecks }, null, 2));
+    if (!passed) process.exitCode = 2;
   } finally { await prisma.$disconnect(); }
 }
 main().catch(() => { console.error("Mobile smoke blocked; no business mutation performed. Check designated synthetic prerequisites."); process.exitCode = 1; });

@@ -1,6 +1,72 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildModuleGates, isArchivedCenterlessFamily, isConfirmedIntentionalEmptySchoolStart, needsCurrentClassroomAssignment, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
+import { buildModuleGates, buildReport, readinessExitCode, type CenterRolloutGap, isArchivedCenterlessFamily, isConfirmedIntentionalEmptySchoolStart, needsCurrentClassroomAssignment, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
+
+function reportSchool(setupGaps: string[] = []): CenterRolloutGap {
+  const moduleGates = buildModuleGates({ setupGaps, guardianCount: 1, guardianEmailCount: 0, guardianPhoneCount: 1, guardianLoginCount: 1, guardianPinCount: 1 });
+  return {
+    centerId: "synthetic-school", label: "Synthetic School", locationId: "test",
+    identity: { address: null, phone: null, email: null, timezone: "America/New_York", organizationId: "test", organizationName: "Test", tenantId: "test", tenantName: "Test", ownerGroupId: null, ownerGroupName: null, taxIdConfigured: true, businessProfileConfirmed: true, schoolDataPath: "start_clean", intentionalEmptyStartConfirmed: false },
+    classroomCount: 1, staffCount: 1, staffWithoutClassroomCount: 0, familyCount: 1, childCount: 1, childrenWithoutClassroomCount: 0,
+    guardianCount: 1, guardianEmailCount: 0, guardianPhoneCount: 1, guardianLoginCount: 1, guardianPinCount: 1, authorizedPickupCount: 0, directorAccessCount: 1,
+    moduleGates, gaps: [...new Set(Object.values(moduleGates).flatMap((gate) => gate.automatedGaps))],
+  };
+}
+
+function reportInput(rows: CenterRolloutGap[], modules = "setup"): Parameters<typeof buildReport>[0] {
+  return { configChecks: [], databaseChecks: [{ status: "pass", label: "Database", detail: "Connected" }], dataChecks: [], rolloutGapRows: rows, childClassroomMismatches: [], args: parsePilotReadinessArgs(["--module", modules]) };
+}
+
+test("connected infrastructure cannot make a blocked school ready", () => {
+  const report = buildReport(reportInput([reportSchool(["no classrooms"])]));
+  assert.equal(report.summary.failures, 0);
+  assert.equal(report.summary.status, "blocked");
+  assert.equal(report.summary.blockedSchoolCount, 1);
+  assert.equal(report.summary.blockedModuleCount, 1);
+  assert.equal(readinessExitCode(report, false), 1);
+});
+
+test("unselected invitation blockers do not prevent a setup-only data check", () => {
+  const school = reportSchool();
+  const report = buildReport(reportInput([school]));
+  assert.equal(school.moduleGates["parent-invitations"].status, "blocked");
+  assert.equal(report.summary.status, "ready");
+  assert.equal(report.summary.blockedModuleCount, 0);
+  assert.equal(readinessExitCode(report, false), 0);
+});
+
+test("a selected blocked school prevents mixed-fleet readiness", () => {
+  const report = buildReport(reportInput([reportSchool(), reportSchool(["missing records"])], "setup,billing"));
+  assert.equal(report.summary.status, "blocked");
+  assert.equal(report.summary.blockedSchoolCount, 1);
+  assert.equal(report.summary.blockedModuleCount, 2);
+  assert.equal(report.summary.approvalRequiredModuleCount, 1);
+});
+
+test("automated billing prerequisites do not count as activation approval", () => {
+  const report = buildReport(reportInput([reportSchool()], "billing,kiosk"));
+  assert.equal(report.summary.status, "manual_approval_required");
+  assert.equal(report.summary.label, "MANUAL APPROVAL REQUIRED");
+  assert.equal(report.summary.approvalRequiredModuleCount, 2);
+  assert.equal(readinessExitCode(report, false), 1);
+});
+
+test("no evaluated schools cannot produce a successful readiness exit", () => {
+  const report = buildReport(reportInput([]));
+  assert.equal(report.summary.status, "blocked");
+  assert.equal(readinessExitCode(report, false), 1);
+});
+
+test("infrastructure failures and optional warning strictness remain effective", () => {
+  const input = reportInput([reportSchool()]);
+  input.configChecks = [{ status: "warn", label: "Optional", detail: "Review" }];
+  const warning = buildReport(input);
+  assert.equal(warning.summary.status, "ready_with_warnings");
+  assert.equal(readinessExitCode(warning, false), 0);
+  assert.equal(readinessExitCode(warning, true), 1);
+  input.databaseChecks = [{ status: "fail", label: "Database", detail: "Unavailable" }];
+  assert.equal(buildReport(input).summary.status, "blocked");
+});
 
 test("pilot readiness args enable machine-readable rollout reports", () => {
   assert.deepEqual(parsePilotReadinessArgs([]), {

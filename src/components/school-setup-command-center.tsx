@@ -253,7 +253,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <fieldset disabled={isPending} aria-busy={isPending} aria-labelledby="school-setup-title" className="m-0 flex min-w-0 flex-col gap-6 border-0 p-0">
       <section aria-labelledby="school-setup-title" className="flex flex-col gap-4 rounded-xl border bg-card/80 p-5 shadow-sm">
         <div className="flex items-start gap-3 rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm">
           <Building2 aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-primary" />
@@ -548,6 +548,6 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
           </CollapsibleCard>
         </aside>
       </div>
-    </div>
+    </fieldset>
   );
 }

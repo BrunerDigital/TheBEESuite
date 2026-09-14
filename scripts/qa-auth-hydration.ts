@@ -30,12 +30,15 @@ async function main() {
   const client = await build({ ...shared, platform: "browser", format: "iife", stdin: { resolveDir: process.cwd(), loader: "tsx", contents: "import {hydrateRoot} from 'react-dom/client';import {AuthFixture} from './tests/fixtures/auth-hydration';const root=document.getElementById('root')!;hydrateRoot(root,<AuthFixture kind={root.dataset.kind!}/>);" } });
   const clientContents = client.outputFiles?.[0].contents;
   assert.ok(clientContents);
+  const documents = new Map(["login", "forgot", "reset", "pin", "registration"].map(kind => [
+    kind, `<!doctype html><html><body><div id="root" data-kind="${kind}">${render(kind)}</div><script src="/hydrate.js"></script></body></html>`,
+  ]));
   const server = createServer((request, response) => {
     if (request.url === "/hydrate.js") { response.setHeader("Content-Type", "application/javascript"); response.end(clientContents); return; }
-    const kind = new URL(request.url!, "http://fixture").searchParams.get("kind") ?? "login";
-    assert.ok(["login", "forgot", "reset", "pin", "registration"].includes(kind));
+    const document = documents.get(new URL(request.url!, "http://fixture").searchParams.get("kind") ?? "login");
+    if (!document) { response.writeHead(404); response.end("Unknown fixture"); return; }
     response.setHeader("Content-Type", "text/html");
-    response.end(`<!doctype html><html><body><div id="root" data-kind="${kind}">${render(kind)}</div><script src="/hydrate.js"></script></body></html>`);
+    response.end(document);
   });
   await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
   const address = server.address(); assert.ok(address && typeof address !== "string");

@@ -2,6 +2,7 @@ import "./load-env";
 import { mkdir, writeFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 import { request } from "playwright";
+import { writeReadinessSnapshot } from "./mobile-launch-readiness";
 import { SYNTHETIC_ROLE_QA_ACCOUNTS, SYNTHETIC_ROLE_QA_TENANT_SLUG, hasSyntheticRoleQaMarker } from "../src/lib/synthetic-role-qa";
 
 async function main() {
@@ -14,7 +15,9 @@ async function main() {
     const schools = await prisma.center.findMany({ where: { status: { notIn: ["closed", "archived", "inactive"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } });
     const columns = ["School ID", "School", "Status", "Director", "Correct access confirmed", "Classrooms confirmed", "Staff confirmed", "Families/children confirmed", "Tuition and balances confirmed", "Billing readiness", "Staff onboarding", "Parent pilot", "Open issues", "Owner", "Next action", "Target date", "Final approval", "Launch date"];
     const quote = (s: string) => `"${s.replace(/"/g, '""')}"`;
-    await writeFile(`${output}/school-readiness.csv`, [columns, ...schools.map(s => [s.id, s.name, "Not Started", ...Array(11).fill(""), "Director review and evidence required", "", "", ""])].map(r => r.map(quote).join(",")).join("\n") + "\n", { flag: "wx" }).catch((error) => { if (error.code !== "EEXIST") throw error; });
+    const snapshot = await writeReadinessSnapshot(output, [columns, ...schools.map(s => [s.id, s.name, "Not Started", ...Array(11).fill(""), "Director review and evidence required", "", "", ""])].map(r => r.map(quote).join(",")).join("\n") + "\n");
+    console.log(JSON.stringify({ directoryEntries: schools.length, readinessSnapshot: snapshot }));
+    if (process.argv.includes("--directory-only")) return;
     const tenant = await prisma.tenant.findUnique({ where: { slug: SYNTHETIC_ROLE_QA_TENANT_SLUG }, select: { id: true } });
     console.log(JSON.stringify({ schools: schools.length, isolatedTenantFound: Boolean(tenant) }));
     if (!tenant || !process.env.SYNTHETIC_ROLE_QA_PASSWORD) throw new Error("Synthetic prerequisites unavailable");

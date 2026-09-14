@@ -22,7 +22,7 @@ import { readSchoolEin } from "@/lib/school-tax-id";
 import { isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 type CheckStatus = "pass" | "warn" | "fail";
-type ReadinessStatus = "ready" | "ready_with_warnings" | "blocked";
+type ReadinessStatus = "ready" | "ready_with_warnings" | "manual_approval_required" | "blocked";
 export type RolloutModule = "setup" | "parent-invitations" | "kiosk" | "billing";
 type ModuleGateStatus = "data_ready" | "blocked" | "manual_approval_required";
 
@@ -105,6 +105,9 @@ type PilotReadinessReport = {
     warnings: number;
     rolloutGapCount: number;
     childClassroomMismatchCount: number;
+    blockedSchoolCount: number;
+    blockedModuleCount: number;
+    approvalRequiredModuleCount: number;
   };
   checks: {
     configuration: Check[];
@@ -312,6 +315,7 @@ export function readinessStatus(failures: number, warnings: number): ReadinessSt
 
 function readinessLabel(status: ReadinessStatus) {
   if (status === "blocked") return "BLOCKED";
+  if (status === "manual_approval_required") return "MANUAL APPROVAL REQUIRED";
   if (status === "ready_with_warnings") return "READY WITH WARNINGS";
   return "READY";
 }
@@ -345,7 +349,7 @@ function printRolloutGaps(rows: CenterRolloutGap[], all: boolean) {
   }
 }
 
-function buildReport(input: {
+export function buildReport(input: {
   configChecks: Check[];
   databaseChecks: Check[];
   dataChecks: Check[];
@@ -356,7 +360,21 @@ function buildReport(input: {
   const allChecks = [...input.configChecks, ...input.databaseChecks, ...input.dataChecks];
   const failures = allChecks.filter((item) => item.status === "fail").length;
   const warnings = allChecks.filter((item) => item.status === "warn").length;
-  const status = readinessStatus(failures, warnings);
+  // Infrastructure checks cannot override the selected schools' module gates.
+  // Unselected modules remain visible as context but do not decide this run.
+  const selectedGates = input.rolloutGapRows.flatMap((row) =>
+    input.args.modules.map((rolloutModule) => row.moduleGates[rolloutModule]),
+  );
+  const blockedModuleCount = selectedGates.filter((gate) => gate.status === "blocked").length;
+  const blockedSchoolCount = input.rolloutGapRows.filter((row) =>
+    input.args.modules.some((rolloutModule) => row.moduleGates[rolloutModule].status === "blocked"),
+  ).length;
+  const approvalRequiredModuleCount = selectedGates.filter((gate) => gate.status === "manual_approval_required").length;
+  const status: ReadinessStatus = failures > 0 || blockedModuleCount > 0 || selectedGates.length === 0
+    ? "blocked"
+    : approvalRequiredModuleCount > 0
+      ? "manual_approval_required"
+      : readinessStatus(failures, warnings);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -373,6 +391,9 @@ function buildReport(input: {
       warnings,
       rolloutGapCount: input.rolloutGapRows.filter((row) => row.gaps.length).length,
       childClassroomMismatchCount: input.childClassroomMismatches.length,
+      blockedSchoolCount,
+      blockedModuleCount,
+      approvalRequiredModuleCount,
     },
     checks: {
       configuration: input.configChecks,
@@ -413,6 +434,14 @@ function printReport(report: PilotReadinessReport, args: PilotReadinessArgs) {
 
   console.log(`\nPilot readiness result: ${report.summary.label}`);
   console.log(`Failures: ${report.summary.failures}; warnings: ${report.summary.warnings}.`);
+  console.log(`Selected gates: ${report.summary.blockedModuleCount} blocked across ${report.summary.blockedSchoolCount} school(s); ${report.summary.approvalRequiredModuleCount} require separate approval.`);
+  if (report.selection.selectedCenterCount === 0) console.log("- BLOCKED: No schools were evaluated.");
+}
+
+export function readinessExitCode(report: PilotReadinessReport, failOnWarn: boolean) {
+  return report.summary.status === "blocked"
+    || report.summary.status === "manual_approval_required"
+    || (failOnWarn && report.summary.warnings > 0) ? 1 : 0;
 }
 
 function writeReport(report: PilotReadinessReport, outputPath: string) {
@@ -825,8 +854,6 @@ async function main() {
     }),
   ];
 
-  const failures = [...configChecks, ...databaseChecks, ...dataChecks].filter((item) => item.status === "fail");
-  const warnings = [...configChecks, ...databaseChecks, ...dataChecks].filter((item) => item.status === "warn");
   const report = buildReport({
     configChecks,
     databaseChecks,
@@ -840,7 +867,7 @@ async function main() {
     const absolutePath = writeReport(report, args.outputPath);
     if (!args.json) console.log(`Wrote readiness report to ${absolutePath}`);
   }
-  if (failures.length || (args.failOnWarn && warnings.length)) process.exitCode = 1;
+  process.exitCode = readinessExitCode(report, args.failOnWarn);
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

@@ -313,7 +313,7 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
   }
 
   return (
-    <section id="school-data-setup" className="scroll-mt-24 rounded-xl border bg-card/80 p-5 shadow-sm" aria-labelledby="school-data-setup-title">
+    <fieldset disabled={isPending} aria-busy={isPending} id="school-data-setup" className="m-0 min-w-0 scroll-mt-24 rounded-xl border bg-card/80 p-5 shadow-sm" aria-labelledby="school-data-setup-title">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
           <div className="flex flex-wrap items-center gap-2">
@@ -382,7 +382,7 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
             {selectedPath === "import_existing" ? (
               <div className="space-y-2">
                 <label htmlFor="school-data-source" className="text-sm font-medium">Previous Source</label>
-                <Select value={sourceSystem} onValueChange={(value) => { setSourceSystem((value ?? "") as SchoolDataSourceSystem | ""); setAttested(false); }}>
+                <Select disabled={isPending} value={sourceSystem} onValueChange={(value) => { setSourceSystem((value ?? "") as SchoolDataSourceSystem | ""); setAttested(false); }}>
                   <SelectTrigger id="school-data-source" className="min-h-11"><SelectValue placeholder="Choose the previous system…" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="procare">ProCare Export Package</SelectItem>
@@ -589,6 +589,6 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
 
       {error ? <div role="alert" className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
       {message ? <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</div> : null}
-    </section>
+    </fieldset>
   );
 }

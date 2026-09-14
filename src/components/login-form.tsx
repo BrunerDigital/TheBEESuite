@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { ClientAuthForm } from "@/components/client-auth-form";
 import { FormEvent, useState, useTransition } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, LogIn, ShieldCheck } from "lucide-react";
 import { BrandIcon, BrandLogo } from "@/components/brand-logo";
@@ -207,7 +208,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 ))}
               </nav>
             ) : null}
-            <form className="order-1 flex flex-col gap-4 sm:order-2" onSubmit={submit} aria-busy={isPending} aria-describedby="login-description">
+            <ClientAuthForm action="/api/auth/login" className="order-1 flex flex-col gap-4 sm:order-2" onSubmit={submit} aria-busy={isPending} aria-describedby="login-description">
               {resetStatus === "complete" ? (
                 <Alert role="status" className="border-emerald-500/30 bg-emerald-500/10">
                   <CheckCircle2 />
@@ -276,7 +277,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 {isPending ? "Signing in…" : "Sign in"}
                 <LogIn data-icon="inline-end" />
               </button>
-            </form>
+            </ClientAuthForm>
             {portal !== "general" ? (
               <div className="order-3 mt-5 rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
                 {copy.helpText}
@@ -300,3 +301,4 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
     </main>
   );
 }
+

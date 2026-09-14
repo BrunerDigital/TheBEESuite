@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { ClientAuthForm } from "@/components/client-auth-form";
 import { FormEvent, useEffect, useRef, useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, LockKeyhole } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
@@ -181,7 +182,7 @@ export function ResetPasswordForm() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={submit} aria-busy={isPending} aria-describedby="reset-password-description">
+            <ClientAuthForm action={forceReset ? "/api/auth/force-password-reset" : "/api/auth/reset-password"} className="flex flex-col gap-4" onSubmit={submit} aria-busy={isPending} aria-describedby="reset-password-description">
               {error ? (
                 <Alert variant="destructive">
                   <AlertCircle />
@@ -249,7 +250,7 @@ export function ResetPasswordForm() {
                   </Button>
                 </>
               ) : null}
-            </form>
+            </ClientAuthForm>
             {forceReset ? (
               <Link href={`${loginHrefForNextPath(next)}&reset=required`} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline">
                 Back to sign in
@@ -272,3 +273,4 @@ export function ResetPasswordForm() {
     </main>
   );
 }
+

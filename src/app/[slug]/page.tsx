@@ -1,4 +1,7 @@
 import { readAutomationPage } from "@/lib/automation-page";
+import { AuditHistoryError, parseAuditHistoryFilters } from "@/lib/audit-history";
+import { readAuditHistoryPage } from "@/lib/audit-history-query";
+import { AuditHistoryUnavailable } from "@/components/audit-history-page";
 import { helpNavigationCardsFor } from "@/lib/help-navigation";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -966,6 +969,16 @@ async function renderLivePage(
   user: CurrentUser,
   searchParams: Record<string, string | string[] | undefined> = {},
 ) {
+  if (slug === "audit-logs") {
+    try {
+      const filters = parseAuditHistoryFilters(searchParams);
+      const data = await prisma.$transaction(tx => readAuditHistoryPage(tx, user, filters), { isolationLevel: "RepeatableRead", timeout: 20_000 });
+      return <AuditLogsPage data={data} />;
+    } catch (error) {
+      if (error instanceof AuditHistoryError) return <AuditHistoryUnavailable message={error.message} />;
+      throw error;
+    }
+  }
   if (slug === "asset-hub") {
     const rows = await prisma.brandAsset.findMany({
       where: { tenantId: user.tenantId, assetType: CORPORATE_ASSET_TYPE },
@@ -5497,34 +5510,6 @@ async function renderLivePage(
     );
   }
 
-  if (slug === "audit-logs") {
-    const where = { centerId: scopedCenterIds };
-    const [logs, total, leadActions, sensitive] = await Promise.all([
-      prisma.auditLog.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take: 100,
-        include: {
-          user: { select: { name: true, email: true } },
-          center: { select: { name: true, crmLocationId: true } },
-        },
-      }),
-      prisma.auditLog.count({ where }),
-      prisma.auditLog.count({ where: { ...where, action: { startsWith: "lead." } } }),
-      prisma.auditLog.count({
-        where: {
-          ...where,
-          OR: [
-            { action: { contains: "restricted", mode: "insensitive" } },
-            { action: { contains: "sensitive", mode: "insensitive" } },
-            { resource: { contains: "Incident", mode: "insensitive" } },
-          ],
-        },
-      }),
-    ]);
-
-    return <AuditLogsPage data={{ logs, stats: { total, leadActions, sensitive } }} />;
-  }
 
   if (slug === "team-permissions") {
     const teamScope = { tenantId: user.tenantId, tenantWide, visibleCenterIds, at: today };

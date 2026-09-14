@@ -84,6 +84,7 @@ export default function AppLauncherPage() {
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
                 Choose the option that matches how you use The BEE Suite. Each one opens a separate page.
               </p>
+              <Link href="/mobile-apps" className="mt-3 inline-block min-h-11 py-2 font-semibold text-amber-200 underline">Mobile apps, onboarding guides, and support</Link>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

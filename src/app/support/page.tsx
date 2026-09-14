@@ -104,6 +104,7 @@ export default function SupportPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>Email: <a className="font-semibold text-amber-200 underline-offset-4 hover:underline" href="mailto:support@thebeesuite.io">support@thebeesuite.io</a></p>
+                  <p><Link className="font-semibold text-amber-200 underline" href="/mobile-apps#support">Prepare a mobile-app support report</Link> with your school, role, device, version, and operational impact.</p>
                   <p>Include your name, school, the email you use to log in, the page you were on, and a screenshot when it is safe to share one. Describe the affected family record without including sensitive details.</p>
                   <p>Include your role, school or company, login email, page, time, steps taken, and a safe screenshot. Families can start account deletion from Parent Portal → Family → Profile &amp; Security → Privacy and Account Deletion.</p>
                   <p>Do not send full card numbers, bank login details, medical documents, custody documents, or other highly sensitive files through ordinary email unless support specifically gives you a secure upload path.</p>

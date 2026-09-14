@@ -4,7 +4,20 @@ import { launchApps, verifiedStoreUrl } from "../src/lib/mobile-launch";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MOBILE_LAUNCH_PUBLIC_PATHS, launchPublicResponseIsValid, mobileLaunchHttpSmokePassed, writeReadinessSnapshot } from "../scripts/mobile-launch-readiness";
+import { MOBILE_LAUNCH_PUBLIC_PATHS, assertProductionLoginOptIn, launchPublicResponseIsValid, mobileLaunchHttpSmokePassed, readinessCsvCell, writeReadinessSnapshot } from "../scripts/mobile-launch-readiness";
+
+test("production login requires explicit opt-in while directory export stays read-only", () => {
+  assert.throws(() => assertProductionLoginOptIn(false, undefined), /ALLOW_SYNTHETIC_ROLE_QA_PRODUCTION_LOGIN/);
+  assert.throws(() => assertProductionLoginOptIn(false, "false"));
+  assert.doesNotThrow(() => assertProductionLoginOptIn(false, "true"));
+  assert.doesNotThrow(() => assertProductionLoginOptIn(true, undefined));
+});
+
+test("readiness CSV neutralizes formulas without changing ordinary school names", () => {
+  for (const value of ["=1+1", "+1+1", "-1+1", "@SUM(1)", "\t=1+1", " \r\n=1+1"]) assert.equal(readinessCsvCell(value), `"'${value}"`);
+  assert.equal(readinessCsvCell('School, "A"'), '"School, ""A"""');
+  assert.equal(readinessCsvCell("School A"), '"School A"');
+});
 
 test("download links fail closed without verified Apple listing evidence", () => {
   const app = launchApps[0];

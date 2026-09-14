@@ -2,10 +2,12 @@ import "./load-env";
 import { mkdir, writeFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 import { request } from "playwright";
-import { MOBILE_LAUNCH_PUBLIC_PATHS, launchPublicResponseIsValid, mobileLaunchHttpSmokePassed, writeReadinessSnapshot } from "./mobile-launch-readiness";
+import { MOBILE_LAUNCH_PUBLIC_PATHS, assertProductionLoginOptIn, launchPublicResponseIsValid, mobileLaunchHttpSmokePassed, readinessCsvCell, writeReadinessSnapshot } from "./mobile-launch-readiness";
 import { SYNTHETIC_ROLE_QA_ACCOUNTS, SYNTHETIC_ROLE_QA_TENANT_SLUG, hasSyntheticRoleQaMarker } from "../src/lib/synthetic-role-qa";
 
 async function main() {
+  const directoryOnly = process.argv.includes("--directory-only");
+  assertProductionLoginOptIn(directoryOnly, process.env.ALLOW_SYNTHETIC_ROLE_QA_PRODUCTION_LOGIN);
   const prisma = new PrismaClient();
   const output = "outputs/ios-launch";
   await mkdir(output, { recursive: true });
@@ -14,10 +16,9 @@ async function main() {
     // Only school identifiers/names are exported, never family/contact/financial records.
     const schools = await prisma.center.findMany({ where: { status: { notIn: ["closed", "archived", "inactive"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } });
     const columns = ["School ID", "School", "Status", "Director", "Correct access confirmed", "Classrooms confirmed", "Staff confirmed", "Families/children confirmed", "Tuition and balances confirmed", "Billing readiness", "Staff onboarding", "Parent pilot", "Open issues", "Owner", "Next action", "Target date", "Final approval", "Launch date"];
-    const quote = (s: string) => `"${s.replace(/"/g, '""')}"`;
-    const snapshot = await writeReadinessSnapshot(output, [columns, ...schools.map(s => [s.id, s.name, "Not Started", ...Array(11).fill(""), "Director review and evidence required", "", "", ""])].map(r => r.map(quote).join(",")).join("\n") + "\n");
+    const snapshot = await writeReadinessSnapshot(output, [columns, ...schools.map(s => [s.id, s.name, "Not Started", ...Array(11).fill(""), "Director review and evidence required", "", "", ""])].map(r => r.map(readinessCsvCell).join(",")).join("\n") + "\n");
     console.log(JSON.stringify({ directoryEntries: schools.length, readinessSnapshot: snapshot }));
-    if (process.argv.includes("--directory-only")) return;
+    if (directoryOnly) return;
     const tenant = await prisma.tenant.findUnique({ where: { slug: SYNTHETIC_ROLE_QA_TENANT_SLUG }, select: { id: true } });
     console.log(JSON.stringify({ schools: schools.length, isolatedTenantFound: Boolean(tenant) }));
     if (!tenant || !process.env.SYNTHETIC_ROLE_QA_PASSWORD) throw new Error("Synthetic prerequisites unavailable");

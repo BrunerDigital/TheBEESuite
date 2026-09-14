@@ -2,6 +2,15 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+export function assertProductionLoginOptIn(directoryOnly: boolean, permission: string | undefined) {
+  if (!directoryOnly && permission !== "true") throw new Error("Production login smoke requires ALLOW_SYNTHETIC_ROLE_QA_PRODUCTION_LOGIN=true. Use --directory-only for a read-only school export.");
+}
+
+export function readinessCsvCell(value: string) {
+  const safe = /^\s*[=+\-@]/.test(value) ? `'${value}` : value;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
 export const MOBILE_LAUNCH_PUBLIC_PATHS = ["/mobile-apps", "/app", "/check-in", "/privacy", "/terms", "/support", "/api/health", ...["director", "teacher", "parent", "kiosk"].map(role => `/guides/mobile-${role}.pdf`)];
 
 export function launchPublicResponseIsValid(path: string, response: { status: number; url: string; contentType: string; body: string }) {

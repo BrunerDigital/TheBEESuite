@@ -33,15 +33,16 @@ async function main() {
         const loginResult = await login.json();
         if (!login.ok() || !loginResult.ok) { results.push({ role: account.key, loginStatus: login.status(), status: "blocked: existing synthetic login failed" }); continue; }
         const landing = await context.get(account.landingPath);
-        const persisted = landing.ok() && new URL(landing.url()).pathname === account.landingPath;
+        const heartbeat = await context.post("/api/device-sessions", { data: { action: "heartbeat" } });
+        const persisted = heartbeat.status() === 200 && landing.ok() && !/NEXT_REDIRECT;/.test(await landing.text()) && new URL(landing.url()).pathname === account.landingPath;
         const extra = [];
         if (account.key === "parent") for (const view of ["updates", "messages", "payments", "family"]) {
           const response = await context.get(`/parent-portal?view=${view}`);
-          extra.push({ view, status: response.status(), retainedPortal: new URL(response.url()).pathname === account.landingPath });
+          extra.push({ view, status: response.status(), retainedPortal: !/NEXT_REDIRECT;/.test(await response.text()) && new URL(response.url()).pathname === account.landingPath });
         }
         const logout = await context.post("/api/auth/logout");
-        const afterLogout = await context.get(account.landingPath);
-        results.push({ role: account.key, login: "passed", correctRole: loginResult.user?.role === account.role, correctPortal: loginResult.nextPath === account.landingPath, sessionPersistence: persisted, resetLinkPresent: resetLink, views: extra, logoutStatus: logout.status(), protectedAfterLogout: new URL(afterLogout.url()).pathname !== account.landingPath });
+        const afterLogout = await context.post("/api/device-sessions", { data: { action: "heartbeat" } });
+        results.push({ role: account.key, login: "passed", correctRole: loginResult.user?.role === account.role, correctPortal: loginResult.nextPath === account.landingPath, sessionPersistence: persisted, resetLinkPresent: resetLink, views: extra, logoutStatus: logout.status(), protectedAfterLogout: afterLogout.status() === 401 });
       } catch { results.push({ role: account.key, status: "blocked: request smoke did not complete" }); }
       finally { await context.post("/api/auth/logout").catch(() => null); await context.dispose(); }
       await writeFile(`${output}/smoke-progress.json`, JSON.stringify(results, null, 2));

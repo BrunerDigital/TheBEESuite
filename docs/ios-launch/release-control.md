@@ -24,6 +24,8 @@ Production branch `main`; canonical deployment at preflight: `22105d8af8a0798458
 
 The source Capacitor wrappers load `https://thebeesuite.io`, with `/parents` and `/teachers` start paths. This confirms the configured backend destination, not compatibility of the Apple-approved binaries. Match each approved archive to a Git SHA and smoke-test that exact build against production before GO.
 
+Supplemental verification used the existing reserved App Review parent and teacher identities after the application's exact demo-scope validator passed. Both returned login 200, the correct role and portal, authenticated heartbeat 200, and post-logout heartbeat 401. Parent home, payments, family, updates and messages, plus the teacher portal, returned 200 without streamed redirects. This verifies HTTP authentication/session and route reachability for those demo accounts; it does not prove visual payment interactions, physical-device behavior, real-school associations, or director/executive access. No credentials or identities were changed.
+
 PR #310 is already MERGED as `087236b7c5a9eddc18f846399e4f944e79f1ce2f`; its description retains a migration hold. Read comments include a migration rehearsal and separately required backup/authorization gate; this task did not establish closure of that gate. No migration, schema change, or PR #310 action is part of this release.
 
 ## Go/no-go evidence checklist

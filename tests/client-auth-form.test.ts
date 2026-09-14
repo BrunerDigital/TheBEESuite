@@ -9,7 +9,7 @@ test("server-rendered credentials cannot be entered or submitted before hydratio
     createElement("input", { name: "password", type: "password" }),
     createElement("button", { type: "submit" }, "Sign in")));
   assert.match(html, /<form[^>]*method="post"/);
-  assert.match(html, /<fieldset[^>]*disabled=""[^>]*>.*name="password".*<button/s);
+  assert.match(html, /<fieldset[^>]*disabled=""[^>]*>[\s\S]*name="password"[\s\S]*<button/);
   assert.match(html, /<noscript>Enable JavaScript/);
 });
 

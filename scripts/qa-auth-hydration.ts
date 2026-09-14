@@ -24,11 +24,14 @@ async function main() {
   const shared = { bundle: true, write: false, jsx: "automatic" as const, define: { "process.env.NODE_ENV": '"test"' }, plugins: [nextMock] };
   const ssr = await build({ ...shared, platform: "node", format: "cjs", packages: "external", stdin: { resolveDir: process.cwd(), loader: "tsx", contents: "import {renderToString} from 'react-dom/server';import {AuthFixture} from './tests/fixtures/auth-hydration';export const render=(kind:string)=>renderToString(<AuthFixture kind={kind}/>);" } });
   const ssrFile = resolve(output, "server.cjs");
+  assert.ok(ssr.outputFiles);
   await writeFile(ssrFile, ssr.outputFiles[0].contents);
   const { render } = createRequire(resolve("package.json"))(ssrFile) as { render(kind: string): string };
   const client = await build({ ...shared, platform: "browser", format: "iife", stdin: { resolveDir: process.cwd(), loader: "tsx", contents: "import {hydrateRoot} from 'react-dom/client';import {AuthFixture} from './tests/fixtures/auth-hydration';const root=document.getElementById('root')!;hydrateRoot(root,<AuthFixture kind={root.dataset.kind!}/>);" } });
+  const clientContents = client.outputFiles?.[0].contents;
+  assert.ok(clientContents);
   const server = createServer((request, response) => {
-    if (request.url === "/hydrate.js") { response.setHeader("Content-Type", "application/javascript"); response.end(client.outputFiles[0].contents); return; }
+    if (request.url === "/hydrate.js") { response.setHeader("Content-Type", "application/javascript"); response.end(clientContents); return; }
     const kind = new URL(request.url!, "http://fixture").searchParams.get("kind") ?? "login";
     assert.ok(["login", "forgot", "reset", "pin", "registration"].includes(kind));
     response.setHeader("Content-Type", "text/html");

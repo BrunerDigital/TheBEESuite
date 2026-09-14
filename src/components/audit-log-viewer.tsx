@@ -1,287 +1,160 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Download, Printer, Search } from "lucide-react";
-import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { Download, Printer } from "lucide-react";
+import { PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useSchoolTimeZone } from "@/components/school-time-zone-context";
-import { formatZonedDateTime } from "@/lib/zoned-date-time";
+import { RecordPaginationNav } from "@/components/record-pagination";
+import { auditActorLabel, auditCenterLabel, auditHistoryHref, parseAuditHistoryFilters, type AuditHistoryData } from "@/lib/audit-history";
+import { formatZonedTimestamp } from "@/lib/zoned-date-time";
+import { cn } from "@/lib/utils";
 
-export type AuditLogViewerRow = {
-  id: string;
-  action: string;
-  resource: string;
-  resourceId: string | null;
-  createdAt: Date | string;
-  user: { name: string; email: string } | null;
-  center: { name: string; crmLocationId: string | null } | null;
-};
+export type { AuditHistoryRow as AuditLogViewerRow } from "@/lib/audit-history";
 
-type DateRange = "all" | "7" | "30" | "90";
+export function AuditLogViewer({ data }: { data: AuditHistoryData }) {
+  const router = useRouter(), [pending, startTransition] = useTransition();
+  const [exporting, setExporting] = useState(false), [status, setStatus] = useState("");
+  const filterKey = auditHistoryHref(data.filters);
+  const [draft, setDraft] = useState(() => ({ key: filterKey, values: { action: data.filters.action, resource: data.filters.resource, centerId: data.filters.centerId } }));
+  const selection = draft.key === filterKey ? draft.values : data.filters;
+  const activeExport = useRef<AbortController | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null), previousKey = useRef(filterKey);
+  const navigation = useRef<{ key: string; owner: Element | null; moved: boolean } | null>(null);
+  const { active: printActive, generatedAt, print: printReport } = usePrintableReport();
+  useEffect(() => () => { activeExport.current?.abort(); activeExport.current = null; }, []);
+  const { logs, filters, pagination, timeZone } = data;
+  const format = (value: string | Date | null) => formatZonedTimestamp(value, timeZone);
+  const resultMessage = `Showing ${pagination.from}–${pagination.to} of ${pagination.total} matching events.`;
+  useEffect(() => {
+    const moved = (event: FocusEvent) => { if (navigation.current && event.target !== navigation.current.owner && event.target !== document.body && event.target !== resultsRef.current) navigation.current.moved = true; };
+    document.addEventListener("focusin", moved); return () => document.removeEventListener("focusin", moved);
+  }, []);
+  useEffect(() => {
+    if (previousKey.current === filterKey) return;
+    previousKey.current = filterKey;
+    setDraft({ key: filterKey, values: { action: filters.action, resource: filters.resource, centerId: filters.centerId } });
+    activeExport.current?.abort(); activeExport.current = null; setExporting(false);
+    setStatus(resultMessage);
+    const requested = navigation.current; navigation.current = null;
+    if (requested?.key === filterKey && !requested.moved && (!requested.owner?.isConnected || document.activeElement === requested.owner || document.activeElement === document.body)) resultsRef.current?.focus();
+  }, [filterKey, filters.action, filters.centerId, filters.resource, resultMessage]);
 
-const dateRangeLabels: Record<DateRange, string> = {
-  all: "All dates",
-  "7": "Last 7 days",
-  "30": "Last 30 days",
-  "90": "Last 90 days",
-};
-
-function formatDateTime(value: Date | string | null | undefined, timeZone: string) {
-  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
-}
-
-function centerLabel(log: AuditLogViewerRow) {
-  return log.center?.crmLocationId ?? log.center?.name ?? "Global";
-}
-
-function rangeMatches(value: Date | string, range: DateRange) {
-  if (range === "all") return true;
-  const createdAt = new Date(value).getTime();
-  if (Number.isNaN(createdAt)) return false;
-  const cutoff = Date.now() - Number(range) * 24 * 60 * 60 * 1000;
-  return createdAt >= cutoff;
-}
-
-function safeCsvCell(value: unknown) {
-  const text = String(value ?? "");
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
-function makeCsvRows(logs: AuditLogViewerRow[], timeZone: string) {
-  const headers = ["When", "Actor Name", "Actor Email", "Action", "Center", "Resource", "Resource ID"];
-  const rows = logs.map((log) => [
-    formatDateTime(log.createdAt, timeZone),
-    log.user?.name ?? "System",
-    log.user?.email ?? "system",
-    log.action,
-    centerLabel(log),
-    log.resource,
-    log.resourceId ?? "",
-  ]);
-  return [headers, ...rows].map((row) => row.map(safeCsvCell).join(",")).join("\r\n");
-}
-
-export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
-  const timeZone = useSchoolTimeZone();
-  const [query, setQuery] = useState("");
-  const [actionFilter, setActionFilter] = useState("all");
-  const [resourceFilter, setResourceFilter] = useState("all");
-  const [centerFilter, setCenterFilter] = useState("all");
-  const [dateRange, setDateRange] = useState<DateRange>("all");
-  const [statusMessage, setStatusMessage] = useState("");
-  const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
-
-  const actionOptions = useMemo(() => Array.from(new Set(logs.map((log) => log.action))).sort(), [logs]);
-  const resourceOptions = useMemo(() => Array.from(new Set(logs.map((log) => log.resource))).sort(), [logs]);
-  const centerOptions = useMemo(() => Array.from(new Set(logs.map(centerLabel))).sort(), [logs]);
-
-  const filteredLogs = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return logs.filter((log) => {
-      const center = centerLabel(log);
-      const matchesQuery =
-        !needle ||
-        log.action.toLowerCase().includes(needle) ||
-        log.resource.toLowerCase().includes(needle) ||
-        log.resourceId?.toLowerCase().includes(needle) ||
-        log.user?.name.toLowerCase().includes(needle) ||
-        log.user?.email.toLowerCase().includes(needle) ||
-        center.toLowerCase().includes(needle);
-      const matchesAction = actionFilter === "all" || log.action === actionFilter;
-      const matchesResource = resourceFilter === "all" || log.resource === resourceFilter;
-      const matchesCenter = centerFilter === "all" || center === centerFilter;
-      return matchesQuery && matchesAction && matchesResource && matchesCenter && rangeMatches(log.createdAt, dateRange);
-    });
-  }, [actionFilter, centerFilter, dateRange, logs, query, resourceFilter]);
-
-  function exportCsv() {
-    if (filteredLogs.length === 0) {
-      setStatusMessage("No audit events match the current filters.");
-      return;
-    }
-
-    const blob = new Blob([makeCsvRows(filteredLogs, timeZone)], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bee-suite-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    setStatusMessage(`Exported ${filteredLogs.length.toLocaleString()} visible audit events.`);
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (pending || exporting) return;
+    const values = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
+    try {
+      const snapshotClock = new Date(Math.max(Date.now(), Date.parse(filters.asOf)));
+      const next = parseAuditHistoryFilters({ ...values, asOf: filters.asOf, page: "1" }, snapshotClock);
+      const nextKey = auditHistoryHref(next), owner = document.activeElement;
+      if (nextKey === filterKey) { setStatus(resultMessage); if (event.currentTarget.contains(owner)) resultsRef.current?.focus(); return; }
+      setDraft({ key: nextKey, values: { action: next.action, resource: next.resource, centerId: next.centerId } });
+      navigation.current = { key: nextKey, owner, moved: !event.currentTarget.contains(owner) };
+      setStatus(""); startTransition(() => router.push(nextKey + "#audit-results", { scroll: false }));
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Review the filters and try again."); }
   }
-
-  return (
-    <Card>
-      <ReportPrintStyles />
-      <PrintableReport active={printActive} label="Printable audit event report">
-        <header>
-          <h1>Audit Event Report</h1>
-          <p>
-            Action: {actionFilter === "all" ? "All actions" : actionFilter} | Resource: {resourceFilter === "all" ? "All resources" : resourceFilter} | Center: {centerFilter === "all" ? "All centers" : centerFilter} | Date: {dateRangeLabels[dateRange]}
-          </p>
-          {query.trim() ? <p>Search: {query.trim()}</p> : null}
-          <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
-          <p>{filteredLogs.length.toLocaleString()} visible events of {logs.length.toLocaleString()} loaded</p>
-        </header>
-        <table>
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>Actor</th>
-              <th>Email</th>
-              <th>Action</th>
-              <th>Center</th>
-              <th>Resource</th>
-              <th>Resource ID</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredLogs.map((log) => (
-              <tr key={log.id}>
-                <td>{formatDateTime(log.createdAt, timeZone)}</td>
-                <td>{log.user?.name ?? "System"}</td>
-                <td>{log.user?.email ?? "system"}</td>
-                <td>{log.action}</td>
-                <td>{centerLabel(log)}</td>
-                <td>{log.resource}</td>
-                <td>{log.resourceId ?? ""}</td>
-              </tr>
-            ))}
-            {!filteredLogs.length ? (
-              <tr><td colSpan={7}>No audit events match the current filters.</td></tr>
-            ) : null}
-          </tbody>
-        </table>
-      </PrintableReport>
-      <CardHeader>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-          <CardTitle as="h2">Recent events</CardTitle>
-            <CardDescription>Filter and export the scoped audit trail currently visible to this role.</CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={exportCsv}>
-              <Download data-icon="inline-start" />
-              Export CSV
-            </Button>
-            <Button type="button" variant="outline" onClick={printReport}>
-              <Printer data-icon="inline-start" />
-              Print events
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_14rem_14rem_14rem_12rem]">
-          <div className="relative">
-            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-10"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search actor, action, resource, center..."
-              aria-label="Search audit events"
-            />
-          </div>
-          <Select value={actionFilter} onValueChange={(value) => value && setActionFilter(value)}>
-            <SelectTrigger aria-label="Audit action filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All actions</SelectItem>
-              {actionOptions.map((action) => (
-                <SelectItem key={action} value={action}>
-                  {action}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={resourceFilter} onValueChange={(value) => value && setResourceFilter(value)}>
-            <SelectTrigger aria-label="Audit resource filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All resources</SelectItem>
-              {resourceOptions.map((resource) => (
-                <SelectItem key={resource} value={resource}>
-                  {resource}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={centerFilter} onValueChange={(value) => value && setCenterFilter(value)}>
-            <SelectTrigger aria-label="Audit center filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All centers</SelectItem>
-              {centerOptions.map((center) => (
-                <SelectItem key={center} value={center}>
-                  {center}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={dateRange} onValueChange={(value) => value && setDateRange(value as DateRange)}>
-            <SelectTrigger aria-label="Audit date range filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(dateRangeLabels) as DateRange[]).map((range) => (
-                <SelectItem key={range} value={range}>
-                  {dateRangeLabels[range]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{filteredLogs.length.toLocaleString()} visible</Badge>
-          <Badge variant="outline">{logs.length.toLocaleString()} loaded</Badge>
-          {statusMessage ? <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{statusMessage}</span> : null}
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>When</TableHead>
-              <TableHead>Actor</TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Center</TableHead>
-              <TableHead>Resource</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredLogs.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell>{formatDateTime(log.createdAt, timeZone)}</TableCell>
-                <TableCell>
-                  <div className="font-medium">{log.user?.name ?? "System"}</div>
-                  <div className="text-xs text-muted-foreground">{log.user?.email ?? "system"}</div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">{log.action}</Badge>
-                </TableCell>
-                <TableCell>{centerLabel(log)}</TableCell>
-                <TableCell>{log.resource} {log.resourceId ? log.resourceId.slice(0, 8) : ""}</TableCell>
-              </TableRow>
-            ))}
-            {!filteredLogs.length ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
-                  No audit events match the current filters.
-                </TableCell>
-              </TableRow>
-            ) : null}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+  async function exportCsv() {
+    if (activeExport.current || pending) return;
+    const controller = new AbortController(); activeExport.current = controller; setExporting(true); setStatus("");
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const response = await fetch(auditHistoryHref(filters, 1, true), { credentials: "same-origin", cache: "no-store", signal: controller.signal });
+      if (!response.ok) {
+        if (response.status === 429) throw new Error("Please wait one minute before exporting again. Your filters are preserved.");
+        if (response.status === 413) throw new Error("This export is too large. Narrow the school or date filters and try again. No partial file was created.");
+        if (response.status === 401 || response.status === 403) throw new Error("Your session or access changed. Refresh the page and sign in if needed.");
+        throw new Error("The export could not be completed. Keep your filters and try again.");
+      }
+      if (!response.headers.get("content-type")?.startsWith("text/csv")) throw new Error("The export response was incomplete. Try again.");
+      const rowCount = response.headers.get("x-audit-row-count");
+      if (!rowCount || !/^\d+$/.test(rowCount) || Number(rowCount) > 10_000) throw new Error("The export response was incomplete. Try again.");
+      const blob = await response.blob();
+      if (controller.signal.aborted) return;
+      if (blob.size > 3_000_000 || !blob.size) throw new Error("The export response was incomplete. Try again.");
+      const url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = url; link.download = "bee-suite-audit-history-" + filters.asOf.slice(0, 10) + ".csv";
+      document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus("Downloaded " + Number(rowCount).toLocaleString() + " matching events. CSV timestamps are UTC.");
+    } catch (error) {
+      if (activeExport.current === controller) setStatus(controller.signal.aborted ? "The export timed out. Narrow the filters or try again." : error instanceof Error ? error.message : "The export could not be completed. Try again.");
+    } finally { clearTimeout(timeout); if (activeExport.current === controller) { activeExport.current = null; setExporting(false); } }
+  }
+  const select = (name: "action" | "resource" | "centerId", label: string, options: { value: string; label: string }[]) => (
+    <div className="flex min-w-0 flex-col gap-1 text-sm font-medium"><label htmlFor={"audit-" + name}>{label}</label>
+      <input type="hidden" name={name} value={selection[name]} />
+      <Select value={selection[name]} disabled={pending || exporting} onValueChange={value => setDraft({ key: filterKey, values: { action: selection.action, resource: selection.resource, centerId: selection.centerId, [name]: value ?? "" } })}>
+        <SelectTrigger id={"audit-" + name} aria-label={label} className="min-h-11 min-w-0 whitespace-normal data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none"><SelectValue className="min-w-0 break-words" /></SelectTrigger>
+        <SelectContent><SelectItem value="">All {label.toLowerCase()}s</SelectItem>
+          {selection[name] && !options.some(option => option.value === selection[name]) ? <SelectItem value={selection[name]}>{selection[name]}</SelectItem> : null}
+          {options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
   );
+  return <section className="min-w-0 rounded-xl border bg-card p-3 sm:p-4" aria-label="Audit history">
+    <ReportPrintStyles />
+    <PrintableReport active={printActive} label="Printable audit history page">
+      <header><h1>Audit history — page {pagination.page} of {pagination.totalPages}</h1>
+        <p>{pagination.from}–{pagination.to} of {pagination.total} matching events. This report prints the current page only.</p>
+        <p>Snapshot: {format(filters.asOf)}. Generated: {format(generatedAt)}.</p>
+        <p>Search: {filters.q || "All"} | Action: {filters.action || "All"} | Resource: {filters.resource || "All"} | School: {data.centers.find(center => center.id === filters.centerId)?.label || (filters.centerId === "global" ? "Tenant-wide" : "All authorized")}</p>
+        <p>Dates: {filters.start || "Any"} through {filters.end || "Snapshot"} ({timeZone})</p></header>
+      <table className="table-fixed [&_td]:[overflow-wrap:anywhere] [&_th]:[overflow-wrap:anywhere]"><thead><tr>{["When", "Actor", "Email", "Action", "School", "Resource", "Resource ID"].map(label => <th key={label}>{label}</th>)}</tr></thead>
+        <tbody>{logs.map(log => <tr key={log.id}><td>{format(log.createdAt)}</td><td>{auditActorLabel(log)}</td><td>{log.user?.email || ""}</td><td>{log.action}</td><td>{auditCenterLabel(log)}</td><td>{log.resource}</td><td>{log.resourceId || ""}</td></tr>)}</tbody></table>
+    </PrintableReport>
+    <form key={auditHistoryHref(filters)} action="/audit-logs" method="get" onSubmit={applyFilters} aria-label="Filter audit history">
+      <input type="hidden" name="asOf" value={filters.asOf} />
+      <fieldset disabled={pending || exporting} className="grid min-w-0 gap-3">
+        <div className="flex min-w-0 flex-wrap items-end gap-2">
+          <label htmlFor="audit-q" className="flex min-w-0 flex-[1_1_14rem] flex-col gap-1 text-sm font-medium">Search all history
+            <Input id="audit-q" name="q" defaultValue={filters.q} maxLength={120} autoComplete="off" placeholder="Actor, action, record or school…" className="min-h-11" />
+          </label>
+          <Button type="submit" className="min-h-11" aria-busy={pending}>{pending ? "Searching…" : "Search"}</Button>
+          <Link className={cn(buttonVariants({ variant: "outline" }), "min-h-11")} href="/audit-logs" prefetch={false}>Reset</Link>
+        </div>
+        <details open={Boolean(filters.action || filters.resource || filters.centerId || filters.start || filters.end)} className="min-w-0">
+          <summary className="min-h-11 cursor-pointer rounded-md py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary">More filters{filters.action || filters.resource || filters.centerId || filters.start || filters.end ? " · active" : ""}</summary>
+          <div className="grid min-w-0 gap-3 py-2 sm:grid-cols-2 lg:grid-cols-3">
+            {select("action", "Action", data.actions.map(value => ({ value, label: value })))}
+            {select("resource", "Resource", data.resources.map(value => ({ value, label: value })))}
+            {select("centerId", "School", [...data.centers.map(center => ({ value: center.id, label: center.label })), ...(data.globalAvailable ? [{ value: "global", label: "Tenant-wide events" }] : [])])}
+            <label htmlFor="audit-start" className="flex min-w-0 flex-col gap-1 text-sm font-medium">From date<Input id="audit-start" name="start" type="date" defaultValue={filters.start} className="min-h-11 w-full min-w-0" /></label>
+            <label htmlFor="audit-end" className="flex min-w-0 flex-col gap-1 text-sm font-medium">Through date<Input id="audit-end" name="end" type="date" defaultValue={filters.end} className="min-h-11 w-full min-w-0" /></label>
+            <p className="self-end pb-2 text-xs text-muted-foreground">Dates use {timeZone}. Select Search to apply.</p>
+          </div>
+        </details>
+      </fieldset>
+    </form>
+    <div className="my-2 flex flex-wrap items-center gap-2">
+      <Button type="button" variant="outline" className="h-auto min-h-11 max-w-full whitespace-normal" disabled={exporting || pending || !pagination.total} onClick={exportCsv} aria-busy={exporting}><Download aria-hidden="true" data-icon="inline-start" /><span className="min-w-0 break-words">{exporting ? "Exporting…" : "Export all matches"}</span></Button>
+      <Button type="button" variant="outline" className="h-auto min-h-11 max-w-full whitespace-normal" onClick={printReport} disabled={pending || !logs.length}><Printer aria-hidden="true" data-icon="inline-start" /><span className="min-w-0 break-words">Print this page</span></Button>
+      <Link href={auditHistoryHref({ ...filters, asOf: "" }, 1)} prefetch={false} className={cn(buttonVariants({ variant: "ghost" }), "h-auto min-h-11 max-w-full whitespace-normal")}>Refresh results</Link>
+    </div>
+    <p id="audit-search-status" role="status" aria-live="polite" className="text-sm text-muted-foreground">{status || (pending ? "Loading matching events…" : "")}</p>
+    <div ref={resultsRef} id="audit-results" tabIndex={-1} aria-label={resultMessage} className="scroll-mt-24 rounded-md focus-visible:outline-2 focus-visible:outline-primary [&_nav_a]:min-h-11" aria-busy={pending}>
+      <RecordPaginationNav pagination={pagination} label="Events" disabled={pending || exporting} />
+      <p className="mb-3 text-xs text-muted-foreground">As of {format(filters.asOf)}. Filters search the complete authorized history.</p>
+      {!logs.length ? <p className="rounded-lg border border-dashed p-4 text-sm">No events match these filters. Try a different search or reset the filters.</p> : <>
+        <ol className="divide-y md:hidden" aria-label="Audit events">{logs.map(log => <li key={log.id} className="min-w-0 py-3" data-audit-row={log.id}>
+          <p className="break-words text-xs text-muted-foreground">{format(log.createdAt)}</p>
+          <p className="mt-1 break-all text-sm font-medium">{log.action}</p>
+          <p className="break-words text-sm">{auditActorLabel(log)} · {auditCenterLabel(log)}</p>
+          <details className="min-w-0"><summary className="min-h-11 cursor-pointer rounded-md py-3 text-sm focus-visible:outline-2 focus-visible:outline-primary">Record details<span className="sr-only"> for {log.action}</span></summary>
+            <dl className="grid gap-1 break-all text-sm"><dt className="text-muted-foreground">Resource</dt><dd>{log.resource}</dd><dt className="text-muted-foreground">Record ID</dt><dd>{log.resourceId || "Not recorded"}</dd>
+              {log.user?.email ? <><dt className="text-muted-foreground">Actor email</dt><dd>{log.user.email}</dd></> : null}</dl>
+          </details>
+        </li>)}</ol>
+        <div className="hidden min-w-0 md:block"><Table><caption className="sr-only">Matching audit events on this page</caption>
+          <TableHeader><TableRow>{["When", "Actor", "Action", "School", "Resource"].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</TableRow></TableHeader>
+          <TableBody>{logs.map(log => <TableRow key={log.id}><TableCell>{format(log.createdAt)}</TableCell><TableCell><p className="break-words font-medium">{auditActorLabel(log)}</p><p className="break-all text-xs text-muted-foreground">{log.user?.email || ""}</p></TableCell>
+            <TableCell className="break-all">{log.action}</TableCell><TableCell>{auditCenterLabel(log)}</TableCell><TableCell><p>{log.resource}</p><p className="break-all text-xs text-muted-foreground">{log.resourceId}</p></TableCell></TableRow>)}</TableBody>
+        </Table></div>
+      </>}
+      {pagination.totalPages > 1 ? <RecordPaginationNav pagination={pagination} label="Events" disabled={pending || exporting} /> : null}
+    </div>
+  </section>;
 }

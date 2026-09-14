@@ -47,7 +47,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { InfoTip } from "@/components/ui/info-tip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportPrintAction } from "@/components/printable-report";
-import { AuditLogViewer } from "@/components/audit-log-viewer";
+export { AuditLogsPage, type AuditLogsData } from "@/components/audit-history-page";
 import { AiCommandCenter, type AiCommandCenterData } from "@/components/ai-command-center";
 import {
   AnalyticsReportBuilder,
@@ -452,45 +452,6 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
   );
 }
 
-export type AuditLogsData = {
-  logs: Array<{
-    id: string;
-    action: string;
-    resource: string;
-    resourceId: string | null;
-    createdAt: Date | string;
-    user: { name: string; email: string } | null;
-    center: { name: string; crmLocationId: string | null } | null;
-  }>;
-  stats: {
-    total: number;
-    sensitive: number;
-    leadActions: number;
-  };
-};
-
-export function AuditLogsPage({ data }: { data: AuditLogsData }) {
-  return (
-    <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
-          <ShieldCheck data-icon="inline-start" />
-          Activity history
-        </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Audit Logs</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Review enrollment changes, notes, tasks, messages, and protected-record activity.
-        </p>
-      </section>
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Events" value={data.stats.total} detail="Based on your assigned access" />
-        <StatCard label="Enrollment actions" value={data.stats.leadActions} detail="Prospective-family changes" />
-        <StatCard label="Protected activity" value={data.stats.sensitive} detail="Protected records and access events" />
-      </div>
-      <AuditLogViewer logs={data.logs} />
-    </div>
-  );
-}
 
 
 export type AgencyAdminData = {

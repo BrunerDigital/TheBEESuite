@@ -56,7 +56,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
                 <Plus data-icon="inline-start" />
                 Start setup
               </Button>
-              <Button variant="outline" nativeButton={false} render={<Link href={`/audit-logs?resource=${encodeURIComponent(module.slug)}`} />}>
+              <Button variant="outline" nativeButton={false} render={<Link href="/audit-logs" />}>
                 View audit trail
                 <ArrowRight data-icon="inline-end" />
               </Button>

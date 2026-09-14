@@ -54,7 +54,7 @@ test("payment continuity is isolated from general parent mutations and non-payme
   assert.match(familyPaymentRoute, /method === "saved_method"[\s\S]*getParentPortalFamilyScope[\s\S]*getParentPortalPaymentFamilyScope/);
   assert.match(page, /familyId: parentPortalContentFamilyId/);
   assert.match(page, /messages=\{paymentContinuityAccess \? \[\] : signedMessages\}/);
-  assert.match(page, /announcements=\{paymentContinuityAccess \? \[\] : announcements\}/);
+  assert.match(page, /announcements=\{paymentContinuityAccess \? \[\] : parentHistoryEnabled \? parentUpdateSnapshot\?\.announcements\?\.items \?\? \[\] : announcements\}/);
   assert.match(page, /accountDeletionRequest=\{paymentContinuityAccess \? null : accountDeletionRequest\}/);
 });
 

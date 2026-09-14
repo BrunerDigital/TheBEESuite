@@ -66,7 +66,8 @@ test("successful acknowledgment updates the button and attention count before re
 test("parent announcement history is reachable without expanding the home by default", () => {
   const source = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
   assert.match(source, /<details[^>]*data-earlier-announcements>/);
-  assert.match(source, /Earlier announcements \(\{announcements\.length - 1\}\)/);
+  assert.match(source, /Earlier announcements \(\{announcements\.length - 1\} loaded\)/);
+  assert.match(source, /Load earlier announcements/);
   assert.match(source, /announcements\.slice\(1\)\.map/);
   assert.doesNotMatch(source, /<details[^>]*\bopen\b[^>]*data-earlier-announcements/);
 });

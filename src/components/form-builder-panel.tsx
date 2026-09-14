@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Copy, Plus, Save, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -142,8 +142,12 @@ export function FormBuilderPanel({ forms }: Props) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const savingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const controlsLocked = isSaving || isPending;
 
   function loadForm(value: string | null) {
+    if (savingRef.current) return;
     const id = value ?? "new";
     setSelectedId(id);
     setMessage("");
@@ -167,11 +171,13 @@ export function FormBuilderPanel({ forms }: Props) {
   }
 
   function applyTemplate(template: keyof typeof templateFields) {
+    if (savingRef.current) return;
     setType(template === "staff" ? "staff_onboarding" : template);
     setFields(templateFields[template].map((field) => ({ ...field, id: draftId() })));
   }
 
   function updateField(id: string, patch: Partial<FormBuilderField>) {
+    if (savingRef.current) return;
     setFields((current) =>
       current.map((field) => {
         if (field.id !== id) return field;
@@ -185,54 +191,70 @@ export function FormBuilderPanel({ forms }: Props) {
   }
 
   function save() {
+    if (savingRef.current) return;
+    const targetFormId = formId;
+    const normalizedFields = fields
+      .map((field) => ({
+        key: field.key || slugKey(field.label),
+        label: field.label.trim(),
+        type: field.type,
+        required: field.required,
+        parentVisible: field.parentVisible,
+        staffOnly: field.staffOnly,
+        helpText: field.helpText.trim() || null,
+        options: field.options.split(",").map((option) => option.trim()).filter(Boolean),
+      }))
+      .filter((field) => field.key && field.label);
+
+    if (!name.trim()) {
+      setError("Form name is required.");
+      return;
+    }
+    if (!normalizedFields.length) {
+      setError("Add at least one field before saving the form.");
+      return;
+    }
+
+    // A save always operates on the draft that was visible when Save was pressed.
+    // Locking all draft mutations until it settles prevents a delayed response from
+    // retargeting the editor and mixing two forms' fields.
+    savingRef.current = true;
+    setIsSaving(true);
+    setMessage("");
+    setError("");
+    const request = {
+      entity: "form",
+      id: targetFormId || undefined,
+      name,
+      type,
+      status,
+      fields: JSON.stringify(normalizedFields),
+    };
+
     startTransition(async () => {
-      setMessage("");
-      setError("");
-      const normalizedFields = fields
-        .map((field) => ({
-          key: field.key || slugKey(field.label),
-          label: field.label.trim(),
-          type: field.type,
-          required: field.required,
-          parentVisible: field.parentVisible,
-          staffOnly: field.staffOnly,
-          helpText: field.helpText.trim() || null,
-          options: field.options.split(",").map((option) => option.trim()).filter(Boolean),
-        }))
-        .filter((field) => field.key && field.label);
-
-      if (!name.trim()) {
-        setError("Form name is required.");
-        return;
+      try {
+        const response = await fetch("/api/operations/records", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+        });
+        const json = await response.json().catch(() => null) as { error?: string; record?: { id?: string }; mode?: string } | null;
+        if (!response.ok) {
+          setError(json?.error || "Form could not be saved.");
+          return;
+        }
+        if (json?.record?.id) {
+          setFormId(json.record.id);
+          setSelectedId(json.record.id);
+        }
+        setMessage(`Form ${json?.mode ?? "saved"}.`);
+        router.refresh();
+      } catch {
+        setError("Form could not be saved. Check your connection and try again.");
+      } finally {
+        savingRef.current = false;
+        setIsSaving(false);
       }
-      if (!normalizedFields.length) {
-        setError("Add at least one field before saving the form.");
-        return;
-      }
-
-      const response = await fetch("/api/operations/records", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entity: "form",
-          id: formId || undefined,
-          name,
-          type,
-          status,
-          fields: JSON.stringify(normalizedFields),
-        }),
-      });
-      const json = await response.json().catch(() => null) as { error?: string; record?: { id?: string }; mode?: string } | null;
-      if (!response.ok) {
-        setError(json?.error || "Form could not be saved.");
-        return;
-      }
-      if (json?.record?.id) {
-        setFormId(json.record.id);
-        setSelectedId(json.record.id);
-      }
-      setMessage(`Form ${json?.mode ?? "saved"}.`);
-      router.refresh();
     });
   }
 
@@ -245,16 +267,16 @@ export function FormBuilderPanel({ forms }: Props) {
             <CardDescription>Build enrollment, medical, permission, staff, and policy forms with field-level visibility and signature requirements.</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => applyTemplate("enrollment")}>
+            <Button type="button" variant="outline" onClick={() => applyTemplate("enrollment")} disabled={controlsLocked}>
               <Copy data-icon="inline-start" />
               Enrollment
             </Button>
-            <Button type="button" variant="outline" onClick={() => applyTemplate("medical")}>Medical</Button>
-            <Button type="button" variant="outline" onClick={() => applyTemplate("staff")}>Staff</Button>
+            <Button type="button" variant="outline" onClick={() => applyTemplate("medical")} disabled={controlsLocked}>Medical</Button>
+            <Button type="button" variant="outline" onClick={() => applyTemplate("staff")} disabled={controlsLocked}>Staff</Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-5" aria-busy={isPending}>
+      <CardContent className="space-y-5" aria-busy={controlsLocked}>
         {message ? (
           <Alert>
             <CheckCircle2 className="size-4" />
@@ -272,7 +294,7 @@ export function FormBuilderPanel({ forms }: Props) {
         <div className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1 md:col-span-2">
             <Label htmlFor={controlIds.existingForm}>Load existing form</Label>
-            <Select value={selectedId} onValueChange={loadForm}>
+            <Select value={selectedId} onValueChange={loadForm} disabled={controlsLocked}>
               <SelectTrigger id={controlIds.existingForm}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="new">New form</SelectItem>
@@ -286,7 +308,7 @@ export function FormBuilderPanel({ forms }: Props) {
           </div>
           <div className="space-y-1">
             <Label htmlFor={controlIds.status}>Status</Label>
-            <Select value={status} onValueChange={(value) => value && setStatus(value)}>
+            <Select value={status} onValueChange={(value) => value && !savingRef.current && setStatus(value)} disabled={controlsLocked}>
               <SelectTrigger id={controlIds.status}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>
@@ -303,11 +325,11 @@ export function FormBuilderPanel({ forms }: Props) {
           </div>
           <div className="space-y-1 md:col-span-2">
             <Label htmlFor={controlIds.name}>Form name</Label>
-            <Input id={controlIds.name} value={name} onChange={(event) => setName(event.target.value)} placeholder="Enrollment packet" />
+            <Input id={controlIds.name} value={name} onChange={(event) => !savingRef.current && setName(event.target.value)} placeholder="Enrollment packet" disabled={controlsLocked} />
           </div>
           <div className="space-y-1 md:col-span-2">
             <Label htmlFor={controlIds.type}>Form type</Label>
-            <Input id={controlIds.type} value={type} onChange={(event) => setType(event.target.value)} placeholder="enrollment, medical, policy" />
+            <Input id={controlIds.type} value={type} onChange={(event) => !savingRef.current && setType(event.target.value)} placeholder="enrollment, medical, policy" disabled={controlsLocked} />
           </div>
         </div>
 
@@ -333,15 +355,15 @@ export function FormBuilderPanel({ forms }: Props) {
                   <TableRow key={field.id}>
                     <TableCell>
                       <Label className="sr-only" htmlFor={`${fieldPrefix}-label`}>{fieldName} label</Label>
-                      <Input id={`${fieldPrefix}-label`} value={field.label} onChange={(event) => updateField(field.id, { label: event.target.value })} placeholder="Field label" />
+                      <Input id={`${fieldPrefix}-label`} value={field.label} onChange={(event) => updateField(field.id, { label: event.target.value })} placeholder="Field label" disabled={controlsLocked} />
                     </TableCell>
                     <TableCell>
                       <Label className="sr-only" htmlFor={`${fieldPrefix}-key`}>{fieldName} key</Label>
-                      <Input id={`${fieldPrefix}-key`} value={field.key} onChange={(event) => updateField(field.id, { key: slugKey(event.target.value) })} placeholder="field_key" />
+                      <Input id={`${fieldPrefix}-key`} value={field.key} onChange={(event) => updateField(field.id, { key: slugKey(event.target.value) })} placeholder="field_key" disabled={controlsLocked} />
                     </TableCell>
                     <TableCell>
                       <Label className="sr-only" htmlFor={`${fieldPrefix}-type`}>{fieldName} type</Label>
-                      <Select value={field.type} onValueChange={(value) => value && updateField(field.id, { type: value })}>
+                      <Select value={field.type} onValueChange={(value) => value && updateField(field.id, { type: value })} disabled={controlsLocked}>
                         <SelectTrigger id={`${fieldPrefix}-type`}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {fieldTypes.map((fieldType) => (
@@ -357,18 +379,19 @@ export function FormBuilderPanel({ forms }: Props) {
                         value={field.type === "select" ? field.options : field.helpText}
                         onChange={(event) => updateField(field.id, field.type === "select" ? { options: event.target.value } : { helpText: event.target.value })}
                         placeholder={field.type === "select" ? "Comma-separated options" : "Optional help text"}
+                        disabled={controlsLocked}
                       />
                     </TableCell>
-                    <TableCell><Switch id={`${fieldPrefix}-required`} aria-label={`${fieldName}: required`} checked={field.required} onCheckedChange={(checked) => updateField(field.id, { required: checked })} /></TableCell>
-                    <TableCell><Switch id={`${fieldPrefix}-parent-visible`} aria-label={`${fieldName}: visible to parents`} checked={field.parentVisible} onCheckedChange={(checked) => updateField(field.id, { parentVisible: checked })} /></TableCell>
-                    <TableCell><Switch id={`${fieldPrefix}-staff-only`} aria-label={`${fieldName}: staff only`} checked={field.staffOnly} onCheckedChange={(checked) => updateField(field.id, { staffOnly: checked })} /></TableCell>
+                    <TableCell><Switch id={`${fieldPrefix}-required`} aria-label={`${fieldName}: required`} checked={field.required} onCheckedChange={(checked) => updateField(field.id, { required: checked })} disabled={controlsLocked} /></TableCell>
+                    <TableCell><Switch id={`${fieldPrefix}-parent-visible`} aria-label={`${fieldName}: visible to parents`} checked={field.parentVisible} onCheckedChange={(checked) => updateField(field.id, { parentVisible: checked })} disabled={controlsLocked} /></TableCell>
+                    <TableCell><Switch id={`${fieldPrefix}-staff-only`} aria-label={`${fieldName}: staff only`} checked={field.staffOnly} onCheckedChange={(checked) => updateField(field.id, { staffOnly: checked })} disabled={controlsLocked} /></TableCell>
                     <TableCell>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        onClick={() => setFields((current) => current.filter((item) => item.id !== field.id))}
-                        disabled={fields.length === 1}
+                        onClick={() => !savingRef.current && setFields((current) => current.filter((item) => item.id !== field.id))}
+                        disabled={controlsLocked || fields.length === 1}
                         aria-label={`Remove ${fieldName}`}
                       >
                         <Trash2 />
@@ -387,13 +410,13 @@ export function FormBuilderPanel({ forms }: Props) {
             <Badge variant="outline">{fields.filter((field) => field.staffOnly).length} staff-only fields</Badge>
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setFields((current) => [...current, emptyField()])}>
+            <Button type="button" variant="outline" onClick={() => !savingRef.current && setFields((current) => [...current, emptyField()])} disabled={controlsLocked}>
               <Plus data-icon="inline-start" />
               Add Field
             </Button>
-            <Button type="button" onClick={save} disabled={isPending} aria-busy={isPending}>
+            <Button type="button" onClick={save} disabled={controlsLocked} aria-busy={controlsLocked}>
               <Save data-icon="inline-start" />
-              {isPending ? "Saving..." : "Save Form"}
+              {controlsLocked ? "Saving..." : "Save Form"}
             </Button>
           </div>
         </div>

@@ -3444,6 +3444,7 @@ export type DocumentsPageData = {
     summary: RequiredChecklistSummary;
   };
   signatureFamilies: SignatureRequestFamilyOption[];
+  canManageDocuments: boolean;
 };
 
 export type TeacherDocumentsPageData = {
@@ -3666,8 +3667,8 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
       </div>
       <nav aria-label="Document tasks" className="flex flex-wrap gap-2 rounded-xl border bg-card p-3">
         <a className={buttonVariants({ variant: "default" })} href="#required-document-action-rows">Review needed documents</a>
-        <a className={buttonVariants({ variant: "outline" })} href="#document-signature-request">Request a signature</a>
-        <a className={buttonVariants({ variant: "outline" })} href="#document-request-editor">Create or edit request</a>
+        {data.canManageDocuments ? <a className={buttonVariants({ variant: "outline" })} href="#document-signature-request">Request a signature</a> : null}
+        {data.canManageDocuments ? <a className={buttonVariants({ variant: "outline" })} href="#document-request-editor">Create or edit request</a> : null}
         <a className={buttonVariants({ variant: "ghost" })} href="#document-records">View all records</a>
       </nav>
       <CollapsibleCard
@@ -3691,8 +3692,8 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
           The package includes CSV sections inside a single JSON download and records the export in the audit log. It does not include raw storage keys or certify legal/licensing compliance.
         </p>
       </CollapsibleCard>
-      <RequiredDocumentChecklistPanel items={data.requiredChecklist.items} summary={data.requiredChecklist.summary} />
-      <SignatureRequestPanel families={data.signatureFamilies} />
+      <RequiredDocumentChecklistPanel items={data.requiredChecklist.items} summary={data.requiredChecklist.summary} canRequest={data.canManageDocuments} />
+      {data.canManageDocuments ? <SignatureRequestPanel families={data.signatureFamilies} /> : null}
       <CollapsibleCard
         id="document-records"
         title="Document records"
@@ -3746,22 +3747,24 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
                       <span className="text-xs text-muted-foreground">Pending upload</span>
                     )}
                   </TableCell>
-                  <TableCell><DocumentUploadActions documentId={document.id} /></TableCell>
-                  <TableCell><DocumentReviewActions documentId={document.id} status={document.status} /></TableCell>
+                  <TableCell>{data.canManageDocuments ? <DocumentUploadActions documentId={document.id} /> : <span className="text-xs text-muted-foreground">Read-only</span>}</TableCell>
+                  <TableCell>{data.canManageDocuments ? <DocumentReviewActions documentId={document.id} status={document.status} /> : <span className="text-xs text-muted-foreground">Read-only</span>}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
       </CollapsibleCard>
-      <CollapsibleCard
-        id="document-request-editor"
-        title="Create or edit document request"
-        description="Open a focused form to create a request or update an existing record."
-        collapsedSummary="Request form · existing records remain unchanged until you save"
-        defaultCollapsed
-      >
-        <OperationsActionHub title="Create or Edit Document Request" defaultEntity="document" compact embedded />
-      </CollapsibleCard>
+      {data.canManageDocuments ? (
+        <CollapsibleCard
+          id="document-request-editor"
+          title="Create or edit document request"
+          description="Open a focused form to create a request or update an existing record."
+          collapsedSummary="Request form · existing records remain unchanged until you save"
+          defaultCollapsed
+        >
+          <OperationsActionHub title="Create or Edit Document Request" defaultEntity="document" compact embedded />
+        </CollapsibleCard>
+      ) : null}
     </div>
   );
 }

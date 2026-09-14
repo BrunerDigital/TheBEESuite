@@ -8,6 +8,8 @@ import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { useParentPaymentRecovery, type ParentPaymentRecovery } from "@/components/use-parent-payment-recovery";
 import { useParentMessageHistory } from "@/components/use-parent-message-history";
+import { useParentAnnouncementHistory } from "@/components/use-parent-announcement-history";
+import { EMPTY_PARENT_ANNOUNCEMENTS, type ParentAnnouncementView } from "@/lib/parent-announcement-history";
 import { useParentUpdatesHistory } from "@/components/use-parent-updates-history";
 import { isParentUpdateDay, type ParentUpdatesPage } from "@/lib/parent-updates-history";
 import type { ParentMessageView } from "@/lib/parent-message-history";
@@ -418,12 +420,10 @@ type Props = {
   requestedDocumentId?: string;
   requestedDocumentUnavailable?: boolean;
   media?: ParentMedia[];
-  announcements?: Array<{
-    id: string;
-    title: string;
-    body: string;
-    sendAt: string | Date | null;
-  }>;
+  announcements?: ParentAnnouncementView[];
+  announcementHistoryEnabled?: boolean;
+  announcementHistoryNextCursor?: string | null;
+  announcementHistoryUnavailable?: boolean;
   uniformProducts?: UniformProductOption[];
   currentGuardianId?: string | null;
   kioskCredentials?: GuardianKioskCredential[];
@@ -743,7 +743,10 @@ function ParentPortalWorkspaceView({
   requestedDocumentId,
   requestedDocumentUnavailable = false,
   media = [],
-  announcements = [],
+  announcements: initialAnnouncements = EMPTY_PARENT_ANNOUNCEMENTS,
+  announcementHistoryEnabled = false,
+  announcementHistoryNextCursor = null,
+  announcementHistoryUnavailable = false,
   uniformProducts = [],
   currentGuardianId = null,
   kioskCredentials = [],
@@ -820,6 +823,12 @@ function ParentPortalWorkspaceView({
   const [messageAttachments, setMessageAttachments] = useState<File[]>([]);
   const [messageAttachmentInputKey, setMessageAttachmentInputKey] = useState(0);
   const messageTimelineRef = useRef<HTMLOListElement | null>(null);
+  const announcementContainerRef = useRef<HTMLElement | null>(null);
+  const announcementHistory = useParentAnnouncementHistory({ familyId: family?.id ?? "", announcements: initialAnnouncements,
+    nextCursor: announcementHistoryNextCursor, unavailable: announcementHistoryUnavailable,
+    enabled: Boolean(family && activeView === "home" && announcementHistoryEnabled && !paymentContinuityAccess && !previewMode && !demoMode && !appReviewMode),
+    container: announcementContainerRef, request: parentPortalRequest });
+  const announcements = announcementHistory.announcements;
   const messageHistory = useParentMessageHistory({ familyId: family?.id ?? "", messages, nextCursor: messageHistoryNextCursor,
     enabled: Boolean(family && !paymentContinuityAccess), timeline: messageTimelineRef, request: parentPortalRequest });
   const updateTimelineRef = useRef<HTMLDivElement | null>(null);
@@ -2448,6 +2457,7 @@ function ParentPortalWorkspaceView({
 
             <section
               id="parent-home-announcements"
+              ref={announcementContainerRef}
               className="overflow-hidden rounded-[1.5rem] border bg-card p-4 sm:p-6"
               aria-labelledby="parent-home-announcements-heading"
             >
@@ -2462,7 +2472,7 @@ function ParentPortalWorkspaceView({
                 </div>
               </div>
               {announcements[0] ? (
-                <div className="mt-5">
+                <div className="mt-5 scroll-mt-28 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [overflow-wrap:anywhere]" data-announcement-id={announcements[0].id} tabIndex={-1}>
                   <details className="group">
                     <summary className="cursor-pointer list-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                       <span className="block font-semibold leading-6">{announcements[0].title}</span>
@@ -2476,7 +2486,7 @@ function ParentPortalWorkspaceView({
                         <Minus className="hidden size-4 shrink-0 group-open:block" aria-hidden="true" />
                       </span>
                     </summary>
-                    <p className="border-t pt-3 text-sm leading-6 text-muted-foreground">
+                    <p className="whitespace-pre-line border-t pt-3 text-sm leading-6 text-muted-foreground">
                       {announcements[0].body}
                     </p>
                   </details>
@@ -2488,26 +2498,39 @@ function ParentPortalWorkspaceView({
                 </div>
               ) : (
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  No new announcements from your school.
+                  {announcementHistory.unavailable ? "School announcements are temporarily unavailable. Retry to check for notices." : "No new announcements from your school."}
                 </p>
               )}
-              {announcements.length > 1 ? (
+              {announcements.length > 1 || announcementHistory.nextCursor ? (
                 <details className="group mt-4 border-t pt-2" data-earlier-announcements>
                   <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                    <span className="min-w-0 flex-1">Earlier announcements ({announcements.length - 1})</span>
+                    <span className="min-w-0 flex-1">Earlier announcements ({announcements.length - 1} loaded)</span>
                     <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
                   </summary>
                   <div className="space-y-4 pb-2 pt-3">
                     {announcements.slice(1).map((announcement) => (
-                      <article key={announcement.id} className="rounded-xl border p-3 [overflow-wrap:anywhere]">
-                        <h3 className="font-semibold">{announcement.title}</h3>
-                        {announcement.sendAt ? <p className="mt-1 text-xs text-muted-foreground">{formatDate(announcement.sendAt)}</p> : null}
-                        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted-foreground">{announcement.body}</p>
+                      <article key={announcement.id} data-announcement-id={announcement.id} tabIndex={-1} className="scroll-mt-28 rounded-xl border p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [overflow-wrap:anywhere]">
+                        <details className="group/notice">
+                          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                            <span className="min-w-0 flex-1"><span className="block font-semibold">{announcement.title}</span>
+                              {announcement.sendAt ? <span className="mt-1 block text-xs text-muted-foreground">{formatDate(announcement.sendAt)}</span> : null}
+                            </span>
+                            <ChevronDown className="size-4 shrink-0 group-open/notice:rotate-180" aria-hidden="true" />
+                          </summary>
+                          <p className="mt-2 whitespace-pre-line border-t pt-2 text-sm leading-6 text-muted-foreground">{announcement.body}</p>
+                        </details>
                       </article>
                     ))}
                   </div>
+                  {announcementHistory.nextCursor ? <Button type="button" variant="outline" className="min-h-11 h-auto max-w-full whitespace-normal py-2 text-left" aria-disabled={announcementHistory.loading} aria-busy={announcementHistory.loading} onClick={event => void announcementHistory.loadEarlier(event.currentTarget)}>
+                    {announcementHistory.loading ? "Loading earlier announcements…" : "Load earlier announcements"}
+                  </Button> : null}
                 </details>
               ) : null}
+              {announcementHistory.unavailable && announcementHistoryEnabled && !appReviewMode && !demoMode && !previewMode ? <Button type="button" variant="outline" className="mt-2 min-h-11 h-auto max-w-full whitespace-normal py-2" aria-disabled={announcementHistory.loading} aria-busy={announcementHistory.loading} onClick={event => void announcementHistory.loadEarlier(event.currentTarget)}>
+                {announcementHistory.loading ? "Loading announcements…" : "Retry announcements"}
+              </Button> : null}
+              <p role="status" aria-live="polite" aria-atomic="true" className="mt-2 text-sm leading-6 text-muted-foreground empty:hidden">{announcementHistory.notice}</p>
             </section>
           </div>
         </>

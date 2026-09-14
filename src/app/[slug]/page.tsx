@@ -185,6 +185,7 @@ import { PARENT_MESSAGE_PAGE_SIZE } from "@/lib/parent-message-history";
 import { isParentUpdateDay } from "@/lib/parent-updates-history";
 import { logOperationalError } from "@/lib/request-response-logging";
 import { parentPhotoViews, parentUpdatesView, readParentUpdatesContext, readParentUpdatesHome, readParentUpdatesRows } from "@/lib/parent-updates-query";
+import { readParentAnnouncementRows } from "@/lib/parent-announcement-query";
 import { parentMessageCenterId } from "@/lib/parent-message-recipients";
 import { buildMessageReplyPath } from "@/lib/message-reply-routing";
 import { staffMessagingHref } from "@/lib/messaging-navigation";
@@ -2521,7 +2522,8 @@ async function renderLivePage(
       if (!context) return null;
       const home = parentHomeRequested ? await readParentUpdatesHome(tx, context, today) : null;
       const rows = !parentUpdatesRequested || invalidUpdateDay ? null : await readParentUpdatesRows(tx, context, { familyId, day: requestedUpdateDay, kind: "day", cursor: null });
-      return { context, home, rows };
+      const announcements = parentHomeRequested ? await readParentAnnouncementRows(tx, context, null, verifiedAppReviewKind === "parent") : null;
+      return { context, home, rows, announcements };
     }, { isolationLevel: "RepeatableRead" }).catch(error => {
       logOperationalError("parent_updates.snapshot_failed", error, { view: parentHomeRequested ? "home" : "updates" });
       return null;
@@ -2670,7 +2672,7 @@ async function renderLivePage(
         select: { id: true, url: true, storageKey: true, caption: true, takenAt: true, child: { select: { fullName: true } } },
       }),
       prisma.announcement.findMany({
-        where: verifiedAppReviewKind === "parent"
+        where: verifiedAppReviewKind === "parent" || parentHistoryEnabled || paymentContinuityAccess
           ? { id: "__no_app_review_announcements__" }
           : {
               OR: [
@@ -3232,7 +3234,10 @@ async function renderLivePage(
         requestedDocumentId={parentDocuments.requestedDocumentId}
         requestedDocumentUnavailable={parentDocuments.requestedDocumentUnavailable}
         media={parentHistoryEnabled ? parentUpdates?.photos ?? [] : signedMedia}
-        announcements={paymentContinuityAccess ? [] : announcements}
+        announcements={paymentContinuityAccess ? [] : parentHistoryEnabled ? parentUpdateSnapshot?.announcements?.items ?? [] : announcements}
+        announcementHistoryEnabled={parentHistoryEnabled && parentHomeRequested && verifiedAppReviewKind !== "parent"}
+        announcementHistoryNextCursor={parentUpdateSnapshot?.announcements?.nextCursor ?? null}
+        announcementHistoryUnavailable={parentHistoryEnabled && parentHomeRequested && !parentUpdateSnapshot?.announcements}
         uniformProducts={[]}
         currentGuardianId={linkedGuardian?.id ?? null}
         kioskCredentials={paymentContinuityAccess ? [] : kioskCredentials}

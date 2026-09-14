@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fullyVoidedTuitionChargeIds } from "../src/lib/payment-readiness-evidence";
+import { tuitionInvoiceItems } from "../src/lib/tuition-credits";
 
 function invoice() {
   return { id: "invoice", status: "VOID", ledgerEntries: [
@@ -49,4 +50,18 @@ test("multiple tuition lines require one exact whole-invoice reversal", () => {
   const candidate = invoice(); candidate.ledgerEntries.push({ ...candidate.ledgerEntries[0], id: "second", amountCents: 100 });
   candidate.ledgerEntries[1].amountCents = -27900;
   assert.deepEqual([...fullyVoidedTuitionChargeIds("account", [candidate])], ["charge", "second"]);
+});
+
+test("discounted tuition uses recognized credit lines in the exact reversal proof", () => {
+  const candidate = invoice();
+  const items = tuitionInvoiceItems({ description: "Tuition", grossAmountCents: 27800, credits: [{ category: "family_discount", amountCents: 2800 }] });
+  candidate.ledgerEntries = items.map((item, index) => ({ ...candidate.ledgerEntries[0], id: `line-${index}`, type: item.ledgerType, amountCents: item.amountCents }));
+  candidate.ledgerEntries.push({ ...invoice().ledgerEntries[1], amountCents: -25000 });
+  assert.deepEqual([...fullyVoidedTuitionChargeIds("account", [candidate])], ["line-0"]);
+  candidate.ledgerEntries[1].sourceSystem = "bee_suite_manual";
+  assert.equal(fullyVoidedTuitionChargeIds("account", [candidate]).size, 0);
+  candidate.ledgerEntries[1].sourceSystem = "bee_suite";
+  candidate.ledgerEntries[1].amountCents = 2800;
+  candidate.ledgerEntries[2].amountCents = -30600;
+  assert.equal(fullyVoidedTuitionChargeIds("account", [candidate]).size, 0);
 });

@@ -14,6 +14,7 @@ test("every SendGrid sender is covered by IntegrationDelivery auditing", () => {
     "src/lib/integrations.ts": "low-level provider implementation",
     "src/lib/inquiry-integrations.ts": "caller records inquiry_notification in src/app/api/inquiries/route.ts",
     "src/lib/integration-deliveries.ts": "retry dispatcher owns the existing delivery record",
+    "src/app/api/communications/announcements/[id]/send/route.ts": "sendAnnouncementEmail reserves delivery and atomic audit before invoking the injected sender; actual service regression tests cover reservation and finalization failures",
     "scripts/send-autopay-reauthorization-email-wave.ts": "precreates and updates its campaign delivery record around each send",
     "scripts/retry-granbury-parent-invite-timeout.ts": "claims and updates an existing delivery record",
   };
@@ -23,6 +24,10 @@ test("every SendGrid sender is covered by IntegrationDelivery auditing", () => {
     return !readFileSync(file, "utf8").includes("recordEmailDeliveryAttempt");
   });
   assert.deepEqual(missing, [], `Unaudited SendGrid senders: ${missing.join(", ")}`);
+  const announcement = readFileSync("src/lib/announcement-email.ts", "utf8");
+  assert.ok(announcement.indexOf("tx.integrationDelivery.create") < announcement.indexOf("options.send("));
+  assert.ok(announcement.indexOf("tx.auditLog.create") < announcement.indexOf("options.send("));
+  assert.match(announcement, /tx\.integrationDelivery\.updateMany/);
   assert.match(readFileSync("src/app/api/inquiries/route.ts", "utf8"), /provider:\s*["']sendgrid["']/);
   assert.match(
     readFileSync("src/lib/inquiry-integrations.ts", "utf8"),

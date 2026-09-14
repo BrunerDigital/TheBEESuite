@@ -115,6 +115,7 @@ export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
 export const executiveAnnouncementDemoRows: AnnouncementsPageData["announcements"] = [
   {
     id: "exec-demo-announcement-picture-day",
+    centerId: null,
     title: "Picture Day Reminder",
     body:
       "Picture day is this Thursday. Please send your child in their preferred outfit and include any classroom-specific notes for teachers.",
@@ -125,6 +126,7 @@ export const executiveAnnouncementDemoRows: AnnouncementsPageData["announcements
   },
   {
     id: "exec-demo-announcement-weather",
+    centerId: "exec-demo-center",
     title: "Weather Watch Update",
     body:
       "We are monitoring tomorrow morning's weather and will send any schedule updates through the portal and email.",
@@ -135,6 +137,7 @@ export const executiveAnnouncementDemoRows: AnnouncementsPageData["announcements
   },
   {
     id: "exec-demo-announcement-newsletter",
+    centerId: null,
     title: "May Family Newsletter",
     body:
       "This month's newsletter highlights classroom learning themes, staff spotlights, birthdays, and upcoming family events.",

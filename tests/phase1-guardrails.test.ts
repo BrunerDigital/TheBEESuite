@@ -1828,7 +1828,6 @@ test("ordinary operations cannot mutate or directly email reserved App Review id
   const inquiryIntegrations = readFileSync("src/lib/inquiry-integrations.ts", "utf8");
   const fteReminderRoute = readFileSync("src/app/api/cron/fte-reminders/route.ts", "utf8");
   const bulkEmailRoutes = [
-    "src/app/api/communications/announcements/[id]/send/route.ts",
     "src/app/api/communications/campaigns/[id]/send/route.ts",
     "src/app/api/cron/campaign-scheduler/route.ts",
     "src/app/api/reputation/review-requests/route.ts",
@@ -1866,6 +1865,11 @@ test("ordinary operations cannot mutate or directly email reserved App Review id
     assert.match(route, /suppressedRecipientCount = email\.suppressedRecipientCount \?\? 0/);
     assert.match(route, /requestedRecipientCount: recipients\.length/);
   }
+  const announcementEmail = readFileSync("src/lib/announcement-email.ts", "utf8");
+  assert.match(readFileSync("src/app/api/communications/announcements/[id]/send/route.ts", "utf8"), /sendAnnouncementEmail/);
+  assert.ok(announcementEmail.indexOf("externalProviderEmails(requested)") < announcementEmail.indexOf("tx.integrationDelivery.create"));
+  assert.match(announcementEmail, /recipientCount: recipients\.length, suppressedRecipientCount: requested\.length - recipients\.length/);
+  assert.match(announcementEmail, /suppressedRecipientCount: current\.preview\.suppressedRecipientCount/);
   assert.match(dailyReportEmail, /reason: email\.skipped[\s\S]*recipients: effectiveEmails[\s\S]*requestedRecipients: emails/);
   assert.match(registrationShareRoute, /emailsQueued: effectiveRecipientCount[\s\S]*suppressedEmailCount: suppressedRecipientCount/);
   assert.match(registrationShareRoute, /recipients: effectiveRecipients[\s\S]*requestedRecipients: emails/);

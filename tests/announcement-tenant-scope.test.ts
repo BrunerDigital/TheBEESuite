@@ -31,7 +31,7 @@ test("tenant-wide announcement views remain limited to authorized schools and pl
 });
 
 test("email sending requires an exact school-owned announcement", () => {
-  const source = readFileSync("src/app/api/communications/announcements/[id]/send/route.ts", "utf8");
+  const source = readFileSync("src/lib/announcement-email.ts", "utf8");
   assert.match(source, /if \(!announcement\.centerId\)/);
   assert.match(source, /Choose one school before sending an announcement email/);
 });

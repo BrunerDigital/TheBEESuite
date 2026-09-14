@@ -25,7 +25,6 @@ import {
   Link2,
   Mail,
   MapPin,
-  Megaphone,
   MessageSquare,
   PanelsTopLeft,
   PenTool,
@@ -54,7 +53,7 @@ import {
   AnalyticsReportBuilder,
   type AnalyticsReportBuilderFilters,
 } from "@/components/analytics-report-builder";
-import { CommunicationSendButton } from "@/components/communication-send-button";
+import { AnnouncementWorkspace, type AnnouncementWorkspaceData } from "@/components/announcement-workspace";
 import {
   BillingWorkbench,
   type BillingWorkbenchCenter,
@@ -2297,93 +2296,10 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
   );
 }
 
-export type AnnouncementsPageData = {
-  centers: Array<{ id: string; name: string }>;
-  announcements: Array<{
-    id: string;
-    title: string;
-    body: string;
-    audience: unknown;
-    status: string;
-    sendAt: Date | string | null;
-    center: { name: string; crmLocationId: string | null } | null;
-  }>;
-  stats: {
-    total: number;
-    draft: number;
-    scheduled: number;
-    sent: number;
-  };
-  demoMode?: boolean;
-};
+export type AnnouncementsPageData = AnnouncementWorkspaceData;
 
 export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
-  return (
-    <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
-          <Megaphone data-icon="inline-start" />
-          Center broadcasts
-        </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Announcements</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Create and schedule announcements for families or staff. Emergency delivery follows the school&apos;s notification settings.
-        </p>
-      </section>
-      {data.demoMode ? <DemoDataNotice section="announcement" /> : null}
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Announcements" value={data.stats.total} />
-        <StatCard label="Drafts" value={data.stats.draft} />
-        <StatCard label="Scheduled" value={data.stats.scheduled} />
-        <StatCard label="Sent" value={data.stats.sent} />
-      </div>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">Broadcast Queue</CardTitle>
-          <CardDescription>Audience, center, status, and scheduled delivery</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Announcement</TableHead>
-                <TableHead>Center</TableHead>
-                <TableHead>Audience</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Send time</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.announcements.map((announcement) => (
-                <TableRow key={announcement.id}>
-                  <TableCell>
-                    <div className="font-medium">{announcement.title}</div>
-                    <div className="mt-1 max-w-xl whitespace-normal text-xs text-muted-foreground">{announcement.body}</div>
-                  </TableCell>
-                  <TableCell>{announcement.center?.crmLocationId ?? announcement.center?.name ?? "All centers"}</TableCell>
-                  <TableCell>{jsonSummary(announcement.audience)}</TableCell>
-                  <TableCell><Badge variant={announcement.status === "sent" ? "default" : "outline"}>{formatRecordLabel(announcement.status)}</Badge></TableCell>
-                  <TableCell>{formatDateTime(announcement.sendAt, announcement)}</TableCell>
-                  <TableCell>
-                    <CommunicationSendButton endpoint={`/api/communications/announcements/${announcement.id}/send`} />
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!data.announcements.length ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
-                    No announcements have been created for the schools you can access.
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-      <OperationsActionHub title="Create or Edit Announcement" defaultEntity="announcement" centers={data.centers} compact />
-    </div>
-  );
+  return <AnnouncementWorkspace data={data} />;
 }
 
 export type CampaignsPageData = CampaignWorkspaceData;

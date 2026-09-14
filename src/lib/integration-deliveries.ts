@@ -131,6 +131,9 @@ export async function claimIntegrationDeliveryForRetry({
     where: {
       id,
       status: "pending",
+      // Announcement batches require fresh audience review and a pre-reserved
+      // one-attempt guard; old stored recipient lists must never auto-replay.
+      purpose: { not: "announcement_email" },
       attempts,
       providerMessageId: null,
       OR: [
@@ -465,7 +468,6 @@ export function staleTimeSensitiveDeliveryReason(
 const SENDGRID_EMAIL_PURPOSES = new Set([
   "communication_email",
   "lead_email",
-  "announcement_email",
   "campaign_email",
   "registration_email",
   "parent_invitation_email",
@@ -548,6 +550,7 @@ export async function retryPendingIntegrationDeliveries({
   const deliveries = await prisma.integrationDelivery.findMany({
     where: {
       status: "pending",
+      purpose: { not: "announcement_email" },
       attempts: { lt: 5 },
       OR: [
         { nextAttemptAt: null },

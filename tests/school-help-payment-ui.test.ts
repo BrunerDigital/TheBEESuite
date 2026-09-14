@@ -40,7 +40,10 @@ test("Announcement destination retains authorized school options without sending
   const route = source("src/app/[slug]/page.tsx").split('<AnnouncementsPage')[1].split('/>')[0];
   assert.match(route, /centers: centers\.map/);
   const view = source("src/components/live-ops-pages.tsx").split("export function AnnouncementsPage")[1].split("export type CampaignsPageData")[0];
-  assert.match(view, /defaultEntity="announcement" centers=\{data\.centers\}/);
+  assert.match(view, /<AnnouncementWorkspace data=\{data\}/);
+  const editor = source("src/components/announcement-workspace.tsx");
+  assert.match(editor, /data\.centers\.map/);
+  assert.match(editor, /No email, SMS or push notification was sent/);
 });
 test("Authoritative pending verification survives return flags and offers only a read refresh", () => {
   const form = source("src/components/payment-method-request-form.tsx");

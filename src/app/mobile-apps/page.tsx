@@ -14,7 +14,7 @@ export default async function MobileAppsPage() {
   return <main className="min-h-screen bg-[#eef7ff] text-slate-950 selection:bg-amber-200">
     <a href="#downloads" className="sr-only focus:not-sr-only focus:p-4">Skip to downloads</a>
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-      <header className="flex flex-wrap items-center justify-between gap-4"><BrandLogo href="/" size="md" priority /><Link className={linkClass} href="/app">Web sign-in</Link></header>
+      <header className="flex flex-wrap items-center justify-between gap-4"><BrandLogo href="/" size="md" textClassName="[&>span]:text-slate-700" priority /><Link className={linkClass} href="/app">Web sign-in</Link></header>
       <section className="my-8 rounded-3xl border border-white bg-white p-6 shadow-sm sm:p-10">
         <p className="text-sm font-semibold uppercase tracking-widest text-slate-600">Your school. One connected day.</p>
         <h1 className="mt-4 max-w-3xl text-4xl font-bold tracking-tight sm:text-6xl">The BEE Suite Mobile Apps</h1>

@@ -21,8 +21,7 @@ import {
 type ScopeFilter = "all" | RequiredChecklistItem["scope"];
 type StatusFilter = "action" | "all" | RequiredChecklistItem["status"];
 
-const visibleRowLimit = 160;
-const visibleSubjectLimit = 80;
+const checklistPageSize = 50;
 
 function statusVariant(status: RequiredChecklistItem["status"]) {
   if (status === "complete") return "default";
@@ -58,9 +57,11 @@ function pluralize(count: number, singular: string, plural = `${singular}s`) {
 export function RequiredDocumentChecklistPanel({
   items,
   summary,
+  canRequest = true,
 }: {
   items: RequiredChecklistItem[];
   summary: RequiredChecklistSummary;
+  canRequest?: boolean;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -69,6 +70,8 @@ export function RequiredDocumentChecklistPanel({
   const [failedItems, setFailedItems] = useState<RequiredChecklistItem[]>([]);
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("action");
+  const [rowPage, setRowPage] = useState(0);
+  const [subjectPage, setSubjectPage] = useState(0);
   const [isPending, startTransition] = useTransition();
 
   const scopedItems = useMemo(() => (
@@ -77,7 +80,11 @@ export function RequiredDocumentChecklistPanel({
   const detailItems = useMemo(() => (
     scopedItems.filter((item) => matchesStatusFilter(item, statusFilter))
   ), [scopedItems, statusFilter]);
-  const visibleItems = useMemo(() => detailItems.slice(0, visibleRowLimit), [detailItems]);
+  const rowPageCount = Math.max(1, Math.ceil(detailItems.length / checklistPageSize));
+  const currentRowPage = Math.min(rowPage, rowPageCount - 1);
+  const visibleItems = useMemo(() => (
+    detailItems.slice(currentRowPage * checklistPageSize, (currentRowPage + 1) * checklistPageSize)
+  ), [currentRowPage, detailItems]);
   const visibleRequestableItems = useMemo(() => (
     visibleItems.filter((item) => requiresChecklistAction(item.status))
   ), [visibleItems]);
@@ -87,7 +94,11 @@ export function RequiredDocumentChecklistPanel({
       statusFilter === "all" || group.items.some((item) => matchesStatusFilter(item, statusFilter))
     ))
   ), [scopedItems, statusFilter]);
-  const visibleSubjectGroups = useMemo(() => subjectGroups.slice(0, visibleSubjectLimit), [subjectGroups]);
+  const subjectPageCount = Math.max(1, Math.ceil(subjectGroups.length / checklistPageSize));
+  const currentSubjectPage = Math.min(subjectPage, subjectPageCount - 1);
+  const visibleSubjectGroups = useMemo(() => (
+    subjectGroups.slice(currentSubjectPage * checklistPageSize, (currentSubjectPage + 1) * checklistPageSize)
+  ), [currentSubjectPage, subjectGroups]);
   const subjectCounts = useMemo(() => ({
     family: allSubjectGroups.filter((group) => group.scope === "family").length,
     child: allSubjectGroups.filter((group) => group.scope === "child").length,
@@ -121,6 +132,7 @@ export function RequiredDocumentChecklistPanel({
   }
 
   function requestItems(targetItems: RequiredChecklistItem[], key: string) {
+    if (!canRequest || !targetItems.length) return;
     startTransition(async () => {
       setMessage("");
       setError("");
@@ -170,7 +182,7 @@ export function RequiredDocumentChecklistPanel({
   }
 
   function createVisibleRequests() {
-    requestItems(visibleRequestableItems, "visible");
+    requestItems(visibleRequestableItems, "page");
   }
 
   function retryFailedRequests() {
@@ -186,18 +198,20 @@ export function RequiredDocumentChecklistPanel({
             Required checklist
           </CardTitle>
           <CardDescription>
-            Required family, child, and staff documentation by visible school scope. Family and child requests email the saved parent addresses with the branded parent form.
+            Required family, child, and staff documentation by visible school scope.{canRequest ? " Family and child requests email the saved parent addresses with the branded parent form." : " Read-only access does not allow requests, uploads, or reviews."}
           </CardDescription>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={isPending || !visibleRequestableItems.length}
-          onClick={createVisibleRequests}
-        >
-          <ListChecks data-icon="inline-start" />
-          {isPending && pendingKey === "visible" ? "Requesting…" : "Request visible action items"}
-        </Button>
+        {canRequest ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPending || !visibleRequestableItems.length}
+            onClick={createVisibleRequests}
+          >
+            <ListChecks data-icon="inline-start" />
+            {isPending && pendingKey === "page" ? "Requesting…" : "Request this page's action items"}
+          </Button>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
@@ -253,7 +267,7 @@ export function RequiredDocumentChecklistPanel({
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground" htmlFor="checklist-scope-filter">Scope</Label>
-              <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as ScopeFilter)}>
+              <Select value={scopeFilter} onValueChange={(value) => { setScopeFilter(value as ScopeFilter); setRowPage(0); setSubjectPage(0); }}>
                 <SelectTrigger id="checklist-scope-filter" className="w-full lg:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -267,7 +281,7 @@ export function RequiredDocumentChecklistPanel({
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground" htmlFor="checklist-status-filter">Status</Label>
-              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+              <Select value={statusFilter} onValueChange={(value) => { setStatusFilter(value as StatusFilter); setRowPage(0); setSubjectPage(0); }}>
                 <SelectTrigger id="checklist-status-filter" className="w-full lg:w-[190px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -285,7 +299,7 @@ export function RequiredDocumentChecklistPanel({
             </div>
           </div>
           <div className="text-sm text-muted-foreground">
-            Showing {visibleItems.length} of {detailItems.length} matching rows across {subjectGroups.length} subjects.
+            Showing {detailItems.length ? currentRowPage * checklistPageSize + 1 : 0}–{currentRowPage * checklistPageSize + visibleItems.length} of {detailItems.length} matching rows across {subjectGroups.length} subjects.
           </div>
         </div>
 
@@ -301,7 +315,7 @@ export function RequiredDocumentChecklistPanel({
             <AlertTitle>Needs attention</AlertTitle>
             <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span>{error}</span>
-              {failedItems.length ? (
+              {canRequest && failedItems.length ? (
                 <Button
                   type="button"
                   size="sm"
@@ -391,17 +405,21 @@ export function RequiredDocumentChecklistPanel({
               </TableBody>
             </Table>
           </div>
-          {subjectGroups.length > visibleSubjectGroups.length ? (
-            <p className="text-xs text-muted-foreground">
-              Showing {visibleSubjectGroups.length} of {subjectGroups.length} matching subjects. Narrow the filters to review the rest.
-            </p>
+          {subjectGroups.length > checklistPageSize ? (
+            <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+              <span>Page {currentSubjectPage + 1} of {subjectPageCount}</span>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" disabled={currentSubjectPage === 0} onClick={() => setSubjectPage((page) => Math.max(0, page - 1))}>Previous</Button>
+                <Button type="button" size="sm" variant="outline" disabled={currentSubjectPage >= subjectPageCount - 1} onClick={() => setSubjectPage((page) => Math.min(subjectPageCount - 1, page + 1))}>Next</Button>
+              </div>
+            </div>
           ) : null}
         </CollapsiblePanel>
 
         <CollapsiblePanel
           id="required-document-action-rows"
           title="Requirement rows"
-          summary={`${visibleItems.length} matching ${visibleItems.length === 1 ? "requirement" : "requirements"} · ${visibleRequestableItems.length} need action · expand to review or request information`}
+          summary={`${visibleItems.length} matching ${visibleItems.length === 1 ? "requirement" : "requirements"} · ${visibleRequestableItems.length} need action · ${canRequest ? "expand to review or request information" : "expand to review"}`}
           defaultCollapsed
         >
           <div className="overflow-x-auto">
@@ -428,7 +446,7 @@ export function RequiredDocumentChecklistPanel({
                     <TableCell><Badge variant={statusVariant(item.status)}>{statusLabel(item.status)}</Badge></TableCell>
                     <TableCell>{formatDate(item.expiresAt)}</TableCell>
                     <TableCell>
-                      {requiresChecklistAction(item.status) ? (
+                      {canRequest && requiresChecklistAction(item.status) ? (
                         <Button
                           type="button"
                           size="sm"
@@ -456,10 +474,14 @@ export function RequiredDocumentChecklistPanel({
               </TableBody>
             </Table>
           </div>
-          {detailItems.length > visibleItems.length ? (
-            <p className="text-xs text-muted-foreground">
-              Showing {visibleItems.length} of {detailItems.length} matching checklist rows. Resolve visible action items first, then narrow the filters.
-            </p>
+          {detailItems.length > checklistPageSize ? (
+            <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+              <span>Page {currentRowPage + 1} of {rowPageCount}</span>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" disabled={currentRowPage === 0} onClick={() => setRowPage((page) => Math.max(0, page - 1))}>Previous</Button>
+                <Button type="button" size="sm" variant="outline" disabled={currentRowPage >= rowPageCount - 1} onClick={() => setRowPage((page) => Math.min(rowPageCount - 1, page + 1))}>Next</Button>
+              </div>
+            </div>
           ) : null}
         </CollapsiblePanel>
       </CardContent>

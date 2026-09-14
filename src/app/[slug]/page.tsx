@@ -7007,7 +7007,7 @@ async function renderLivePage(
       summary: summarizeRequiredDocumentChecklist(requiredChecklistItems),
     };
 
-    return <DocumentsPage data={{ documents: signedDocuments, stats: { total, expiring, restricted, pending }, requiredChecklist, signatureFamilies }} />;
+    return <DocumentsPage data={{ documents: signedDocuments, stats: { total, expiring, restricted, pending }, requiredChecklist, signatureFamilies, canManageDocuments: canManageOperations(user) }} />;
   }
 
   if (slug === "compliance") {

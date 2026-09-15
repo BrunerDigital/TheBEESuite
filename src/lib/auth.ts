@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { sessionMeetsMfaPolicy } from "@/lib/mfa-policy";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
@@ -22,6 +23,7 @@ export const SESSION_COOKIE = "bee_suite_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 
 export type AppSession = {
+  mfaVerified?: boolean;
   userId: string;
   email: string;
   role: UserRole;
@@ -171,11 +173,13 @@ function verifySignature(data: string, signature: string) {
 }
 
 export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "role"> & {
+  mfaVerified?: boolean;
   sessionVersion?: number;
   deviceSessionId?: string | null;
   workspaceSelection?: WorkspaceSelectionValue | null;
 }) {
   const payload: AppSession = {
+    mfaVerified: user.mfaVerified === true ? true : undefined,
     userId: user.id,
     email: user.email,
     role: user.role,
@@ -263,7 +267,7 @@ async function sessionDeviceIsActive(session: AppSession, tenantId: string) {
   return true;
 }
 
-export async function getCurrentUser(options: { allowPasswordResetRequired?: boolean } = {}): Promise<CurrentUser | null> {
+export async function getCurrentUser(options: { allowPasswordResetRequired?: boolean; allowMfaEnrollment?: boolean } = {}): Promise<CurrentUser | null> {
   const session = await getSession();
   if (!session) return null;
   const now = new Date();
@@ -321,6 +325,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
 
   if (!user) return null;
   if (!sessionMatchesCurrentVersion(session, user.sessionVersion)) return null;
+  if (!options.allowMfaEnrollment && !sessionMeetsMfaPolicy(user.role, session.mfaVerified)) return null;
   if (!(await sessionDeviceIsActive(session, user.tenantId))) return null;
   if (requiresPasswordResetGate(user) && !options.allowPasswordResetRequired) return null;
   if (!await appReviewRuntimeScopeIsValid({

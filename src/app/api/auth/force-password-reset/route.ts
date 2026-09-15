@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
-import { createSessionToken, getCurrentUser, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
+import { createSessionToken, getCurrentUser, getSession, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
@@ -14,7 +14,7 @@ function clean(value: unknown) {
 }
 
 async function POSTHandler(request: NextRequest) {
-  const user = await getCurrentUser({ allowPasswordResetRequired: true });
+  const user = await getCurrentUser({ allowPasswordResetRequired: true, allowMfaEnrollment: true });
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
@@ -94,7 +94,8 @@ async function POSTHandler(request: NextRequest) {
       ok: true,
       message: "Password updated. Your workspace is ready.",
     });
-    response.cookies.set(SESSION_COOKIE, createSessionToken(updated), sessionCookieOptions());
+    const session = await getSession();
+    response.cookies.set(SESSION_COOKIE, createSessionToken({ ...updated, mfaVerified: session?.mfaVerified, deviceSessionId: session?.deviceSessionId, workspaceSelection: session?.workspaceSelection }), sessionCookieOptions());
     return response;
   } catch (error) {
     logOperationalError("auth.force_password_reset.failed", error, { userId: user.id });

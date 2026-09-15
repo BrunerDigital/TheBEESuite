@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sessionMeetsMfaPolicy } from "@/lib/mfa-policy";
 import { createSessionToken, requiresPasswordResetGate, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
 import {
   buildDeviceSessionLabel,
@@ -53,6 +54,9 @@ async function POSTHandler(request: NextRequest) {
       { status: 429, headers: { "Retry-After": String(retryAfterSeconds(mfaRate.resetAt)) } },
     );
   }
+  // Snapshot before provider authentication so concurrent factor/password changes
+  // cannot promote an earlier password-only attempt into a new application session.
+  const before = await prisma.user.findFirst({ where: { email, isActive: true }, select: { id: true, sessionVersion: true } });
   const verified = await verifySupabaseLogin({ email, password, mfaCode, mfaFactorId: clean(body.mfaFactorId) });
   if (verified.status === "mfa_required" || verified.status === "invalid_code") {
     return NextResponse.json({
@@ -92,7 +96,13 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const nextPath = resolvePortalPostLoginPath({ role: user.role, requestedNext: body.next, portal: body.loginPortal });
+  if (!before || before.id !== user.id || before.sessionVersion !== user.sessionVersion) {
+    return NextResponse.json({ ok: false, error: "Your account security changed during sign-in. Please sign in again." }, { status: 409 });
+  }
+
+  const nextPath = sessionMeetsMfaPolicy(user.role, verified.mfaVerified)
+    ? resolvePortalPostLoginPath({ role: user.role, requestedNext: body.next, portal: body.loginPortal })
+    : "/account/security";
   const userAgent = cleanUserAgent(request.headers.get("user-agent"));
   const appMode = normalizeDeviceAppMode(body.appMode, nextPath);
   const deviceType = inferDeviceType(userAgent);
@@ -133,7 +143,7 @@ async function POSTHandler(request: NextRequest) {
     requiresPasswordReset: requiresPasswordResetGate(user),
     nextPath,
   });
-  response.cookies.set(SESSION_COOKIE, createSessionToken({ ...user, deviceSessionId: deviceSession?.id }), sessionCookieOptions());
+  response.cookies.set(SESSION_COOKIE, createSessionToken({ ...user, mfaVerified: verified.mfaVerified, deviceSessionId: deviceSession?.id }), sessionCookieOptions());
   return response;
 }
 

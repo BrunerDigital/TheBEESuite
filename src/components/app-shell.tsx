@@ -1046,6 +1046,9 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
             <DropdownMenuSeparator />
           </>
         ) : null}
+        {!previewMode && !appReviewAccount ? <DropdownMenuItem className="p-0" render={<Link href="/account/security" onClick={(event) => closeForPlainNavigation(event, onNavigate)} className="flex w-full items-center gap-2 px-3 py-2" />}>
+          <ShieldCheck data-icon="inline-start" aria-hidden="true" /> Authenticators
+        </DropdownMenuItem> : null}
         {!previewMode ? (
           <DropdownMenuItem onClick={onLogout} variant="destructive" className="py-2">
             <LogOut data-icon="inline-start" />

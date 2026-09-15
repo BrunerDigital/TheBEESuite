@@ -11,9 +11,9 @@ export const GENERAL_LOGIN_ENTRY_PATH = "/login";
 export type LoginPortal = "general" | "parents" | "teachers" | "directors" | "executives";
 
 const parentLoginRoles = new Set(["PARENT_GUARDIAN", "AUTHORIZED_PICKUP"]);
-const parentAllowedNextPrefixes = ["/parent-portal", "/messages", "/documents", "/notifications", "/help"];
+const parentAllowedNextPrefixes = ["/parent-portal", "/messages", "/documents", "/notifications", "/help", "/account/security"];
 const teacherLoginRoles = new Set(["TEACHER"]);
-const teacherAllowedNextPrefixes = ["/teacher-portal", "/classroom-dashboard", "/attendance", "/daily-reports", "/incident-reports", "/messages", "/documents", "/notifications", "/help"];
+const teacherAllowedNextPrefixes = ["/teacher-portal", "/classroom-dashboard", "/attendance", "/daily-reports", "/incident-reports", "/messages", "/documents", "/notifications", "/help", "/account/security"];
 const classroomLoginRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "READ_ONLY_AUDITOR"]);
 const executiveLoginRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "READ_ONLY_AUDITOR"]);
 const directorLoginRoles = new Set(["CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "BILLING_ADMIN"]);

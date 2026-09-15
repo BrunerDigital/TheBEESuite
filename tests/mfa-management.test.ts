@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { manageMfa, type MfaManagementInput } from "../src/lib/mfa-management";
 import { roleRequiresMfa, sessionMeetsMfaPolicy } from "../src/lib/mfa-policy";
 import { UserRole } from "@prisma/client";
+import { resolvePostLoginPath } from "../src/lib/login-routing";
 
 const user = { id: "synthetic-auth", email: "synthetic@example.com" };
 const input: MfaManagementInput = { ...user, password: "not-a-real-password", action: "list" };
@@ -94,4 +95,8 @@ test("MFA rollout defaults off; configured roles require signed boolean assuranc
   assert.equal(sessionMeetsMfaPolicy(UserRole.BILLING_ADMIN, "true", "BILLING_ADMIN"), false);
   assert.equal(sessionMeetsMfaPolicy(UserRole.BILLING_ADMIN, true, "BILLING_ADMIN"), true);
   assert.equal(roleRequiresMfa(UserRole.BILLING_ADMIN, "BILLING_ADMN"), true);
+});
+
+test("all roles can return to their own security settings after reauthentication", () => {
+  for (const role of Object.values(UserRole)) assert.equal(resolvePostLoginPath({ role, requestedNext: "/account/security" }), "/account/security");
 });

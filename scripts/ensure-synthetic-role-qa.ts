@@ -1,4 +1,6 @@
 import "./load-env";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -410,6 +412,20 @@ async function verifyDatabaseAccount(account: SyntheticRoleQaAccount, scope: Awa
   return base && scopeOk && assignmentOk && guardianLinksOk && pickupLinkOk;
 }
 
+export async function assertSyntheticRoleQaPreflight(accounts: readonly SyntheticRoleQaAccount[]) {
+  const scope = await loadDemoScope();
+  for (const account of accounts) {
+    await preflightExistingAccount(account, {
+      tenantId: scope.tenant.id, brandId: scope.brand.id, organizationId: scope.organization.id,
+      centerId: scope.center.id, familyId: scope.family.id, classroomId: scope.classroom.id,
+    });
+    const auth = await preflightExistingAuthIdentity(account);
+    if (!auth.exists || !await verifyDatabaseAccount(account, scope)) {
+      fail(`Synthetic ${account.key} prerequisites failed; no browser session opened.`);
+    }
+  }
+}
+
 async function main() {
   if (apply && process.env.ALLOW_SYNTHETIC_ROLE_QA_MUTATIONS !== "true") {
     fail("Set ALLOW_SYNTHETIC_ROLE_QA_MUTATIONS=true with --apply.");
@@ -489,7 +505,7 @@ async function main() {
   if ((apply || verifyAuth) && !passed) process.exitCode = 1;
 }
 
-main().catch((error) => {
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) main().catch((error) => {
   console.error(error instanceof Error ? error.message : "Synthetic role QA account operation failed.");
   process.exitCode = 1;
 }).finally(() => prisma.$disconnect());

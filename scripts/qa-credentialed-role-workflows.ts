@@ -1,8 +1,11 @@
 import "./load-env";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { chromium, type Page, type Request } from "playwright";
 import { SYNTHETIC_ROLE_QA_ACCOUNTS } from "@/lib/synthetic-role-qa";
+import { prisma } from "@/lib/prisma";
+import { assertSyntheticRoleQaPreflight } from "./ensure-synthetic-role-qa";
+import { credentialedQaBaseUrl, credentialedQaPasswords, credentialedQaRequestAllowed } from "./credentialed-qa-policy";
 
 type Viewport = { id: "desktop" | "mobile"; width: number; height: number };
 type Workflow = { id: string; href: string; expectedHref?: string };
@@ -61,6 +64,7 @@ function argument(name: string, fallback: string) {
 }
 
 function cleanBaseUrl(value: string) {
+  credentialedQaBaseUrl(value, process.env.ALLOW_SYNTHETIC_ROLE_QA_PRODUCTION_LOGIN === "true");
   const url = new URL(value);
   if (url.protocol !== "https:" && !["127.0.0.1", "localhost"].includes(url.hostname)) {
     throw new Error("Credentialed role QA requires HTTPS except on localhost.");
@@ -75,8 +79,9 @@ function cleanBaseUrl(value: string) {
 
 const baseUrl = cleanBaseUrl(argument("--base-url", "https://thebeesuite.io"));
 const outputDirectory = resolve(argument("--output-dir", `output/playwright/credentialed-role-${Date.now()}`));
-const password = process.env.SYNTHETIC_ROLE_QA_PASSWORD?.trim() || process.env.DEMO_PASSWORD?.trim() || "";
-if (!password) throw new Error("SYNTHETIC_ROLE_QA_PASSWORD (or DEMO_PASSWORD) is required.");
+const sharedPassword = process.env.SYNTHETIC_ROLE_QA_PASSWORD?.trim() || process.env.DEMO_PASSWORD?.trim() || "";
+const credentialFile = process.env.SYNTHETIC_ROLE_QA_CREDENTIALS_FILE?.trim();
+if (!credentialFile && !sharedPassword) throw new Error("SYNTHETIC_ROLE_QA_CREDENTIALS_FILE or SYNTHETIC_ROLE_QA_PASSWORD is required.");
 const includePlatformOwner = process.argv.includes("--include-platform-owner");
 if (includePlatformOwner && process.env.ALLOW_SYNTHETIC_PLATFORM_OWNER_QA !== "true") {
   throw new Error("Set ALLOW_SYNTHETIC_PLATFORM_OWNER_QA=true with --include-platform-owner; this role can access every tenant.");
@@ -105,7 +110,7 @@ function matchesWorkflow(actual: string, expected: string) {
   const expectedUrl = new URL(expected, baseUrl);
   return actualUrl.pathname === expectedUrl.pathname
     && actualUrl.search === expectedUrl.search
-    && actualUrl.hash === expectedUrl.hash;
+    && (!expectedUrl.hash || actualUrl.hash === expectedUrl.hash);
 }
 
 function requestProblem(request: Request) {
@@ -161,6 +166,9 @@ type PageMetricsResult = {
 };
 
 async function pageMetrics(page: Page) {
+  // Next retains inactive page trees while navigation settles. Measure the
+  // interactive destination, never an inert transition snapshot.
+  await page.locator("main h1:not([inert] *)").first().waitFor({ state: "visible", timeout: 45_000 });
   return page.evaluate<PageMetricsResult>(`(() => {
     const isVisible = (element) => {
       const style = getComputedStyle(element);
@@ -298,13 +306,29 @@ async function clickWorkflowLink(page: Page, href: string) {
   for (const links of [page.locator("main a[href]"), page.locator("a[href]")]) {
     for (let index = 0; index < await links.count(); index += 1) {
       const candidate = links.nth(index);
-      if (!await candidate.isVisible().catch(() => false)) continue;
       const value = await candidate.getAttribute("href");
       if (!value) continue;
       const resolved = new URL(value, page.url());
       if (resolved.pathname !== target.pathname) continue;
       if (target.search && resolved.search !== target.search) continue;
       if (target.hash && resolved.hash !== target.hash) continue;
+      // Follow the actual disclosure controls to a nested destination. Do not
+      // force-click hidden links or replace navigation with direct page.goto.
+      for (const summary of await candidate.locator("xpath=ancestor::details[not(@open)]/summary").all()) {
+        if (await summary.isVisible()) await summary.click();
+      }
+      const hiddenIds = await candidate.evaluate((element) => {
+        const ids: string[] = [];
+        for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+          if (ancestor.hidden && ancestor.id) ids.unshift(ancestor.id);
+        }
+        return ids;
+      });
+      for (const id of hiddenIds) {
+        const toggle = page.locator(`button[aria-controls=${JSON.stringify(id)}][aria-expanded="false"]`).first();
+        if (await toggle.isVisible().catch(() => false)) await toggle.click();
+      }
+      if (!await candidate.isVisible().catch(() => false)) continue;
       await candidate.click();
       await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => undefined);
       await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => undefined);
@@ -327,13 +351,28 @@ function metricsPass(metrics: PageMetricsResult, viewport: Viewport) {
 
 async function main() {
   await mkdir(outputDirectory, { recursive: true });
+  await assertSyntheticRoleQaPreflight(targetAccounts);
+  const passwords = credentialFile
+    ? credentialedQaPasswords(targetAccounts, JSON.parse((await readFile(credentialFile, "utf8")).replace(/^\uFEFF/, "")))
+    : new Map(targetAccounts.map((account) => [account.key, sharedPassword]));
   const browser = await chromium.launch();
   const results: Array<Record<string, unknown>> = [];
   const requestFailures: string[] = [];
 
   try {
     for (const account of targetAccounts) {
-      const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", colorScheme: "light" });
+      const password = passwords.get(account.key)!;
+      const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", colorScheme: "light", serviceWorkers: "block" });
+      await context.route("**/*", async (route) => {
+        const request = route.request();
+        if (!credentialedQaRequestAllowed({ baseUrl, url: request.url(), method: request.method(), body: request.postData(), resourceType: request.resourceType(), email: account.email, password })) {
+          unsafeRequests.push(`${request.method()} ${new URL(request.url()).pathname}`);
+          await route.abort("blockedbyclient");
+          return;
+        }
+        await route.continue();
+      });
+      try {
       if (["127.0.0.1", "localhost"].includes(new URL(baseUrl).hostname)) {
         await context.route("**/_vercel/**/script.js", (route) => route.fulfill({ status: 204, contentType: "application/javascript" }));
       }
@@ -442,7 +481,17 @@ async function main() {
         });
       }
 
-      await context.close();
+      } catch {
+        results.push({ role: account.key, passed: false, failure: "Workflow did not complete; no provider or credential error payload retained." });
+      } finally {
+        try {
+          const logout = await context.request.post(`${baseUrl}/api/auth/logout`, { maxRedirects: 0 });
+          if (!logout.ok()) unsafeRequests.push(`Session cleanup failed for ${account.key}`);
+        } catch {
+          unsafeRequests.push(`Session cleanup failed for ${account.key}`);
+        }
+        await context.close();
+      }
     }
   } finally {
     await browser.close();
@@ -455,7 +504,7 @@ async function main() {
     baseUrl,
     accountSet: "isolated synthetic role QA",
     results,
-    writeAudit: { allowed: ["POST /api/auth/login", "POST /api/device-sessions (session heartbeat)"], unexpectedWrites },
+    writeAudit: { mode: "block before transmission; service workers disabled", allowed: ["POST /api/auth/login (exact selected QA account)", "POST /api/device-sessions (session heartbeat)", "POST /api/auth/logout (cleanup only)"], unexpectedWrites },
     httpErrors,
     requestFailures,
     consoleErrors,
@@ -500,7 +549,7 @@ const pageErrors: string[] = [];
 const unsafeRequests: string[] = [];
 const httpErrors: string[] = [];
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : error);
+main().catch(() => {
+  console.error("Credentialed QA did not complete. Check designated account prerequisites and local evidence; no error payload is printed.");
   process.exitCode = 1;
-});
+}).finally(() => prisma.$disconnect());

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type User } from "@supabase/supabase-js";
+import { authenticateMfaLogin } from "@/lib/mfa-login";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import {
   buildParentLoginSetupUrl,
@@ -554,6 +555,15 @@ export async function updateSupabaseAuthUserPasswordByEmail({
   });
   if (error) throw error;
   return { ok: true, updated: true };
+}
+
+export async function verifySupabaseLogin(input: { email: string; password: string; mfaFactorId?: string; mfaCode?: string }) {
+  const { url, key } = getSupabaseAuthConfig("anon");
+  const client = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }) },
+  });
+  return authenticateMfaLogin(client, input);
 }
 
 export async function verifySupabasePassword(email: string, password: string) {

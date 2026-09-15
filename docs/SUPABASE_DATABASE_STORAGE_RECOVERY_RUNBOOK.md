@@ -50,15 +50,21 @@ Always restore into an isolated target first. Do not modify `storage.objects`, `
    npm run storage:verify -- --input <archive-directory>
    ```
 
-5. Restore through the Storage API with a target-only server credential:
+5. Preview the restore through the Storage API with a target-only server credential:
 
    ```powershell
    $env:SUPABASE_RESTORE_URL='https://<isolated-project-ref>.supabase.co'
    $env:SUPABASE_RESTORE_ADMIN_KEY='<isolated-server-only-key>'
-   npm run storage:restore -- --input <archive-directory>
+   npm run storage:restore -- --input <archive-directory> --target-project <isolated-project-ref>
    ```
 
-   If reviewed private buckets already exist, add `--allow-existing-buckets`. Existing objects are never overwritten; an object collision stops the restore for investigation.
+   The default is read-only. The URL must match the explicit project reference; the source project and known production project are rejected. If reviewed private buckets already exist, add `--allow-existing-buckets`. All selected buckets are checked for public access and object collisions before the first write. Review the returned counts, source, target and fingerprint, then apply that exact plan:
+
+   ```powershell
+   npm run storage:restore -- --input <archive-directory> --target-project <isolated-project-ref> --apply --expected-plan <reviewed-fingerprint>
+   ```
+
+   Repeat `--allow-existing-buckets` on apply if it was used for preview. Changed archive or target state invalidates the fingerprint. Existing objects are never overwritten. Runtime failures or concurrent changes can still interrupt a restore; retain the result for investigation and use a fresh isolated target rather than overwriting or deleting partial evidence. Production re-entry is a separately controlled recovery operation, not an override flag on this rehearsal tool.
 6. Reconcile database object references to the manifest. Verify representative tenant/center/family/child relationships, object counts, sizes and SHA-256 values, private bucket settings, short-lived signed access, and denial of direct unauthenticated access.
 7. Record achieved RPO/RTO, exceptions, missing writes, reconciliation ownership, technical review, and destruction of the isolated target. Production re-entry requires the named human stop authority.
 

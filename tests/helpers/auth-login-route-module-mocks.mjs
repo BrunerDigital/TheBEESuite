@@ -60,9 +60,9 @@ mock.module("@/lib/prisma", {
 
 mock.module("@/lib/supabase-auth", {
   namedExports: {
-    async verifySupabasePassword(email) {
+    async verifySupabaseLogin({ email }) {
       state.passwordChecks.push(email);
-      return true;
+      return state.loginResult ?? { status: "verified" };
     },
   },
 });
@@ -188,4 +188,37 @@ test("denies password-authenticated identity missing from the application databa
 
 test("denies password-authenticated identity whose application user is inactive", async () => {
   await assertDeniedWithoutSession("inactive@example.com");
+});
+
+test("MFA challenges and failures never create application or device sessions", async () => {
+  for (const status of ["mfa_required", "invalid_code", "unavailable", "unsupported_factor", "invalid_password"]) {
+    state.loginResult = { status, factors: [{ id: "synthetic-factor", label: "Authenticator" }] };
+    const before = { devices: state.deviceSessionCreates, tokens: state.sessionTokensCreated, audits: state.auditLogCreates };
+    const response = await POST(new Request("https://app.test/api/auth/login", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "inactive@example.com", password: "synthetic", mfaCode: "123456" }),
+    }));
+    assert.equal(response.status, status === "unavailable" || status === "unsupported_factor" ? 503 : 401);
+    assert.equal(response.headers.has("set-cookie"), false);
+    assert.deepEqual({ devices: state.deviceSessionCreates, tokens: state.sessionTokensCreated, audits: state.auditLogCreates }, before);
+    if (status === "mfa_required" || status === "invalid_code") {
+      assert.equal((await response.json()).requiresMfa, true);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    }
+  }
+  state.loginResult = undefined;
+});
+
+test("a fully verified active account receives its application session", async () => {
+  applicationUsers.set("active@example.com", { ...applicationUsers.get("inactive@example.com"), id: "active-user", email: "active@example.com", isActive: true });
+  state.loginResult = { status: "verified" };
+  const before = state.sessionTokensCreated;
+  const response = await POST(new Request("https://app.test/api/auth/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "active@example.com", password: "synthetic", mfaCode: "123456" }),
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(state.sessionTokensCreated, before + 1);
+  assert.equal(response.headers.has("set-cookie"), true);
+  state.loginResult = undefined;
 });

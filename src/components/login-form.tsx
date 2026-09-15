@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ClientAuthForm } from "@/components/client-auth-form";
-import { FormEvent, useState, useTransition } from "react";
+import { FormEvent, useEffect, useRef, useState, useTransition } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, LogIn, ShieldCheck } from "lucide-react";
 import { BrandIcon, BrandLogo } from "@/components/brand-logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { appModeFromPath } from "@/lib/device-sessions";
+import type { LoginMfaFactor } from "@/lib/mfa-login";
 import {
   defaultNextPathForLoginPortal,
   normalizeLoginPortal,
@@ -117,7 +118,14 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [mfaFactors, setMfaFactors] = useState<LoginMfaFactor[]>([]);
+  const [mfaFactorId, setMfaFactorId] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const mfaCodeInput = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
+  useEffect(() => {
+    if (!isPending && mfaFactors.length > 0) mfaCodeInput.current?.focus();
+  }, [mfaFactors, isPending]);
   const heroItems = copy.heroItems;
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -129,11 +137,19 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
         const response = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, next, loginPortal: portal, appMode: appModeFromPath(next), deviceLabel }),
+          body: JSON.stringify({ email, password, next, loginPortal: portal, appMode: appModeFromPath(next), deviceLabel, mfaFactorId, mfaCode }),
         });
 
-        const data = (await response.json().catch(() => null)) as { error?: string; requiresPasswordReset?: boolean; nextPath?: string } | null;
+        const data = (await response.json().catch(() => null)) as { error?: string; requiresPasswordReset?: boolean; nextPath?: string; requiresMfa?: boolean; mfaFactors?: LoginMfaFactor[] } | null;
         if (!response.ok) {
+          if (data?.requiresMfa && data.mfaFactors?.length) {
+            const factors = data.mfaFactors;
+            setMfaFactors(factors);
+            setMfaFactorId((current) => factors.some((factor) => factor.id === current) ? current : factors[0].id);
+            setMfaCode("");
+            setError(mfaCode ? data.error ?? "Unable to verify the authenticator code." : "");
+            return;
+          }
           setError(data?.error ?? "Unable to sign in.");
           return;
         }
@@ -241,7 +257,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                   name="email"
                   className="h-11"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={(event) => { setEmail(event.target.value); setMfaFactors([]); setMfaFactorId(""); setMfaCode(""); }}
                   placeholder={copy.emailPlaceholder}
                   type={portal === "parents" ? "email" : "text"}
                   inputMode={portal === "parents" ? "email" : undefined}
@@ -273,8 +289,21 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                   required
                 />
               </div>
+              {mfaFactors.length > 0 ? (
+                <div className="flex flex-col gap-2" role="group" aria-label="Two-step verification">
+                  {mfaFactors.length > 1 ? <>
+                    <Label htmlFor="mfa-factor">Authenticator</Label>
+                    <select id="mfa-factor" className="h-11 rounded-md border bg-white px-3 text-sm text-slate-950" value={mfaFactorId} onChange={(event) => { setMfaFactorId(event.target.value); setMfaCode(""); }}>
+                      {mfaFactors.map((factor) => <option key={factor.id} value={factor.id}>{factor.label}</option>)}
+                    </select>
+                  </> : null}
+                  <Label htmlFor="mfa-code">Authenticator code</Label>
+                  <Input ref={mfaCodeInput} id="mfa-code" name="mfaCode" className="h-11" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={mfaCode} onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, ""))} required aria-describedby="mfa-help" />
+                  <p id="mfa-help" className="text-sm text-slate-600">Enter the six-digit code from your authenticator app. If you lost access, use another enrolled authenticator or contact your administrator for recovery.</p>
+                </div>
+              ) : null}
               <button className={buttonVariants({ size: "lg", className: "h-11" })} type="submit" disabled={isPending}>
-                {isPending ? "Signing in…" : "Sign in"}
+                {isPending ? "Signing in…" : mfaFactors.length ? "Verify and sign in" : "Sign in"}
                 <LogIn data-icon="inline-end" />
               </button>
             </ClientAuthForm>

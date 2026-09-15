@@ -2,6 +2,7 @@ import "./load-env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+import { assertRestorePlanApproved, createStorageRestorePlan, storageProjectRef, validateRestoreTarget, type RestoreTargetBucket } from "../src/lib/storage-restore-plan";
 import {
   STORAGE_BACKUP_MANIFEST,
   STORAGE_BACKUP_SCHEMA_VERSION,
@@ -23,7 +24,7 @@ function usage(): never {
       "Usage:",
       "  npm run storage:backup -- --output <archive-dir> [--bucket <id>]... [--prefix <path>]",
       "  npm run storage:verify -- --input <archive-dir>",
-      "  npm run storage:restore -- --input <archive-dir> [--allow-existing-buckets]",
+      "  npm run storage:restore -- --input <archive-dir> --target-project <ref> [--allow-existing-buckets] [--apply --expected-plan <sha256>]",
       "",
       "Backup env: SUPABASE_STORAGE_URL and SUPABASE_STORAGE_ADMIN_KEY",
       "Restore env: SUPABASE_RESTORE_URL and SUPABASE_RESTORE_ADMIN_KEY",
@@ -51,12 +52,7 @@ function oneValue(args: string[], flag: string) {
 }
 
 function projectRefFromUrl(url: string) {
-  const host = new URL(url).hostname;
-  const projectRef = host.split(".")[0] ?? "";
-  if (!/^[a-z0-9]{20}$/.test(projectRef)) {
-    throw new Error("Supabase URL does not contain a valid project reference.");
-  }
-  return projectRef;
+  return storageProjectRef(url);
 }
 
 function createStorageClient(url: string, key: string) {
@@ -138,6 +134,7 @@ async function backup(args: string[]) {
   if (prefixes.length > 1) usage();
   const prefix = prefixes[0] ? validateStorageObjectPath(prefixes[0].replace(/\/$/, "")) : "";
   const url = requiredEnv("SUPABASE_STORAGE_URL", "NEXT_PUBLIC_SUPABASE_URL");
+  projectRefFromUrl(url);
   const key = requiredEnv("SUPABASE_STORAGE_ADMIN_KEY", "SUPABASE_SERVICE_ROLE_KEY");
   const client = createStorageClient(url, key);
   await ensureNewArchiveDirectory(output);
@@ -236,11 +233,30 @@ async function restore(args: string[]) {
   const allowExistingBuckets = args.includes("--allow-existing-buckets");
   const manifest = await readAndVerifyArchive(input);
   const url = requiredEnv("SUPABASE_RESTORE_URL");
+  const targetProjectRef = validateRestoreTarget(url, oneValue(args, "--target-project"), manifest.sourceProjectRef);
   const key = requiredEnv("SUPABASE_RESTORE_ADMIN_KEY", "SUPABASE_RESTORE_SERVICE_ROLE_KEY");
   const client = createStorageClient(url, key);
   const { data: targetBuckets, error: targetError } = await client.storage.listBuckets();
   if (targetError) throw new Error(`Could not list target Storage buckets: ${targetError.message}`);
   const existingById = new Map((targetBuckets ?? []).map((bucket) => [bucket.id, bucket]));
+
+  // Inspect every selected bucket before the first write, including collisions
+  // in later buckets that previously left an avoidably partial restore.
+  const inspectedBuckets: RestoreTargetBucket[] = [];
+  for (const bucket of manifest.buckets) {
+    const existing = existingById.get(bucket.id);
+    if (!existing) continue;
+    if (!allowExistingBuckets || existing.public) {
+      throw new Error(`Target bucket requires review and must be private: ${bucket.id}.`);
+    }
+    inspectedBuckets.push({ id: existing.id, public: existing.public, objectPaths: await listObjectPaths(client, bucket.id, "") });
+  }
+  const plan = createStorageRestorePlan(manifest, targetProjectRef, inspectedBuckets, allowExistingBuckets);
+  if (!args.includes("--apply")) {
+    console.log(JSON.stringify({ command: "restore-preview", ...plan }));
+    return;
+  }
+  assertRestorePlanApproved(plan.fingerprint, oneValue(args, "--expected-plan"));
 
   for (const bucket of manifest.buckets) {
     const existing = existingById.get(bucket.id);

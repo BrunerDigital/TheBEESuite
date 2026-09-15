@@ -110,7 +110,7 @@ function matchesWorkflow(actual: string, expected: string) {
   const expectedUrl = new URL(expected, baseUrl);
   return actualUrl.pathname === expectedUrl.pathname
     && actualUrl.search === expectedUrl.search
-    && actualUrl.hash === expectedUrl.hash;
+    && (!expectedUrl.hash || actualUrl.hash === expectedUrl.hash);
 }
 
 function requestProblem(request: Request) {
@@ -166,6 +166,9 @@ type PageMetricsResult = {
 };
 
 async function pageMetrics(page: Page) {
+  // Next retains inactive page trees while navigation settles. Measure the
+  // interactive destination, never an inert transition snapshot.
+  await page.locator("main h1:not([inert] *)").first().waitFor({ state: "visible", timeout: 45_000 });
   return page.evaluate<PageMetricsResult>(`(() => {
     const isVisible = (element) => {
       const style = getComputedStyle(element);
@@ -303,13 +306,29 @@ async function clickWorkflowLink(page: Page, href: string) {
   for (const links of [page.locator("main a[href]"), page.locator("a[href]")]) {
     for (let index = 0; index < await links.count(); index += 1) {
       const candidate = links.nth(index);
-      if (!await candidate.isVisible().catch(() => false)) continue;
       const value = await candidate.getAttribute("href");
       if (!value) continue;
       const resolved = new URL(value, page.url());
       if (resolved.pathname !== target.pathname) continue;
       if (target.search && resolved.search !== target.search) continue;
       if (target.hash && resolved.hash !== target.hash) continue;
+      // Follow the actual disclosure controls to a nested destination. Do not
+      // force-click hidden links or replace navigation with direct page.goto.
+      for (const summary of await candidate.locator("xpath=ancestor::details[not(@open)]/summary").all()) {
+        if (await summary.isVisible()) await summary.click();
+      }
+      const hiddenIds = await candidate.evaluate((element) => {
+        const ids: string[] = [];
+        for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+          if (ancestor.hidden && ancestor.id) ids.unshift(ancestor.id);
+        }
+        return ids;
+      });
+      for (const id of hiddenIds) {
+        const toggle = page.locator(`button[aria-controls=${JSON.stringify(id)}][aria-expanded="false"]`).first();
+        if (await toggle.isVisible().catch(() => false)) await toggle.click();
+      }
+      if (!await candidate.isVisible().catch(() => false)) continue;
       await candidate.click();
       await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => undefined);
       await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => undefined);

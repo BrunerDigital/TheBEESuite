@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       email: user.email,
       role: user.role,
       sessionVersion: session.sessionVersion,
+      mfaVerified: session.mfaVerified,
       deviceSessionId: session.deviceSessionId,
       workspaceSelection: body.selection,
     }),

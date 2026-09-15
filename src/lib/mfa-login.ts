@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type LoginMfaFactor = { id: string; label: string };
 export type MfaLoginResult =
-  | { status: "verified" }
+  | { status: "verified"; mfaVerified?: boolean }
   | { status: "invalid_password" }
   | { status: "unavailable" }
   | { status: "unsupported_factor" }
@@ -41,7 +41,7 @@ export async function authenticateMfaLogin(
     }
     const assurance = await client.auth.mfa.getAuthenticatorAssuranceLevel();
     return !assurance.error && assurance.data?.currentLevel === "aal2"
-      ? { status: "verified" } : { status: "unavailable" };
+      ? { status: "verified", mfaVerified: true } : { status: "unavailable" };
   } catch {
     return { status: "unavailable" };
   } finally {

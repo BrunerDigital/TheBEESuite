@@ -75,7 +75,7 @@ test("factor substitution and malformed codes never reach provider verification"
 
 test("backup authenticator succeeds only after provider verification and AAL2", async () => {
   const { client, calls } = provider({ factors: [primary, backup] });
-  assert.deepEqual(await authenticateMfaLogin(client, { ...input, mfaCode: "123456", mfaFactorId: "backup" }), { status: "verified" });
+  assert.deepEqual(await authenticateMfaLogin(client, { ...input, mfaCode: "123456", mfaFactorId: "backup" }), { status: "verified", mfaVerified: true });
   assert.deepEqual(calls.find((call) => call.method === "verify")?.args, { code: "123456", factorId: "backup" });
   assert.deepEqual(calls.map((call) => call.method), ["password", "list", "verify", "assurance", "logout"]);
 });

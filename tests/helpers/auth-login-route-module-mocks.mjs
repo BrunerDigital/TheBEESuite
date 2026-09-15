@@ -39,7 +39,7 @@ mock.module("@/lib/prisma", {
           ) {
             return null;
           }
-          return record;
+          return { ...record };
         },
       },
       deviceSession: {
@@ -62,6 +62,7 @@ mock.module("@/lib/supabase-auth", {
   namedExports: {
     async verifySupabaseLogin({ email }) {
       state.passwordChecks.push(email);
+      if (state.bumpDuringLogin) applicationUsers.get(email).sessionVersion++;
       return state.loginResult ?? { status: "verified" };
     },
   },
@@ -85,7 +86,8 @@ mock.module("@/lib/rate-limit", {
 mock.module("@/lib/auth", {
   namedExports: {
     SESSION_COOKIE: "bee_suite_session",
-    createSessionToken() {
+    createSessionToken(input) {
+      state.lastSession = input;
       state.sessionTokensCreated += 1;
       return "unexpected-session-token";
     },
@@ -237,4 +239,29 @@ test("one client's MFA rate limit cannot lock out another client's login", async
   }
   state.blockedRateKey = undefined;
   state.loginResult = undefined;
+});
+
+test("a security change during provider login prevents session issuance", async () => {
+  state.bumpDuringLogin = true;
+  const response = await POST(new Request("https://app.test/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "active@example.com", password: "synthetic" }) }));
+  assert.equal(response.status, 409);
+  assert.equal(response.headers.has("set-cookie"), false);
+  state.bumpDuringLogin = false;
+});
+
+test("required-role login is enrollment-only until provider AAL2 is verified", async () => {
+  const previous = process.env.BEE_MFA_REQUIRED_ROLES;
+  process.env.BEE_MFA_REQUIRED_ROLES = "PARENT_GUARDIAN";
+  try {
+    for (const mfaVerified of [undefined, true]) {
+      state.loginResult = { status: "verified", mfaVerified };
+      const response = await POST(new Request("https://app.test/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "active@example.com", password: "synthetic" }) }));
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).nextPath, mfaVerified ? "/parent-portal" : "/account/security");
+      assert.equal(state.lastSession.mfaVerified, mfaVerified);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.BEE_MFA_REQUIRED_ROLES; else process.env.BEE_MFA_REQUIRED_ROLES = previous;
+    state.loginResult = undefined;
+  }
 });

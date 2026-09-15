@@ -31,6 +31,7 @@ test("the real login payload omits inactive MFA fields and passes the strict QA 
   assert.equal(Object.hasOwn(body, "mfaFactorId"), false);
   assert.equal(credentialedQaRequestAllowed({ ...base, body: JSON.stringify(body) }), true);
   const challenged = buildLoginRequest({ ...initial, mfaCode: "123456", mfaFactorId: "synthetic" });
+  assert.ok("mfaCode" in challenged);
   assert.equal(challenged.mfaCode, "123456");
   // Unattended QA must still stop if its designated account has enrolled MFA.
   assert.equal(credentialedQaRequestAllowed({ ...base, body: JSON.stringify(challenged) }), false);

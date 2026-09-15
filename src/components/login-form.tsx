@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { appModeFromPath } from "@/lib/device-sessions";
 import type { LoginMfaFactor } from "@/lib/mfa-login";
+import { buildLoginRequest } from "@/lib/login-request";
 import {
   defaultNextPathForLoginPortal,
   normalizeLoginPortal,
@@ -137,7 +138,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
         const response = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, next, loginPortal: portal, appMode: appModeFromPath(next), deviceLabel, mfaFactorId, mfaCode }),
+          body: JSON.stringify(buildLoginRequest({ email, password, next, loginPortal: portal, appMode: appModeFromPath(next), deviceLabel, mfaFactorId, mfaCode })),
         });
 
         const data = (await response.json().catch(() => null)) as { error?: string; requiresPasswordReset?: boolean; nextPath?: string; requiresMfa?: boolean; mfaFactors?: LoginMfaFactor[] } | null;

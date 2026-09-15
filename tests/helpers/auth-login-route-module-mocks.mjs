@@ -69,11 +69,12 @@ mock.module("@/lib/supabase-auth", {
 
 mock.module("@/lib/rate-limit", {
   namedExports: {
-    async checkPersistentRateLimit() {
+    async checkPersistentRateLimit({ key }) {
+      if (key === state.blockedRateKey) return { ok: false, resetAt: Date.now() + 60_000 };
       return { ok: true };
     },
-    requestIp() {
-      return "203.0.113.10";
+    requestIp(headers) {
+      return headers.get("x-test-ip") || "203.0.113.10";
     },
     retryAfterSeconds() {
       return 60;
@@ -220,5 +221,20 @@ test("a fully verified active account receives its application session", async (
   assert.equal(response.status, 200);
   assert.equal(state.sessionTokensCreated, before + 1);
   assert.equal(response.headers.has("set-cookie"), true);
+  state.loginResult = undefined;
+});
+
+test("one client's MFA rate limit cannot lock out another client's login", async () => {
+  state.blockedRateKey = "login-mfa:203.0.113.10:active@example.com";
+  state.loginResult = { status: "mfa_required", factors: [{ id: "factor", label: "Authenticator" }] };
+  for (const [ip, expectedStatus] of [["203.0.113.10", 429], ["203.0.113.11", 401]]) {
+    const response = await POST(new Request("https://app.test/api/auth/login", {
+      method: "POST", headers: { "content-type": "application/json", "x-test-ip": ip },
+      body: JSON.stringify({ email: "active@example.com", password: "synthetic", mfaCode: "123456" }),
+    }));
+    assert.equal(response.status, expectedStatus);
+    assert.equal(response.headers.has("set-cookie"), false);
+  }
+  state.blockedRateKey = undefined;
   state.loginResult = undefined;
 });

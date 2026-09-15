@@ -47,7 +47,7 @@ async function POSTHandler(request: NextRequest) {
 
   const mfaCode = clean(body.mfaCode);
   if (mfaCode) {
-    const mfaRate = await checkPersistentRateLimit({ key: `login-mfa:${email}`, limit: 8, windowMs: 15 * 60 * 1000 });
+    const mfaRate = await checkPersistentRateLimit({ key: `login-mfa:${ipAddress}:${email}`, limit: 8, windowMs: 15 * 60 * 1000 });
     if (!mfaRate.ok) return NextResponse.json(
       { ok: false, error: "Too many verification attempts. Please wait and try again." },
       { status: 429, headers: { "Retry-After": String(retryAfterSeconds(mfaRate.resetAt)) } },

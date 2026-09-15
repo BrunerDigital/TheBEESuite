@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { credentialedQaBaseUrl, credentialedQaPasswords, credentialedQaRequestAllowed } from "../scripts/credentialed-qa-policy";
+import { buildLoginRequest } from "../src/lib/login-request";
 
 test("private QA credentials match exactly one selected role and email", () => {
   const selected = [{ key: "director", email: "director@synthetic.thebeesuite.io" }];
@@ -22,6 +23,18 @@ test("QA credentials reject lookalike, external, and credential-bearing origins"
 });
 
 const base = { baseUrl: "https://thebeesuite.io", url: "https://thebeesuite.io/api/auth/login", method: "POST", body: null as string | null, resourceType: "fetch", email: "qa@synthetic.thebeesuite.io", password: "local-test-only" };
+
+test("the real login payload omits inactive MFA fields and passes the strict QA boundary", () => {
+  const initial = { email: base.email, password: base.password, next: "/dashboard", loginPortal: "directors", appMode: "web", deviceLabel: "QA", mfaCode: "", mfaFactorId: "" };
+  const body = buildLoginRequest(initial);
+  assert.equal(Object.hasOwn(body, "mfaCode"), false);
+  assert.equal(Object.hasOwn(body, "mfaFactorId"), false);
+  assert.equal(credentialedQaRequestAllowed({ ...base, body: JSON.stringify(body) }), true);
+  const challenged = buildLoginRequest({ ...initial, mfaCode: "123456", mfaFactorId: "synthetic" });
+  assert.equal(challenged.mfaCode, "123456");
+  // Unattended QA must still stop if its designated account has enrolled MFA.
+  assert.equal(credentialedQaRequestAllowed({ ...base, body: JSON.stringify(challenged) }), false);
+});
 
 test("QA permits only the exact selected login and heartbeat payloads", () => {
   const login = { email: base.email, password: base.password, next: "/dashboard", loginPortal: "directors", appMode: "web", deviceLabel: "QA browser" };

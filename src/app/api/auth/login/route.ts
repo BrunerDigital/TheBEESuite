@@ -9,7 +9,7 @@ import {
   normalizeDeviceAppMode,
 } from "@/lib/device-sessions";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
-import { verifySupabasePassword } from "@/lib/supabase-auth";
+import { verifySupabaseLogin } from "@/lib/supabase-auth";
 import { resolveLoginIdentifier } from "@/lib/demo-accounts";
 import { resolvePortalPostLoginPath } from "@/lib/login-routing";
 
@@ -45,8 +45,27 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const verified = await verifySupabasePassword(email, password);
-  if (!verified) {
+  const mfaCode = clean(body.mfaCode);
+  if (mfaCode) {
+    const mfaRate = await checkPersistentRateLimit({ key: `login-mfa:${ipAddress}:${email}`, limit: 8, windowMs: 15 * 60 * 1000 });
+    if (!mfaRate.ok) return NextResponse.json(
+      { ok: false, error: "Too many verification attempts. Please wait and try again." },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds(mfaRate.resetAt)) } },
+    );
+  }
+  const verified = await verifySupabaseLogin({ email, password, mfaCode, mfaFactorId: clean(body.mfaFactorId) });
+  if (verified.status === "mfa_required" || verified.status === "invalid_code") {
+    return NextResponse.json({
+      ok: false, requiresMfa: true, mfaFactors: verified.factors,
+      error: verified.status === "invalid_code" ? "That authenticator code did not work. Try a fresh code." : "Enter the code from your authenticator app.",
+    }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+  if (verified.status === "unavailable" || verified.status === "unsupported_factor") {
+    return NextResponse.json({ ok: false, error: verified.status === "unsupported_factor"
+      ? "This account needs a supported authenticator. Contact your administrator for account recovery."
+      : "Sign-in verification is unavailable. Please try again shortly." }, { status: 503 });
+  }
+  if (verified.status !== "verified") {
     return NextResponse.json(
       { ok: false, error: "Invalid email or password." },
       { status: 401 },

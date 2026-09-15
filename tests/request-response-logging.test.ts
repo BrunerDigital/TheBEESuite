@@ -24,6 +24,39 @@ test("operational anomalies classify Prisma, Auth, and push failures without mes
   });
 });
 
+test("provider error logs agree with classification and reject invalid status overrides", () => {
+  const cases = [
+    { error: { statusCode: 400 }, metadata: {}, expected: 400 },
+    { error: { statusCode: 410 }, metadata: { status: 410 }, expected: 410 },
+    { error: {}, metadata: { responseStatus: "429" }, expected: 429 },
+    { error: { status: 503 }, metadata: { status: 0 }, expected: 503 },
+    { error: { statusCode: 502 }, metadata: { status: false }, expected: 502 },
+    { error: { statusCode: 503 }, metadata: { status: 200 }, expected: 503 },
+    { error: { status: "invalid", statusCode: 404 }, metadata: {}, expected: 404 },
+    { error: {}, metadata: { status: 999 }, expected: 500 },
+    { error: {}, metadata: { status: null, responseStatus: 400 }, expected: 400 },
+  ];
+  const original = console.error;
+  const setting = process.env.OPERATIONAL_ERROR_LOGGING;
+  const lines: string[] = [];
+  process.env.OPERATIONAL_ERROR_LOGGING = "on";
+  console.error = (line: string) => { lines.push(line); };
+  try {
+    for (const item of cases) {
+      logOperationalError("web_push.delivery_failed", item.error, item.metadata);
+      const payload = JSON.parse(lines.at(-1)!);
+      assert.equal(payload.status, item.expected);
+      assert.equal(payload.anomaly, "push_delivery_rejected");
+      assert.equal(payload.severity, item.expected >= 500 ? "critical" : "warning");
+      assert.equal(payload.message, "[REDACTED]");
+    }
+  } finally {
+    console.error = original;
+    if (setting === undefined) delete process.env.OPERATIONAL_ERROR_LOGGING;
+    else process.env.OPERATIONAL_ERROR_LOGGING = setting;
+  }
+});
+
 test("operational log redaction removes nested PII and keeps safe status fields", () => {
   const redacted = redactForOperationalLog({
     action: "create",

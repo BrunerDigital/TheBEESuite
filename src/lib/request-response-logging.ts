@@ -72,8 +72,7 @@ export function classifyOperationalAnomaly(
   metadata: Record<string, unknown> = {},
 ): { anomaly: OperationalAnomaly; severity: "warning" | "critical" } {
   const errorRecord = error && typeof error === "object" ? error as Record<string, unknown> : {};
-  const metadataStatus = Number(metadata.status ?? metadata.responseStatus);
-  const status = Number.isInteger(metadataStatus) ? metadataStatus : statusFromError(error);
+  const status = operationalErrorStatus(error, metadata);
   const code = String(errorRecord.code ?? metadata.errorCode ?? "").toUpperCase();
   const normalizedContext = context.toLowerCase();
 
@@ -264,12 +263,19 @@ function requestFromArgs(args: unknown[]) {
   return args.find((arg): arg is Request => arg instanceof Request) ?? null;
 }
 
+function httpErrorStatus(value: unknown) {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  const status = Number(value);
+  return Number.isInteger(status) && status >= 400 && status <= 599 ? status : null;
+}
+
 function statusFromError(error: unknown) {
-  if (error && typeof error === "object" && "status" in error) {
-    const status = Number((error as { status?: unknown }).status);
-    if (Number.isInteger(status) && status >= 400 && status <= 599) return status;
-  }
-  return 500;
+  const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  return httpErrorStatus(record.status) ?? httpErrorStatus(record.statusCode) ?? 500;
+}
+
+function operationalErrorStatus(error: unknown, metadata: Record<string, unknown>) {
+  return httpErrorStatus(metadata.status) ?? httpErrorStatus(metadata.responseStatus) ?? statusFromError(error);
 }
 
 function logPayload(payload: LogPayload) {
@@ -307,7 +313,7 @@ export function logOperationalError(context: string, error: unknown, metadata: R
       severity: classification.severity,
       context: compactString(context),
       errorType: error instanceof Error ? error.name : typeof error,
-      status: statusFromError(error),
+      status: operationalErrorStatus(error, metadata),
       message: REDACTED,
       metadata: redactForOperationalLog(metadata),
     }),

@@ -3,6 +3,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { chromium, type Page, type Request } from "playwright";
 import { SYNTHETIC_ROLE_QA_ACCOUNTS } from "@/lib/synthetic-role-qa";
+import { prisma } from "@/lib/prisma";
+import { assertSyntheticRoleQaPreflight } from "./ensure-synthetic-role-qa";
+import { credentialedQaBaseUrl, credentialedQaRequestAllowed } from "./credentialed-qa-policy";
 
 type Viewport = { id: "desktop" | "mobile"; width: number; height: number };
 type Workflow = { id: string; href: string; expectedHref?: string };
@@ -61,6 +64,7 @@ function argument(name: string, fallback: string) {
 }
 
 function cleanBaseUrl(value: string) {
+  credentialedQaBaseUrl(value, process.env.ALLOW_SYNTHETIC_ROLE_QA_PRODUCTION_LOGIN === "true");
   const url = new URL(value);
   if (url.protocol !== "https:" && !["127.0.0.1", "localhost"].includes(url.hostname)) {
     throw new Error("Credentialed role QA requires HTTPS except on localhost.");
@@ -327,13 +331,24 @@ function metricsPass(metrics: PageMetricsResult, viewport: Viewport) {
 
 async function main() {
   await mkdir(outputDirectory, { recursive: true });
+  await assertSyntheticRoleQaPreflight(targetAccounts);
   const browser = await chromium.launch();
   const results: Array<Record<string, unknown>> = [];
   const requestFailures: string[] = [];
 
   try {
     for (const account of targetAccounts) {
-      const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", colorScheme: "light" });
+      const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", colorScheme: "light", serviceWorkers: "block" });
+      await context.route("**/*", async (route) => {
+        const request = route.request();
+        if (!credentialedQaRequestAllowed({ baseUrl, url: request.url(), method: request.method(), body: request.postData(), resourceType: request.resourceType(), email: account.email, password })) {
+          unsafeRequests.push(`${request.method()} ${new URL(request.url()).pathname}`);
+          await route.abort("blockedbyclient");
+          return;
+        }
+        await route.continue();
+      });
+      try {
       if (["127.0.0.1", "localhost"].includes(new URL(baseUrl).hostname)) {
         await context.route("**/_vercel/**/script.js", (route) => route.fulfill({ status: 204, contentType: "application/javascript" }));
       }
@@ -442,7 +457,17 @@ async function main() {
         });
       }
 
-      await context.close();
+      } catch {
+        results.push({ role: account.key, passed: false, failure: "Workflow did not complete; no provider or credential error payload retained." });
+      } finally {
+        try {
+          const logout = await context.request.post(`${baseUrl}/api/auth/logout`, { maxRedirects: 0 });
+          if (!logout.ok()) unsafeRequests.push(`Session cleanup failed for ${account.key}`);
+        } catch {
+          unsafeRequests.push(`Session cleanup failed for ${account.key}`);
+        }
+        await context.close();
+      }
     }
   } finally {
     await browser.close();
@@ -455,7 +480,7 @@ async function main() {
     baseUrl,
     accountSet: "isolated synthetic role QA",
     results,
-    writeAudit: { allowed: ["POST /api/auth/login", "POST /api/device-sessions (session heartbeat)"], unexpectedWrites },
+    writeAudit: { mode: "block before transmission; service workers disabled", allowed: ["POST /api/auth/login (exact selected QA account)", "POST /api/device-sessions (session heartbeat)", "POST /api/auth/logout (cleanup only)"], unexpectedWrites },
     httpErrors,
     requestFailures,
     consoleErrors,
@@ -500,7 +525,7 @@ const pageErrors: string[] = [];
 const unsafeRequests: string[] = [];
 const httpErrors: string[] = [];
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : error);
+main().catch(() => {
+  console.error("Credentialed QA did not complete. Check designated account prerequisites and local evidence; no error payload is printed.");
   process.exitCode = 1;
-});
+}).finally(() => prisma.$disconnect());

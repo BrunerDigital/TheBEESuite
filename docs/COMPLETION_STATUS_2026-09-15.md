@@ -20,7 +20,7 @@ This is a current evidence checkpoint, not an all-school launch approval. The Au
 | Family payment readiness | 21 payment-enabled schools, 653 current families, all with billing accounts; zero ordered or latest-created ledger-balance mismatches | 37 lack active parent links; two have positive balances without active parent links; one balance-only account needs evidence review |
 | Balance-only accounts | 20 positive balances without an open invoice, of which 19 have supported provenance | Do not manufacture invoices or alter balances merely to eliminate a report warning |
 | Agency integrity | No claim-status, amount, chronology or relationship integrity blockers in the read-only audit | No remittance records existed; this does not prove remittance execution or settlement |
-| Designated role QA | Nine non-platform test identities pass demo-scope, application, Auth-marker and linkage preflight | Saved credentials fail for all nine; exact credential-repair approval requested; no identities changed |
+| Designated role QA | Nine non-platform test identities pass demo-scope, application, Auth-marker and linkage preflight; current per-account credentials located in the existing private store | The shared environment password was stale. Credential reset is unnecessary; fresh guarded role verification is running with the private credentials. No identities changed |
 | Mobile source | Parent/Teacher source identity, HTTPS, assets, privacy and static configuration checks pass | Signed archives, authenticated native flows, physical devices, TestFlight and Apple publication remain separate |
 
 The 69-school result covers the readiness checker's eligible operational schools, not every directory entry or demo record. Missing confirmations are completion holds; this report does not turn off already-approved operations. Provider configuration presence was read from an existing local configuration source and is not a fresh provider-delivery test.
@@ -31,6 +31,7 @@ The 69-school result covers the readiness checker's eligible operational schools
 2. Run the full existing demo identity/linkage preflight before opening credentialed QA browsers.
 3. Restrict QA credential destinations to the canonical HTTPS origin or localhost, and block unexpected network writes before transmission. Block service workers so they cannot bypass interception.
 4. Log out test browser sessions in cleanup, including workflow failures; retain failed-role evidence and continue checking the remaining selected roles.
+5. Support `SYNTHETIC_ROLE_QA_CREDENTIALS_FILE` for the existing private per-account credential store. Each selected role/email must match exactly once; no passwords are printed or persisted in reports. This avoids incorrectly treating a stale shared password as a need to reset identities.
 
 Focused verification: 31 tests passed across operational logging, QA policy, account scope, workflow safeguards and school onboarding. A Chromium run against a local HTTP server proved that only the selected fake login and heartbeat reached the server; all four attempted business, revocation and wrong-account writes were blocked, with no real provider calls. Typecheck passed. Full production and fresh unsigned native gates are tracked in the protected PR/release evidence.
 
@@ -48,7 +49,7 @@ These are internal review artifacts, not public guides. Do not email them, impor
 
 ## Completion sequence
 
-1. Repair the nine designated demo credentials after approval, then execute management and other role workflows with the guarded runner. Platform-owner access is excluded.
+1. Finish management and other role workflows with the guarded runner and existing private credentials. Platform-owner access is excluded; credential-repair approval is no longer needed.
 2. Obtain source-record confirmation from the responsible school owner; resolve each school's separate setup/invitation/kiosk/billing gaps and preserve migration evidence.
 3. Review the two positive-balance parent-access exceptions and one unsupported balance with exact current source evidence before proposing mutations.
 4. Close privileged MFA design/enforcement, isolated staging, scheduled encrypted backups, database/Storage restore rehearsal, monitoring acknowledgment and support ownership. None is certified by a successful code build.

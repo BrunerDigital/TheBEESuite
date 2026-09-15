@@ -1,4 +1,18 @@
 /** Network boundary for read-only credentialed role verification. */
+export function credentialedQaPasswords(accounts: readonly { key: string; email: string }[], input: unknown) {
+  const document = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  if (!Array.isArray(document.accounts)) throw new Error("QA credential file must contain an accounts array.");
+  const passwords = new Map<string, string>();
+  for (const account of accounts) {
+    const matches = document.accounts.filter((row) => row && typeof row === "object" && row.role === account.key);
+    if (matches.length !== 1 || matches[0].email !== account.email || typeof matches[0].password !== "string" || !matches[0].password.trim()) {
+      throw new Error("QA credential file must match each selected role and email exactly once.");
+    }
+    passwords.set(account.key, matches[0].password);
+  }
+  return passwords;
+}
+
 export function credentialedQaBaseUrl(value: string, productionOptIn: boolean) {
   const url = new URL(value);
   const local = ["localhost", "127.0.0.1"].includes(url.hostname);

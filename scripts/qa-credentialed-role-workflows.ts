@@ -1,11 +1,11 @@
 import "./load-env";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { chromium, type Page, type Request } from "playwright";
 import { SYNTHETIC_ROLE_QA_ACCOUNTS } from "@/lib/synthetic-role-qa";
 import { prisma } from "@/lib/prisma";
 import { assertSyntheticRoleQaPreflight } from "./ensure-synthetic-role-qa";
-import { credentialedQaBaseUrl, credentialedQaRequestAllowed } from "./credentialed-qa-policy";
+import { credentialedQaBaseUrl, credentialedQaPasswords, credentialedQaRequestAllowed } from "./credentialed-qa-policy";
 
 type Viewport = { id: "desktop" | "mobile"; width: number; height: number };
 type Workflow = { id: string; href: string; expectedHref?: string };
@@ -79,8 +79,9 @@ function cleanBaseUrl(value: string) {
 
 const baseUrl = cleanBaseUrl(argument("--base-url", "https://thebeesuite.io"));
 const outputDirectory = resolve(argument("--output-dir", `output/playwright/credentialed-role-${Date.now()}`));
-const password = process.env.SYNTHETIC_ROLE_QA_PASSWORD?.trim() || process.env.DEMO_PASSWORD?.trim() || "";
-if (!password) throw new Error("SYNTHETIC_ROLE_QA_PASSWORD (or DEMO_PASSWORD) is required.");
+const sharedPassword = process.env.SYNTHETIC_ROLE_QA_PASSWORD?.trim() || process.env.DEMO_PASSWORD?.trim() || "";
+const credentialFile = process.env.SYNTHETIC_ROLE_QA_CREDENTIALS_FILE?.trim();
+if (!credentialFile && !sharedPassword) throw new Error("SYNTHETIC_ROLE_QA_CREDENTIALS_FILE or SYNTHETIC_ROLE_QA_PASSWORD is required.");
 const includePlatformOwner = process.argv.includes("--include-platform-owner");
 if (includePlatformOwner && process.env.ALLOW_SYNTHETIC_PLATFORM_OWNER_QA !== "true") {
   throw new Error("Set ALLOW_SYNTHETIC_PLATFORM_OWNER_QA=true with --include-platform-owner; this role can access every tenant.");
@@ -332,12 +333,16 @@ function metricsPass(metrics: PageMetricsResult, viewport: Viewport) {
 async function main() {
   await mkdir(outputDirectory, { recursive: true });
   await assertSyntheticRoleQaPreflight(targetAccounts);
+  const passwords = credentialFile
+    ? credentialedQaPasswords(targetAccounts, JSON.parse((await readFile(credentialFile, "utf8")).replace(/^\uFEFF/, "")))
+    : new Map(targetAccounts.map((account) => [account.key, sharedPassword]));
   const browser = await chromium.launch();
   const results: Array<Record<string, unknown>> = [];
   const requestFailures: string[] = [];
 
   try {
     for (const account of targetAccounts) {
+      const password = passwords.get(account.key)!;
       const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", colorScheme: "light", serviceWorkers: "block" });
       await context.route("**/*", async (route) => {
         const request = route.request();

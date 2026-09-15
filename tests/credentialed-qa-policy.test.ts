@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { credentialedQaBaseUrl, credentialedQaRequestAllowed } from "../scripts/credentialed-qa-policy";
+import { credentialedQaBaseUrl, credentialedQaPasswords, credentialedQaRequestAllowed } from "../scripts/credentialed-qa-policy";
+
+test("private QA credentials match exactly one selected role and email", () => {
+  const selected = [{ key: "director", email: "director@synthetic.thebeesuite.io" }];
+  const row = { role: "director", email: selected[0].email, password: "fixture-only" };
+  assert.equal(credentialedQaPasswords(selected, { accounts: [row] }).get("director"), "fixture-only");
+  for (const accounts of [[], [row, row], [{ ...row, email: "real@example.com" }], [{ ...row, password: "" }]]) {
+    assert.throws(() => credentialedQaPasswords(selected, { accounts }));
+  }
+  assert.throws(() => credentialedQaPasswords(selected, null));
+});
 
 test("QA credentials reject lookalike, external, and credential-bearing origins", () => {
   for (const url of ["https://thebeesuite.io.evil.test", "https://evil.test", "http://thebeesuite.io", "https://thebeesuite.io:8443", "https://user:pass@thebeesuite.io", "https://thebeesuite.io/?token=secret", "https://thebeesuite.io/login"]) {

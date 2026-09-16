@@ -121,7 +121,7 @@ import { childScheduleClassification, fteScheduledDaysPerWeek, scheduledDaysPerW
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
-import { getParentPortalPaymentFamilyScope, getParentPortalPaymentReturn, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
+import { getParentPortalFamilyScope, getParentPortalPaymentFamilyScope, getParentPortalPaymentReturn, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 import { parentCurrentChildScope, readParentDocumentPage } from "@/lib/parent-document-query";
 import { parentAttentionScope, parentIncidentOrder, parentIncidentSelect, parentInvoiceOrder, parentInvoiceSelect, prioritizeParentAttentionRecords } from "@/lib/parent-attention";
@@ -2442,7 +2442,7 @@ async function renderLivePage(
       if (parentReviewScopeInvalid) return <AppReviewScopeBlocked portal="Parent" />;
     }
     const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
-      ? requestedParentFamilyScope ?? await getParentPortalPaymentFamilyScope(user.id, user.tenantId, selectedParentFamilyId)
+      ? requestedParentFamilyScope ?? await getParentPortalFamilyScope(user.id, user.tenantId, selectedParentFamilyId)
       : null;
     if (parentFamilyScope && !parentFamilyScope.ok) {
       return <ParentPortalAccessBlocked />;

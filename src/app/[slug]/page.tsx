@@ -2453,7 +2453,6 @@ async function renderLivePage(
             AND: [
               parentPortalFamilyScopeWhere({ userId: user.id, requestedFamilyId: selectedParentFamilyId }),
               parentPortalTenantFamilyWhere(parentPortalTenantCenterIds),
-              currentOrOutstandingFamilyWhere(),
             ],
           }
         : { AND: [visibleFamilyWhere(visibleCenterIds), currentOrOutstandingFamilyWhere()] },

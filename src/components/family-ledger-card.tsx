@@ -10,7 +10,7 @@ import {
   type BillingReceiptSchool,
 } from "@/components/billing-print-actions";
 import { BILLING_TARGET_UNAVAILABLE } from "@/lib/billing-family-selection";
-import { scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
+import { scheduleFocusedPortalControlRevealExcept } from "@/lib/focused-portal-control";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -127,7 +127,7 @@ export function FamilyLedgerCard({
   );
 
   return (
-    <Card id="family-ledger" className="office-billing-workspace glass-panel scroll-mt-24" onFocusCapture={event => scheduleFocusedPortalControlReveal(event.target)}>
+    <Card id="family-ledger" className="office-billing-workspace glass-panel scroll-mt-24" onFocusCapture={event => scheduleFocusedPortalControlRevealExcept(event.target, new Set(["family-ledger-family"]))}>
       <CardHeader className="ledger-heading-layout grid grid-cols-1 gap-4">
         <div>
         <CardTitle as="h2">Family Ledger</CardTitle>

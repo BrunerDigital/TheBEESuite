@@ -50,9 +50,12 @@ test("office focus waits for layout and cannot steal a later interaction", () =>
     if (!retainedFocus) document.activeElement = {};
     frames.shift()!(0); assert.equal(scrolls.length, retainedFocus ? 1 : 0);
   }
-  for (const file of ["billing-workbench", "family-ledger-card", "director-payment-terminal-workspace"]) {
+  for (const file of ["billing-workbench", "director-payment-terminal-workspace"]) {
     assert.match(readFileSync(`src/components/${file}.tsx`, "utf8"), /onFocusCapture=\{event => scheduleFocusedPortalControlReveal\(event.target\)\}/);
   }
+  const ledgerSource = readFileSync("src/components/family-ledger-card.tsx", "utf8");
+  assert.match(ledgerSource, /scheduleFocusedPortalControlRevealExcept\(event.target, new Set\(\["family-ledger-family"\]\)\)/);
+  assert.match(readFileSync("src/lib/focused-portal-control.ts", "utf8"), /scheduleFocusedPortalControlRevealExcept/);
   assert.doesNotMatch(readFileSync("src/lib/focused-portal-control.ts", "utf8"), /\.focus\(/);
 });
 

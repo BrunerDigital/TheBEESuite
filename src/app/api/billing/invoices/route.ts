@@ -37,6 +37,7 @@ import {
 } from "@/lib/parent-billing-visibility";
 import { applyFamilyBalancePaymentToOpenInvoices } from "@/lib/stripe-payment-application";
 import { currentlyEnrolledChildWhere, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
+import { payAheadDescription, payAheadMonthCount, payAheadTotalCents } from "@/lib/pay-ahead";
 import {
   billingFamilyAccountCategory,
   childTuitionEligibilityError,
@@ -293,6 +294,54 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
     skipped: result.created ? 0 : 1,
     invoice: result.invoice,
   });
+}
+
+async function createPayAheadInvoice(user: CurrentBillingUser, body: Record<string, unknown>) {
+  const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
+  if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
+  const childId = clean(body.childId);
+  const child = familyAccess.family.children.find((item) => item.id === childId);
+  if (!child) return NextResponse.json({ ok: false, error: "Choose a child linked to this family." }, { status: 400 });
+  const childEligibilityError = childTuitionEligibilityError(child);
+  if (childEligibilityError) return NextResponse.json({ ok: false, error: childEligibilityError }, { status: 409 });
+  const tuitionPlanId = clean(body.tuitionPlanId);
+  const plan = tuitionPlanId
+    ? await prisma.tuitionPlan.findFirst({ where: { id: tuitionPlanId, centerId: familyAccess.centerId } })
+    : null;
+  if (!plan) return NextResponse.json({ ok: false, error: "Choose a monthly tuition plan for this school." }, { status: 404 });
+  if (plan.cadence !== "monthly") return NextResponse.json({ ok: false, error: "Pay ahead uses a monthly tuition plan so it never estimates a month as four weekly charges." }, { status: 400 });
+  if (isVoucherFundedTuitionAmount(plan.amountCents)) return NextResponse.json({ ok: false, error: "$0 CCDF or voucher tuition does not create a family invoice." }, { status: 400 });
+  const childFields = jsonObject(child.customFields);
+  if (clean(childFields.tuitionPlanId) !== plan.id || childFields.tuitionBillingEnabled !== true || clean(childFields.tuitionBillingCadence ?? childFields.tuitionPlanCadence) !== "monthly") {
+    return NextResponse.json({ ok: false, error: "The selected child does not have this monthly plan saved as its active tuition assignment. Refresh and choose the current assignment." }, { status: 409 });
+  }
+  const monthCount = payAheadMonthCount(body.monthCount);
+  if (!monthCount) return NextResponse.json({ ok: false, error: "Choose between 1 and 12 months." }, { status: 400 });
+  const dueDate = parseDate(body.dueDate);
+  const startPeriod = normalizeRecurringBillingPeriod(body.startPeriod, dueDate, "monthly");
+  const description = payAheadDescription(plan.name, monthCount);
+  const amountCents = payAheadTotalCents(plan.amountCents, monthCount);
+  const dedupeKey = billingDedupeKey({ familyId: familyAccess.family.id, chargeSource: "tuitionPlan", sourceId: `pay-ahead:${plan.id}:${startPeriod}:${monthCount}`, billingPeriod: startPeriod, childIds: [child.id] });
+  const result = await prisma.$transaction((tx) => createBillingInvoiceForFamily(tx, {
+    familyId: familyAccess.family.id,
+    dueDate,
+    description: `${description} - ${child.fullName}`,
+    items: [{ description: `${description} - ${child.fullName}`, amountCents }],
+    customFields: {
+      mode: "pay_ahead", chargeSource: "tuitionPlan", sourceId: `pay-ahead:${plan.id}:${startPeriod}:${monthCount}`,
+      tuitionPlanId: plan.id, tuitionPlanName: plan.name, cadence: "monthly", startPeriod, monthCount,
+      monthlyRateCents: plan.amountCents, grossTuitionCents: amountCents, netTuitionCents: amountCents,
+      tuitionCredits: [], tuitionCreditsTotalCents: 0, tuitionAdditionalCharges: [], tuitionAdditionalChargesTotalCents: 0,
+      centerId: familyAccess.centerId, childId: child.id, dedupeKey,
+    },
+  }));
+  await writeAuditLog(user, {
+    centerId: familyAccess.centerId,
+    action: result.created ? "billing.pay_ahead_invoice.created" : "billing.pay_ahead_invoice.skipped_duplicate",
+    resource: "Invoice", resourceId: result.invoice.id,
+    metadata: { familyId: familyAccess.family.id, childId: child.id, tuitionPlanId: plan.id, monthCount, startPeriod, amountCents },
+  });
+  return NextResponse.json({ ok: true, created: result.created ? 1 : 0, skipped: result.created ? 0 : 1, totalCents: result.invoice.totalCents, invoice: result.invoice });
 }
 
 async function createBatchInvoices(user: CurrentBillingUser, body: Record<string, unknown>) {
@@ -1572,6 +1621,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   if (mode === "single") return createSingleInvoice(user, body);
+  if (mode === "payAhead") return createPayAheadInvoice(user, body);
   if (mode === "batch") return createBatchInvoices(user, body);
   if (mode === "adjustment") return createLedgerAdjustment(user, body);
   if (mode === "agencyPayment") return createAgencyPayment(user, body);

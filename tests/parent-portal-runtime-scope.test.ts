@@ -134,6 +134,7 @@ test("parent portal rendering does not use payment scope for an ordinary family 
   const source = readFileSync("src/app/[slug]/page.tsx", "utf8");
   assert.match(source, /const paymentFlowRequested = \[/);
   assert.match(source, /requestedParentFamilyId && paymentFlowRequested/);
+  assert.match(source, /parentPortalFamilyScopeWhere\(\{ userId: user\.id \}\),[\s\S]*parentPortalTenantFamilyWhere\(parentPortalTenantCenterIds\),[\s\S]*orderBy: \[\{ name: "asc" \}/);
 });
 
 test("parent setup and kiosk credential lists stay inside the signed-in tenant", () => {

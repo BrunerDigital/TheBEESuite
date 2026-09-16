@@ -2389,7 +2389,6 @@ async function renderLivePage(
             AND: [
               parentPortalFamilyScopeWhere({ userId: user.id }),
               parentPortalTenantFamilyWhere(parentPortalTenantCenterIds),
-              currentOrOutstandingFamilyWhere(),
             ],
           },
           orderBy: [{ name: "asc" }, { createdAt: "asc" }],

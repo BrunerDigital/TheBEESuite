@@ -38,6 +38,25 @@ This handoff records what was revalidated during the completion pass and the rem
 - Capture final fake-data screenshots and complete the physical-device evidence packet.
 - Complete App Store metadata, reviewer information, support/privacy links, export compliance, and final App Review approval.
 
+## External gate matrix
+
+Use this matrix as the stop/go record. A gate is not complete from a source check alone; attach the named evidence before changing its status to **PASS**.
+
+| Gate | Owner | Required evidence | Stop condition |
+| --- | --- | --- | --- |
+| Apple signing and archive | Apple release owner | Xcode Release archives for both bundle IDs, successful validation, version/build numbers, and signing-team evidence | Any signing, entitlement, archive, or validation error; do not upload |
+| TestFlight and physical devices | Apple release owner + QA owner | Processed TestFlight builds installed on supported iPhones; parent and teacher evidence packet with login, logout, background/resume, upload, reconnect, reinstall, and update results | Any crash, wrong-role access, stale session, broken upload, or unrecovered offline state |
+| Teacher production access | School director + QA owner | Assigned test teacher account, exact school/classroom, authenticated production screenshots or trace, and denied cross-classroom/cross-school checks | Missing safe credentials, ambiguous assignment, or any unauthorized record access |
+| Parent/family access | School director + QA owner | Exact Holly Hill Bruner-family scope, authenticated parent trace, and denied unrelated-family/child/document/message checks | Shared or ambiguous family identity, or any unrelated-family visibility |
+| Provider delivery | Operations owner | Redacted SendGrid/Twilio/payment/monitoring configuration evidence, approved non-family test results, delivery/failure/retry outcomes, and named responders | Provider identity, webhook, suppression, retry, or ownership evidence missing |
+| Billing and payout activation | Finance owner + school approver | School-specific pricing, tax/receipt, connected-account, reconciliation, refund/dispute, and payout approval packet | Any unresolved ledger mismatch or missing separate activation approval |
+| Legal and store content | Legal/business owner | Approved Terms, Privacy, EULA, account deletion, media/communications consent, App Store privacy answers, export compliance, support URL, and reviewer notes | Any unapproved disclosure, policy, or store metadata |
+| School rollout | Director + business approver | School-specific readiness report, module-by-module GO/NO-GO, training/support owner, rollback window, and cutover approval | Do not activate invitations, kiosk/PIN, billing, payments, ProCare retirement, or mobile distribution without its own GO |
+
+### Handoff return packet
+
+Return these items to close the external gates: two processed TestFlight build links, physical-device evidence packet, teacher production smoke trace, two-school isolation trace, redacted provider delivery results, school-specific billing/reconciliation approval, legal/store approval packet, and signed rollout GO/NO-GO decisions. Do not send passwords, secret keys, bank details, or verification codes in chat.
+
 ## Intentionally deferred unless separately approved
 
 - Android native applications.

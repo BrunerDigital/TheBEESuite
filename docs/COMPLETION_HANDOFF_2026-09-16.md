@@ -12,7 +12,7 @@ This handoff records what was revalidated during the completion pass and the rem
 - `npm run mobile:store:check`: passed for parent and teacher iOS configuration.
 - `npm run ios:parent:sync`: passed.
 - `npm run ios:teacher:sync`: passed.
-- Fresh unsigned macOS native verification on `4586633665558ad53982fc06e89b1622be0c4d26`: parent and teacher jobs passed. Evidence: [GitHub Actions run 35133522173](https://github.com/BrunerDigital/TheBEESuite/actions/runs/35133522173).
+- Fresh unsigned macOS native verification on current `eac132a7b56f65b0c08ab9fa8603a4aa670b84c9`: parent and teacher jobs passed. Evidence: [GitHub Actions run 35136238134](https://github.com/BrunerDigital/TheBEESuite/actions/runs/35136238134).
 - Public production routes `/parents`, `/teachers`, `/support`, `/privacy`, `/terms`, `/eula`, and `/mobile-apps`: HTTP 200.
 - Parent portal live authentication and Holly Hill test-family flow: verified.
 - Current production health: database connected.

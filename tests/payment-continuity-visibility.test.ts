@@ -85,6 +85,9 @@ test("director billing finds past payable accounts but keeps them payment-only",
   assert.match(page, /workbenchFamilyWhere[\s\S]*currentOrOutstandingFamilyWhere\(\)/);
   assert.match(page, /accountCategory: billingFamilyAccountCategory\(family\.children\)/);
   assert.match(billingWorkbench, /Past family payment access/);
+  assert.match(billingWorkbench, /familyListMode/);
+  assert.match(billingWorkbench, /family\.accountCategory === familyListMode/);
+  assert.match(billingWorkbench, /Past balances/);
   assert.match(billingWorkbench, /effectivePaymentTarget\.startsWith\("invoice:"\) && !selectedFamilyIsPast/);
   assert.match(billingWorkbench, /disabled=\{isPending \|\| !selectedBillingAccount \|\| directorPaymentAmountCents <= 0\}[\s\S]*Digital Terminal/);
   assert.match(billingWorkbench, /Create Invoice[\s\S]*Past family payment access|selectedFamilyIsPast[\s\S]*Create Invoice/);

@@ -166,6 +166,8 @@ export type BillingWorkbenchTuitionPlan = {
   amountCents: number;
 };
 
+type BillingFamilyListMode = BillingFamilyAccountCategory;
+
 type Props = {
   families: BillingWorkbenchFamily[];
   centers: BillingWorkbenchCenter[];
@@ -477,6 +479,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
   const [billingAction, setBillingAction] = useState(initialFamilyIsProspective ? "single" : "recurring");
   const [moreBillingActionsExpanded, setMoreBillingActionsExpanded] = useState(false);
+  const [familyListMode, setFamilyListMode] = useState<BillingFamilyListMode>(initialFamily?.accountCategory ?? "current");
 
   useEffect(() => {
     const sectionId = decodeURIComponent(window.location.hash.slice(1));
@@ -505,9 +508,17 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   const filteredFamilies = useMemo(
-    () => families.filter((family) => Boolean(centerId) && family.centerId === centerId),
-    [centerId, families],
+    () => families.filter((family) => Boolean(centerId) && family.centerId === centerId && family.accountCategory === familyListMode),
+    [centerId, families, familyListMode],
   );
+  const familyCounts = useMemo(() => {
+    const scopedFamilies = families.filter((family) => Boolean(centerId) && family.centerId === centerId);
+    return {
+      current: scopedFamilies.filter((family) => family.accountCategory === "current").length,
+      past: scopedFamilies.filter((family) => family.accountCategory === "past").length,
+      prospective: scopedFamilies.filter((family) => family.accountCategory === "prospective").length,
+    } satisfies Record<BillingFamilyListMode, number>;
+  }, [centerId, families]);
   const locationTuitionPlans = useMemo(
     () => tuitionPlans.filter((plan) => plan.centerId === centerId),
     [centerId, tuitionPlans],
@@ -1077,6 +1088,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setCenterId(value);
     setSelectionError(null);
     setFamilyId(nextFamily?.id ?? "");
+    setFamilyListMode(nextFamily?.accountCategory ?? "current");
     applyFamilyTuitionContext(nextFamily, nextPlans);
   }
 
@@ -1084,6 +1096,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (isPending || !value || value === effectiveFamilyId || !filteredFamilies.some((family) => family.id === value) || !confirmDiscardBillingInput()) return;
     const nextFamily = filteredFamilies.find((family) => family.id === value) ?? null;
     resetFamilyBoundBillingDrafts(nextFamily, centerId);
+    if (nextFamily) setFamilyListMode(nextFamily.accountCategory ?? "current");
     setFamilyId(value);
     setSelectionError(null);
     applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
@@ -1956,6 +1969,28 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </div>
           <div className="space-y-1">
             <Label htmlFor="billing-workbench-family">Family</Label>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Family account type">
+              {(["current", "past", "prospective"] as const).map((mode) => (
+                <Button
+                  key={mode}
+                  type="button"
+                  size="sm"
+                  variant={familyListMode === mode ? "default" : "outline"}
+                  disabled={isPending || familyCounts[mode] === 0}
+                  onClick={() => {
+                    if (mode === familyListMode || !familyCounts[mode] || !confirmDiscardBillingInput()) return;
+                    const nextFamily = families.find((family) => family.centerId === centerId && family.accountCategory === mode) ?? null;
+                    resetFamilyBoundBillingDrafts(nextFamily, centerId);
+                    setFamilyListMode(mode);
+                    setFamilyId(nextFamily?.id ?? "");
+                    setSelectionError(null);
+                    applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
+                  }}
+                >
+                  {mode === "current" ? "Current" : mode === "past" ? "Past balances" : "Pending"} ({familyCounts[mode]})
+                </Button>
+              ))}
+            </div>
             <Select disabled={isPending} value={effectiveFamilyId} onValueChange={handleFamilyChange}>
               <SelectTrigger id="billing-workbench-family"><SelectValue placeholder="Choose family" /></SelectTrigger>
               <SelectContent>

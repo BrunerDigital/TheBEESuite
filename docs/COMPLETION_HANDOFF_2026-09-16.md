@@ -1,7 +1,7 @@
 # BEE Suite Parent and Teacher Completion Handoff
 
 Date: September 16, 2026
-Baseline: `origin/main` / `036c7dac3acba44dc6dbeed5a4b1d065c9823119`
+Baseline: `origin/main` / `b5ce3a8693ee0d474778fa649e011bb74e981ef5`
 
 This handoff records what was revalidated during the completion pass and the remaining actions that require Apple, physical-device, provider, legal, school, or business access.
 
@@ -13,6 +13,7 @@ This handoff records what was revalidated during the completion pass and the rem
 - `npm run ios:parent:sync`: passed.
 - `npm run ios:teacher:sync`: passed.
 - Fresh unsigned macOS native verification on current `eac132a7b56f65b0c08ab9fa8603a4aa670b84c9`: parent and teacher jobs passed. Evidence: [GitHub Actions run 35136238134](https://github.com/BrunerDigital/TheBEESuite/actions/runs/35136238134).
+- Clean current-baseline validation on `b5ce3a8693ee0d474778fa649e011bb74e981ef5`: `npm test` passed with 2,483 tests and `npm run vercel-build` passed through Prisma generation, lint, typecheck, tests, and Next production build.
 - Public production routes `/parents`, `/teachers`, `/support`, `/privacy`, `/terms`, `/eula`, and `/mobile-apps`: HTTP 200.
 - Parent portal live authentication and Holly Hill test-family flow: verified.
 - Current production health: database connected.

@@ -2360,7 +2360,13 @@ async function renderLivePage(
     const parentFamilySection = firstSearchParam(searchParams.section) || "children";
     const requestedParentFamilyId = firstSearchParam(searchParams.familyId) || null;
     const requestedLedgerPage = boundedPage(searchParams.ledgerPage);
-    const requestedParentFamilyScope = user.role === UserRole.PARENT_GUARDIAN && requestedParentFamilyId
+    const paymentFlowRequested = [
+      firstSearchParam(searchParams.payment),
+      firstSearchParam(searchParams.session_id),
+      firstSearchParam(searchParams.invoice),
+      firstSearchParam(searchParams.familyPayment),
+    ].some(Boolean);
+    const requestedParentFamilyScope = user.role === UserRole.PARENT_GUARDIAN && requestedParentFamilyId && paymentFlowRequested
       ? await getParentPortalPaymentFamilyScope(user.id, user.tenantId, requestedParentFamilyId)
       : null;
     if (requestedParentFamilyScope && !requestedParentFamilyScope.ok) {

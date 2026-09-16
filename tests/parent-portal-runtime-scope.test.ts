@@ -130,6 +130,12 @@ test("runtime family lookup restricts guardian links to the signed-in tenant", (
   assert.match(source, /family: parentPortalTenantFamilyWhere\(tenantCenterIds\)/);
 });
 
+test("parent portal rendering does not use payment scope for an ordinary family link", () => {
+  const source = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  assert.match(source, /const paymentFlowRequested = \[/);
+  assert.match(source, /requestedParentFamilyId && paymentFlowRequested/);
+});
+
 test("parent setup and kiosk credential lists stay inside the signed-in tenant", () => {
   for (const path of [
     "src/app/parent-portal/setup/page.tsx",

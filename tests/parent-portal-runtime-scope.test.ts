@@ -152,6 +152,7 @@ test("parent portal rejects a requested unlinked family before choosing a defaul
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   assert.match(page, /getParentPortalPaymentFamilyScope\(user\.id, user\.tenantId, requestedParentFamilyId\)/);
   assert.match(page, /requestedParentFamilyScope \?\? await getParentPortalFamilyScope\(user\.id, user\.tenantId, selectedParentFamilyId\)/);
+  assert.match(page, /parentPortalFamilyScopeWhere\(\{ userId: user\.id, requestedFamilyId: selectedParentFamilyId \}\),[\s\S]*parentPortalTenantFamilyWhere\(parentPortalTenantCenterIds\),[\s\S]*\n            \],/);
   assert.match(page, /requestedParentFamilyScope && !requestedParentFamilyScope\.ok/);
   assert.match(page, /getParentPortalTenantCenterIds\(user\.tenantId\)/);
   assert.match(page, /parentPortalTenantFamilyWhere\(parentPortalTenantCenterIds\)/);

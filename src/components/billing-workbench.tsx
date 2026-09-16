@@ -34,6 +34,7 @@ import {
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 import { TUITION_CREDIT_CATEGORIES, type TuitionCreditCategory } from "@/lib/tuition-credits";
+import { PAY_AHEAD_MAX_MONTHS, payAheadTotalCents } from "@/lib/pay-ahead";
 import {
   ONE_TIME_BILLING_ADJUSTMENT_OPTIONS,
   oneTimeBillingAdjustmentNeedsNote,
@@ -416,6 +417,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [amountDollars, setAmountDollars] = useState("");
   const [dueDate, setDueDate] = useState(draftDates.date);
   const [billingPeriod, setBillingPeriod] = useState(draftDates.month);
+  const [payAheadMonthCount, setPayAheadMonthCount] = useState("1");
+  const [payAheadStartPeriod, setPayAheadStartPeriod] = useState(draftDates.month);
   const [batchTarget, setBatchTarget] = useState("child");
   const [ageGroup, setAgeGroup] = useState("all");
   const [enrollmentStatus, setEnrollmentStatus] = useState("enrolled");
@@ -1256,6 +1259,18 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       billingPeriod,
       ...chargePayload(),
     });
+  }
+
+  function submitPayAhead() {
+    if (!selectedFamily) return setErrorMessage("Choose a family before creating a pay-ahead invoice.");
+    if (!selectedAssignmentChild || !effectiveAssignmentPlanId) return setErrorMessage("Choose a child with a saved tuition plan before creating a pay-ahead invoice.");
+    const plan = locationTuitionPlans.find((item) => item.id === effectiveAssignmentPlanId);
+    if (!plan || plan.cadence !== "monthly") return setErrorMessage("Choose a monthly tuition plan. Pay ahead never estimates a month as four weekly charges.");
+    const months = Number.parseInt(payAheadMonthCount, 10);
+    let totalCents = 0;
+    try { totalCents = payAheadTotalCents(plan.amountCents, months); } catch (error) { return setErrorMessage(error instanceof Error ? error.message : "Choose a valid number of months."); }
+    if (!confirmBillingAction(`create a ${money(totalCents)} pay-ahead invoice`, selectedAssignmentChild.fullName)) return;
+    submit({ mode: "payAhead", familyId: selectedFamily.id, childId: selectedAssignmentChild.id, tuitionPlanId: plan.id, monthCount: months, startPeriod: payAheadStartPeriod, dueDate });
   }
 
   function submitAssignmentChargeNow() {
@@ -2370,6 +2385,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </div>
           <TabsList id="billing-action-tabs" className="flex flex-wrap justify-start gap-1 group-data-horizontal/tabs:h-auto" aria-label="Billing tasks">
             <TabsTrigger value="recurring" disabled={selectedFamilyIsProspective || selectedFamilyIsPast} className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Child tuition</TabsTrigger>
+            <TabsTrigger value="pay-ahead" disabled={selectedFamilyIsProspective || selectedFamilyIsPast} className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Pay ahead</TabsTrigger>
             <TabsTrigger value="single" className="h-10 min-h-10"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
             <TabsTrigger value="adjustment" className="h-10 min-h-10"><MinusCircle data-icon="inline-start" />One-time fee / credit</TabsTrigger>
             <TabsTrigger value="check" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
@@ -2381,6 +2397,24 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <TabsTrigger value="refund" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "refund" ? "hidden" : ""}`}><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
             <TabsTrigger value="agency" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "agency" ? "hidden" : ""}`}><BadgeDollarSign data-icon="inline-start" />Agency claims</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="pay-ahead" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            <div>
+              <div className="text-sm font-medium">Create one monthly pay-ahead invoice</div>
+              <p className="mt-1 text-xs text-muted-foreground">Use the child&apos;s saved monthly tuition rate and an exact number of future months. This replaces the weekly × 4 workaround and does not submit payment automatically.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="space-y-1 md:col-span-2"><Label htmlFor="billing-pay-ahead-child">Child</Label><Select value={assignmentChildId} onValueChange={(value) => value && setAssignmentChildId(value)}><SelectTrigger id="billing-pay-ahead-child"><SelectValue placeholder="Choose child" /></SelectTrigger><SelectContent>{selectedChildren.map((child) => <SelectItem key={child.id} value={child.id}>{child.fullName} · {child.tuitionAssignment?.tuitionPlanName ?? "No saved plan"}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1"><Label htmlFor="billing-pay-ahead-months">Months paid ahead</Label><Input id="billing-pay-ahead-months" inputMode="numeric" min={1} max={PAY_AHEAD_MAX_MONTHS} value={payAheadMonthCount} onChange={(event) => setPayAheadMonthCount(event.target.value)} /></div>
+              <div className="space-y-1"><Label htmlFor="billing-pay-ahead-start">First month</Label><Input id="billing-pay-ahead-start" type="month" value={payAheadStartPeriod} onChange={(event) => setPayAheadStartPeriod(event.target.value)} /></div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1"><Label htmlFor="billing-pay-ahead-due-date">Invoice due date</Label><Input id="billing-pay-ahead-due-date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></div>
+              <SummaryMetric label="Monthly rate" value={selectedAssignment?.cadence === "monthly" && selectedAssignment?.amountCents ? money(selectedAssignment.amountCents) : "Choose monthly plan"} detail="Saved child tuition rate" />
+              <SummaryMetric label="Pay-ahead total" value={selectedAssignment?.cadence === "monthly" && selectedAssignment?.amountCents ? money(payAheadTotalCents(selectedAssignment.amountCents, Math.max(1, Number.parseInt(payAheadMonthCount, 10) || 1))) : "$0.00"} detail={`${payAheadMonthCount || 0} month${payAheadMonthCount === "1" ? "" : "s"}`} />
+            </div>
+            <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId} onClick={submitPayAhead}><CalendarClock data-icon="inline-start" />Create Pay-Ahead Invoice</Button>
+          </TabsContent>
 
           <TabsContent value="single" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <ChargeFields

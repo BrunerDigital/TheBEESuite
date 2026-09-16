@@ -24,3 +24,8 @@ export function scheduleFocusedPortalControlReveal(trigger: HTMLElement | null) 
   if (!viewport || !trigger.closest(".bee-app-frame")) return;
   viewport.requestAnimationFrame(() => viewport.requestAnimationFrame(() => revealFocusedPortalControl(trigger)));
 }
+
+export function scheduleFocusedPortalControlRevealExcept(trigger: HTMLElement | null, excludedIds: ReadonlySet<string>) {
+  if (trigger && excludedIds.has(trigger.id)) return;
+  scheduleFocusedPortalControlReveal(trigger);
+}

@@ -12,7 +12,7 @@ export type ParentPaymentObservation = ParentPaymentObservationTarget & {
   observedAt: string;
   accountPaymentBlocker: ParentAccountPaymentBlocker | null;
   invoicePayments: Array<{ invoiceId: string; payment: ParentPendingPayment }>;
-  outcome: "unidentified" | "active" | "settled" | "unresolved";
+  outcome: "unidentified" | "active" | "settled" | "not_submitted" | "unresolved";
 };
 
 export function isPaymentObservationId(value: unknown): value is string {
@@ -33,8 +33,8 @@ export function isParentPaymentObservation(value: unknown, target: ParentPayment
   if (!item || item.ok !== true || item.version !== 1 || item.familyId !== target.familyId
     || item.invoiceId !== target.invoiceId || item.paymentId !== target.paymentId || item.requestNonce !== target.requestNonce
     || typeof item.observedAt !== "string" || !Number.isFinite(Date.parse(item.observedAt))
-    || typeof item.outcome !== "string" || !["unidentified", "active", "settled", "unresolved"].includes(item.outcome)) return false;
-  if (item.outcome === "settled" && !target.paymentId) return false;
+    || typeof item.outcome !== "string" || !["unidentified", "active", "settled", "not_submitted", "unresolved"].includes(item.outcome)) return false;
+  if (["settled", "not_submitted"].includes(item.outcome) && !target.paymentId) return false;
   if (item.accountPaymentBlocker !== null) {
     const blocker = record(item.accountPaymentBlocker);
     if (!blocker || !Number.isSafeInteger(blocker.count) || Number(blocker.count) < 1
@@ -47,6 +47,16 @@ export function isParentPaymentObservation(value: unknown, target: ParentPayment
     if (!entry || !isPaymentObservationId(entry.invoiceId) || !isPending(entry.payment) || ids.has(entry.invoiceId)) return false;
     ids.add(entry.invoiceId); return true;
   });
+}
+
+/** A recorded definitive Checkout rejection, never absence of a draft, resolves
+ * a local network warning. Provider IDs or prior uncertainty remain held. */
+export function isDefinitivelyRejectedCheckout(payment: { status: string; provider: string; customFields: unknown }) {
+  const fields = record(payment.customFields);
+  return payment.provider === "stripe" && payment.status === "FAILED" && fields?.status === "checkout_failed"
+    && fields.stripeProviderStatus === 400
+    && Boolean(fields.paymentFailedAt || fields.checkoutFailedAt)
+    && !fields.submissionStateUnknownAt && !fields.stripeCheckoutSessionId && !fields.stripePaymentIntentId;
 }
 
 function isHostedCheckoutDestination(value: unknown): value is string {

@@ -8,7 +8,7 @@ type Attempt = { familyId: string; invoiceId: string | null; method: "ach" | "ca
 type Hold = Attempt & { paymentId: string | null; summary: ParentPendingPayment; settled: boolean };
 type Request = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-/** Local uncertainty survives portal tabs. Only an explicit new page can discard a held attempt. */
+/** Local uncertainty survives portal tabs until an exact receipt resolves it. */
 export function useParentPaymentRecovery(familyId: string, request: Request, refreshPage: () => void, serverBlocker?: ParentAccountPaymentBlocker | null) {
   const [holds, setHolds] = useState<Hold[]>([]);
   const [isRefreshing, setRefreshing] = useState(false);
@@ -71,7 +71,8 @@ export function useParentPaymentRecovery(familyId: string, request: Request, ref
         const body: unknown = await response.json().catch(() => null);
         if (!response.ok || !isParentPaymentObservation(body, target)) throw new Error("Unverified payment observation");
         const payment = target.invoiceId ? body.invoicePayments.find(entry => entry.invoiceId === target.invoiceId)?.payment : body.accountPaymentBlocker;
-        return { hold: item ? { ...item, summary: payment ?? item.summary, settled: body.outcome === "settled" } : null, account: body.accountPaymentBlocker, invoices: body.invoicePayments };
+        return { hold: item && body.outcome !== "not_submitted" ? { ...item, summary: payment ?? item.summary, settled: body.outcome === "settled" } : null,
+          notSubmitted: Boolean(item && body.outcome === "not_submitted"), account: body.accountPaymentBlocker, invoices: body.invoicePayments };
       }));
       if (!current()) return;
       const updated = [...held.current.filter(item => item.familyId !== capturedFamily), ...updates.map(item => item.hold).filter((item): item is Hold => item !== null)];
@@ -85,7 +86,8 @@ export function useParentPaymentRecovery(familyId: string, request: Request, ref
       const latest = { familyId: capturedFamily, blocker: observedBlocker, invoices };
       latestAccountRef.current = latest; setLatestAccount(latest);
       setRefreshMessage(currentHolds.length
-        ? updates.every(item => item.hold?.settled) && !observedBlocker ? "Your payment is recorded. Review the updated balance before making another payment."
+        ? updates.every(item => item.notSubmitted) && !observedBlocker ? "The earlier checkout was rejected before a payment was created. Review the current balance and school payment readiness before trying again."
+          : updates.every(item => item.hold?.settled) && !observedBlocker ? "Your payment is recorded. Review the updated balance before making another payment."
           : "Status checked. Keep this attempt paused until its outcome is confirmed. Contact your school if it does not update."
         : "Status checked. Your account details are refreshing.");
       refreshPage();

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { getParentPortalPaymentFamilyScope } from "@/lib/parent-portal-family-scope";
 import { parentPaymentStatus } from "@/lib/parent-payment-status";
-import { isPaymentObservationId, type ParentPaymentObservation } from "@/lib/parent-payment-observation";
+import { isDefinitivelyRejectedCheckout, isPaymentObservationId, type ParentPaymentObservation } from "@/lib/parent-payment-observation";
 import { jsonRecord } from "@/lib/billing-guardrails";
 import { isReturnedStripePayment } from "@/lib/ach-payment-lifecycle";
 import { prisma } from "@/lib/prisma";
@@ -52,7 +52,8 @@ async function GETHandler(request: NextRequest) {
     const fields = jsonRecord(attempt.customFields);
     outcome = attempt.status === "PAID" && !isReturnedStripePayment(attempt) && fields.stripeDisputeLedgerActive !== true
       && !String(fields.status ?? "").includes("unknown") && !["processing", "requires_capture"].includes(String(fields.stripePaymentIntentStatus ?? ""))
-      ? "settled" : parentPaymentStatus([attempt]).accountPaymentBlocker ? "active" : "unresolved";
+      ? "settled" : isDefinitivelyRejectedCheckout(attempt) ? "not_submitted"
+        : parentPaymentStatus([attempt]).accountPaymentBlocker ? "active" : "unresolved";
   }
   return reply({ ok: true, version: 1, familyId, invoiceId, paymentId, requestNonce, observedAt: new Date().toISOString(),
     accountPaymentBlocker: summary.accountPaymentBlocker, invoicePayments, outcome } satisfies ParentPaymentObservation);

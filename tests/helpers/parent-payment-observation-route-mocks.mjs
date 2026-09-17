@@ -86,3 +86,12 @@ test("only an exact unambiguous paid receipt reports settled, failures and retur
     assert.equal((await run(query)).body.outcome, "unresolved");
   }
 });
+
+test("an exact provider-rejected checkout resolves without clearing another active payment", async () => {
+  reset();
+  receipt = payment({ status: "FAILED", customFields: { invoiceId: "fake-invoice", status: "checkout_failed", stripeProviderStatus: 400, paymentFailedAt: "2026-09-17T00:00:00Z" } });
+  const result = await run("familyId=fake-family&requestNonce=x&paymentId=fake-payment&invoiceId=fake-invoice");
+  assert.equal(result.body.outcome, "not_submitted");
+  assert.equal(result.body.accountPaymentBlocker.count, 1);
+  assert.doesNotMatch(JSON.stringify(result.body), /stripeProviderStatus|paymentFailedAt/);
+});

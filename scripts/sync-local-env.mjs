@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, copyFileSync, chmodSync } from "node:fs";
 
 const localPath = ".env.local";
 const pulledPath = ".env.production.pulled.local";
@@ -26,19 +26,31 @@ function parseEnv(path) {
 
 function hasValue(entry) {
   if (!entry || entry.value === null) return false;
-  return entry.value.trim().replace(/^["']|["']$/g, "").length > 0;
+  const value = entry.value.trim().replace(/^["']|["']$/g, "");
+  return value.length > 0 && !isRedacted(entry);
+}
+
+function isRedacted(entry) {
+  const value = entry?.value?.trim().replace(/^["']|["']$/g, "") ?? "";
+  return /^(?:\[redacted\]|<redacted>|redacted|\[sensitive\]|<sensitive>|\*{3,})$/i.test(value);
 }
 
 if (!existsSync(pulledPath)) {
   throw new Error(`${pulledPath} is missing. Run npm run cloud:env:prod first.`);
 }
 
-if (existsSync(localPath)) {
-  copyFileSync(localPath, `${localPath}.backup-${timestamp()}`);
-}
-
 const local = parseEnv(localPath);
 const pulled = parseEnv(pulledPath);
+const unavailable = pulled.entries.filter((entry) => entry.key && isRedacted(entry) && !hasValue(local.byKey.get(entry.key)));
+if (unavailable.length) {
+  throw new Error(`Refusing to install redacted credentials. Obtain usable values for: ${unavailable.map((entry) => entry.key).join(", ")}. ${localPath} was not changed.`);
+}
+
+if (existsSync(localPath)) {
+  const backupPath = `${localPath}.backup-${timestamp()}`;
+  copyFileSync(localPath, backupPath);
+  chmodSync(backupPath, 0o600);
+}
 const writtenKeys = new Set();
 const output = [];
 let preserved = 0;
@@ -66,7 +78,8 @@ for (const localEntry of local.entries) {
   }
 }
 
-writeFileSync(localPath, `${output.join("\n").replace(/\n+$/, "")}\n`);
+writeFileSync(localPath, `${output.join("\n").replace(/\n+$/, "")}\n`, { mode: 0o600 });
+chmodSync(localPath, 0o600);
 
 console.log(`Synced ${localPath} from ${pulledPath}.`);
-console.log(`Preserved ${preserved} existing non-empty local values for blank pulled keys.`);
+console.log(`Preserved ${preserved} existing usable local values for blank or redacted pulled keys.`);

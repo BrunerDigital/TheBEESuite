@@ -28,7 +28,7 @@ const original = { id: "fake-automation", tenantId: "fake-tenant" as string | nu
 function fixture(requestActor = actor) {
   let state = structuredClone(original);
   let currentActor: Row | null = structuredClone(requestActor);
-  let beforeUpdate = (_row: typeof original) => {};
+  let beforeUpdate: (row: typeof original) => void = () => {};
   let failAudit = false;
   let writes = 0;
   const committedAudits: string[] = [];

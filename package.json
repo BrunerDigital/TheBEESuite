@@ -119,7 +119,9 @@
     "billing:ensure-uniform-products": "tsx -r tsconfig-paths/register scripts/ensure-student-uniform-products.ts",
     "billing:reconcile-offline-invoices": "tsx scripts/reconcile-historical-offline-invoice-applications.ts",
     "parents:prepare-payer-portals": "tsx -r tsconfig-paths/register scripts/prepare-payer-portal-accounts.ts",
-    "stripe:reconcile-school-processing-fees": "tsx scripts/reconcile-stripe-school-processing-fees.ts"
+    "stripe:reconcile-school-processing-fees": "tsx scripts/reconcile-stripe-school-processing-fees.ts",
+    "cloud:release:check": "node scripts/release-production.mjs --check",
+    "cloud:release": "node scripts/release-production.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

@@ -43,7 +43,11 @@ export function getRuntimeDatabaseUrl(env: EnvMap) {
       url.searchParams.set("pgbouncer", "true");
     }
     if (!url.searchParams.has("connection_limit")) {
-      url.searchParams.set("connection_limit", env.PRISMA_CONNECTION_LIMIT ?? "5");
+      // Direct/session connections each occupy a Postgres backend. Five per
+      // serverless instance can exhaust the database before traffic is busy.
+      // Transaction poolers can multiplex the existing concurrent-query pool.
+      const defaultConnectionLimit = isTransactionPoolerUrl(rawUrl) ? "5" : "1";
+      url.searchParams.set("connection_limit", env.PRISMA_CONNECTION_LIMIT ?? defaultConnectionLimit);
     }
     if (!url.searchParams.has("pool_timeout")) {
       url.searchParams.set("pool_timeout", env.PRISMA_POOL_TIMEOUT ?? "20");

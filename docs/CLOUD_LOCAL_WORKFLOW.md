@@ -41,6 +41,19 @@ This creates the sibling worktree `The Bee Suite 2-worktrees/enrollment-redesign
 
 ## Validate and release one unit
 
+For an intentional manual production release, use `npm run cloud:release:check`
+followed by `npm run cloud:release` from a clean checkout of the current remote
+`main`. These commands verify the exact Vercel project/owner and GitHub remote,
+reject uncommitted or untracked work, and query remote main instead of trusting a
+possibly stale local tracking ref. Vercel still runs `vercel-build`. Do not bypass
+the wrapper with a direct CLI deployment from a working checkout. Verify the
+resulting commit, canonical aliases, health, and affected flow after deployment.
+
+Environment sync preserves usable local values when exports are blank or
+redacted. If a redacted key has no usable local value, sync stops before changing
+`.env.local`. Obtain the actual authorized credential; never paste a redaction
+marker as its replacement. Environment files and backups are owner-readable only.
+
 1. Run focused tests while developing.
 2. Run `git diff --check` and `npm run cloud:validate`.
 3. Push the branch and review its Vercel preview, including the changed flow.

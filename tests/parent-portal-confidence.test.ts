@@ -16,5 +16,5 @@ test("notification dropdown uses role-safe destinations and a closing menu item"
   const shell = readFileSync("src/components/app-shell.tsx", "utf8");
 
   assert.match(shell, /storedNotificationHrefForRole\(notification, currentUser\?\.role\)/);
-  assert.match(shell, /<DropdownMenuItem[\s\S]*Open parent portal/);
+  assert.match(shell, /<DropdownMenuLinkItem[\s\S]*closeOnClick[\s\S]*Open parent portal/);
 });

@@ -6,6 +6,12 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 const script = resolve("scripts/sync-local-env.mjs");
+function assertPrivateMode(path: string) {
+  // Windows reports ACL-backed files through a different mode surface; the
+  // POSIX 0600 assertion remains the meaningful portable check.
+  if (process.platform !== "win32") assert.equal(statSync(path).mode & 0o777, 0o600);
+}
+
 function sync(local: string, pulled: string) {
   const root = mkdtempSync(join(tmpdir(), "bee-env-sync-"));
   writeFileSync(join(root, ".env.local"), local);
@@ -21,9 +27,9 @@ test("redacted exports cannot replace usable local credentials", () => {
     assert.match(fixture.output, /AUTH_SECRET="local-secret"/);
     assert.match(fixture.output, /CUSTOM="keep"/);
     assert.doesNotMatch(fixture.output, /REDACTED/);
-    assert.equal(statSync(join(fixture.root, ".env.local")).mode & 0o777, 0o600);
+    assertPrivateMode(join(fixture.root, ".env.local"));
     const backup = readdirSync(fixture.root).find((file) => file.includes(".backup-"))!;
-    assert.equal(statSync(join(fixture.root, backup)).mode & 0o777, 0o600);
+    assertPrivateMode(join(fixture.root, backup));
   } finally { rmSync(fixture.root, { recursive: true }); }
 });
 

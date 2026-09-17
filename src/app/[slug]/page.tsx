@@ -252,7 +252,7 @@ import {
   readSchoolBusinessProfileConfirmation,
   schoolBusinessProfileFieldLabel,
 } from "@/lib/school-business-profile";
-import { stripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
+import { stripePaymentReadiness } from "@/lib/stripe-payment-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
 import { terminalStoreEnabled, terminalStoreReturnState } from "@/lib/feature-availability";
 import { readSchoolEin } from "@/lib/school-tax-id";
@@ -3097,8 +3097,9 @@ async function renderLivePage(
     const stripeWebhookConfigured = verifiedAppReviewKind === "parent"
       ? false
       : Boolean(await getStripeWebhookSecret({ tenantId: user.tenantId }));
-    const configuredParentCheckoutReadiness = stripeCheckoutReadiness({
+    const configuredParentCheckoutReadiness = stripePaymentReadiness({
       customFields: familyCenter?.customFields,
+      centerName: familyCenter?.name,
       stripeConfigured,
       webhookConfigured: stripeWebhookConfigured || process.env.STRIPE_REQUIRE_WEBHOOK_FOR_CHECKOUT === "false",
       allowPlatformOnlyPayments: process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true",
@@ -4579,8 +4580,9 @@ async function renderLivePage(
               dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),
               hardwareTerminalConfigured: typeof recordFromJson(center.customFields).stripeTerminalLocationId === "string"
                 && String(recordFromJson(center.customFields).stripeTerminalLocationId).trim().length > 0,
-              checkoutReadiness: stripeCheckoutReadiness({
+              checkoutReadiness: stripePaymentReadiness({
                 customFields: center.customFields,
+                centerName: center.name,
                 stripeConfigured: billingStripeConfigured,
                 webhookConfigured: billingStripeWebhookConfigured,
                 allowPlatformOnlyPayments,

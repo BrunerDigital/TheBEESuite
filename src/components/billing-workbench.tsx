@@ -183,6 +183,11 @@ type Props = {
   searchQuery?: string;
 };
 
+function billingFamilyAccountCategory(family: BillingWorkbenchFamily): BillingFamilyListMode {
+  // Keep older callers and cached page data usable while the server metadata rolls out.
+  return family.accountCategory ?? "current";
+}
+
 type DirectorPaymentMethod = "autopay" | "card_checkout" | "instant_bank_checkout" | "ach_checkout";
 type TuitionFundingType = "family" | "voucher";
 
@@ -401,7 +406,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [childSelectionError, setChildSelectionError] = useState(Boolean(initialChildId && !initialAssignmentChild));
   const initialAssignment = initialAssignmentChild?.tuitionAssignment ?? null;
   const initialAssignedPlan = initialLocationTuitionPlans.find((plan) => plan.id === initialAssignment?.tuitionPlanId) ?? null;
-  const initialFamilyIsProspective = initialFamily?.accountCategory === "prospective";
+  const initialFamilyIsProspective = initialFamily ? billingFamilyAccountCategory(initialFamily) === "prospective" : false;
   const [centerId, setCenterId] = useState(initialCenter);
   const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
   const timeZone = resolveSchoolTimeZone(centerId);
@@ -482,7 +487,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
   const [billingAction, setBillingAction] = useState(initialFamilyIsProspective ? "single" : "recurring");
   const [moreBillingActionsExpanded, setMoreBillingActionsExpanded] = useState(false);
-  const [familyListMode, setFamilyListMode] = useState<BillingFamilyListMode>(initialFamily?.accountCategory ?? "current");
+  const [familyListMode, setFamilyListMode] = useState<BillingFamilyListMode>(initialFamily ? billingFamilyAccountCategory(initialFamily) : "current");
 
   useEffect(() => {
     const sectionId = decodeURIComponent(window.location.hash.slice(1));
@@ -510,18 +515,24 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     });
   }
 
-  const filteredFamilies = useMemo(
-    () => families.filter((family) => Boolean(centerId) && family.centerId === centerId && family.accountCategory === familyListMode),
-    [centerId, families, familyListMode],
+  const scopedFamilies = useMemo(
+    () => families.filter((family) => Boolean(centerId) && family.centerId === centerId),
+    [centerId, families],
   );
   const familyCounts = useMemo(() => {
-    const scopedFamilies = families.filter((family) => Boolean(centerId) && family.centerId === centerId);
     return {
-      current: scopedFamilies.filter((family) => family.accountCategory === "current").length,
-      past: scopedFamilies.filter((family) => family.accountCategory === "past").length,
-      prospective: scopedFamilies.filter((family) => family.accountCategory === "prospective").length,
+      current: scopedFamilies.filter((family) => billingFamilyAccountCategory(family) === "current").length,
+      past: scopedFamilies.filter((family) => billingFamilyAccountCategory(family) === "past").length,
+      prospective: scopedFamilies.filter((family) => billingFamilyAccountCategory(family) === "prospective").length,
     } satisfies Record<BillingFamilyListMode, number>;
-  }, [centerId, families]);
+  }, [scopedFamilies]);
+  const effectiveFamilyListMode = familyCounts[familyListMode] > 0
+    ? familyListMode
+    : (["current", "past", "prospective"] as const).find((mode) => familyCounts[mode] > 0) ?? "current";
+  const filteredFamilies = useMemo(
+    () => scopedFamilies.filter((family) => billingFamilyAccountCategory(family) === effectiveFamilyListMode),
+    [effectiveFamilyListMode, scopedFamilies],
+  );
   const locationTuitionPlans = useMemo(
     () => tuitionPlans.filter((plan) => plan.centerId === centerId),
     [centerId, tuitionPlans],
@@ -530,8 +541,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     ? familyId
     : "";
   const selectedFamily = filteredFamilies.find((family) => family.id === effectiveFamilyId) ?? null;
-  const selectedFamilyIsPast = selectedFamily?.accountCategory === "past";
-  const selectedFamilyIsProspective = selectedFamily?.accountCategory === "prospective";
+  const selectedFamilyAccountCategory = selectedFamily ? billingFamilyAccountCategory(selectedFamily) : null;
+  const selectedFamilyIsPast = selectedFamilyAccountCategory === "past";
+  const selectedFamilyIsProspective = selectedFamilyAccountCategory === "prospective";
   const selectedCenter = centers.find((center) => center.id === centerId) ?? null;
   const selectedCenterClassrooms = selectedCenter?.classrooms ?? [];
   const selectedCheckoutReadiness = selectedCenter?.checkoutReadiness ?? null;
@@ -1055,11 +1067,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   function resetFamilyBoundBillingDrafts(nextFamily: BillingWorkbenchFamily | null, nextCenterId: string) {
     const dates = billingDraftDates(resolveSchoolTimeZone(nextCenterId));
     setDraftDates(dates);
-    setChargeSource(nextFamily?.accountCategory === "prospective" ? "custom" : "tuitionPlan");
+    setChargeSource(nextFamily && billingFamilyAccountCategory(nextFamily) === "prospective" ? "custom" : "tuitionPlan");
     setProductId(uniformShirtProduct?.id ?? products[0]?.id ?? "");
     setProductQuantity("1");
     setChildId("none");
-    setDescription(nextFamily?.accountCategory === "prospective" ? "Enrollment fee" : "");
+    setDescription(nextFamily && billingFamilyAccountCategory(nextFamily) === "prospective" ? "Enrollment fee" : "");
     setAmountDollars("");
     setDueDate(dates.date);
     setBillingPeriod(dates.month);
@@ -1079,7 +1091,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setWeeklyRecoveryPeriod(dates.week); setWeeklyRecoveryPreview(null);
     setManualPaymentEmailCopies([]); setPaymentReviewMethod(null);
     setStatusMessage(""); setErrorMessage("");
-    setBillingAction(nextFamily?.accountCategory === "prospective" ? "single" : "recurring");
+    setBillingAction(nextFamily && billingFamilyAccountCategory(nextFamily) === "prospective" ? "single" : "recurring");
     setMoreBillingActionsExpanded(false);
   }
 
@@ -1091,7 +1103,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setCenterId(value);
     setSelectionError(null);
     setFamilyId(nextFamily?.id ?? "");
-    setFamilyListMode(nextFamily?.accountCategory ?? "current");
+    setFamilyListMode(nextFamily ? billingFamilyAccountCategory(nextFamily) : "current");
     applyFamilyTuitionContext(nextFamily, nextPlans);
   }
 
@@ -1099,7 +1111,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (isPending || !value || value === effectiveFamilyId || !filteredFamilies.some((family) => family.id === value) || !confirmDiscardBillingInput()) return;
     const nextFamily = filteredFamilies.find((family) => family.id === value) ?? null;
     resetFamilyBoundBillingDrafts(nextFamily, centerId);
-    if (nextFamily) setFamilyListMode(nextFamily.accountCategory ?? "current");
+    if (nextFamily) setFamilyListMode(billingFamilyAccountCategory(nextFamily));
     setFamilyId(value);
     setSelectionError(null);
     applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
@@ -1990,11 +2002,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   key={mode}
                   type="button"
                   size="sm"
-                  variant={familyListMode === mode ? "default" : "outline"}
+                  variant={effectiveFamilyListMode === mode ? "default" : "outline"}
                   disabled={isPending || familyCounts[mode] === 0}
                   onClick={() => {
-                    if (mode === familyListMode || !familyCounts[mode] || !confirmDiscardBillingInput()) return;
-                    const nextFamily = families.find((family) => family.centerId === centerId && family.accountCategory === mode) ?? null;
+                    if (mode === effectiveFamilyListMode || !familyCounts[mode] || !confirmDiscardBillingInput()) return;
+                    const nextFamily = scopedFamilies.find((family) => billingFamilyAccountCategory(family) === mode) ?? null;
                     resetFamilyBoundBillingDrafts(nextFamily, centerId);
                     setFamilyListMode(mode);
                     setFamilyId(nextFamily?.id ?? "");
@@ -2011,7 +2023,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <SelectContent>
                 {filteredFamilies.map((family) => (
                   <SelectItem key={family.id} value={family.id}>
-                    {family.name}{family.accountCategory === "prospective" ? " · Pending / waitlisted" : family.accountCategory === "past" ? " · Past family" : ""}{family.billingEmail ? ` · ${family.billingEmail}` : ""}
+                    {family.name}{billingFamilyAccountCategory(family) === "prospective" ? " · Pending / waitlisted" : billingFamilyAccountCategory(family) === "past" ? " · Past family" : ""}{family.billingEmail ? ` · ${family.billingEmail}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>

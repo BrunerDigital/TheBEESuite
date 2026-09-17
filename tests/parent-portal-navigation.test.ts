@@ -202,8 +202,8 @@ test("parent account menu exposes real destinations while preview stays mutation
   assert.match(shell, /const accountDestination = \(section: "profile" \| "notifications"\) => parentPortalWorkspaceHref\(\{/);
   assert.match(shell, /familyId,[\s\S]*section,[\s\S]*const profileHref = accountDestination\("profile"\)/);
   assert.match(shell, /const notificationsHref = accountDestination\("notifications"\)/);
-  assert.match(shell, /render=\{<Link href=\{profileHref\}[\s\S]*Profile &amp; security/);
-  assert.match(shell, /render=\{<Link href=\{notificationsHref\}[\s\S]*Notifications/);
+  assert.match(shell, /<DropdownMenuLinkItem[\s\S]*closeOnClick[\s\S]*render=\{<Link href=\{profileHref\}[\s\S]*Profile &amp; security/);
+  assert.match(shell, /<DropdownMenuLinkItem[\s\S]*closeOnClick[\s\S]*render=\{<Link href=\{notificationsHref\}[\s\S]*Notifications/);
   assert.match(shell, /\{previewMode \? \([\s\S]*Preview account[\s\S]*\) : \([\s\S]*ProfilePhotoUploader/);
   assert.match(shell, /\{!previewMode \? \([\s\S]*Sign out[\s\S]*\) : null\}/);
   assert.match(shell, /preferInitialsForDefault=\{parentFacing\}/);

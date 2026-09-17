@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { isServerCheckoutReceipt, isParentPaymentObservation, paymentResponseNeedsConfirmation } from "../src/lib/parent-payment-observation";
+import { isDefinitivelyRejectedCheckout, isServerCheckoutReceipt, isParentPaymentObservation, paymentResponseNeedsConfirmation } from "../src/lib/parent-payment-observation";
 
 const target = { familyId: "fake-family", invoiceId: null, paymentId: null, requestNonce: "fake-nonce" };
 const valid = { ...target, ok: true, version: 1, observedAt: "2026-09-12T00:00:00Z", accountPaymentBlocker: null, invoicePayments: [], outcome: "unidentified" };
@@ -10,12 +10,26 @@ const valid = { ...target, ok: true, version: 1, observedAt: "2026-09-12T00:00:0
 test("empty status observation is correlated but not a settled payment receipt", () => {
   assert.equal(isParentPaymentObservation(valid, target), true);
   assert.equal(isParentPaymentObservation({ ...valid, outcome: "settled" }, target), false);
+  assert.equal(isParentPaymentObservation({ ...valid, outcome: "not_submitted" }, target), false);
   for (const key of ["familyId", "invoiceId", "paymentId", "requestNonce"]) {
     assert.equal(isParentPaymentObservation({ ...valid, [key]: "other" }, target), false, key);
   }
   for (const patch of [{ ok: false }, { version: 2 }, { observedAt: "invalid" }, { outcome: "safe_to_retry" }, { outcome: ["unidentified"] }, { accountPaymentBlocker: {} }, { invoicePayments: {} }]) {
     assert.equal(isParentPaymentObservation({ ...valid, ...patch }, target), false);
   }
+});
+
+test("only a definitive rejected checkout can resolve a local failure warning", () => {
+  const fields = { status: "checkout_failed", stripeProviderStatus: 400, paymentFailedAt: "2026-09-17T00:00:00Z" };
+  const payment = { status: "FAILED", provider: "stripe", customFields: fields };
+  assert.equal(isDefinitivelyRejectedCheckout(payment), true);
+  for (const patch of [{ stripeProviderStatus: 500 }, { stripeProviderStatus: 409 }, { stripeProviderStatus: null },
+    { submissionStateUnknownAt: "2026-09-17T00:00:00Z" }, { stripeCheckoutSessionId: "cs_test_existing" },
+    { stripePaymentIntentId: "pi_existing" }, { paymentFailedAt: null }, { status: "checkout_submission_unknown" }]) {
+    assert.equal(isDefinitivelyRejectedCheckout({ ...payment, customFields: { ...fields, ...patch } }), false);
+  }
+  for (const status of ["DRAFT", "PAID", "VOID"]) assert.equal(isDefinitivelyRejectedCheckout({ ...payment, status }), false);
+  assert.equal(isDefinitivelyRejectedCheckout({ ...payment, provider: "stripe_terminal" }), false);
 });
 test("status shape validates every phase, count, method and invoice identity", () => {
   const payment = { phase: "confirmation_unknown", method: "card" };

@@ -106,7 +106,7 @@ function checkNativeRole(role, shared) {
 
   assert.match(project, new RegExp(`PRODUCT_BUNDLE_IDENTIFIER = ${role.bundleId.replaceAll(".", "\\.")};`));
   assert.match(project, /MARKETING_VERSION = 1\.0;/);
-  assert.match(project, /CURRENT_PROJECT_VERSION = 1;/);
+  assert.match(project, /CURRENT_PROJECT_VERSION = [1-9][0-9]*;/);
   assert.match(project, /IPHONEOS_DEPLOYMENT_TARGET = 16\.0;/);
   assert.match(project, /TARGETED_DEVICE_FAMILY = 1;/);
   assert.doesNotMatch(project, /com\.apple\.developer\.aps-environment/);

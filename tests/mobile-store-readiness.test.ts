@@ -12,7 +12,7 @@ test("parent iOS release identity stays aligned", { skip: !nativeProjectPresent 
   assert.match(capacitorConfig, /appId:\s*"com\.brunerdigital\.thebeesuite\.parent"/);
   assert.match(project, /PRODUCT_BUNDLE_IDENTIFIER = com\.brunerdigital\.thebeesuite\.parent;/);
   assert.match(project, /MARKETING_VERSION = 1\.0;/);
-  assert.match(project, /CURRENT_PROJECT_VERSION = 1;/);
+  assert.match(project, /CURRENT_PROJECT_VERSION = [1-9][0-9]*;/);
 });
 
 test("parent iOS v1 remains iPhone-only and HTTPS-only", { skip: !nativeProjectPresent }, () => {

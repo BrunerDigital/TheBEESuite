@@ -1,22 +1,28 @@
 # BEE Suite Parent and Teacher Completion Handoff
 
 Date: September 16, 2026
-Baseline: `origin/main` / `b5ce3a8693ee0d474778fa649e011bb74e981ef5`
+Baseline: `origin/main` / `b16cb892ee04fe08718c9d51ced13086ddf3eb50`
 
 This handoff records what was revalidated during the completion pass and the remaining actions that require Apple, physical-device, provider, legal, school, or business access.
 
 ## Revalidated technical baseline
 
-- `npm test`: 2,483 passed, 0 failed.
+- `npm test`: 2,485 passed, 0 failed on current main.
 - `npm run vercel-build`: passed, including Prisma generation, lint, typecheck, tests, and Next production build.
 - `npm run mobile:store:check`: passed for parent and teacher iOS configuration.
 - `npm run ios:parent:sync`: passed.
 - `npm run ios:teacher:sync`: passed.
 - Fresh unsigned macOS native verification on current `eac132a7b56f65b0c08ab9fa8603a4aa670b84c9`: parent and teacher jobs passed. Evidence: [GitHub Actions run 35136238134](https://github.com/BrunerDigital/TheBEESuite/actions/runs/35136238134).
-- Clean current-baseline validation on `b5ce3a8693ee0d474778fa649e011bb74e981ef5`: `npm test` passed with 2,483 tests and `npm run vercel-build` passed through Prisma generation, lint, typecheck, tests, and Next production build.
+- Clean current-baseline validation on current main: `npm test` passed with 2,485 tests and `npm run vercel-build` passed through Prisma generation, lint, typecheck, tests, and Next production build.
 - Public production routes `/parents`, `/teachers`, `/support`, `/privacy`, `/terms`, `/eula`, and `/mobile-apps`: HTTP 200.
 - Parent portal live authentication and Holly Hill test-family flow: verified.
 - Current production health: database connected.
+
+## Mac/iOS follow-up on current main
+
+- Current-main Parent and Teacher build `1.0 (4)` archives were signed with Apple Distribution identity for team `BMYUFLTU52`, passed strict codesign verification, and passed Xcode Organizer App Store validation.
+- Current-main Debug builds were installed and launched on the paired physical iPhone. Fresh Parent and Teacher screenshots are recorded with the exact binary/source details in [IOS_CURRENT_MAIN_RELEASE_EVIDENCE_2026-09-16.md](IOS_CURRENT_MAIN_RELEASE_EVIDENCE_2026-09-16.md).
+- The signed artifacts are upload-ready, but no App Store Connect upload, TestFlight distribution, App Review submission, or public release was performed.
 
 ## Still required before a full launch claim
 
@@ -29,12 +35,10 @@ This handoff records what was revalidated during the completion pass and the rem
 
 ### Parent and teacher iOS
 
-- Use a Mac with current Xcode and the Apple Developer team that owns both bundle IDs.
-- Select the correct signing team and confirm unused version/build numbers.
-- Archive and validate both apps in Release configuration.
+- Review the current-main signed archives and exact build-4 evidence recorded in [IOS_CURRENT_MAIN_RELEASE_EVIDENCE_2026-09-16.md](IOS_CURRENT_MAIN_RELEASE_EVIDENCE_2026-09-16.md).
 - Review the exact binary privacy reports and App Store Connect privacy answers.
 - Upload to TestFlight.
-- Install each processed build on a physical supported iPhone.
+- Install each processed TestFlight build on a physical supported iPhone; the current development-signed builds have already been installed and launched on the paired device.
 - Test authenticated parent/teacher workflows, uploads, background/resume, offline/reconnect, logout, reinstall, and update behavior.
 - Capture final fake-data screenshots and complete the physical-device evidence packet.
 - Complete App Store metadata, reviewer information, support/privacy links, export compliance, and final App Review approval.

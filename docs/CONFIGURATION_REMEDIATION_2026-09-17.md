@@ -17,7 +17,7 @@
 
 - A separate Supabase staging target has not been provisioned. Preview still lacks database configuration and currently references the production public auth endpoint. Development still has production-backed credentials. Select an existing isolated project or confirm the cost of a new branch before completing environment migration.
 - Twilio records identify a trial-account restriction on a pending SMS. Account upgrade/destination verification requires account-owner action; no message was sent or retried.
-- Current production database retention/PITR and an operating off-platform storage backup destination still need verification and owner/destination selection. The earlier synthetic restore drill is not a current full-production recovery certificate.
+- The live Supabase backup dashboard lists daily physical database backups September 10–17; the latest is September 17 at 08:14:05 UTC. PITR is not enabled and is offered as a paid add-on. Storage object bodies are explicitly excluded from those database backups. An operating off-platform storage backup destination still needs verification and owner/destination selection. The earlier synthetic restore drill is not a current full-production recovery certificate.
 - Email suppression/bounce records and invalid push subscriptions were not bypassed. Their presence does not establish that the platform's provider keys are invalid.
 
 Vercel environment changes affect new deployments; see [Vercel environment-variable management](https://vercel.com/docs/environment-variables/managing-environment-variables). No production migrations, financial transactions, user access changes, or live test messages are part of this remediation.

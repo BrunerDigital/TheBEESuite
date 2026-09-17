@@ -37,6 +37,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLinkItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -761,14 +762,15 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
           ) : null}
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
+        <DropdownMenuLinkItem
+          closeOnClick
           className="p-0"
           render={(
             <Link href={notificationCenterHref} className="block w-full p-3 text-sm font-medium text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
           )}
         >
           {notificationCenterHref === "/parent-portal" ? "Open parent portal" : "Open notification center"}
-        </DropdownMenuItem>
+        </DropdownMenuLinkItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1017,38 +1019,41 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
         <DropdownMenuSeparator />
         {parentGuardian ? (
           <>
-            <DropdownMenuItem
+            <DropdownMenuLinkItem
+              closeOnClick
               className="p-0"
               render={<Link href={profileHref} onClick={(event) => closeForPlainNavigation(event, onNavigate)} className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
             >
               <ShieldCheck data-icon="inline-start" aria-hidden="true" />
               Profile &amp; security
-            </DropdownMenuItem>
-            <DropdownMenuItem
+            </DropdownMenuLinkItem>
+            <DropdownMenuLinkItem
+              closeOnClick
               className="p-0"
               render={<Link href={notificationsHref} onClick={(event) => closeForPlainNavigation(event, onNavigate)} className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
             >
               <Bell data-icon="inline-start" aria-hidden="true" />
               Notifications
-            </DropdownMenuItem>
+            </DropdownMenuLinkItem>
             <DropdownMenuSeparator />
           </>
         ) : null}
         {isTeacherUser(currentUser) ? (
           <>
-            <DropdownMenuItem
+            <DropdownMenuLinkItem
+              closeOnClick
               className="p-0"
               render={<TeacherTaskLink href="/teacher-portal#teacher-profile-setup" onClick={(event) => closeForPlainNavigation(event, onNavigate)} className="flex w-full items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />}
             >
               <ShieldCheck data-icon="inline-start" aria-hidden="true" />
               Profile settings
-            </DropdownMenuItem>
+            </DropdownMenuLinkItem>
             <DropdownMenuSeparator />
           </>
         ) : null}
-        {!previewMode && !appReviewAccount ? <DropdownMenuItem className="p-0" render={<Link href="/account/security" onClick={(event) => closeForPlainNavigation(event, onNavigate)} className="flex w-full items-center gap-2 px-3 py-2" />}>
+        {!previewMode && !appReviewAccount ? <DropdownMenuLinkItem closeOnClick className="p-0" render={<Link href="/account/security" onClick={(event) => closeForPlainNavigation(event, onNavigate)} className="flex w-full items-center gap-2 px-3 py-2" />}>
           <ShieldCheck data-icon="inline-start" aria-hidden="true" /> Authenticators
-        </DropdownMenuItem> : null}
+        </DropdownMenuLinkItem> : null}
         {!previewMode ? (
           <DropdownMenuItem onClick={onLogout} variant="destructive" className="py-2">
             <LogOut data-icon="inline-start" />

@@ -1,8 +1,82 @@
 # Production Release Checklist
 
-Last updated: July 24, 2026
+Last updated: September 18, 2026
 
 Use this before every production release that affects live schools.
+
+## 0. Release-Readiness Audit Prompt
+
+Use this prompt when you need one consolidated release-readiness audit focused on blockers, paid-plan gaps, and the exact next actions:
+
+```text
+Act as a release-readiness auditor for /home/runner/work/TheBEESuite/TheBEESuite.
+
+First read:
+- /home/runner/work/TheBEESuite/TheBEESuite/.env.example
+- /home/runner/work/TheBEESuite/TheBEESuite/package.json
+- /home/runner/work/TheBEESuite/TheBEESuite/vercel.json
+- /home/runner/work/TheBEESuite/TheBEESuite/README.md
+- /home/runner/work/TheBEESuite/TheBEESuite/docs/LOCAL_CLOUD_SETUP.md
+- /home/runner/work/TheBEESuite/TheBEESuite/docs/DEPLOYMENT.md
+- /home/runner/work/TheBEESuite/TheBEESuite/docs/GO_LIVE.md
+- /home/runner/work/TheBEESuite/TheBEESuite/docs/STRIPE_CONNECT_SETUP.md
+- /home/runner/work/TheBEESuite/TheBEESuite/docs/KIDCITY_CRM_CUTOVER.md
+- /home/runner/work/TheBEESuite/TheBEESuite/docs/CONFIGURATION_REMEDIATION_2026-09-17.md
+- /home/runner/work/TheBEESuite/TheBEESuite/scripts/check-local-cloud-setup.mjs
+- /home/runner/work/TheBEESuite/TheBEESuite/scripts/deployment-ops-check.mjs
+- /home/runner/work/TheBEESuite/TheBEESuite/src/lib/readiness-guardrails.ts
+- /home/runner/work/TheBEESuite/TheBEESuite/src/app/api/system/readiness/route.ts
+
+Objective:
+Find everything that must be done so the app is truly good to go as fast as possible, without missing hidden blockers.
+
+Audit all of these:
+1. GitHub branch protection, CI, alerts, required checks
+2. Vercel project config, envs, deploy behavior, domains, cron jobs
+3. Supabase project setup, auth, storage, database, backup, PITR, staging isolation
+4. Prisma and migration safety
+5. Stripe, Stripe Connect, webhook destinations, payment method configs, payout onboarding
+6. SendGrid domain auth, sender config, signed event webhook
+7. Twilio sender, messaging service, status/inbound callbacks, account restrictions
+8. Web Push VAPID setup
+9. Google Sheets / Calendar
+10. Turnstile
+11. OpenAI
+12. Meta / Google Ads / TikTok / LinkedIn / Microsoft Ads / Pinterest / X / Zapier / DocuSign / signature provider
+13. Monitoring, health checks, release verification, rollback readiness
+14. Paid account, quota, or upgrade dependencies
+15. Anything that can cause runtime failure, auth failure, webhook failure, or serverless/database exhaustion
+
+Critical requirements:
+- Explicitly verify whether pooled database URLs are required and explain why direct db host connections are risky.
+- Flag every place preview/development still touches production services.
+- Separate findings into:
+  - must fix before go-live
+  - should fix immediately after
+  - feature-specific only
+- Do not print secrets.
+- Prefer exact env var names, exact script names, and exact file references.
+- Call out anything requiring paid plans, verified senders/domains, provider admin access, or account-owner action.
+
+Return only:
+A. Top 10 blockers in priority order
+B. Fastest path to green
+C. Required env vars by platform
+D. Paid-plan / quota / external-account dependencies
+E. Production isolation risks
+F. Concrete verification commands to run now
+G. Final launch checklist with owners/dependencies
+```
+
+Fastest path to green after the audit:
+
+1. Confirm Vercel project, env, cron, and build behavior.
+2. Confirm Supabase pooled database URL, auth, storage, and backup/recovery coverage.
+3. Confirm Stripe webhook secrets, payment method configuration IDs, and Connect payout readiness.
+4. Confirm SendGrid signed webhook and sender-domain authentication.
+5. Confirm Twilio production sender and resolve account restrictions.
+6. Run `npm run cloud:status`, `npm run ops:check`, `npm run pilot:check`, and `npm run cloud:validate`.
+7. Verify `/api/health` and authenticated `/api/system/readiness`.
 
 ## 1. Scope
 

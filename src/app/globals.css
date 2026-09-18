@@ -46,6 +46,8 @@
    Glass frames orientation and glanceable status. Dense records, forms, and
    financial/compliance content retain a more opaque surface for legibility. */
 :root {
+  --font-geist-sans: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-geist-mono: "SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --glass-canvas: oklch(0.985 0.008 84);
   --glass-surface: oklch(1 0.006 84 / 72%);
   --glass-surface-strong: oklch(1 0.006 84 / 88%);

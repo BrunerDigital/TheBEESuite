@@ -5060,7 +5060,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       ) : null}
       {!data.readOnly && writableTarget ? (
         <BillingWorkbench
-          key={billingSelectionKey(data.initialSelection)}
+          key={`workbench:${billingSelectionKey(data.initialSelection)}`}
           families={data.workbench.families}
           centers={data.workbench.centers}
           products={data.workbench.products}
@@ -5175,7 +5175,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         </CardContent>
       </Card>
       <FamilyLedgerCard
-        key={billingSelectionKey(data.initialSelection)}
+        key={`ledger:${billingSelectionKey(data.initialSelection)}`}
         initialCenterId={data.initialSelection?.centerId}
         canOpenFamilyProfile={data.canOpenFamilyProfile}
         entries={data.ledgerEntries}

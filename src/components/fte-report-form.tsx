@@ -779,7 +779,7 @@ export function FteReportForm({
           <div className="mb-3">
             <h3 id={`${fieldIdPrefix}-weekly-billing-heading`} className="text-sm font-semibold">Weekly Billing</h3>
             <p className="text-xs text-muted-foreground">
-              BEE Suite billing is prefilled automatically. Add UPK, CCAP, or other agency billing submitted outside BEE Suite; it is included in the calculated total.
+              BEE Suite billing is prefilled automatically. Monthly tuition uses monthly ÷ 4 for the month containing the week start; weekly tuition uses the billed week. These are weekly reporting amounts, not payments received. Add verified weekly UPK, CCAP, or other agency billing submitted outside BEE Suite; it is included in the calculated total.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

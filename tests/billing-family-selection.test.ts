@@ -61,7 +61,10 @@ test("server supplements a capped exact family through the same eligibility and 
   assert.match(page, /!data\.readOnly && writableTarget \? \(\s*<BillingWorkbench/);
   assert.match(page, /workspace === "terminal" && !data\.readOnly && writableTarget/);
   assert.match(page, /\.\.\.data\.ledgerAccounts\.map/);
-  assert.match(page, /<FamilyLedgerCard\s+key=\{billingSelectionKey\(data\.initialSelection\)\}/);
+  // These components are siblings. Equal keys leave stale workbenches behind
+  // when a save or background refresh reconciles the billing page.
+  assert.match(page, /<BillingWorkbench\s+key=\{`workbench:\$\{billingSelectionKey\(data\.initialSelection\)\}`\}/);
+  assert.match(page, /<FamilyLedgerCard\s+key=\{`ledger:\$\{billingSelectionKey\(data\.initialSelection\)\}`\}/);
   assert.match(page, /!data\.readOnly \? <PaymentAutopayActions \/>/);
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
   assert.match(workbench, /<fieldset disabled=\{isPending\} aria-busy=\{isPending\}/);

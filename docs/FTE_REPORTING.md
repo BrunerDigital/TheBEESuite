@@ -100,3 +100,8 @@ Directors can enter these values in the weekly FTE form. Executive users can imp
 - Keep one rolling source workbook. Monthly/weekly tabs are accepted only as compatibility input.
 - If the tab name must be forced, set `KIDCITY_FTE_SHEET_NAME`.
 - If the report uses a nonstandard tab/range, set `KIDCITY_FTE_RANGE`.
+
+
+## Monthly tuition in weekly FTE
+
+Monthly tuition invoices use a weekly reporting equivalent of monthly billed amount divided by four, as directed September 18, 2026. The reporting month is the month containing the week start (Monday). This is an operating metric, not an allocation of monthly revenue across calendar weeks; do not sum weekly equivalents to reconstruct monthly revenue. Weekly invoices retain their existing covered-week basis. Manual invoices without an explicit monthly cadence retain their creation-week basis. Round only after accumulating invoice contributions. Family and supported agency portions use the same divisor. Historical submitted reports and invoice/payment records are not rewritten. External agency billing still requires a verified weekly amount.

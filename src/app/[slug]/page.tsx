@@ -113,7 +113,7 @@ import { billingFamilyAccountCategory } from "@/lib/prospective-family-billing";
 import { SCHOOL_DASHBOARD_LIST_LIMIT } from "@/lib/dashboard-query-limits";
 import { getFteDueState, isExecutiveFteManager, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { resolveFteReportSelection, writableFteCenterIds } from "@/lib/fte-report-selection";
-import { invoiceBelongsToFteWeek } from "@/lib/fte-billing-period";
+import { invoiceFteWeekWeight } from "@/lib/fte-billing-period";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { fteAgeBucket } from "@/lib/fte-age-groups";
@@ -706,6 +706,7 @@ async function buildFtePrefills(
   const weekEndExclusive = new Date(weekStart);
   weekEndExclusive.setUTCDate(weekEndExclusive.getUTCDate() + 7);
   const billingPeriod = isoWeekBillingPeriod(weekStart);
+  const monthlyBillingPeriod = weekStart.toISOString().slice(0, 7);
 
   const [children, invoices, accountBalances, staffProfiles] = await Promise.all([prisma.child.findMany({
     where: {
@@ -738,6 +739,8 @@ async function buildFtePrefills(
         { createdAt: { gte: weekStart, lt: weekEndExclusive } },
         { customFields: { path: ["billingPeriod"], equals: billingPeriod } },
         { customFields: { path: ["coverageStartsPeriod"], equals: billingPeriod } },
+        { customFields: { path: ["billingPeriod"], equals: monthlyBillingPeriod } },
+        { customFields: { path: ["coverageStartsPeriod"], equals: monthlyBillingPeriod } },
       ],
     },
     select: {
@@ -864,7 +867,8 @@ async function buildFtePrefills(
   }
 
   for (const invoice of invoices) {
-    if (!invoiceBelongsToFteWeek(invoice, weekStart)) continue;
+    const weekWeight = invoiceFteWeekWeight(invoice, weekStart);
+    if (!weekWeight) continue;
     const row = invoice.billingAccount.family.centerId ? byCenter.get(invoice.billingAccount.family.centerId) : null;
     if (!row) continue;
     const separated = responsibilitySeparatedBillingAmounts({
@@ -873,17 +877,17 @@ async function buildFtePrefills(
     });
     if (invoice.status === PaymentStatus.VOID && (!separated || separated.familyResponsibilityCents > 0)) continue;
     if (separated) {
-      row.totalBilledAmount += separated.totalResponsibilityCents / 100;
-      row.subsidyBillAmount += separated.agencyResponsibilityCents / 100;
-      row.selfPayerBillAmount += separated.familyResponsibilityCents / 100;
+      row.totalBilledAmount += separated.totalResponsibilityCents * weekWeight / 100;
+      row.subsidyBillAmount += separated.agencyResponsibilityCents * weekWeight / 100;
+      row.selfPayerBillAmount += separated.familyResponsibilityCents * weekWeight / 100;
     } else {
       const invoiceMetadataText = JSON.stringify(invoice.customFields).toLowerCase();
       const subsidyCents = /subsidy|agency|voucher|scholarship|elc|dhs/.test(invoiceMetadataText)
         ? invoice.totalCents
         : invoice.items.filter((item) => /subsidy|agency|voucher|scholarship|elc|dhs/i.test(item.description)).reduce((sum, item) => sum + item.amountCents, 0);
-      row.totalBilledAmount += invoice.totalCents / 100;
-      row.subsidyBillAmount += subsidyCents / 100;
-      row.selfPayerBillAmount += Math.max(invoice.totalCents - subsidyCents, 0) / 100;
+      row.totalBilledAmount += invoice.totalCents * weekWeight / 100;
+      row.subsidyBillAmount += subsidyCents * weekWeight / 100;
+      row.selfPayerBillAmount += Math.max(invoice.totalCents - subsidyCents, 0) * weekWeight / 100;
     }
   }
 

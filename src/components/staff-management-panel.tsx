@@ -188,7 +188,8 @@ function sortClockEditRows(rows: ClockEditRow[]) {
   return [...rows].sort((left, right) => {
     const leftTime = new Date(left.occurredAt).getTime();
     const rightTime = new Date(right.occurredAt).getTime();
-    return (Number.isFinite(leftTime) ? leftTime : 0) - (Number.isFinite(rightTime) ? rightTime : 0);
+    return (Number.isFinite(leftTime) ? leftTime : 0) - (Number.isFinite(rightTime) ? rightTime : 0)
+      || (left.action === right.action ? 0 : left.action === "clock_out" ? -1 : 1);
   });
 }
 
@@ -236,7 +237,8 @@ export function clampClockEditDateTimeToPayPeriod(localValue: string, startDate:
 
 function clockEditRowsFromEvents(events: StaffClockEvent[], timeZone: string): ClockEditRow[] {
   return [...events]
-    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime()
+      || (left.action === right.action ? 0 : left.action === "clock_out" ? -1 : 1))
     .map((event, index) => ({
       id: `clock-event-${index}-${event.occurredAt}`,
       action: event.action,
@@ -258,7 +260,8 @@ export function clockEditRowsFromSavedEvents(
     if (occurredAt) rowIdByOccurredAt.set(`${row.action}:${occurredAt.toISOString()}`, row.id);
   }
   return [...events]
-    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime()
+      || (left.action === right.action ? 0 : left.action === "clock_out" ? -1 : 1))
     .map((event, index) => ({
       id: rowIdByOccurredAt.get(`${event.action}:${new Date(event.occurredAt).toISOString()}`)
         ?? `clock-event-${index}-${event.occurredAt}`,
@@ -283,7 +286,7 @@ export function clockEditRowOccurredAtUtc(row: ClockEditRow, timeZone: string) {
   return zonedDateTimeLocalToUtc(row.occurredAt, timeZone);
 }
 
-function nextClockEditAction(rows: ClockEditRow[]): StaffClockAction {
+export function nextClockEditAction(rows: ClockEditRow[]): StaffClockAction {
   const sorted = sortClockEditRows(rows).filter((row) => row.occurredAt);
   const last = sorted[sorted.length - 1];
   return last?.action === "clock_in" ? "clock_out" : "clock_in";

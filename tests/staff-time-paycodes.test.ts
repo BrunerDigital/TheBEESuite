@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildPayrollDayRows, buildPayrollShiftRows, buildPayCodeSummaries, clockEditRowsFromSavedEvents } from "@/components/staff-management-panel";
+import { nextClockEditAction, buildPayrollDayRows, buildPayrollShiftRows, buildPayCodeSummaries, clockEditRowsFromSavedEvents } from "@/components/staff-management-panel";
 import { normalizeStaffClockEventEdits, readStaffClockState, readStaffClockSummary, staffClockEditFields, staffClockFields } from "@/lib/staff-kiosk";
 
 test("multiple codes survive edits, adjacent intervals, new punches, and printed/submitted totals", () => {
@@ -68,5 +68,9 @@ test("a category change at the same instant retains the new open clock state", (
   if (!normalized.ok) return;
   const fields = staffClockEditFields({ customFields: {}, events: normalized.events, editedAt: new Date("2026-09-21T17:00:00Z") });
   assert.equal(readStaffClockState(fields).status, "clocked_in");
+  const savedRows = clockEditRowsFromSavedEvents(readStaffClockState(fields).events, "UTC", []);
+  assert.deepEqual(savedRows.map(row => row.action), ["clock_in", "clock_out", "clock_in"]);
+  assert.equal(nextClockEditAction(savedRows), "clock_out");
+  assert.equal(nextClockEditAction([...savedRows].reverse()), "clock_out");
   assert.equal(readStaffClockSummary(fields, { now: new Date("2026-09-21T17:00:00Z") }).openShiftMinutes, 60);
 });

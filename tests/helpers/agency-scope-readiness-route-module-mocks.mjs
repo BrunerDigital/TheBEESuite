@@ -41,6 +41,7 @@ function authorization(overrides = {}) {
     familyId,
     childId: "child-test",
     authorizationNumber: "AUTH-TEST",
+    center: { timezone: "America/New_York" },
     coverageStart: new Date("2026-09-01T00:00:00.000Z"),
     coverageEnd: new Date("2026-09-30T00:00:00.000Z"),
     authorizedRateCents: 10_000,
@@ -162,6 +163,7 @@ mock.module("@/lib/audit", {
 mock.module("@/lib/request-response-logging", { namedExports: { withApiLogging(_name, handler) { return handler; } } });
 
 const { POST } = await import("../../src/app/api/billing/agency-claims/route.ts");
+const { agencyClaimServiceStartMin } = await import("../../src/lib/agency-date-defaults.ts");
 
 function post(body) {
   return POST(new Request("https://app.test/api/billing/agency-claims", {
@@ -181,6 +183,25 @@ function validClaimBody(centerId = "center-test") {
     serviceUnits: "1",
   };
 }
+
+test("claim service dates accept the extended boundary and reject dates outside it", async () => {
+  authorizationRecord = authorization();
+  const earliest = agencyClaimServiceStartMin(authorizationRecord.coverageStart, "America/New_York");
+  const beforeBoundary = new Date(`${earliest}T12:00:00Z`);
+  beforeBoundary.setUTCDate(beforeBoundary.getUTCDate() - 1);
+  for (const [start, end, status] of [
+    [earliest, earliest, 200],
+    ["2026-09-30", "2026-09-30", 200],
+    [beforeBoundary.toISOString().slice(0, 10), earliest, 400],
+    ["2026-09-30", "2026-10-01", 400],
+    ["2026-09-02", "2026-09-01", 400],
+  ]) {
+    const before = claimCreates;
+    const response = await post({ ...validClaimBody(), servicePeriodStart: start, servicePeriodEnd: end });
+    assert.equal(response.status, status, `${start} through ${end}`);
+    assert.equal(claimCreates - before, status === 200 ? 1 : 0);
+  }
+});
 
 test("createClaim requires every authorization relationship and current enrollment to match the exact school", async () => {
   const corruptions = [

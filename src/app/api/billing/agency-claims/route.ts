@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { agencyClaimServiceStartMin } from "@/lib/agency-date-defaults";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
 import {
@@ -4231,6 +4232,7 @@ async function postHandler(request: NextRequest) {
           where: { id: clean(body.authorizationId) },
           include: {
             agencyProgram: true,
+            center: { select: { timezone: true } },
             family: { select: { id: true, centerId: true } },
             child: { select: { id: true, familyId: true, fullName: true, enrollmentStatus: true, classroomId: true } },
           },
@@ -4243,7 +4245,8 @@ async function postHandler(request: NextRequest) {
         const requestedRateCents = hasNumericInput(body.rateDollars) ? cents(body.rateDollars) : authorization.authorizedRateCents;
         if (requestedRateCents <= 0 || requestedRateCents > authorization.authorizedRateCents) throw new AgencyWorkflowError("The claim rate must be positive and cannot exceed the authorization rate.");
         const claimedCents = claimAmountCents({ serviceUnits: units, rateCents: requestedRateCents });
-        if (start < authorization.coverageStart || end > authorization.coverageEnd || claimedCents <= 0) throw new AgencyWorkflowError("Service dates must fall within the authorization and units/rate must produce a positive claim.");
+        const earliestServiceDate = agencyClaimServiceStartMin(authorization.coverageStart, authorization.center.timezone || "America/New_York");
+        if (dateInput(start) < earliestServiceDate || dateInput(end) > dateInput(authorization.coverageEnd) || claimedCents <= 0) throw new AgencyWorkflowError(`Service dates must be between ${earliestServiceDate} and ${dateInput(authorization.coverageEnd)}, and units/rate must produce a positive claim.`);
         const overlap = await tx.subsidyClaim.findFirst({ where: { authorizationId: authorization.id, status: { notIn: ["void", "denied"] }, servicePeriodStart: { lte: end }, servicePeriodEnd: { gte: start } }, select: { number: true } });
         if (overlap) throw new AgencyWorkflowError(`Claim ${overlap.number} already covers some or all of this service period. Void or correct that claim before creating another.`, 409);
         if (authorization.authorizedUnits !== null) {

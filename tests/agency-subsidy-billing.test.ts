@@ -306,7 +306,7 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(workspace, /Record denial/);
   assert.match(workspace, /Void draft/);
   assert.match(workspace, /name="serviceUnits"[\s\S]*step="0\.000001"/);
-  assert.match(workspace, /selectedClaimAuthorization\?\.coverageStart\.slice\(0, 10\)/);
+  assert.match(workspace, /agencyClaimServiceStartMin\(selectedClaimAuthorization\.coverageStart, selectedTimeZone\)/);
   assert.match(workspace, /selectedClaimAuthorization\?\.coverageEnd\.slice\(0, 10\)/);
   assert.match(workspace, /onError: setClaimError/);
   assert.match(workspace, /Draft claim created and added to the agency claim queue below/);

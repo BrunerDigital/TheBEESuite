@@ -303,7 +303,7 @@ function payrollWeekLabel(value: Date | string, timeZone: string) {
   return `${formatShortDate(start)} - ${formatShortDate(end)}`;
 }
 
-export function buildPayrollShiftRows(shifts: StaffClockShift[], timeZone: string): PayrollShiftRow[] {
+export function buildPayrollShiftRows(shifts: StaffClockShift[], timeZone: string, defaultPayCode?: string | null): PayrollShiftRow[] {
   const weeklyMinutes = new Map<string, number>();
   return [...shifts]
     .sort((left, right) => new Date(left.clockInAt).getTime() - new Date(right.clockInAt).getTime())
@@ -311,7 +311,7 @@ export function buildPayrollShiftRows(shifts: StaffClockShift[], timeZone: strin
       const clockIn = new Date(shift.clockInAt);
       const weekLabel = payrollWeekLabel(clockIn, timeZone);
       const usedMinutes = weeklyMinutes.get(weekLabel) ?? 0;
-      const paidLeave = isStaffPaidLeaveCode(shift.payCode);
+      const paidLeave = isStaffPaidLeaveCode(shift.payCode || defaultPayCode);
       const regularMinutes = paidLeave ? shift.minutes : Math.max(0, Math.min(shift.minutes, overtimeWeeklyThresholdMinutes - usedMinutes));
       const overtimeMinutes = Math.max(0, shift.minutes - regularMinutes);
       if (!paidLeave) weeklyMinutes.set(weekLabel, usedMinutes + shift.minutes);
@@ -520,11 +520,11 @@ export function StaffManagementPanel({
           startDate: payrollStart,
           endDate: payrollEnd,
         });
-        const shiftRows = buildPayrollShiftRows(summary.shifts, timeZone);
-        const regularMinutes = shiftRows.reduce((sum, shift) => sum + shift.regularMinutes, 0);
-        const overtimeMinutes = shiftRows.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
         const compensation = readStaffCompensation(teacher.customFields);
         const payrollPayCode = compensation.payCode ?? teacher.title ?? "Teacher";
+        const shiftRows = buildPayrollShiftRows(summary.shifts, timeZone, payrollPayCode);
+        const regularMinutes = shiftRows.reduce((sum, shift) => sum + shift.regularMinutes, 0);
+        const overtimeMinutes = shiftRows.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
         const payrollDepartment = compensation.department ?? teacher.classroom?.name ?? "Unassigned";
         const payCodeSummaries = buildPayCodeSummaries({
           shifts: shiftRows,

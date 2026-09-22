@@ -292,7 +292,7 @@ export function validateNextStaffClockAction(action: StaffClockAction, state: St
 
 export function normalizeStaffClockEventEdits(
   value: unknown,
-  options: { timeZone?: string | null; maxEvents?: number; allowLeadingClockOut?: boolean } = {},
+  options: { timeZone?: string | null; maxEvents?: number; allowLeadingClockOut?: boolean; defaultPayCode?: string | null } = {},
 ) {
   if (!Array.isArray(value)) {
     return { ok: false as const, error: "Clock events must be an array." };
@@ -355,7 +355,7 @@ export function normalizeStaffClockEventEdits(
     expectedAction = event.action === "clock_in" ? "clock_out" : "clock_in";
   }
 
-  if (sorted.at(-1)?.action === "clock_in" && isStaffPaidLeaveCode(sorted.at(-1)?.payCode)) {
+  if (sorted.at(-1)?.action === "clock_in" && isStaffPaidLeaveCode(sorted.at(-1)?.payCode || options.defaultPayCode)) {
     return { ok: false as const, error: "Paid leave needs both a start and an end time." };
   }
 

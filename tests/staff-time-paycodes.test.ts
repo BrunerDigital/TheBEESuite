@@ -48,6 +48,18 @@ test("paid leave does not consume worked overtime allowance but training does", 
 });
 
 test("invalid codes, zero-duration intervals, and open paid leave fail validation", () => {
+  for (const defaultPayCode of ["PTO", "Bereavement", "Holiday", "Holiday Voucher"]) {
+    const open = [{ action: "clock_in", occurredAt: "2026-09-21T08:00:00Z" }];
+    assert.equal(normalizeStaffClockEventEdits(open, { defaultPayCode }).ok, false);
+    assert.equal(normalizeStaffClockEventEdits([{ ...open[0], payCode: "Training at School" }], { defaultPayCode }).ok, true);
+    const closed = normalizeStaffClockEventEdits([...open, { action: "clock_out", occurredAt: "2026-09-23T08:00:00Z" }], { defaultPayCode });
+    assert.equal(closed.ok, true);
+    if (closed.ok) {
+      const stored = staffClockEditFields({ customFields: {}, events: closed.events, editedAt: new Date("2026-09-24T00:00:00Z") });
+      const shifts = buildPayrollShiftRows(readStaffClockSummary(stored).shifts, "UTC", defaultPayCode);
+      assert.equal(shifts.reduce((sum, row) => sum + row.overtimeMinutes, 0), 0);
+    }
+  }
   for (const payCode of ["unknown", "PTO", "Bereavement", "Holiday", "Holiday Voucher"]) {
     assert.equal(normalizeStaffClockEventEdits([{ action: "clock_in", occurredAt: "2026-09-21T08:00:00Z", payCode }]).ok, false);
   }

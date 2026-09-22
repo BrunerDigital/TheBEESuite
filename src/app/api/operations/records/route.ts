@@ -16,7 +16,7 @@ import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
 import { parseCalendarDateOrTimestamp } from "@/lib/date-guardrails";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
-import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, staffCompensationCustomFields } from "@/lib/staff-compensation";
+import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, readStaffCompensation, staffCompensationCustomFields } from "@/lib/staff-compensation";
 import {
   hasLegacyTruncatedStaffClockHistory,
   normalizeStaffClockAction,
@@ -1804,6 +1804,7 @@ async function POSTHandler(request: NextRequest) {
       where: { id: staffId },
       select: {
         id: true,
+        title: true,
         centerId: true,
         customFields: true,
         center: { select: { city: true, state: true, postalCode: true, timezone: true, customFields: true } },
@@ -1824,6 +1825,7 @@ async function POSTHandler(request: NextRequest) {
     if (hasEventEditPayload) {
       const normalized = normalizeStaffClockEventEdits(body.events, {
         timeZone,
+        defaultPayCode: readStaffCompensation(staff.customFields).payCode ?? staff.title,
         allowLeadingClockOut: hasLegacyTruncatedStaffClockHistory(staff.customFields),
       });
       if (!normalized.ok) return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });

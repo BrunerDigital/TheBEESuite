@@ -1,6 +1,8 @@
 const DEFAULT_INQUIRY_ALLOWED_ORIGINS = [
   "https://kidcityusa.com",
   "https://www.kidcityusa.com",
+  "https://misshoneyslearningcenter.com",
+  "https://www.misshoneyslearningcenter.com",
   "https://thebeesuite.io",
   "https://www.thebeesuite.io",
 ];

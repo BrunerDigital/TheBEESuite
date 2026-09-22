@@ -30,6 +30,8 @@ test("configured inquiry origins extend trusted defaults and normalize additiona
   assert.deepEqual(getConfiguredInquiryAllowedOrigins(env), [
     "https://kidcityusa.com",
     "https://www.kidcityusa.com",
+    "https://misshoneyslearningcenter.com",
+    "https://www.misshoneyslearningcenter.com",
     "https://thebeesuite.io",
     "https://www.thebeesuite.io",
     "https://forms.example.test",
@@ -37,4 +39,15 @@ test("configured inquiry origins extend trusted defaults and normalize additiona
   assert.equal(isAllowedInquiryOrigin("https://thebeesuite.io", env), true);
   assert.equal(isAllowedInquiryOrigin("https://forms.example.test", env), true);
   assert.equal(isAllowedInquiryOrigin("https://example.com", env), false);
+});
+
+test("Miss Honey's inquiry requests allow exact production origins and reject lookalikes", () => {
+  for (const origin of ["https://misshoneyslearningcenter.com", "https://www.misshoneyslearningcenter.com"]) {
+    assert.equal(isAllowedInquiryOrigin(origin, {}), true);
+    assert.equal(inquiryCorsHeaders(origin, {})["Access-Control-Allow-Origin"], origin);
+  }
+  for (const origin of ["http://misshoneyslearningcenter.com", "https://misshoneyslearningcenter.com.example.com", "https://untrusted.misshoneyslearningcenter.com"]) {
+    assert.equal(isAllowedInquiryOrigin(origin, {}), false);
+    assert.notEqual(inquiryCorsHeaders(origin, {})["Access-Control-Allow-Origin"], origin);
+  }
 });

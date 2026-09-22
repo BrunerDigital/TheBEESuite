@@ -95,6 +95,7 @@ type PayrollSummary = {
     title: string;
     department: string;
     payCode: string;
+    payCodeSummaries?: Array<{ payCode: string; totalMinutes: number; regularMinutes: number; overtimeMinutes: number }>;
     totalMinutes: number;
     regularMinutes: number;
     overtimeMinutes: number;
@@ -431,7 +432,7 @@ function PayrollSummariesCard({
                             <div className="font-medium">{employee.employeeName}</div>
                             <div className="text-xs text-muted-foreground">{employee.title}</div>
                           </TableCell>
-                          <TableCell>{[employee.department, employee.payCode].filter(Boolean).join(" · ")}</TableCell>
+                          <TableCell>{[employee.department, employee.payCode].filter(Boolean).join(" · ")}{employee.payCodeSummaries?.map((code) => <div key={code.payCode} className="text-xs">{code.payCode}: {formatStaffDecimalHours(code.totalMinutes)}h ({formatStaffDecimalHours(code.regularMinutes)} regular / {formatStaffDecimalHours(code.overtimeMinutes)} OT)</div>)}</TableCell>
                           <TableCell className="text-right">{formatStaffDecimalHours(employee.regularMinutes)}</TableCell>
                           <TableCell className="text-right">{formatStaffDecimalHours(employee.overtimeMinutes)}</TableCell>
                           <TableCell className="text-right font-medium">{formatStaffDecimalHours(employee.totalMinutes)}</TableCell>
@@ -482,7 +483,7 @@ function PayrollSummariesCard({
                   {selectedSummary.employeeSummaries.map((employee) => (
                     <tr key={employee.employeeId}>
                       <td>{employee.employeeName}{employee.title ? ` · ${employee.title}` : ""}</td>
-                      <td>{[employee.department, employee.payCode].filter(Boolean).join(" · ")}</td>
+                      <td>{[employee.department, employee.payCode].filter(Boolean).join(" · ")}{employee.payCodeSummaries?.map((code) => <div key={code.payCode} className="text-xs">{code.payCode}: {formatStaffDecimalHours(code.totalMinutes)}h ({formatStaffDecimalHours(code.regularMinutes)} regular / {formatStaffDecimalHours(code.overtimeMinutes)} OT)</div>)}</td>
                       <td>{formatStaffDecimalHours(employee.regularMinutes)}</td>
                       <td>{formatStaffDecimalHours(employee.overtimeMinutes)}</td>
                       <td>{formatStaffDecimalHours(employee.totalMinutes)}</td>

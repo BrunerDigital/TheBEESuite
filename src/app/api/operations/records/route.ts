@@ -16,7 +16,7 @@ import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
 import { parseCalendarDateOrTimestamp } from "@/lib/date-guardrails";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
-import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, staffCompensationCustomFields } from "@/lib/staff-compensation";
+import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, readStaffCompensation, staffCompensationCustomFields } from "@/lib/staff-compensation";
 import {
   hasLegacyTruncatedStaffClockHistory,
   normalizeStaffClockAction,
@@ -505,6 +505,16 @@ async function POSTHandler(request: NextRequest) {
             title: clean(employee.title).slice(0, 120),
             department: clean(employee.department).slice(0, 160),
             payCode: clean(employee.payCode).slice(0, 120),
+            payCodeSummaries: (Array.isArray(employee.payCodeSummaries) ? employee.payCodeSummaries : []).slice(0, 16).map((value: unknown) => {
+              const code = jsonObject(value);
+              return {
+                payCode: clean(code.payCode).slice(0, 120),
+                department: clean(code.department).slice(0, 160),
+                totalMinutes: Math.max(0, intValue(code.totalMinutes)),
+                regularMinutes: Math.max(0, intValue(code.regularMinutes)),
+                overtimeMinutes: Math.max(0, intValue(code.overtimeMinutes)),
+              };
+            }),
             totalMinutes: Math.max(0, intValue(employee.totalMinutes)),
             regularMinutes: Math.max(0, intValue(employee.regularMinutes)),
             overtimeMinutes: Math.max(0, intValue(employee.overtimeMinutes)),
@@ -1794,6 +1804,7 @@ async function POSTHandler(request: NextRequest) {
       where: { id: staffId },
       select: {
         id: true,
+        title: true,
         centerId: true,
         customFields: true,
         center: { select: { city: true, state: true, postalCode: true, timezone: true, customFields: true } },
@@ -1814,6 +1825,7 @@ async function POSTHandler(request: NextRequest) {
     if (hasEventEditPayload) {
       const normalized = normalizeStaffClockEventEdits(body.events, {
         timeZone,
+        defaultPayCode: readStaffCompensation(staff.customFields).payCode ?? staff.title,
         allowLeadingClockOut: hasLegacyTruncatedStaffClockHistory(staff.customFields),
       });
       if (!normalized.ok) return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });

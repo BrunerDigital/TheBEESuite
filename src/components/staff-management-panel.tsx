@@ -24,7 +24,7 @@ import {
   type StaffPayType,
 } from "@/lib/staff-compensation";
 import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
-import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary, type StaffClockAction, type StaffClockEvent, type StaffClockShift } from "@/lib/staff-kiosk";
+import { STAFF_TIME_PAY_CODES, isStaffPaidLeaveCode, type StaffTimePayCode, formatStaffDecimalHours, readStaffClockState, readStaffClockSummary, type StaffClockAction, type StaffClockEvent, type StaffClockShift } from "@/lib/staff-kiosk";
 import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 import { zonedDateInputToUtc, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
@@ -97,6 +97,7 @@ export type ClockEditRow = {
   action: StaffClockAction;
   occurredAt: string;
   originalOccurredAt?: string;
+  payCode?: StaffTimePayCode | null;
   notes: string;
 };
 
@@ -109,6 +110,7 @@ type PayCodeSummaryRow = {
 };
 
 type PayrollDayRow = {
+  payCode: string;
   dateKey: string;
   dateLabel: string;
   clockInLabel: string;
@@ -178,7 +180,7 @@ function clockEditRowId() {
   return `clock-row-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function clockEditControlId(rowId: string, control: "action" | "occurred-at" | "notes" | "remove") {
+function clockEditControlId(rowId: string, control: "action" | "occurred-at" | "pay-code" | "notes" | "remove") {
   return `payroll-punch-${rowId}-${control}`.replace(/[^A-Za-z0-9_-]/g, "-");
 }
 
@@ -186,7 +188,8 @@ function sortClockEditRows(rows: ClockEditRow[]) {
   return [...rows].sort((left, right) => {
     const leftTime = new Date(left.occurredAt).getTime();
     const rightTime = new Date(right.occurredAt).getTime();
-    return (Number.isFinite(leftTime) ? leftTime : 0) - (Number.isFinite(rightTime) ? rightTime : 0);
+    return (Number.isFinite(leftTime) ? leftTime : 0) - (Number.isFinite(rightTime) ? rightTime : 0)
+      || (left.action === right.action ? 0 : left.action === "clock_out" ? -1 : 1);
   });
 }
 
@@ -234,13 +237,15 @@ export function clampClockEditDateTimeToPayPeriod(localValue: string, startDate:
 
 function clockEditRowsFromEvents(events: StaffClockEvent[], timeZone: string): ClockEditRow[] {
   return [...events]
-    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime()
+      || (left.action === right.action ? 0 : left.action === "clock_out" ? -1 : 1))
     .map((event, index) => ({
       id: `clock-event-${index}-${event.occurredAt}`,
       action: event.action,
       occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone, true),
       originalOccurredAt: event.occurredAt,
       notes: event.notes ?? "",
+      payCode: event.payCode ?? null,
     }));
 }
 
@@ -252,17 +257,19 @@ export function clockEditRowsFromSavedEvents(
   const rowIdByOccurredAt = new Map<string, string>();
   for (const row of existingRows) {
     const occurredAt = clockEditRowOccurredAtUtc(row, timeZone);
-    if (occurredAt) rowIdByOccurredAt.set(occurredAt.toISOString(), row.id);
+    if (occurredAt) rowIdByOccurredAt.set(`${row.action}:${occurredAt.toISOString()}`, row.id);
   }
   return [...events]
-    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime()
+      || (left.action === right.action ? 0 : left.action === "clock_out" ? -1 : 1))
     .map((event, index) => ({
-      id: rowIdByOccurredAt.get(new Date(event.occurredAt).toISOString())
+      id: rowIdByOccurredAt.get(`${event.action}:${new Date(event.occurredAt).toISOString()}`)
         ?? `clock-event-${index}-${event.occurredAt}`,
       action: event.action,
       occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone, true),
       originalOccurredAt: event.occurredAt,
       notes: event.notes ?? "",
+      payCode: event.payCode ?? null,
     }));
 }
 
@@ -279,7 +286,7 @@ export function clockEditRowOccurredAtUtc(row: ClockEditRow, timeZone: string) {
   return zonedDateTimeLocalToUtc(row.occurredAt, timeZone);
 }
 
-function nextClockEditAction(rows: ClockEditRow[]): StaffClockAction {
+export function nextClockEditAction(rows: ClockEditRow[]): StaffClockAction {
   const sorted = sortClockEditRows(rows).filter((row) => row.occurredAt);
   const last = sorted[sorted.length - 1];
   return last?.action === "clock_in" ? "clock_out" : "clock_in";
@@ -296,7 +303,7 @@ function payrollWeekLabel(value: Date | string, timeZone: string) {
   return `${formatShortDate(start)} - ${formatShortDate(end)}`;
 }
 
-function buildPayrollShiftRows(shifts: StaffClockShift[], timeZone: string): PayrollShiftRow[] {
+export function buildPayrollShiftRows(shifts: StaffClockShift[], timeZone: string, defaultPayCode?: string | null): PayrollShiftRow[] {
   const weeklyMinutes = new Map<string, number>();
   return [...shifts]
     .sort((left, right) => new Date(left.clockInAt).getTime() - new Date(right.clockInAt).getTime())
@@ -304,9 +311,10 @@ function buildPayrollShiftRows(shifts: StaffClockShift[], timeZone: string): Pay
       const clockIn = new Date(shift.clockInAt);
       const weekLabel = payrollWeekLabel(clockIn, timeZone);
       const usedMinutes = weeklyMinutes.get(weekLabel) ?? 0;
-      const regularMinutes = Math.max(0, Math.min(shift.minutes, overtimeWeeklyThresholdMinutes - usedMinutes));
+      const paidLeave = isStaffPaidLeaveCode(shift.payCode || defaultPayCode);
+      const regularMinutes = paidLeave ? shift.minutes : Math.max(0, Math.min(shift.minutes, overtimeWeeklyThresholdMinutes - usedMinutes));
       const overtimeMinutes = Math.max(0, shift.minutes - regularMinutes);
-      weeklyMinutes.set(weekLabel, usedMinutes + shift.minutes);
+      if (!paidLeave) weeklyMinutes.set(weekLabel, usedMinutes + shift.minutes);
       return {
         ...shift,
         dateLabel: formatShortDate(clockIn, timeZone),
@@ -319,30 +327,31 @@ function buildPayrollShiftRows(shifts: StaffClockShift[], timeZone: string): Pay
     });
 }
 
-function buildPayCodeSummaries(input: {
+export function buildPayCodeSummaries(input: {
   shifts: PayrollShiftRow[];
   payCode: string;
   department: string;
 }) {
-  const summary: PayCodeSummaryRow = {
-    payCode: input.payCode || "Teacher",
-    department: input.department || "Unassigned",
-    totalMinutes: 0,
-    regularMinutes: 0,
-    overtimeMinutes: 0,
-  };
-  input.shifts.forEach((shift) => {
+  const summaries = new Map<string, PayCodeSummaryRow>();
+  for (const shift of input.shifts) {
+    const payCode = shift.payCode || input.payCode || "Teacher";
+    const summary = summaries.get(payCode) ?? {
+      payCode, department: input.department || "Unassigned",
+      totalMinutes: 0, regularMinutes: 0, overtimeMinutes: 0,
+    };
     summary.totalMinutes += shift.minutes;
     summary.regularMinutes += shift.regularMinutes;
     summary.overtimeMinutes += shift.overtimeMinutes;
-  });
-  return [summary];
+    summaries.set(payCode, summary);
+  }
+  return [...summaries.values()];
 }
 
 export function buildPayrollDayRows(input: {
   startDate: string;
   endDate: string;
   shifts: PayrollShiftRow[];
+  payCode?: string;
   timeZone: string;
 }): PayrollDayRow[] {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(input.endDate) || input.startDate > input.endDate) return [];
@@ -359,11 +368,19 @@ export function buildPayrollDayRows(input: {
   const finalDay = new Date(`${input.endDate}T12:00:00Z`);
   while (cursor <= finalDay) {
     const dateKey = cursor.toISOString().slice(0, 10);
-    const shifts = shiftsByDate.get(dateKey) ?? [];
+    const dayShifts = shiftsByDate.get(dateKey) ?? [];
+    const groups = new Map<string, PayrollShiftRow[]>();
+    for (const shift of dayShifts) {
+      const code = shift.payCode || input.payCode || "Teacher";
+      groups.set(code, [...(groups.get(code) ?? []), shift]);
+    }
+    if (!groups.size) groups.set(input.payCode || "Teacher", []);
+    for (const [payCode, shifts] of groups) {
     const regularMinutes = shifts.reduce((sum, shift) => sum + shift.regularMinutes, 0);
     const overtimeMinutes = shifts.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
     rows.push({
       dateKey,
+      payCode,
       dateLabel: new Intl.DateTimeFormat("en-US", { weekday: "short", month: "2-digit", day: "2-digit", year: "numeric" }).format(cursor),
       clockInLabel: shifts.length ? shifts.map((shift) => shift.clockInLabel).join(", ") : "—",
       clockOutLabel: shifts.length ? shifts.map((shift) => shift.clockOutLabel).join(", ") : "—",
@@ -372,6 +389,7 @@ export function buildPayrollDayRows(input: {
       overtimeMinutes,
       totalMinutes: shifts.reduce((sum, shift) => sum + shift.minutes, 0),
     });
+    }
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return rows;
@@ -502,11 +520,11 @@ export function StaffManagementPanel({
           startDate: payrollStart,
           endDate: payrollEnd,
         });
-        const shiftRows = buildPayrollShiftRows(summary.shifts, timeZone);
-        const regularMinutes = shiftRows.reduce((sum, shift) => sum + shift.regularMinutes, 0);
-        const overtimeMinutes = shiftRows.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
         const compensation = readStaffCompensation(teacher.customFields);
         const payrollPayCode = compensation.payCode ?? teacher.title ?? "Teacher";
+        const shiftRows = buildPayrollShiftRows(summary.shifts, timeZone, payrollPayCode);
+        const regularMinutes = shiftRows.reduce((sum, shift) => sum + shift.regularMinutes, 0);
+        const overtimeMinutes = shiftRows.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
         const payrollDepartment = compensation.department ?? teacher.classroom?.name ?? "Unassigned";
         const payCodeSummaries = buildPayCodeSummaries({
           shifts: shiftRows,
@@ -531,7 +549,7 @@ export function StaffManagementPanel({
           clock,
           summary,
           shiftRows,
-          dayRows: buildPayrollDayRows({ startDate: payrollStartDate, endDate: payrollEndDate, shifts: shiftRows, timeZone }),
+          dayRows: buildPayrollDayRows({ startDate: payrollStartDate, endDate: payrollEndDate, shifts: shiftRows, payCode: payrollPayCode, timeZone }),
           payCodeSummaries,
           payrollPayCode,
           payrollDepartment,
@@ -799,7 +817,7 @@ export function StaffManagementPanel({
       return;
     }
 
-    const events: { action: StaffClockAction; occurredAt: string; notes: string | null }[] = [];
+    const events: StaffClockEvent[] = [];
     for (const row of clockEditRows) {
       const occurredAt = clockEditRowOccurredAtUtc(row, clockTimeZone);
       if (!occurredAt) {
@@ -811,6 +829,7 @@ export function StaffManagementPanel({
         action: row.action,
         occurredAt: occurredAt.toISOString(),
         notes: row.notes.trim() || null,
+        payCode: row.action === "clock_in" ? row.payCode || null : null,
       });
     }
     const submittedRows = clockEditRows;
@@ -886,6 +905,7 @@ export function StaffManagementPanel({
             title: row.title,
             department: row.payrollDepartment,
             payCode: row.payrollPayCode,
+            payCodeSummaries: row.payCodeSummaries,
             totalMinutes: row.summary.totalMinutes,
             regularMinutes: row.regularMinutes,
             overtimeMinutes: row.overtimeMinutes,
@@ -1404,12 +1424,14 @@ export function StaffManagementPanel({
                 </div>
               </div>
 
+              <p className="mt-3 text-xs text-muted-foreground">Choose a paycode on each start entry. End that interval and start another to change codes within a day. Paid leave requires an end time and is excluded from worked-hour overtime estimates. Review leave eligibility and pay before processing payroll.</p>
               <div className="mt-3 overflow-x-auto rounded-md border bg-background/60">
                 <table className="w-full min-w-[760px] text-sm">
                   <thead className="border-b bg-muted/40 text-xs uppercase text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2 text-left font-medium">Action</th>
                       <th className="px-3 py-2 text-left font-medium">Date and time</th>
+                      <th className="px-3 py-2 text-left font-medium">Paycode</th>
                       <th className="px-3 py-2 text-left font-medium">Notes</th>
                       <th className="px-3 py-2 text-right font-medium">Remove</th>
                     </tr>
@@ -1420,6 +1442,7 @@ export function StaffManagementPanel({
                       const actionId = clockEditControlId(row.id, "action");
                       const occurredAtId = clockEditControlId(row.id, "occurred-at");
                       const notesId = clockEditControlId(row.id, "notes");
+                      const payCodeId = clockEditControlId(row.id, "pay-code");
                       const removeId = clockEditControlId(row.id, "remove");
 
                       return (
@@ -1449,6 +1472,16 @@ export function StaffManagementPanel({
                             />
                           </td>
                           <td className="px-3 py-2">
+                            {row.action === "clock_in" ? (
+                              <select id={payCodeId} aria-label={`Paycode for ${rowAccessibleName}`}
+                                className={nativeSelectClassName} value={row.payCode || ""} disabled={isPending}
+                                onChange={(event) => updateClockEditRow(row.id, { payCode: event.target.value as StaffTimePayCode || null })}>
+                                <option value="">Employee default</option>
+                                {STAFF_TIME_PAY_CODES.map((code) => <option key={code} value={code}>{code}</option>)}
+                              </select>
+                            ) : <span className="text-xs text-muted-foreground">From start entry</span>}
+                          </td>
+                          <td className="px-3 py-2">
                             <Input
                               id={notesId}
                               aria-label={`Notes for ${rowAccessibleName}`}
@@ -1476,12 +1509,12 @@ export function StaffManagementPanel({
                     })}
                     {!payrollRangeIsValid ? (
                       <tr>
-                        <td colSpan={4} className="px-3 py-4 text-sm text-muted-foreground">Select a valid pay period to view punches.</td>
+                        <td colSpan={5} className="px-3 py-4 text-sm text-muted-foreground">Select a valid pay period to view punches.</td>
                       </tr>
                     ) : null}
                     {payrollRangeIsValid && !visibleClockEditRows.length ? (
                       <tr>
-                        <td colSpan={4} className="px-3 py-4 text-sm text-muted-foreground">No punches saved for this staff member in this pay period.</td>
+                        <td colSpan={5} className="px-3 py-4 text-sm text-muted-foreground">No punches saved for this staff member in this pay period.</td>
                       </tr>
                     ) : null}
                   </tbody>
@@ -1842,9 +1875,9 @@ export function StaffManagementPanel({
                       </thead>
                       <tbody>
                         {row.dayRows.map((day) => (
-                          <tr key={day.dateKey} className="border-b print:border-black">
+                          <tr key={`${day.dateKey}:${day.payCode}`} className="border-b print:border-black">
                             <td className="px-2 py-1">{day.dateLabel}</td>
-                            <td className="px-2 py-1">{row.payrollPayCode}</td>
+                            <td className="px-2 py-1">{day.payCode}</td>
                             <td className="px-2 py-1">{row.payrollDepartment}</td>
                             <td className="px-2 py-1">{day.clockInLabel}</td>
                             <td className="px-2 py-1">{day.clockOutLabel}</td>

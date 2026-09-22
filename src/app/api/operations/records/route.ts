@@ -505,6 +505,16 @@ async function POSTHandler(request: NextRequest) {
             title: clean(employee.title).slice(0, 120),
             department: clean(employee.department).slice(0, 160),
             payCode: clean(employee.payCode).slice(0, 120),
+            payCodeSummaries: (Array.isArray(employee.payCodeSummaries) ? employee.payCodeSummaries : []).slice(0, 16).map((value: unknown) => {
+              const code = jsonObject(value);
+              return {
+                payCode: clean(code.payCode).slice(0, 120),
+                department: clean(code.department).slice(0, 160),
+                totalMinutes: Math.max(0, intValue(code.totalMinutes)),
+                regularMinutes: Math.max(0, intValue(code.regularMinutes)),
+                overtimeMinutes: Math.max(0, intValue(code.overtimeMinutes)),
+              };
+            }),
             totalMinutes: Math.max(0, intValue(employee.totalMinutes)),
             regularMinutes: Math.max(0, intValue(employee.regularMinutes)),
             overtimeMinutes: Math.max(0, intValue(employee.overtimeMinutes)),

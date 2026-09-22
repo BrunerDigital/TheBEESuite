@@ -827,6 +827,15 @@ export default async function DashboardPage() {
               title: metadataString(employee.title),
               department: metadataString(employee.department),
               payCode: metadataString(employee.payCode),
+              payCodeSummaries: Array.isArray(employee.payCodeSummaries) ? employee.payCodeSummaries.map((value) => {
+                const code = recordFromJson(value);
+                return {
+                  payCode: metadataString(code.payCode),
+                  totalMinutes: metadataNumber(code.totalMinutes) ?? 0,
+                  regularMinutes: metadataNumber(code.regularMinutes) ?? 0,
+                  overtimeMinutes: metadataNumber(code.overtimeMinutes) ?? 0,
+                };
+              }) : [],
               totalMinutes: metadataNumber(employee.totalMinutes) ?? 0,
               regularMinutes: metadataNumber(employee.regularMinutes) ?? 0,
               overtimeMinutes: metadataNumber(employee.overtimeMinutes) ?? 0,

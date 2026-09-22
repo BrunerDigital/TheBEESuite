@@ -2,6 +2,12 @@ import type { Prisma } from "@prisma/client";
 import { verifyStaffPin } from "@/lib/kiosk";
 
 export const STAFF_CLOCK_ACTIONS = ["clock_in", "clock_out"] as const;
+export const STAFF_TIME_PAY_CODES = ["PTO", "Training at School", "Staff Meeting at School", "Bereavement", "Holiday Voucher", "Training at home", "Holiday"] as const;
+export type StaffTimePayCode = typeof STAFF_TIME_PAY_CODES[number];
+
+export function isStaffPaidLeaveCode(value: unknown) {
+  return value === "PTO" || value === "Bereavement" || value === "Holiday Voucher" || value === "Holiday";
+}
 const LEGACY_STAFF_CLOCK_EVENT_LIMIT = 120;
 const STAFF_CLOCK_EVENT_LIMIT = 2_000;
 const STAFF_CLOCK_EDIT_EVENT_LIMIT = STAFF_CLOCK_EVENT_LIMIT + 100;
@@ -13,6 +19,7 @@ export type StaffClockEvent = {
   occurredAt: string;
   timeZone?: string | null;
   notes?: string | null;
+  payCode?: StaffTimePayCode | null;
 };
 
 export type StaffClockShift = {
@@ -21,6 +28,7 @@ export type StaffClockShift = {
   minutes: number;
   status: "closed" | "open";
   notes: string | null;
+  payCode?: StaffTimePayCode | null;
 };
 
 export type StaffClockSummary = {
@@ -63,6 +71,7 @@ function clockEvent(value: unknown): StaffClockEvent | null {
     occurredAt,
     timeZone: stringValue(record.timeZone) || stringValue(record.timezone) || null,
     notes: stringValue(record.notes) || null,
+    payCode: STAFF_TIME_PAY_CODES.includes(record.payCode as StaffTimePayCode) ? record.payCode as StaffTimePayCode : null,
   };
 }
 
@@ -102,7 +111,7 @@ function summarizeClockEvents(
   const endMs = dateMs(options.endDate ?? null);
   const sorted = [...events]
     .filter((event) => dateMs(event.occurredAt) !== null)
-    .sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0));
+    .sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0) || (left.action === right.action ? 0 : left.action === "clock_out" ? -1 : 1));
   const shifts: StaffClockShift[] = [];
   let openClockIn: StaffClockEvent | null = null;
 
@@ -119,6 +128,7 @@ function summarizeClockEvents(
       minutes: minutesBetween(openClockIn.occurredAt, event.occurredAt),
       status: "closed",
       notes: event.notes || openClockIn.notes || null,
+      payCode: openClockIn.payCode ?? null,
     });
     openClockIn = null;
   }
@@ -130,6 +140,7 @@ function summarizeClockEvents(
       minutes: minutesBetween(openClockIn.occurredAt, now),
       status: "open",
       notes: openClockIn.notes || null,
+      payCode: openClockIn.payCode ?? null,
     });
   }
 
@@ -303,15 +314,20 @@ export function normalizeStaffClockEventEdits(
     if (!occurredAt) {
       return { ok: false as const, error: `Punch ${index + 1} needs a valid date and time.` };
     }
+    const payCode = stringValue(record.payCode);
+    if (payCode && !STAFF_TIME_PAY_CODES.includes(payCode as StaffTimePayCode)) {
+      return { ok: false as const, error: `Punch ${index + 1} has an unsupported paycode.` };
+    }
     events.push({
       action,
       occurredAt,
       timeZone: stringValue(record.timeZone) || stringValue(record.timezone) || options.timeZone || null,
       notes: stringValue(record.notes) || null,
+      payCode: action === "clock_in" ? payCode as StaffTimePayCode || null : null,
     });
   }
 
-  const sorted = [...events].sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0));
+  const sorted = [...events].sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0) || (left.action === right.action ? 0 : left.action === "clock_out" ? -1 : 1));
   let expectedAction: StaffClockAction = options.allowLeadingClockOut && sorted[0]?.action === "clock_out"
     ? "clock_out"
     : "clock_in";
@@ -322,7 +338,9 @@ export function normalizeStaffClockEventEdits(
     if (currentMs === null) {
       return { ok: false as const, error: `Punch ${index + 1} needs a valid date and time.` };
     }
-    if (previousMs !== null && currentMs <= previousMs) {
+    // A category can change at the exact instant the preceding interval ends.
+    const adjacentIntervals = event.action === "clock_in" && sorted[index - 1]?.action === "clock_out";
+    if (previousMs !== null && (currentMs < previousMs || (currentMs === previousMs && !adjacentIntervals))) {
       return { ok: false as const, error: "Punch times must not be duplicated." };
     }
     if (event.action !== expectedAction) {
@@ -337,20 +355,24 @@ export function normalizeStaffClockEventEdits(
     expectedAction = event.action === "clock_in" ? "clock_out" : "clock_in";
   }
 
+  if (sorted.at(-1)?.action === "clock_in" && isStaffPaidLeaveCode(sorted.at(-1)?.payCode)) {
+    return { ok: false as const, error: "Paid leave needs both a start and an end time." };
+  }
+
   return { ok: true as const, events: sorted };
 }
 
 export function hasLegacyTruncatedStaffClockHistory(customFields: unknown) {
   const events = readStaffClockState(customFields).events;
   if (events.length !== LEGACY_STAFF_CLOCK_EVENT_LIMIT) return false;
-  const oldest = [...events].sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0))[0];
+  const oldest = [...events].sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0) || (left.action === right.action ? 0 : left.action === "clock_out" ? -1 : 1))[0];
   return oldest?.action === "clock_out";
 }
 
 function clockEventsForStorage(events: StaffClockEvent[]) {
   const storedEvents = [...events]
     .filter((event) => dateMs(event.occurredAt) !== null)
-    .sort((left, right) => (dateMs(right.occurredAt) ?? 0) - (dateMs(left.occurredAt) ?? 0))
+    .sort((left, right) => (dateMs(right.occurredAt) ?? 0) - (dateMs(left.occurredAt) ?? 0) || (left.action === right.action ? 0 : left.action === "clock_in" ? -1 : 1))
     .slice(0, STAFF_CLOCK_EVENT_LIMIT);
 
   // The former rolling limit could discard the clock-in half of the oldest

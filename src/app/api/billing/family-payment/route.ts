@@ -43,7 +43,7 @@ function parseAmountCents(body: Record<string, unknown>) {
 }
 function checkoutCategory(method: FamilyPaymentMethod): StripePaymentMethodCategory {
   if (method === "card_checkout") return "card";
-  if (method === "instant_bank_checkout") return "link_bank";
+  if (method === "instant_bank_checkout") return "link";
   if (method === "ach_checkout") return "ach";
   return "default";
 }
@@ -204,7 +204,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  if (connectedAccountId && process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT !== "false") {
+  if (connectedAccountId && (method === "instant_bank_checkout" || process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT !== "false")) {
     const accountStatus = await retrieveStripeConnectedAccount(connectedAccountId, { tenantId: user.tenantId });
     if (!accountStatus.ok || !accountStatus.account) {
       return NextResponse.json(
@@ -284,6 +284,7 @@ async function POSTHandler(request: NextRequest) {
     parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
     parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
     schoolProcessingFeeAmountCents: String(amounts.schoolProcessingFeeAmountCents),
+    stripeFeesCollector: schoolPaysStripeFeesDirectly ? "stripe" : "application",
     beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
     beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
     requestedPaymentMethodCategory,
@@ -291,7 +292,7 @@ async function POSTHandler(request: NextRequest) {
     paymentMethodConfigurationMissing: String(method !== "saved_method" && usesSpecificFeePolicy && !paymentMethodConfigurationId),
     stripePaymentMethodConfigurationId: paymentMethodConfigurationId || "",
     familyPaymentMethod: method,
-    bankAccountVerificationMethod: method === "instant_bank_checkout" ? "instant" : "",
+    bankAccountVerificationMethod: "",
     checkoutTotalCents: String(amounts.checkoutTotalCents),
     applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
     feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
@@ -313,7 +314,7 @@ async function POSTHandler(request: NextRequest) {
       stripePaymentMethodId: method === "saved_method" ? savedPaymentMethod.stripeDefaultPaymentMethodId : null,
       stripePaymentMethodType: method === "saved_method" ? savedPaymentMethod.paymentMethodType : null,
       paymentMethodLabel: method === "saved_method" ? savedPaymentMethod.paymentMethodLabel : null,
-      bankAccountVerificationMethod: method === "instant_bank_checkout" ? "instant" : null },
+      bankAccountVerificationMethod: null },
     acceptProcessingRecovery: savedMethodNeedsCardAcceptance ? { userId: user.id, version: PAYMENT_PROCESSING_RECOVERY_VERSION } : undefined,
     authorizeRequest: async () => {
       const fresh = await getCurrentUser();
@@ -360,7 +361,7 @@ async function POSTHandler(request: NextRequest) {
     : await startFamilyPayment({ ...common, kind: "checkout", request: { ...commonRequest,
       successUrl: `${getSecurePaymentAppBaseUrl(request.url)}${successPath}`, cancelUrl: `${getSecurePaymentAppBaseUrl(request.url)}${cancelPath}`,
       paymentMethodConfigurationId, paymentMethodCategory: requestedPaymentMethodCategory,
-      bankAccountVerificationMethod: method === "instant_bank_checkout" ? "instant" : null, allowPaymentMethodFallback: false,
+      bankAccountVerificationMethod: null, allowPaymentMethodFallback: false,
       onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true" },
       customer: { email: billingAccount.family.billingEmail, name: billingAccount.family.name, connectedAccountId, tenantId: user.tenantId,
         metadata: { tenantId: user.tenantId, billingAccountId: billingAccount.id, familyId: billingAccount.familyId, centerId,

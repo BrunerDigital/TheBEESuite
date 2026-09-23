@@ -228,7 +228,7 @@ test("family Checkout preserves exact bank verification metadata for downstream 
     reset(); parentFamily(); captureFamily = true;
     const response = await familyPayment.POST(request({ ...familyBody(), method }));
     assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
-    const input = familyInputs[0], expected = method === "instant_bank_checkout" ? "instant" : null;
+    const input = familyInputs[0], expected = null;
     assert.equal(input.request.bankAccountVerificationMethod, expected);
     assert.equal(input.request.metadata.bankAccountVerificationMethod, expected ?? "");
     assert.equal(input.fields.bankAccountVerificationMethod, expected);
@@ -298,5 +298,35 @@ test("family return paths keep an internal destination and one server payment id
     assert.deepEqual(url.searchParams.getAll("familyPayment"), [realFamilyService.FAMILY_PAYMENT_ID_TOKEN]);
     assert.deepEqual(url.searchParams.getAll("payment"), ["success"]); assert.deepEqual(url.searchParams.getAll("session_id"), ["{CHECKOUT_SESSION_ID}"]);
     assert.ok(!href.includes("forged"));
+  }
+});
+
+
+test("all wallet entry points prove direct Stripe fees and persist neutral wallet intent", async () => {
+  const previous = process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT;
+  process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT = "false";
+  try {
+    for (const kind of ["direct", "signed", "family"]) {
+      reset(); captureFamily = true;
+      const response = kind === "direct"
+        ? await direct.POST(request({ invoiceId: "fake-invoice", paymentMethodCategory: "link_bank" }))
+        : kind === "signed"
+          ? await signed.POST(request({ invoiceId: "fake-invoice", token: token(), paymentMethodCategory: "link_bank" }))
+          : await familyPayment.POST(request({ familyId: "fake-family", amountCents: 10000, method: "instant_bank_checkout" }));
+      assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+      assert.ok(providers.some(call => call.operation === "account-read"));
+      const input = kind === "family" ? familyInputs[0] : captured[0];
+      if (kind === "direct") { assert.equal(input.request.metadata.collectionMode, "director_instant_bank_checkout"); assert.equal(input.fields.collectionMode, "director_instant_bank_checkout"); }
+      assert.equal(input.request.paymentMethodCategory, "link");
+      assert.equal(input.request.metadata.paymentMethodCategory, "link");
+      assert.equal(input.request.metadata.stripeFeesCollector, "stripe");
+      assert.equal(input.request.metadata.schoolProcessingFeeAmountCents, "0");
+      assert.equal(input.request.metadata.parentProcessingRecoveryAmountCents, "0");
+      assert.equal(input.request.metadata.bankAccountVerificationMethod, "");
+      assert.equal(input.request.amountCents, 10000);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT;
+    else process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT = previous;
   }
 });

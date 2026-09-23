@@ -36,7 +36,7 @@ function millisecondsSince(value: string | null | undefined, now: Date) {
 
 function normalizeCheckoutCategory(value: unknown): StripePaymentMethodCategory | null {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (normalized === "default" || normalized === "ach" || normalized === "card" || normalized === "link_bank") {
+  if (normalized === "default" || normalized === "ach" || normalized === "card" || normalized === "link_bank" || normalized === "link") {
     return normalized;
   }
   return null;

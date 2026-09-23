@@ -1,4 +1,4 @@
-export type StripeSchoolProcessingFeeCategory = "default" | "ach" | "card" | "card_present" | "link_bank";
+export type StripeSchoolProcessingFeeCategory = "default" | "ach" | "card" | "card_present" | "link_bank" | "link";
 
 export type StripeSchoolProcessingFeeRate = {
   basisPoints: number;

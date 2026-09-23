@@ -133,3 +133,33 @@ for (const category of ["card", "ach", "default"] as const) test(`single-mode ${
 
   } finally { globalThis.fetch = original; }
 });
+
+
+test("fee-neutral Link wallet filters dynamic methods without changing principal, account or retry identity", async () => {
+  const original = globalThis.fetch;
+  const calls: Array<{ body: string; key: string | null }> = [];
+  globalThis.fetch = (async (_url, init) => {
+    const body = new URLSearchParams(String(init?.body));
+    assert.equal(new Headers(init?.headers).get("Stripe-Account"), "acct_fake");
+    assert.equal(body.get("payment_method_configuration"), null);
+    assert.equal(body.get("payment_method_types[0]"), null);
+    assert.equal(body.get("allowed_payment_method_types[0]"), "card");
+    assert.equal(body.get("allowed_payment_method_types[1]"), "link");
+    assert.equal(body.get("payment_method_options[us_bank_account][verification_method]"), null);
+    assert.equal(body.get("line_items[0][price_data][unit_amount]"), "10000");
+    assert.equal(body.get("line_items[1][price_data][unit_amount]"), null);
+    assert.equal(body.get("payment_intent_data[application_fee_amount]"), "100");
+    assert.equal(body.get("metadata[paymentMethodCategory]"), "link");
+    calls.push({ body: String(init?.body), key: new Headers(init?.headers).get("Idempotency-Key") });
+    return new Response(JSON.stringify(calls.length === 1 ? {} : { id: "cs_fake", url: "https://checkout.stripe.com/c/pay_fake" }), { status: calls.length === 1 ? 500 : 200 });
+  }) as typeof fetch;
+  try {
+    const result = await reconcileIdempotentStripeSubmission(() => createStripeCheckoutSession({ ...request,
+      paymentMethodCategory: "link", invoiceAmountCents: 10000, parentSurchargeAmountCents: 0,
+      metadata: { invoiceId: "fake-invoice", paymentMethodCategory: "link", stripeFeesCollector: "stripe",
+        schoolProcessingFeeAmountCents: "0", parentProcessingRecoveryAmountCents: "0", bankAccountVerificationMethod: "" } }));
+    assert.equal(result.resolved, true); assert.equal(result.value?.ok, true);
+    assert.equal(calls.length, 2); assert.deepEqual(calls[0], calls[1]);
+    assert.equal(calls[0].key, "fake-invoice-claim:link_wallet_v1");
+  } finally { globalThis.fetch = original; }
+});

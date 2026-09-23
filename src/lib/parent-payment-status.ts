@@ -5,7 +5,7 @@ import { stripePaymentClaimConflict } from "./stripe-payment-claim-conflict";
 
 export type ParentPendingPayment = {
   phase: "confirmation_unknown" | "ach_processing" | "payment_pending";
-  method: "ach" | "card" | "link_bank" | "card_present" | null;
+  method: "ach" | "card" | "link_bank" | "card_present" | "link" | null;
 };
 export type ParentAccountPaymentBlocker = ParentPendingPayment & { count: number; blocksInvoicePayments: boolean };
 const phasePriority = { confirmation_unknown: 0, ach_processing: 1, payment_pending: 2 };
@@ -23,7 +23,7 @@ function paymentPresentation(payment: Payment): ParentPendingPayment {
   const fields = jsonRecord(payment.customFields);
   const category = fields.paymentMethodCategory || fields.requestedPaymentMethodCategory;
   const method = payment.provider === "stripe_terminal" ? "card_present"
-    : category === "ach" || category === "card" || category === "link_bank" ? category : null;
+    : category === "ach" || category === "card" || category === "link_bank" || category === "link" ? category : null;
   return { method, phase: isStripeSubmissionUnknownPayment(payment) ? "confirmation_unknown"
     : isAchPaymentProcessing(payment) ? "ach_processing" : "payment_pending" };
 }

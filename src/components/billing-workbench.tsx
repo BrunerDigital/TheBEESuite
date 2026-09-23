@@ -2175,11 +2175,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 Digital Terminal
               </Button>
               <Button
-                disabled title="Instant bank checkout is temporarily unavailable. Choose ACH or card."
+                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0} title="Link or card; bank funding is offered when eligible. No added parent processing fee."
                 onClick={() => openPaymentReview("instant_bank_checkout")}
                 variant="outline"
               >
-                Link temporarily unavailable
+                Link or card
               </Button>
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}

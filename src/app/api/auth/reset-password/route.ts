@@ -54,7 +54,7 @@ async function POSTHandler(request: NextRequest) {
       const verified = await verifySupabaseRecoveryTokenHash(tokenHash);
       if (!verified.ok) {
         if (claimedSetupTokenId) await releaseParentPortalSetupToken(claimedSetupTokenId);
-        logOperationalError("auth.reset_password.supabase_token_hash_failed", null);
+        logOperationalError("auth.reset_password.supabase_token_hash_failed", null, { status: verified.providerStatus });
         return NextResponse.json(
           { ok: false, error: "Password reset link is invalid or expired. Request a fresh reset link." },
           { status: 400 },

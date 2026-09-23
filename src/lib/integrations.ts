@@ -1,4 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { checkoutFailureDiagnostics } from "@/lib/checkout-failure-diagnostics";
+import { logOperationalError } from "@/lib/request-response-logging";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
 import {
@@ -1052,6 +1054,11 @@ export async function createStripeCheckoutSession({
 
   if (!response || !response.ok || !json?.url || !json?.id?.startsWith("cs_")) {
     const status = response?.status ?? 500;
+    logOperationalError("stripe.checkout.provider_rejected", null, {
+      status: status >= 400 ? status : 502,
+      provider: "stripe",
+      ...checkoutFailureDiagnostics(json),
+    });
     return {
       ok: false,
       configured: true,

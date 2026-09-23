@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
 import { CollapsibleCard } from "@/components/workspace-preferences";
 import { AgencyReconciliationControls } from "@/components/agency-reconciliation-controls";
+import { AgencyContractReport } from "@/components/agency-contract-report";
 import { AGENCY_RETRY_STORAGE_ERROR, agencyRetryStorageKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "@/lib/agency-retry-key";
 import { agencyProgramSetupBlockers } from "@/lib/agency-subsidy-billing";
 import { isCurrentlyEnrolledChildRecord, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
@@ -103,7 +104,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     } finally {
       if (centerIdRef.current === requestCenterId) setPending(false);
     }
-  }, [adjustmentCursor, adjustmentPage, batchCursor, batchPage, centerId, claimCursor, claimPage, ledgerCursor, ledgerSearchParams]);
+  }, [adjustmentCursor, adjustmentPage, batchCursor, batchPage, centerId, claimCursor, claimPage, ledgerCursor, ledgerSearchParams, setPending, setError]);
 
   useEffect(() => {
     let active = true;
@@ -414,6 +415,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
 
   return (
     <section id="agency-subsidy-billing" className="space-y-4 scroll-mt-24">
+      {centerId && centerId !== "all" ? <AgencyContractReport key={centerId} centerId={centerId} today={agencyDateDefault(selectedTimeZone)} /> : null}
       <Card className="glass-panel border-sky-500/30">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">

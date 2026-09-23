@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BellRing, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isNativeAppRuntime, useNativeAppRuntime } from "@/lib/native-app-runtime";
+import { isCurrentPushSubscriptionActive } from "@/lib/web-push-subscription-state";
 
 type PushState =
   | "loading"
@@ -22,6 +23,7 @@ type PushConfiguration = {
   configured: boolean;
   publicKey: string | null;
   activeSubscriptions: number;
+  subscriptions?: Array<{ endpointHash: string; isActive: boolean }>;
 };
 
 function isIOS() {
@@ -123,7 +125,11 @@ export function WebPushControl() {
         return;
       }
       if (subscription) {
-        if (json.activeSubscriptions === 0) await storeSubscription(subscription);
+        if (!await isCurrentPushSubscriptionActive(subscription.endpoint, json.subscriptions)) {
+          setState("disabled");
+          setDetail("Device alerts need to be reconnected. Enable alerts to refresh this device’s subscription.");
+          return;
+        }
         setState("enabled");
         setDetail("Alerts and icon badges are enabled on this device.");
         return;
@@ -167,7 +173,11 @@ export function WebPushControl() {
 
       const registration = await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
-      const subscription = existing ?? await registration.pushManager.subscribe({
+      // A rejected endpoint must be replaced, never silently reactivated on page load.
+      if (existing) {
+        if (!await existing.unsubscribe()) throw new Error("The old subscription could not be replaced.");
+      }
+      const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey(configuration.publicKey),
       });

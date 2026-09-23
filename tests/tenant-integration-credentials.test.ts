@@ -301,7 +301,9 @@ test("Stripe checkout uses Link for instant bank payments when no dedicated conf
     });
 
     assert.equal(result.ok, true);
-    assert.match(body, /payment_method_types%5B0%5D=link/);
+    assert.match(body, /allowed_payment_method_types%5B0%5D=card/);
+    assert.match(body, /allowed_payment_method_types%5B1%5D=link/);
+    assert.equal(new URLSearchParams(body).has("payment_method_types[0]"), false);
     assert.doesNotMatch(body, /payment_method_configuration=pmc_bank/);
     assert.doesNotMatch(body, /payment_method_options%5Bus_bank_account%5D/);
   } finally {
@@ -339,7 +341,9 @@ test("Stripe instant bank checkout bypasses account-scoped payment method config
 
     assert.equal(result.ok, true);
     assert.equal(calls, 1);
-    assert.match(body, /payment_method_types%5B0%5D=link/);
+    assert.match(body, /allowed_payment_method_types%5B0%5D=card/);
+    assert.match(body, /allowed_payment_method_types%5B1%5D=link/);
+    assert.equal(new URLSearchParams(body).has("payment_method_types[0]"), false);
     assert.doesNotMatch(body, /payment_method_configuration/);
     assert.doesNotMatch(body, /payment_method_options%5Bus_bank_account%5D/);
   } finally {

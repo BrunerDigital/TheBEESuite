@@ -75,6 +75,15 @@ test("integration retry delay backs off and caps at the largest configured delay
   assert.equal(nextIntegrationRetryAt(99, now).toISOString(), "2026-06-03T02:00:00.000Z");
 });
 
+test("permanent provider rejection stops retries without marking a message delivered", () => {
+  assert.deepEqual(computeIntegrationDeliveryState({
+    result: { ok: false, configured: true, provider: "twilio", retryable: false, providerErrorCode: "21608" }, attempts: 1,
+  }), { status: "failed", nextAttemptAt: null, deliveredAt: null });
+  assert.equal(computeIntegrationDeliveryState({
+    result: { ok: false, configured: true, provider: "twilio", retryable: true, providerStatus: 429 }, attempts: 1,
+  }).status, "pending");
+});
+
 test("integration retries atomically claim a due delivery before sending", () => {
   const source = readFileSync(new URL("../src/lib/integration-deliveries.ts", import.meta.url), "utf8");
   const retrySource = source.slice(source.indexOf("export async function retryPendingIntegrationDeliveries"));

@@ -13,6 +13,7 @@ import {
 } from "@/lib/parent-portal-setup-links";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
+import { passwordUpdateFailure, readPasswordRecoveryRetry, sealPasswordRecoveryRetry } from "@/lib/password-recovery-retry";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -24,9 +25,13 @@ async function POSTHandler(request: NextRequest) {
     accessToken?: unknown;
     tokenHash?: unknown;
     password?: unknown;
+    recoveryRetryToken?: unknown;
   } | null;
   const accessToken = clean(body?.accessToken);
-  const tokenHash = clean(body?.tokenHash);
+  const recoveryRetryToken = clean(body?.recoveryRetryToken);
+  const retry = readPasswordRecoveryRetry(recoveryRetryToken);
+  if (recoveryRetryToken && !retry) return NextResponse.json({ ok: false, error: "Your password recovery session expired. Request a fresh reset link." }, { status: 400 });
+  const tokenHash = retry?.tokenHash || clean(body?.tokenHash);
   const password = clean(body?.password);
 
   if (!accessToken && !tokenHash) {
@@ -40,9 +45,9 @@ async function POSTHandler(request: NextRequest) {
   let claimedSetupTokenId = "";
   let passwordUpdated = false;
   try {
-    let resetAccessToken = accessToken;
-    let verifiedEmail = "";
-    if (!resetAccessToken && tokenHash) {
+    let resetAccessToken = retry?.accessToken || accessToken;
+    let verifiedEmail = retry?.email || "";
+    if ((!resetAccessToken || retry) && tokenHash) {
       const claim = await claimParentPortalSetupToken(tokenHash);
       if (!claim.ok) {
         return NextResponse.json(
@@ -51,7 +56,7 @@ async function POSTHandler(request: NextRequest) {
         );
       }
       claimedSetupTokenId = claim.tracked ? claim.token.id : "";
-      const verified = await verifySupabaseRecoveryTokenHash(tokenHash);
+      const verified = retry ? { ok: true as const, accessToken: retry.accessToken, email: retry.email } : await verifySupabaseRecoveryTokenHash(tokenHash);
       if (!verified.ok) {
         if (claimedSetupTokenId) await releaseParentPortalSetupToken(claimedSetupTokenId);
         logOperationalError("auth.reset_password.supabase_token_hash_failed", null, { status: verified.providerStatus });
@@ -83,10 +88,13 @@ async function POSTHandler(request: NextRequest) {
     const response = await updateSupabasePassword(resetAccessToken, password);
     if (!response.ok) {
       if (claimedSetupTokenId) await releaseParentPortalSetupToken(claimedSetupTokenId);
-      logOperationalError("auth.reset_password.supabase_update_failed", null, { status: response.status });
+      const failure = passwordUpdateFailure(response.status, await response.json().catch(() => null));
+      logOperationalError("auth.reset_password.supabase_update_failed", null, { status: response.status, category: failure.category });
+      const nextRetryToken = failure.retryable && tokenHash
+        ? recoveryRetryToken || sealPasswordRecoveryRetry({ accessToken: resetAccessToken, tokenHash, email: recoveryIdentity.email }) : undefined;
       return NextResponse.json(
-        { ok: false, error: "Password reset link is invalid or expired. Request a fresh reset link." },
-        { status: 400 },
+        { ok: false, error: failure.message, ...(nextRetryToken ? { recoveryRetryToken: nextRetryToken } : {}) },
+        { status: failure.status, headers: { "Cache-Control": "no-store" } },
       );
     }
     passwordUpdated = true;

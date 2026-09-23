@@ -7,7 +7,17 @@ import {
   webPushHref,
   webPushPreferenceType,
   webPushSubscriptionShouldDeactivate,
+  webPushFailureReason,
 } from "@/lib/web-push-policy";
+
+test("push diagnostics allowlist reasons and preserve subscriptions for provider configuration failures", () => {
+  assert.equal(webPushFailureReason({ body: '{"reason":"BadJwtToken"}' }), "BadJwtToken");
+  assert.equal(webPushFailureReason({ body: '{"reason":"private endpoint details"}' }), "unclassified");
+  assert.equal(webPushFailureReason({ body: "private non-json response" }), "unclassified");
+  assert.equal(webPushSubscriptionShouldDeactivate(400, 1, "BadJwtToken"), false);
+  assert.equal(webPushSubscriptionShouldDeactivate(400, 1, "BadDeviceToken"), true);
+  assert.equal(webPushSubscriptionShouldDeactivate(410, 1, "Unregistered"), true);
+});
 
 test("permanently or repeatedly rejected web push subscriptions are deactivated", () => {
   assert.equal(webPushSubscriptionShouldDeactivate(400), true);

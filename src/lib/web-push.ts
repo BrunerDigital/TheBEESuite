@@ -12,6 +12,7 @@ import {
   webPushHref,
   webPushPreferenceType,
   webPushSubscriptionShouldDeactivate,
+  webPushFailureReason,
   type WebPushPreferenceType,
 } from "@/lib/web-push-policy";
 
@@ -354,7 +355,8 @@ async function dispatchCandidate(
     const status = errorStatus(error);
     const attempts = candidate.attempts + 1;
     const code = errorCode(error);
-    const deactivateSubscription = webPushSubscriptionShouldDeactivate(status, subscription.failureCount + 1);
+    const reason = webPushFailureReason(error);
+    const deactivateSubscription = webPushSubscriptionShouldDeactivate(status, subscription.failureCount + 1, reason);
     const terminal = deactivateSubscription || attempts >= MAX_DELIVERY_ATTEMPTS;
     const failedAt = terminal ? new Date() : null;
 
@@ -380,8 +382,9 @@ async function dispatchCandidate(
       }),
     ]);
 
-    logOperationalError("web_push.delivery_failed", error, {
+    logOperationalError("web_push.delivery_failed", null, {
       status: status ?? 0,
+      category: reason,
       attempts,
       terminal,
       deactivateSubscription,

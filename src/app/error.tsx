@@ -23,6 +23,9 @@ export default function AppError({
     if (!isRecoverableClientLoadFailure(error)) return;
 
     void recoverClientAssetsAndReload();
+    const retryOnline = () => { void recoverClientAssetsAndReload(); };
+    window.addEventListener("online", retryOnline);
+    return () => window.removeEventListener("online", retryOnline);
   }, [error]);
 
   return (

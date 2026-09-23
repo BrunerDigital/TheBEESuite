@@ -81,7 +81,18 @@ export function safeWebPushPlatform(value: unknown) {
   return ["ios", "android", "desktop", "web"].includes(platform) ? platform : "web";
 }
 
-export function webPushSubscriptionShouldDeactivate(status: number | null, _consecutiveFailures = 1) {
+export function webPushFailureReason(error: unknown) {
+  const body = error && typeof error === "object" && "body" in error ? error.body : null;
+  if (typeof body !== "string") return "unclassified";
+  try {
+    const reason = JSON.parse(body)?.reason;
+    return ["BadDeviceToken", "Unregistered", "VapidPkHashMismatch", "BadJwtToken", "BadVapidPublicKey", "BadTtl", "BadUrgency", "BadTopic", "PayloadTooLarge"].includes(reason)
+      ? String(reason) : "unclassified";
+  } catch { return "unclassified"; }
+}
+
+export function webPushSubscriptionShouldDeactivate(status: number | null, _consecutiveFailures = 1, reason = "unclassified") {
   void _consecutiveFailures;
+  if (status === 400 && ["BadJwtToken", "BadVapidPublicKey", "BadTtl", "BadUrgency", "BadTopic", "PayloadTooLarge"].includes(reason)) return false;
   return status === 400 || status === 404 || status === 410;
 }

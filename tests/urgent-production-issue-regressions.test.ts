@@ -25,7 +25,7 @@ test("client load recovery refreshes the service worker and clears stale app cac
   const globalError = readFileSync("src/app/global-error.tsx", "utf8");
   assert.match(recovery, /getRegistrations/);
   assert.match(recovery, /registration\.update/);
-  assert.match(recovery, /key\.startsWith\("bee-suite-"\)/);
+  assert.match(recovery, /key\.startsWith\("bee-suite-app-shell-"\)/);
   assert.match(recovery, /window\.caches\.delete\(key\)\.catch/);
   assert.match(recovery, /finally \{\s*window\.location\.reload\(\)/);
   assert.match(appError, /recoverClientAssetsAndReload/);

@@ -10,6 +10,8 @@ export function isRecoverableClientLoadFailure(error: Error) {
 }
 
 export async function recoverClientAssetsAndReload() {
+  // Preserve the offline shell and the retry allowance until connectivity returns.
+  if (navigator.onLine === false) return false;
   try {
     const lastRecoveryAt = Number(window.sessionStorage.getItem(CLIENT_LOAD_RECOVERY_KEY) || "0");
     if (Date.now() - lastRecoveryAt < CLIENT_LOAD_RECOVERY_WINDOW_MS) return false;
@@ -26,7 +28,7 @@ export async function recoverClientAssetsAndReload() {
     if ("caches" in window) {
       const keys = await window.caches.keys().catch(() => []);
       await Promise.all(keys
-        .filter((key) => key.startsWith("bee-suite-"))
+        .filter((key) => key.startsWith("bee-suite-app-shell-"))
         .map((key) => window.caches.delete(key).catch(() => false)));
     }
   } finally {

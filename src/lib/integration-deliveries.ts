@@ -168,7 +168,7 @@ export function computeIntegrationDeliveryState({
     return { status: "delivered", nextAttemptAt: null, deliveredAt: now };
   }
 
-  if (attempts >= maxAttempts) {
+  if (("retryable" in result && result.retryable === false) || attempts >= maxAttempts) {
     return { status: "failed", nextAttemptAt: null, deliveredAt: null };
   }
 

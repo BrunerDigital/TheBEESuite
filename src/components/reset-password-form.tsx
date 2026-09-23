@@ -25,6 +25,7 @@ type ResetResponse = {
   ok?: boolean;
   error?: string;
   message?: string;
+  recoveryRetryToken?: string;
 };
 
 function safeNextPath(value: string | null) {
@@ -122,6 +123,9 @@ export function ResetPasswordForm() {
         const data = (await response.json().catch(() => null)) as ResetResponse | null;
 
         if (!response.ok) {
+          if (!forceReset && data?.recoveryRetryToken) {
+            credentialRef.current = { ...credentialRef.current, recoveryRetryToken: data.recoveryRetryToken };
+          }
           setError(data?.error ?? "Unable to update your password.");
           return;
         }

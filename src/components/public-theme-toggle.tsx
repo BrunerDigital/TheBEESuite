@@ -1,7 +1,7 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 const themeStorageKey = "bee-suite-theme";
 
@@ -42,6 +42,7 @@ function getServerThemeSnapshot() {
 
 export function PublicThemeToggle() {
   const isDark = useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot);
+  useEffect(() => { syncThemeColor(isDark); }, [isDark]);
 
   function toggleTheme() {
     const root = document.documentElement;

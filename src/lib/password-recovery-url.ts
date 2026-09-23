@@ -1,6 +1,7 @@
 export type PasswordRecoveryCredential = {
   accessToken?: string;
   tokenHash?: string;
+  recoveryRetryToken?: string;
 };
 
 export type PasswordRecoveryLinkResolution =

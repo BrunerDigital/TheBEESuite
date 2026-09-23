@@ -104,12 +104,20 @@ async function GETHandler() {
       ...(user.deviceSessionId ? { deviceSessionId: user.deviceSessionId } : {}),
     },
   });
+  const subscriptions = await prisma.webPushSubscription.findMany({
+    where: { tenantId: user.tenantId, userId: user.id },
+    select: { endpointHash: true, isActive: true, deviceSessionId: true },
+  });
 
   return NextResponse.json({
     ok: true,
     configured: configuration.configured,
     publicKey: configuration.publicKey,
     activeSubscriptions,
+    subscriptions: subscriptions.map(({ endpointHash, isActive, deviceSessionId }) => ({
+      endpointHash,
+      isActive: isActive && (!user.deviceSessionId || deviceSessionId === user.deviceSessionId),
+    })),
   });
 }
 
@@ -160,8 +168,11 @@ async function POSTHandler(request: NextRequest) {
   const endpointHash = webPushEndpointHash(endpoint);
   const existing = await prisma.webPushSubscription.findUnique({
     where: { endpointHash },
-    select: { id: true, tenantId: true, userId: true, deviceSessionId: true, isActive: true },
+    select: { id: true, tenantId: true, userId: true, deviceSessionId: true, isActive: true, failureCount: true },
   });
+  if (existing && !existing.isActive && existing.failureCount > 0) {
+    return NextResponse.json({ ok: false, error: "This device subscription was rejected. Enable alerts again to create a fresh subscription." }, { status: 409 });
+  }
   const ownershipChanged = Boolean(existing && (existing.tenantId !== user.tenantId || existing.userId !== user.id));
   const subscriptionStateChanged = Boolean(
     !existing ||

@@ -33,6 +33,8 @@ export type IntegrationSendResult = {
   error?: string;
   providerStatus?: number;
   acceptanceUnknown?: boolean;
+  retryable?: boolean;
+  providerErrorCode?: string;
 };
 
 export type EmailAttachment = {
@@ -867,7 +869,7 @@ export async function sendSms({
     signal: AbortSignal.timeout(10_000),
   });
 
-  const json = await response.json().catch(() => null) as { sid?: string; message?: string } | null;
+  const json = await response.json().catch(() => null) as { sid?: string; message?: string; code?: number } | null;
 
   if (!response.ok) {
     return {
@@ -875,6 +877,11 @@ export async function sendSms({
       configured: true,
       provider: "twilio",
       error: json?.message || `Twilio returned ${response.status}.`,
+      providerStatus: response.status,
+      providerErrorCode: typeof json?.code === "number" ? String(json.code) : undefined,
+      // Provider configuration, opt-outs and invalid recipients require action;
+      // sending the same message repeatedly cannot resolve these rejections.
+      retryable: ![20003, 21211, 21608, 21610, 21614].includes(json?.code ?? 0),
     };
   }
 
@@ -978,7 +985,13 @@ export async function createStripeCheckoutSession({
     if (paymentMethodMode === "configuration" && paymentMethodConfigurationId) {
       body.set("payment_method_configuration", paymentMethodConfigurationId);
     } else if (paymentMethodMode === "payment_method_types" && fallbackPaymentMethodTypes.length) {
-      addIndexedParams(body, "payment_method_types", fallbackPaymentMethodTypes);
+      if (paymentMethodCategory === "link_bank") {
+        // Link cannot be the sole Checkout method. Filter dynamic eligibility
+        // to Link and its required card companion; never submit a Link-only list.
+        addIndexedParams(body, "allowed_payment_method_types", ["card", "link"]);
+      } else {
+        addIndexedParams(body, "payment_method_types", fallbackPaymentMethodTypes);
+      }
     }
 
     if (bankAccountVerificationMethod === "instant" && paymentMethodCategory !== "link_bank") {

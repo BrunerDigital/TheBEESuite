@@ -13,6 +13,7 @@ export function checkoutFailureDiagnostics(payload: unknown) {
   const fields = new Set([
     "customer", "customer_email", "payment_method_configuration", "payment_method_types",
     "payment_method_types[0]", "payment_method_options[us_bank_account][verification_method]",
+    "allowed_payment_method_types", "allowed_payment_method_types[0]", "allowed_payment_method_types[1]",
     "payment_method_options[us_bank_account][financial_connections][permissions]",
     "payment_method_options[us_bank_account][financial_connections][permissions][0]",
     "payment_intent_data[application_fee_amount]", "metadata", "payment_intent_data[metadata]",

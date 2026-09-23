@@ -129,6 +129,12 @@ for (const category of ["card", "ach", "link_bank", "default"] as const) test(`s
   try {
     assert.equal((await createStripeCheckoutSession({ ...request, paymentMethodConfigurationId: null, paymentMethodCategory: category, allowPaymentMethodFallback: false })).ok, true);
     assert.equal(keys.length, 1); assert.match(keys[0], category === "default" ? /:dynamic$/ : /:payment_method_types$/);
-    assert.equal(bodies[0].get("payment_method_types[0]"), { card: "card", ach: "us_bank_account", link_bank: "link", default: null }[category]);
+    assert.equal(bodies[0].get("payment_method_types[0]"), { card: "card", ach: "us_bank_account", link_bank: null, default: null }[category]);
+    if (category === "link_bank") {
+      assert.equal(bodies[0].get("allowed_payment_method_types[0]"), "card");
+      assert.equal(bodies[0].get("allowed_payment_method_types[1]"), "link");
+      assert.equal(bodies[0].get("payment_intent_data[application_fee_amount]"), "100");
+      assert.equal(bodies[0].get("customer"), "cus_fake");
+    }
   } finally { globalThis.fetch = original; }
 });

@@ -272,7 +272,7 @@ test("Stripe checkout can require instant bank verification", async () => {
   }
 });
 
-test("Stripe checkout uses Link for instant bank payments when no dedicated configuration exists", async () => {
+test("Stripe instant bank checkout fails closed before creating a card-capable session", async () => {
   const originalFetch = globalThis.fetch;
   process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_bank";
   delete process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID;
@@ -300,9 +300,10 @@ test("Stripe checkout uses Link for instant bank payments when no dedicated conf
       credentials: { STRIPE_SECRET_KEY: "sk_platform" },
     });
 
-    assert.equal(result.ok, true);
-    assert.match(body, /allowed_payment_method_types%5B0%5D=card/);
-    assert.match(body, /allowed_payment_method_types%5B1%5D=link/);
+    assert.equal(result.ok, false);
+    assert.equal(result.retryable, false);
+    assert.match(result.error ?? "", /choose bank account \(ACH\) or card/i);
+    assert.equal(body, "");
     assert.equal(new URLSearchParams(body).has("payment_method_types[0]"), false);
     assert.doesNotMatch(body, /payment_method_configuration=pmc_bank/);
     assert.doesNotMatch(body, /payment_method_options%5Bus_bank_account%5D/);
@@ -311,7 +312,7 @@ test("Stripe checkout uses Link for instant bank payments when no dedicated conf
   }
 });
 
-test("Stripe instant bank checkout bypasses account-scoped payment method configurations", async () => {
+test("Stripe instant bank checkout cannot bypass the fee guard with a configuration", async () => {
   const originalFetch = globalThis.fetch;
   let body = "";
   let calls = 0;
@@ -339,10 +340,11 @@ test("Stripe instant bank checkout bypasses account-scoped payment method config
       credentials: { STRIPE_SECRET_KEY: "sk_platform" },
     });
 
-    assert.equal(result.ok, true);
-    assert.equal(calls, 1);
-    assert.match(body, /allowed_payment_method_types%5B0%5D=card/);
-    assert.match(body, /allowed_payment_method_types%5B1%5D=link/);
+    assert.equal(result.ok, false);
+    assert.equal(result.retryable, false);
+    assert.match(result.error ?? "", /choose bank account \(ACH\) or card/i);
+    assert.equal(body, "");
+    assert.equal(calls, 0);
     assert.equal(new URLSearchParams(body).has("payment_method_types[0]"), false);
     assert.doesNotMatch(body, /payment_method_configuration/);
     assert.doesNotMatch(body, /payment_method_options%5Bus_bank_account%5D/);

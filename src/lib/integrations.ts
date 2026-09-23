@@ -948,6 +948,19 @@ export async function createStripeCheckoutSession({
     return { ok: false, configured: true, provider: "stripe", error: applicationFeeError };
   }
 
+  // Hosted Link can be funded by a card, but callers price link_bank as a
+  // bank-only payment before creating the session. Never offer a card under
+  // those fee assumptions or silently substitute a different payment rail.
+  if (paymentMethodCategory === "link_bank") {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      retryable: false,
+      error: "Instant bank checkout is temporarily unavailable. Please choose bank account (ACH) or card checkout instead.",
+    };
+  }
+
   const fallbackPaymentMethodTypes = stripeCheckoutPaymentMethodTypes(paymentMethodCategory);
   const providerCustomerEmail = externalProviderEmail(customerEmail);
   type CheckoutPaymentMethodMode = "configuration" | "payment_method_types" | "dynamic";
@@ -985,16 +998,10 @@ export async function createStripeCheckoutSession({
     if (paymentMethodMode === "configuration" && paymentMethodConfigurationId) {
       body.set("payment_method_configuration", paymentMethodConfigurationId);
     } else if (paymentMethodMode === "payment_method_types" && fallbackPaymentMethodTypes.length) {
-      if (paymentMethodCategory === "link_bank") {
-        // Link cannot be the sole Checkout method. Filter dynamic eligibility
-        // to Link and its required card companion; never submit a Link-only list.
-        addIndexedParams(body, "allowed_payment_method_types", ["card", "link"]);
-      } else {
-        addIndexedParams(body, "payment_method_types", fallbackPaymentMethodTypes);
-      }
+      addIndexedParams(body, "payment_method_types", fallbackPaymentMethodTypes);
     }
 
-    if (bankAccountVerificationMethod === "instant" && paymentMethodCategory !== "link_bank") {
+    if (bankAccountVerificationMethod === "instant") {
       body.set("payment_method_options[us_bank_account][verification_method]", "instant");
       body.set("payment_method_options[us_bank_account][financial_connections][permissions][0]", "payment_method");
     }
@@ -1040,7 +1047,7 @@ export async function createStripeCheckoutSession({
   }
 
   const paymentMethodModes: CheckoutPaymentMethodMode[] = [
-    ...(paymentMethodConfigurationId && paymentMethodCategory !== "link_bank" ? ["configuration" as const] : []),
+    ...(paymentMethodConfigurationId ? ["configuration" as const] : []),
     ...(fallbackPaymentMethodTypes.length ? ["payment_method_types" as const] : []),
     "dynamic",
   ];

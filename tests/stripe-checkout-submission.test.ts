@@ -120,7 +120,7 @@ test("invoice single-mode submission never falls through to a different provider
   } finally { globalThis.fetch = original; }
 });
 
-for (const category of ["card", "ach", "link_bank", "default"] as const) test(`single-mode ${category} keeps the existing deterministic first mode`, async () => {
+for (const category of ["card", "ach", "default"] as const) test(`single-mode ${category} keeps the existing deterministic first mode`, async () => {
   const original = globalThis.fetch, bodies: URLSearchParams[] = [], keys: string[] = [];
   globalThis.fetch = (async (_url, init) => {
     bodies.push(new URLSearchParams(String(init?.body))); keys.push(new Headers(init?.headers).get("Idempotency-Key")!);
@@ -130,11 +130,6 @@ for (const category of ["card", "ach", "link_bank", "default"] as const) test(`s
     assert.equal((await createStripeCheckoutSession({ ...request, paymentMethodConfigurationId: null, paymentMethodCategory: category, allowPaymentMethodFallback: false })).ok, true);
     assert.equal(keys.length, 1); assert.match(keys[0], category === "default" ? /:dynamic$/ : /:payment_method_types$/);
     assert.equal(bodies[0].get("payment_method_types[0]"), { card: "card", ach: "us_bank_account", link_bank: null, default: null }[category]);
-    if (category === "link_bank") {
-      assert.equal(bodies[0].get("allowed_payment_method_types[0]"), "card");
-      assert.equal(bodies[0].get("allowed_payment_method_types[1]"), "link");
-      assert.equal(bodies[0].get("payment_intent_data[application_fee_amount]"), "100");
-      assert.equal(bodies[0].get("customer"), "cus_fake");
-    }
+
   } finally { globalThis.fetch = original; }
 });

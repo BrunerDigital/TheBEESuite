@@ -14,7 +14,7 @@ test("parent, enrollment, and dashboard copy uses plain operational labels", () 
   const workspacePage = source("src/app/[slug]/page.tsx");
 
   assert.match(parent, /Debit or credit card/);
-  assert.match(parent, /Pay with Link/);
+  assert.match(parent, /Link temporarily unavailable/);
   assert.match(parent, /Connect bank account/);
   assert.match(parent, /Send change request/);
   assert.match(parent, /displayTokenLabel\(child\.enrollmentStatus\)/);

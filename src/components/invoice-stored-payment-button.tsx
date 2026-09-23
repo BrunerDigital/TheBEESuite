@@ -314,12 +314,11 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         </Button>
         <Button
           size="sm"
-          disabled={isPending || Boolean(paymentActionReason)}
+          disabled title="Instant bank checkout is temporarily unavailable. Choose ACH or card."
           onClick={openInstantBankCheckout}
           variant="outline"
         >
-          <CreditCard data-icon="inline-start" />
-          {method.paymentMethodReauthorizationRequired ? "One-time Pay with Link" : "Pay with Link"}
+          Link temporarily unavailable
         </Button>
         <Button
           size="sm"

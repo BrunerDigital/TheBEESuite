@@ -3622,24 +3622,12 @@ function ParentPortalWorkspaceView({
                         </Button>
                         <Button
                           className="w-full sm:w-auto"
-                          disabled={
-                            isPending ||
-                            paymentCheckoutMethod !== null ||
-                            checkoutBlocked ||
-                            accountPaymentDisabled
-                          }
+                          disabled title="Instant bank checkout is temporarily unavailable. Choose ACH or card."
                           aria-busy={paymentCheckoutMethod === "link_bank"}
                           onClick={() => payBalance("link_bank")}
                           variant="outline"
                         >
-                          {paymentCheckoutMethod === "link_bank" ? (
-                            <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />
-                          ) : (
-                            <CreditCard data-icon="inline-start" />
-                          )}
-                          {paymentCheckoutMethod === "link_bank"
-                            ? "Opening secure checkout…"
-                            : "Pay with Link"}
+                          Link temporarily unavailable
                         </Button>
                         <Button
                           className="w-full sm:w-auto"
@@ -3871,18 +3859,11 @@ function ParentPortalWorkspaceView({
                   </Button>
                   <Button
                     className="w-full sm:w-auto"
-                    disabled={
-                      isPending ||
-                      paymentCheckoutMethod !== null ||
-                      checkoutBlocked ||
-                      paymentRecovery.isSubmitting || Boolean(accountPaymentBlocker?.blocksInvoicePayments) ||
-                      !selectedUniformProduct
-                    }
+                    disabled title="Instant bank checkout is temporarily unavailable. Choose ACH or card."
                     onClick={() => buyUniform("link_bank")}
                     variant="outline"
                   >
-                    <CreditCard data-icon="inline-start" />
-                    Buy with Link
+                    Link temporarily unavailable
                   </Button>
                 </div>
               </div>
@@ -3977,19 +3958,13 @@ function ParentPortalWorkspaceView({
                       </Button>
                       <Button
                         className="w-full sm:w-auto"
-                        disabled={
-                          isPending ||
-                          paymentCheckoutMethod !== null ||
-                          paymentRecovery.isSubmitting || invoicePaymentBlocked(invoice.id) ||
-                          checkoutBlocked
-                        }
+                        disabled title="Instant bank checkout is temporarily unavailable. Choose ACH or card."
                         onClick={() =>
                           payProductInvoice(invoice.id, "link_bank")
                         }
                         variant="outline"
                       >
-                        <CreditCard data-icon="inline-start" />
-                        Pay invoice with Link
+                        Link temporarily unavailable
                       </Button>
                     </div>
                   ) : null}

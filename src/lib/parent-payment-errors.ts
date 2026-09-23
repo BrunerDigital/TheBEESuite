@@ -1,3 +1,6 @@
+export const INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE =
+  "Instant bank checkout is temporarily unavailable. Please choose bank account (ACH) or card checkout instead.";
+
 export const PARENT_PAYMENT_UNAVAILABLE_MESSAGE =
   "Online payments are temporarily unavailable. Please contact your school if you need help.";
 

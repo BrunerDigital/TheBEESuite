@@ -46,7 +46,6 @@ test("saved bank setup allows Stripe's microdeposit fallback", () => {
   for (const path of [
     "src/app/api/billing/payment-method-session/route.ts",
     "src/app/api/billing/payment-method-request/session/route.ts",
-    "src/app/api/billing/payment-method-request/checkout/route.ts",
   ]) {
     const route = readFileSync(path, "utf8");
     assert.match(route, /paymentMethodCategory === "link_bank" \? "automatic" : null|requestedPaymentMethodCategory === "link_bank" \? "automatic" : null/);

@@ -424,3 +424,20 @@ test("expired action-required recovery cannot overwrite a late paid webhook", as
   assert.equal(result.ok, false); assert.equal(f.state.payments[0].status, PaymentStatus.PAID); assert.equal(f.state.payments.length, 1);
   assert.equal(f.checkoutCalls.length, 1);
 });
+
+
+test("wallet checkout persists neutral funding classification and resumes the same session", async () => {
+  const f = fixture();
+  f.base.request.paymentMethodCategory = "link";
+  Object.assign(f.base.request.metadata, { requestedPaymentMethodCategory: "link", paymentMethodCategory: "link",
+    stripeFeesCollector: "stripe", schoolProcessingFeeAmountCents: "0", parentProcessingRecoveryAmountCents: "0", bankAccountVerificationMethod: "" });
+  Object.assign(f.base.fields, { requestedPaymentMethodCategory: "link", paymentMethodCategory: "link", bankAccountVerificationMethod: "" });
+  const result = await startInvoiceCheckout(f.base);
+  assert.equal(result.ok, true);
+  assert.equal(f.checkoutCalls.length, 1);
+  assert.equal(f.state.payments[0].customFields.paymentMethodCategory, "link");
+  assert.equal(f.state.payments[0].customFields.bankAccountVerificationMethod, "");
+  const resumed = await startInvoiceCheckout(f.base);
+  assert.equal(resumed.ok, true);
+  assert.equal(f.checkoutCalls.length, 1);
+});

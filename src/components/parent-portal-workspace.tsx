@@ -3622,12 +3622,12 @@ function ParentPortalWorkspaceView({
                         </Button>
                         <Button
                           className="w-full sm:w-auto"
-                          disabled title="Instant bank checkout is temporarily unavailable. Choose ACH or card."
+                          disabled={isPending || paymentCheckoutMethod !== null || checkoutBlocked || accountPaymentDisabled} title="Link or card; bank funding is offered when eligible. No added parent processing fee."
                           aria-busy={paymentCheckoutMethod === "link_bank"}
                           onClick={() => payBalance("link_bank")}
                           variant="outline"
                         >
-                          Link temporarily unavailable
+                          Link or card
                         </Button>
                         <Button
                           className="w-full sm:w-auto"
@@ -3859,11 +3859,11 @@ function ParentPortalWorkspaceView({
                   </Button>
                   <Button
                     className="w-full sm:w-auto"
-                    disabled title="Instant bank checkout is temporarily unavailable. Choose ACH or card."
+                    disabled={isPending || paymentCheckoutMethod !== null || checkoutBlocked || paymentRecovery.isSubmitting || Boolean(accountPaymentBlocker?.blocksInvoicePayments) || !selectedUniformProduct} title="Link or card; bank funding is offered when eligible. No added parent processing fee."
                     onClick={() => buyUniform("link_bank")}
                     variant="outline"
                   >
-                    Link temporarily unavailable
+                    Link or card
                   </Button>
                 </div>
               </div>
@@ -3958,13 +3958,13 @@ function ParentPortalWorkspaceView({
                       </Button>
                       <Button
                         className="w-full sm:w-auto"
-                        disabled title="Instant bank checkout is temporarily unavailable. Choose ACH or card."
+                        disabled={isPending || paymentCheckoutMethod !== null || paymentRecovery.isSubmitting || invoicePaymentBlocked(invoice.id) || checkoutBlocked} title="Link or card; bank funding is offered when eligible. No added parent processing fee."
                         onClick={() =>
                           payProductInvoice(invoice.id, "link_bank")
                         }
                         variant="outline"
                       >
-                        Link temporarily unavailable
+                        Link or card
                       </Button>
                     </div>
                   ) : null}

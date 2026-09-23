@@ -1,3 +1,4 @@
+import { linkCheckoutIsUnsafe } from "./link-checkout-policy";
 import { INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/parent-payment-errors";
 import { PaymentStatus, Prisma, type Payment, type PrismaClient } from "@prisma/client";
 import { activeStripeCheckoutPaymentSummary, jsonRecord } from "./billing-guardrails";
@@ -31,7 +32,7 @@ const secureUrl = (value: unknown): value is string => { try { return typeof val
 
 /** One immutable, bounded, account-serialized attempt; provider calls never run inside retryable DB transactions. */
 export async function startFamilyPayment(input: Input): Promise<FamilyPaymentResult> {
-  if (input.kind === "checkout" && input.request.paymentMethodCategory === "link_bank") {
+  if (input.kind === "checkout" && linkCheckoutIsUnsafe(input.request)) {
     return { ok: false, statusCode: 409, error: INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE };
   }
   const { kind, authorize, authorizeRequest, audit, database = prisma, now = () => new Date(),

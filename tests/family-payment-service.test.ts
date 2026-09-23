@@ -321,3 +321,20 @@ test("Checkout audit rollback never leaves a locally finalized unaudited receipt
   assert.equal(f.state.payments[0].status, PaymentStatus.DRAFT); assert.equal(f.state.payments[0].customFields.stripeCheckoutSessionId, undefined);
   assert.equal(f.state.payments[0].customFields.status, "checkout_pending"); assert.equal(f.state.audits.length, 0);
 });
+
+
+test("wallet checkout persists neutral funding classification and resumes the same session", async () => {
+  const f = fixture();
+  f.base.request.paymentMethodCategory = "link";
+  Object.assign(f.base.request.metadata, { requestedPaymentMethodCategory: "link", paymentMethodCategory: "link",
+    stripeFeesCollector: "stripe", schoolProcessingFeeAmountCents: "0", parentProcessingRecoveryAmountCents: "0", bankAccountVerificationMethod: "" });
+  Object.assign(f.base.fields, { requestedPaymentMethodCategory: "link", paymentMethodCategory: "link", bankAccountVerificationMethod: "" });
+  const result = await startFamilyPayment(f.base);
+  assert.equal(result.ok, true);
+  assert.equal(f.checkoutCalls.length, 1);
+  assert.equal(f.state.payments[0].customFields.paymentMethodCategory, "link");
+  assert.equal(f.state.payments[0].customFields.bankAccountVerificationMethod, "");
+  const resumed = await startFamilyPayment(f.base);
+  assert.equal(resumed.ok, true);
+  assert.equal(f.checkoutCalls.length, 1);
+});

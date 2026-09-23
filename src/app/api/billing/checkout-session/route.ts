@@ -52,7 +52,8 @@ function clean(value: unknown) {
 
 function paymentMethodCategory(value: unknown): StripePaymentMethodCategory {
   const normalized = clean(value).toLowerCase();
-  if (normalized === "ach" || normalized === "card" || normalized === "link_bank") return normalized;
+  if (normalized === "link_bank" || normalized === "link") return "link";
+  if (normalized === "ach" || normalized === "card") return normalized;
   return "default";
 }
 
@@ -169,7 +170,7 @@ async function POSTHandler(request: NextRequest) {
   const requestedPaymentMethodCategory = paymentMethodCategory(body.paymentMethodCategory || body.paymentMethod);
   const collectionMode = checkoutCollectionMode(body.collectionMode, requestedPaymentMethodCategory, userCanManageBilling);
   const source = userCanManageBilling ? clean(body.source) || "director_dashboard" : "parent_portal";
-  const bankAccountVerificationMethod = requestedPaymentMethodCategory === "link_bank" ? "instant" : null;
+  const bankAccountVerificationMethod = null;
   const defaultReturnPath = userIsParentGuardian && !userCanManageBilling ? "/parent-portal" : "/billing-invoices";
   const returnPath = safeReturnPath(body.returnPath, defaultReturnPath);
   if (!invoiceId) {
@@ -333,7 +334,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  if (connectedAccountId && process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT !== "false") {
+  if (connectedAccountId && (requestedPaymentMethodCategory === "link" || process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT !== "false")) {
     const accountStatus = await retrieveStripeConnectedAccount(connectedAccountId, { tenantId });
     if (!accountStatus.ok || !accountStatus.account) {
       return NextResponse.json(
@@ -441,6 +442,7 @@ async function POSTHandler(request: NextRequest) {
       parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
       parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
       schoolProcessingFeeAmountCents: String(amounts.schoolProcessingFeeAmountCents),
+      stripeFeesCollector: schoolPaysStripeFeesDirectly ? "stripe" : "application",
       beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
       beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
       requestedPaymentMethodCategory,

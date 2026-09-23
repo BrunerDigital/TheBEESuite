@@ -1,3 +1,4 @@
+import { linkCheckoutIsUnsafe } from "./link-checkout-policy";
 import { createHash } from "node:crypto";
 import { INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/parent-payment-errors";
 import { PaymentStatus, Prisma, type PrismaClient } from "@prisma/client";
@@ -36,7 +37,7 @@ export async function startInvoiceCheckout(input: {
   now?: () => Date;
 }): Promise<CheckoutResult> {
   // Reject before claims, customer creation or reuse of a previously issued URL.
-  if (input.request.paymentMethodCategory === "link_bank") {
+  if (linkCheckoutIsUnsafe(input.request)) {
     return { ok: false, statusCode: 409, error: INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE };
   }
   const { topology, billingAccountId, invoiceId, invoiceTotalCents, keyPrefix, authorize, audit,

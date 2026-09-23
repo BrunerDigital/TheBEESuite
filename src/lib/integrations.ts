@@ -1,3 +1,4 @@
+import { linkCheckoutIsUnsafe } from "./link-checkout-policy";
 import { INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/parent-payment-errors";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { checkoutFailureDiagnostics } from "@/lib/checkout-failure-diagnostics";
@@ -952,7 +953,7 @@ export async function createStripeCheckoutSession({
   // Hosted Link can be funded by a card, but callers price link_bank as a
   // bank-only payment before creating the session. Never offer a card under
   // those fee assumptions or silently substitute a different payment rail.
-  if (paymentMethodCategory === "link_bank") {
+  if (linkCheckoutIsUnsafe({ paymentMethodCategory, connectedAccountId, amountCents, invoiceAmountCents, parentSurchargeAmountCents, metadata })) {
     return {
       ok: false,
       configured: true,
@@ -964,7 +965,7 @@ export async function createStripeCheckoutSession({
 
   const fallbackPaymentMethodTypes = stripeCheckoutPaymentMethodTypes(paymentMethodCategory);
   const providerCustomerEmail = externalProviderEmail(customerEmail);
-  type CheckoutPaymentMethodMode = "configuration" | "payment_method_types" | "dynamic";
+  type CheckoutPaymentMethodMode = "configuration" | "payment_method_types" | "dynamic" | "link_wallet_v1";
 
   function buildBody(paymentMethodMode: CheckoutPaymentMethodMode) {
     const body = new URLSearchParams({
@@ -996,7 +997,9 @@ export async function createStripeCheckoutSession({
       body.set("customer_email", providerCustomerEmail);
     }
 
-    if (paymentMethodMode === "configuration" && paymentMethodConfigurationId) {
+    if (paymentMethodMode === "link_wallet_v1") {
+      addIndexedParams(body, "allowed_payment_method_types", ["card", "link"]);
+    } else if (paymentMethodMode === "configuration" && paymentMethodConfigurationId) {
       body.set("payment_method_configuration", paymentMethodConfigurationId);
     } else if (paymentMethodMode === "payment_method_types" && fallbackPaymentMethodTypes.length) {
       addIndexedParams(body, "payment_method_types", fallbackPaymentMethodTypes);
@@ -1047,7 +1050,7 @@ export async function createStripeCheckoutSession({
     return { response, json };
   }
 
-  const paymentMethodModes: CheckoutPaymentMethodMode[] = [
+  const paymentMethodModes: CheckoutPaymentMethodMode[] = paymentMethodCategory === "link" ? ["link_wallet_v1"] : [
     ...(paymentMethodConfigurationId ? ["configuration" as const] : []),
     ...(fallbackPaymentMethodTypes.length ? ["payment_method_types" as const] : []),
     "dynamic",

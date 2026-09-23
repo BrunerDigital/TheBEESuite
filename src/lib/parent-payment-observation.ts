@@ -24,7 +24,7 @@ function record(value: unknown): Record<string, unknown> | null {
 function isPending(value: unknown): value is ParentPendingPayment {
   const item = record(value);
   return Boolean(item && typeof item.phase === "string" && ["confirmation_unknown", "ach_processing", "payment_pending"].includes(item.phase)
-    && [null, "ach", "card", "link_bank", "card_present"].includes(item.method as string | null));
+    && [null, "ach", "card", "link_bank", "link", "card_present"].includes(item.method as string | null));
 }
 
 /** Correlation and shape validation only: an empty observation NEVER authorizes a retry. */

@@ -54,8 +54,9 @@ function clean(value: unknown) {
 
 function paymentMethodCategory(value: unknown): StripePaymentMethodCategory {
   const normalized = clean(value).toLowerCase();
-  if (normalized === "card" || normalized === "link_bank" || normalized === "ach") return normalized;
-  return "link_bank";
+  if (normalized === "link_bank" || normalized === "link") return "link";
+  if (normalized === "card" || normalized === "ach") return normalized;
+  return "link";
 }
 
 function appendQuery(path: string, key: string, value: string) {
@@ -97,7 +98,7 @@ async function POSTHandler(request: NextRequest) {
     }, { status: 403 });
   }
   const requestedPaymentMethodCategory = paymentMethodCategory(body.paymentMethodCategory);
-  const bankAccountVerificationMethod = requestedPaymentMethodCategory === "link_bank" ? "automatic" : null;
+  const bankAccountVerificationMethod = null;
   const invoiceId = clean(body.invoiceId);
 
   const family = await prisma.family.findUnique({
@@ -305,7 +306,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  if (connectedAccountId && process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT !== "false") {
+  if (connectedAccountId && (requestedPaymentMethodCategory === "link" || process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT !== "false")) {
     const accountStatus = await retrieveStripeConnectedAccount(connectedAccountId, { tenantId: payload.tenantId });
     if (!accountStatus.ok || !accountStatus.account) {
       return NextResponse.json(
@@ -408,6 +409,7 @@ async function POSTHandler(request: NextRequest) {
       parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
       parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
       schoolProcessingFeeAmountCents: String(amounts.schoolProcessingFeeAmountCents),
+      stripeFeesCollector: schoolPaysStripeFeesDirectly ? "stripe" : "application",
       beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
       beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
       requestedPaymentMethodCategory,

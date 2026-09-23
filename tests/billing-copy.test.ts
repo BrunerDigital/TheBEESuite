@@ -32,7 +32,7 @@ test("billing action labels name the real action and hide internal identifiers",
   const printActions = source("src/components/billing-print-actions.tsx");
 
   assert.match(invoiceActions, /Process authorized autopay/);
-  assert.match(invoiceActions, /Pay with Link/);
+  assert.match(invoiceActions, /Link temporarily unavailable/);
   assert.match(invoiceActions, /Digital Terminal/);
   assert.match(autopayActions, /Process all reviewed balances/);
   assert.match(autopayActions, /Account credit is applied first/);
@@ -47,7 +47,7 @@ test("public payment form copy separates saved methods from autopay", () => {
   const page = source("src/components/public-payment-page-shell.tsx");
 
   assert.match(form, /Connect bank account/);
-  assert.match(form, /Pay with Link/);
+  assert.match(form, /Link temporarily unavailable/);
   assert.match(form, /does not turn on autopay/);
   assert.match(page, /Set up your family/);
   assert.doesNotMatch(form, /Instant Bank Login|Verify Bank Instantly|secure processor handoff/);

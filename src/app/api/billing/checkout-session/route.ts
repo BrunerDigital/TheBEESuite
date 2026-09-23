@@ -61,7 +61,7 @@ function checkoutCollectionMode(value: unknown, requestedPaymentMethodCategory: 
   const requested = clean(value);
   if (userCanManageBilling && requested.startsWith("director_")) return requested;
   if (userCanManageBilling && requestedPaymentMethodCategory === "card") return "director_card_terminal";
-  if (userCanManageBilling && requestedPaymentMethodCategory === "link_bank") return "director_instant_bank_checkout";
+  if (userCanManageBilling && requestedPaymentMethodCategory === "link") return "director_instant_bank_checkout";
   if (userCanManageBilling && requestedPaymentMethodCategory === "ach") return "director_ach_checkout";
   return "parent_checkout";
 }

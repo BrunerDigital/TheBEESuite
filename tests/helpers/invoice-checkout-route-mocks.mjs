@@ -316,6 +316,7 @@ test("all wallet entry points prove direct Stripe fees and persist neutral walle
       assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
       assert.ok(providers.some(call => call.operation === "account-read"));
       const input = kind === "family" ? familyInputs[0] : captured[0];
+      if (kind === "direct") { assert.equal(input.request.metadata.collectionMode, "director_instant_bank_checkout"); assert.equal(input.fields.collectionMode, "director_instant_bank_checkout"); }
       assert.equal(input.request.paymentMethodCategory, "link");
       assert.equal(input.request.metadata.paymentMethodCategory, "link");
       assert.equal(input.request.metadata.stripeFeesCollector, "stripe");

@@ -1,3 +1,4 @@
+import { INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/parent-payment-errors";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { checkoutFailureDiagnostics } from "@/lib/checkout-failure-diagnostics";
 import { logOperationalError } from "@/lib/request-response-logging";
@@ -957,7 +958,7 @@ export async function createStripeCheckoutSession({
       configured: true,
       provider: "stripe",
       retryable: false,
-      error: "Instant bank checkout is temporarily unavailable. Please choose bank account (ACH) or card checkout instead.",
+      error: INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE,
     };
   }
 

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/parent-payment-errors";
 import { PaymentStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { activeStripeCheckoutPaymentSummary, isActiveStripeCheckoutPayment, jsonRecord } from "@/lib/billing-guardrails";
 import { createStripeCheckoutSession, createStripeCustomer, type IntegrationSendResult } from "@/lib/integrations";
@@ -34,6 +35,10 @@ export async function startInvoiceCheckout(input: {
   resolveDraft?: typeof resolveStripeCheckoutDraftBlocker;
   now?: () => Date;
 }): Promise<CheckoutResult> {
+  // Reject before claims, customer creation or reuse of a previously issued URL.
+  if (input.request.paymentMethodCategory === "link_bank") {
+    return { ok: false, statusCode: 409, error: INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE };
+  }
   const { topology, billingAccountId, invoiceId, invoiceTotalCents, keyPrefix, authorize, audit,
     database = prisma, submitCheckout = createStripeCheckoutSession, submitCustomer = createStripeCustomer,
     resolveDraft = resolveStripeCheckoutDraftBlocker, now = () => new Date() } = input;
@@ -108,7 +113,8 @@ export async function startInvoiceCheckout(input: {
       database,
       validateSession: session => invoiceCheckoutSessionIdentityMatches({ session, sessionId: knownSessionId, paymentId: known.id,
         invoiceId, customerId: knownCustomer, topology: { ...topology, connectedAccountId: recordedAccount }, originalPrincipalCents: known.amountCents }),
-      canResumeSession: session => identityMatches && invoiceCheckoutSessionRequestMatches(session, knownRequest),
+      canResumeSession: session => saved.paymentMethodCategory !== "link_bank" && saved.requestedPaymentMethodCategory !== "link_bank"
+        && identityMatches && invoiceCheckoutSessionRequestMatches(session, knownRequest),
       scope: "invoice", requestedPaymentMethodCategory: request.paymentMethodCategory, expectedAmountCents: invoiceTotalCents,
       expectedCheckoutTotalCents: request.amountCents, expectedFeeDisclosureVersion: typeof fields.feeDisclosureVersion === "string" ? fields.feeDisclosureVersion : undefined });
     if (!resolution.blocked && resolution.url) return { ok: true, statusCode: 200, status: "checkout_session_reused", url: resolution.url,

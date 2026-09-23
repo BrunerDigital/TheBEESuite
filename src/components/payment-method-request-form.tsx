@@ -298,9 +298,8 @@ export function PaymentMethodRequestForm({
                 <span className="sm:hidden">Card</span>
                 <span className="hidden sm:inline">Debit or credit card</span>
               </Button>
-              <Button className="h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" disabled={isPending} variant="outline" onClick={() => startPayment(nextOpenInvoice.id, "link_bank")}>
-                <CreditCard data-icon="inline-start" />
-                <span>Pay with Link</span>
+              <Button className="h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" disabled title="Instant bank checkout is temporarily unavailable. Choose ACH or card." variant="outline" onClick={() => startPayment(nextOpenInvoice.id, "link_bank")}>
+                Link temporarily unavailable
               </Button>
             </div>
             {openInvoices.length > 1 ? (

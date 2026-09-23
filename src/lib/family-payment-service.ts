@@ -1,3 +1,4 @@
+import { INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/parent-payment-errors";
 import { PaymentStatus, Prisma, type Payment, type PrismaClient } from "@prisma/client";
 import { activeStripeCheckoutPaymentSummary, jsonRecord } from "./billing-guardrails";
 import { createStripeCheckoutSession, createStripeCustomer, createStripeOffSessionPaymentIntent, retrieveStripePaymentIntent, type IntegrationSendResult } from "./integrations";
@@ -30,6 +31,9 @@ const secureUrl = (value: unknown): value is string => { try { return typeof val
 
 /** One immutable, bounded, account-serialized attempt; provider calls never run inside retryable DB transactions. */
 export async function startFamilyPayment(input: Input): Promise<FamilyPaymentResult> {
+  if (input.kind === "checkout" && input.request.paymentMethodCategory === "link_bank") {
+    return { ok: false, statusCode: 409, error: INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE };
+  }
   const { kind, authorize, authorizeRequest, audit, database = prisma, now = () => new Date(),
     submitCheckout = createStripeCheckoutSession, submitIntent = createStripeOffSessionPaymentIntent, submitCustomer = createStripeCustomer,
     retrieveIntent = retrieveStripePaymentIntent, resolveDraft = resolveStripeCheckoutDraftBlocker } = input;
@@ -89,7 +93,8 @@ export async function startFamilyPayment(input: Input): Promise<FamilyPaymentRes
       expectedCheckoutTotalCents: request.amountCents, expectedFeeDisclosureVersion: request.metadata.feeDisclosureVersion,
       validateSession: session => familyCheckoutSessionIdentityMatches({ session, sessionId: knownSessionId, paymentId: proof.payment.id,
         customerId, topology, originalPrincipalCents: proof.payment.amountCents, invoiceNumber: knownRequest.invoiceNumber }),
-      canResumeSession: session => identityMatches && familyCheckoutSessionRequestMatches(session, knownRequest) });
+      canResumeSession: session => saved.paymentMethodCategory !== "link_bank" && saved.requestedPaymentMethodCategory !== "link_bank"
+        && identityMatches && familyCheckoutSessionRequestMatches(session, knownRequest) });
     if (!resolution.blocked && "url" in resolution && secureUrl(resolution.url)) return { ok: true, statusCode: 200, status: "checkout_session_reused",
       paymentId: existing.id, stripeSessionId: knownSessionId, url: resolution.url };
     if (resolution.blocked) return held(existing.id);

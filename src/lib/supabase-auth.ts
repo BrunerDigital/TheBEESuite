@@ -294,6 +294,9 @@ export async function verifySupabaseRecoveryTokenHash(tokenHash: string) {
     return {
       ok: false as const,
       error: error?.message || "Password setup link is invalid or expired.",
+      providerStatus: error
+        ? (Number.isInteger(error.status) && error.status! >= 400 && error.status! <= 599 ? error.status! : 500)
+        : 502,
     };
   }
   return {

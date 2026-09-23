@@ -9,6 +9,26 @@ const request = { amountCents: 10000, applicationFeeAmountCents: 100, invoiceNum
   connectedAccountId: "acct_fake", customerId: "cus_fake", idempotencyKey: "fake-invoice-claim", credentials,
   paymentMethodCategory: "card" as const, paymentMethodConfigurationId: "pmc_fake" };
 
+test("definitive Checkout rejection logs safe diagnosis without changing the failed result or retrying", async () => {
+  const original = globalThis.fetch, originalError = console.error;
+  const logs: string[] = []; let calls = 0;
+  console.error = (value) => { logs.push(String(value)); };
+  globalThis.fetch = (async () => {
+    calls++;
+    return new Response(JSON.stringify({ error: { code: "resource_missing", param: "customer",
+      type: "invalid_request_error", message: "No customer cus_private for parent@example.com" } }), { status: 400 });
+  }) as typeof fetch;
+  try {
+    const result = await createStripeCheckoutSession(request);
+    assert.equal(result.ok, false); assert.equal(result.providerStatus, 400); assert.equal(result.acceptanceUnknown, false);
+    assert.equal(calls, 1); assert.equal(logs.length, 1);
+    const log = JSON.parse(logs[0]);
+    assert.equal(log.status, 400); assert.equal(log.metadata.category, "resource_missing");
+    assert.equal(log.metadata.filter, "customer"); assert.equal(log.metadata.type, "invalid_request_error");
+    assert.doesNotMatch(logs[0], /cus_private|parent@example|pmc_fake|acct_fake|sk_test/);
+  } finally { globalThis.fetch = original; console.error = originalError; }
+});
+
 for (const status of [409, 500]) test(`provider ${status} does not change payment mode/key and recovers only the same request`, async () => {
   const original = globalThis.fetch, calls: Array<{ body: string; key: string; account: string }> = [];
   globalThis.fetch = (async (_url, init) => {

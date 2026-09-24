@@ -1,10 +1,10 @@
 # The BEE Suite Role SOP Library
 
-Last updated: September 2, 2026
+Last updated: September 23, 2026
 
 Use these SOPs when training a school team or sending role-specific instructions before a launch, parent portal rollout, billing rollout, or kiosk rollout.
 
-For the owner/director transition announcement, use `SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md` with the curated packet in `output/pdf/SCHOOL_TRANSITION_EMAIL_PACKET_CURRENT/`.
+For the owner/director transition announcement, use `SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md` with the curated packet in `output/pdf/SCHOOL_TRANSITION_EMAIL_PACKET_CURRENT/`. The packet was rebuilt from the September 23 source; its school GO gate includes all-account and application-session access review.
 
 Generated sendable packet: `output/pdf/TEAM_SHARE_GUIDES_CURRENT/`. Rebuild this stable packet after any source SOP, public resource, UI label, route, or workflow change. Do not distribute a generated PDF whose revision date predates its source SOP.
 
@@ -46,7 +46,7 @@ When the UI, permissions, labels, routes, or workflow guardrails change, update 
 
 ## Role Guides
 
-- `docs/sops/SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md` - school-specific owner payout setup, director data validation, staff and parent readiness, billing cutover, independent launch gates, and GO/NO-GO sign-off.
+- `docs/sops/SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md` - school-specific owner payout setup, director data validation, staff login and session access review, parent readiness, billing cutover, independent launch gates, and GO/NO-GO sign-off.
 - `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` - plain-language director checklist for school data, classrooms, children, families, safety, tuition, balances, staff, corrections, FAQs, and sign-off.
 - `docs/sops/SCHOOL_SYSTEM_OPERATING_MANUAL.md` - full system breakdown, launch sequence, key functions, role handoff, and visual training assets.
 - `docs/sops/EXECUTIVE_ADMIN_SOP.md` - executive setup, multi-location oversight, FTE review, payment readiness, integrations, permissions, and support access.

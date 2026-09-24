@@ -45,11 +45,12 @@ test("landing page presents real product screens in device mockups", () => {
   assert.ok(showcaseSource.includes('loading={preload ? "eager" : undefined}'), "hero LCP image should load eagerly");
   assert.ok(showcaseSource.includes('fetchPriority={preload ? "high" : undefined}'), "hero LCP image should receive high fetch priority");
   assert.ok(showcaseSource.includes("sizes="), "device images should provide responsive sizes");
+  assert.ok(showcaseSource.includes("data-hero-product-stage"), "hero should expose its composed product stage");
   assert.ok(
     showcaseSource.includes("left-[4%] right-[4%]") &&
       showcaseSource.includes("h-[clamp(11rem,52vw,12.75rem)]") &&
-      showcaseSource.includes("sm:left-auto sm:right-0 sm:h-[42%] sm:w-[34%]"),
-    "school-use image should keep a landscape mobile frame and restore the desktop composition",
+      showcaseSource.includes("sm:left-auto sm:right-0 sm:h-[53%] sm:w-[55%]"),
+    "school-use image should retain its landscape mobile frame with the revised desktop composition",
   );
   assert.ok(showcaseSource.includes("(max-width: 639px) 92vw"), "school-use image should request an appropriately sized mobile asset");
 });
@@ -138,21 +139,22 @@ test("landing page remains accessible, responsive, and motion-conscious", () => 
   assert.ok(!showcaseSource.includes("setInterval"), "product screens must not auto-advance");
 });
 
-test("landing page follows the modern ink, white, and honey visual system in both themes", () => {
+test("landing page follows the editorial ink, white, and honey visual system in both themes", () => {
   for (const expected of [
     "bg-[#071018]",
     "bg-white",
     "bg-[#f5f3ee]",
-    "bg-[#fbf7ec] text-slate-950 dark:bg-[#071018] dark:text-white",
-    "linear-gradient(112deg,#fbf7ec_0%,#fbf7ec_52%,#f3ead8_100%)",
-    "dark:bg-[radial-gradient(circle_at_74%_42%,rgba(32,70,94,0.34),transparent_34rem),linear-gradient(112deg,#071018_0%,#071018_52%,#0b1b27_100%)]",
+    "bg-[#f8f5ed] text-slate-950 dark:bg-[#07131d] dark:text-white",
+    "linear-gradient(118deg,#f8f5ed_0%,#f8f5ed_51%,#efe5cf_100%)",
+    "dark:bg-[linear-gradient(118deg,#07131d_0%,#07131d_58%,#0b1c28_100%)]",
     "bg-[#f6bd2c]",
     "dark:bg-[#071018]",
     "dark:bg-[#0a151f]",
     "dark:bg-[#0d1b26]",
     "[&>span:first-child]:text-amber-700 dark:[&>span:first-child]:text-amber-300",
     "PublicThemeToggle",
-    "tracking-[-0.065em]",
+    "tracking-[-0.06em]",
+    "[clip-path:polygon(0_35%,50%_100%,100%_35%,100%_100%,0_100%)]",
   ]) {
     assert.ok(pageSource.includes(expected), `missing landing visual treatment: ${expected}`);
   }

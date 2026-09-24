@@ -43,10 +43,10 @@ const gettingStartedLinks = [
 ] as const;
 
 const primaryLinkClass =
-  "inline-flex min-h-12 touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#f6bd2c] px-6 py-3 text-sm font-semibold text-[#071018] shadow-[0_16px_38px_rgba(246,189,44,0.18)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-[#ffd15a] hover:shadow-[0_20px_46px_rgba(246,189,44,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6bd2c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#071018]";
+  "inline-flex min-h-13 touch-manipulation items-center justify-center gap-3 rounded-[1.15rem] bg-[#f6bd2c] px-7 py-3.5 text-sm font-semibold text-[#071018] shadow-[0_18px_48px_rgba(246,189,44,0.2)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-[#ffd15a] hover:shadow-[0_22px_54px_rgba(246,189,44,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6bd2c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8f5ed] dark:focus-visible:ring-offset-[#07131d] sm:px-8";
 
 const outlineLinkClass =
-  "inline-flex min-h-12 touch-manipulation items-center justify-center gap-2 rounded-xl border border-amber-500/70 bg-white/55 px-6 py-3 text-sm font-semibold text-slate-950 transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-500 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fbf7ec] dark:border-[#f6bd2c]/70 dark:bg-white/[0.025] dark:text-white dark:hover:border-[#ffd15a] dark:hover:bg-white/[0.07] dark:focus-visible:ring-[#f6bd2c] dark:focus-visible:ring-offset-[#071018]";
+  "inline-flex min-h-13 touch-manipulation items-center justify-center gap-2 rounded-[1.15rem] border border-amber-500/75 bg-white/45 px-7 py-3.5 text-sm font-semibold text-slate-950 transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-500 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8f5ed] dark:border-[#f6bd2c]/75 dark:bg-transparent dark:text-white dark:hover:border-[#ffd15a] dark:hover:bg-white/[0.06] dark:focus-visible:ring-[#f6bd2c] dark:focus-visible:ring-offset-[#07131d] sm:px-8";
 
 function WorkspaceLink({
   title,
@@ -88,14 +88,14 @@ export default function Home() {
         Skip to main content
       </a>
 
-      <div className="relative overflow-hidden bg-[#fbf7ec] text-slate-950 dark:bg-[#071018] dark:text-white">
+      <div className="relative overflow-hidden bg-[#f8f5ed] text-slate-950 dark:bg-[#07131d] dark:text-white">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_74%_42%,rgba(246,189,44,0.20),transparent_34rem),linear-gradient(112deg,#fbf7ec_0%,#fbf7ec_52%,#f3ead8_100%)] dark:bg-[radial-gradient(circle_at_74%_42%,rgba(32,70,94,0.34),transparent_34rem),linear-gradient(112deg,#071018_0%,#071018_52%,#0b1b27_100%)]"
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,#f8f5ed_0%,#f8f5ed_51%,#efe5cf_100%)] dark:bg-[linear-gradient(118deg,#07131d_0%,#07131d_58%,#0b1c28_100%)]"
         />
 
-        <header className="relative z-40 border-b border-slate-900/10 bg-[#fbf7ec]/88 backdrop-blur-xl dark:border-white/10 dark:bg-[#071018]/88">
-          <div className="mx-auto flex min-h-18 max-w-[1480px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10 xl:px-14">
+        <header className="relative z-40 border-b border-slate-900/10 bg-[#f8f5ed]/90 backdrop-blur-xl dark:border-white/10 dark:bg-[#07131d]/90">
+          <div className="mx-auto flex min-h-20 max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10 xl:px-12">
             <BrandLogo
               href="/"
               compact
@@ -106,7 +106,7 @@ export default function Home() {
             />
 
             <nav aria-label="Primary navigation" className="flex items-center gap-2 sm:gap-3">
-              <div className="mr-3 hidden items-center gap-1 lg:flex xl:gap-2">
+              <div className="mr-2 hidden items-center gap-1 xl:flex">
                 <Link
                   href="#product"
                   className="inline-flex min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:text-zinc-300 dark:hover:bg-white/[0.06] dark:hover:text-white dark:focus-visible:ring-amber-300"
@@ -135,7 +135,7 @@ export default function Home() {
               <PublicThemeToggle />
               <Link
                 href="/login"
-                className="inline-flex min-h-11 touch-manipulation items-center justify-center rounded-xl border border-amber-500/80 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-[background-color,border-color,color] hover:border-amber-500 hover:bg-amber-300 hover:text-[#071018] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fbf7ec] dark:border-amber-300/80 dark:text-white dark:hover:border-amber-300 dark:focus-visible:ring-amber-300 dark:focus-visible:ring-offset-[#071018]"
+                className="inline-flex min-h-11 touch-manipulation items-center justify-center rounded-2xl bg-[#f6bd2c] px-5 py-2.5 text-sm font-semibold text-[#071018] shadow-[0_10px_28px_rgba(246,189,44,0.16)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-[#ffd15a] hover:shadow-[0_14px_34px_rgba(246,189,44,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8f5ed] dark:focus-visible:ring-amber-300 dark:focus-visible:ring-offset-[#07131d]"
               >
                 Sign In
               </Link>
@@ -144,33 +144,38 @@ export default function Home() {
         </header>
 
         <main id="main-content" className="relative">
-          <section className="relative px-4 pb-10 pt-14 sm:px-6 sm:pb-14 sm:pt-18 lg:px-10 xl:px-14 xl:pb-8 xl:pt-12">
-            <div className="mx-auto grid max-w-[1480px] items-center gap-10 lg:min-h-[calc(100svh-7.5rem)] lg:grid-cols-[0.86fr_1.14fr] lg:gap-7 xl:gap-9 2xl:min-h-[46rem]">
-              <div className="relative z-20 max-w-2xl py-4 text-center lg:py-10 lg:text-left">
-                <h1 className="text-balance text-[clamp(3.15rem,5.7vw,5.9rem)] font-semibold leading-[0.92] tracking-[-0.065em]">
+          <section className="relative px-4 pb-20 pt-8 sm:px-6 sm:pb-24 sm:pt-16 lg:px-10 lg:pb-28 lg:pt-8 xl:px-12 xl:pb-24">
+            <div className="mx-auto grid max-w-[1440px] items-center gap-6 sm:gap-10 lg:min-h-[calc(100svh-13rem)] lg:grid-cols-[0.84fr_1.16fr] lg:gap-2 2xl:min-h-[44rem]">
+              <div className="relative z-20 max-w-[44rem] py-4 text-center lg:-mt-8 lg:py-10 lg:pr-8 lg:text-left xl:pr-12">
+                <h1 className="text-balance text-[clamp(3.35rem,5.35vw,5.35rem)] font-semibold leading-[0.94] tracking-[-0.06em]">
                   The school day, connected.
                 </h1>
-                <p className="mx-auto mt-7 max-w-xl text-pretty text-base leading-7 text-slate-600 dark:text-zinc-300 sm:text-lg sm:leading-8 lg:mx-0">
+                <p className="mx-auto mt-5 max-w-[39rem] text-pretty text-base leading-7 text-slate-600 dark:text-zinc-300 sm:mt-7 sm:text-lg sm:leading-8 lg:mx-0">
                   One secure suite for enrollment, classrooms, family communication, billing, and multi-location oversight.
                 </p>
-                <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start">
+                <div className="mt-7 flex flex-col justify-center gap-3 sm:mt-9 sm:flex-row lg:justify-start">
                   <Link href="/login" className={primaryLinkClass}>
                     Sign In to The BEE Suite
-                    <ArrowRight aria-hidden="true" className="size-4" />
+                    <ArrowRight aria-hidden="true" className="size-[1.1rem]" />
                   </Link>
                   <Link href="#product" className={outlineLinkClass}>
                     See the product
                   </Link>
                 </div>
-                <p className="mt-7 text-sm leading-6 text-slate-500 dark:text-zinc-400 sm:text-base">
+                <p className="mx-auto mt-7 max-w-xl text-sm leading-6 text-slate-500 dark:text-zinc-400 sm:mt-8 sm:text-base lg:mx-0">
                   Built for directors, teachers, families, and multi-school teams.
                 </p>
               </div>
 
-              <div className="relative z-10 min-w-0 lg:-mr-8 xl:-mr-10 2xl:-mr-16">
+              <div className="relative z-10 min-w-0 lg:-mr-4 xl:-mr-8">
                 <LandingHeroShowcase />
               </div>
             </div>
+
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-[-2%] bottom-[-1px] z-30 h-10 bg-white [clip-path:polygon(0_35%,50%_100%,100%_35%,100%_100%,0_100%)] dark:bg-[#0a151f] sm:h-14 lg:h-16"
+            />
           </section>
 
           <section

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from "node:fs/promises";
+import { link, mkdtemp, mkdir, writeFile, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -110,6 +110,11 @@ test("archive verification rejects conflicting duplicate hashes and linked files
     await writeFile(manifestFile, JSON.stringify(manifest));
     const linkedTarget = join(root, "outside.blob");
     await writeFile(linkedTarget, bytes);
+    await rm(objectFile);
+    await link(linkedTarget, objectFile);
+    const hardLinked = verify();
+    assert.equal(hardLinked.status, 1);
+    assert.match(hardLinked.stderr, /unsafe file or link/);
     await rm(objectFile);
     try {
       await symlink(linkedTarget, objectFile);

@@ -123,7 +123,7 @@ async function readArchiveFile(root: string, archivePath: string) {
   for (const [index, segment] of segments.entries()) {
     current = resolve(current, segment);
     const entry = await lstat(current);
-    if (entry.isSymbolicLink() || (index === segments.length - 1 ? !entry.isFile() : !entry.isDirectory())) {
+    if (entry.isSymbolicLink() || (index === segments.length - 1 ? !entry.isFile() || entry.nlink !== 1 : !entry.isDirectory())) {
       throw new Error(`Archive contains an unsafe file or link: ${archivePath}.`);
     }
   }

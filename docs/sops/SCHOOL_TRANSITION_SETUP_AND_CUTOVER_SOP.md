@@ -179,6 +179,7 @@ Record each gate separately:
 - [ ] Data starting point selected and saved for the named school
 - [ ] Import package accepted and imported data validated, or clean-start state explicitly confirmed
 - [ ] Latest school-data review is confirmed and has not become stale
+- [ ] Every staff member expected to sign in has a reconciled application user, Auth identity, approved application role, and exact school grant; intentionally uninvited staff and other access exceptions are named, owned, and held off
 - [ ] Director access tested
 - [ ] Teacher access and rosters tested
 - [ ] Parent invitations approved or intentionally held off
@@ -197,6 +198,7 @@ Record:
 
 - School / decision date and time:
 - Modules approved for GO / modules held off:
+- Staff login reconciliation evidence, intentionally uninvited staff, and access blockers/owners:
 - Last previous-system tuition cycle / first BEE Suite tuition cycle, or clean-start note:
 - Owner / director / billing / implementation approvers:
 - Open exceptions, owner, due date, and exact retest:

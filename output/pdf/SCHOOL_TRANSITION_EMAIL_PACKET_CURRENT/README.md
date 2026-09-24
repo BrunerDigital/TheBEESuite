@@ -8,7 +8,7 @@ This is a manual email packet for Brenden's pre-week announcement. It is not par
 
 ## Core Attachments
 
-1. `01_SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.pdf` - owner payout setup, director validation, family and child records, staff/guardian account and application-session access review, billing cutover, independent launch gates, and final GO/NO-GO record.
+1. `01_SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.pdf` - owner payout setup, director validation, family and child records, staff/guardian/authorized-pickup account and application-session access review, billing cutover, independent launch gates, and final GO/NO-GO record.
 2. `02_DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.pdf` - plain-language director checklist for reviewing the correct school, children, families, safety information, tuition, balances, and staff; includes stop rules, correction tracking, FAQs, and sign-off.
 3. `03_PARENT_PORTAL_INSTALL_GUIDE.pdf` - parent login, secure URL checks, and browser installation for iPhone, iPad, Android, Fire tablet, and desktop.
 4. `04_TEACHER_SOP.pdf` - teacher login, classroom scope, attendance, daily reports, incidents, media, messages, and stop conditions.

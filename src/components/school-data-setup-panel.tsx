@@ -550,12 +550,15 @@ export function SchoolDataSetupPanel({ data }: { data: SchoolDataSetupPanelData 
               <Button variant="outline" nativeButton={false} render={<Link href="/classroom-dashboard#classroom-editor" />}>
                 Set Up Classrooms <ArrowRight aria-hidden="true" data-icon="inline-end" />
               </Button>
-              <Button variant="outline" nativeButton={false} render={<Link href="/family-detail" />}>
+              <Button variant="outline" nativeButton={false} render={<Link href="/family-detail#family-directory" />}>
                 Add or Review Families <ArrowRight aria-hidden="true" data-icon="inline-end" />
               </Button>
             </>
           )
         ) : null}
+        <Button variant="outline" nativeButton={false} render={<Link href="/resources/director-data-clean-start#family-entry" />}>
+          Family Entry Instructions <ArrowRight aria-hidden="true" data-icon="inline-end" />
+        </Button>
         {selectedPath === "import_existing" && latestBatch && !hasUnsavedChanges ? (
           <Button type="button" variant="outline" onClick={runWholeSchoolVerification} disabled={isVerifying || isPending || latestBatch.status === "processing"}>
             {isVerifying ? <Loader2 aria-hidden="true" data-icon="inline-start" className="animate-spin motion-reduce:animate-none" /> : <FileSearch aria-hidden="true" data-icon="inline-start" />}

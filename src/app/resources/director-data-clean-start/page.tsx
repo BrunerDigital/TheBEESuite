@@ -130,10 +130,30 @@ export default function DirectorDataCleanStartPage() {
       <section className="px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl">
           <nav aria-label="Guide sections" className="grid gap-3 sm:grid-cols-3">
-            {[['Before you begin', '#before-you-begin'], ['Step-by-step checklist', '#checklist'], ['Frequently asked questions', '#faqs']].map(([label, href]) => (
+            {[['Start entering families', '#family-entry'], ['Before you begin', '#before-you-begin'], ['Step-by-step checklist', '#checklist'], ['Frequently asked questions', '#faqs']].map(([label, href]) => (
               <Link key={href} href={href} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.055] px-4 py-3 text-sm font-semibold text-slate-200 hover:border-amber-300/60 hover:text-amber-200">{label}<ArrowRight className="size-4" /></Link>
             ))}
           </nav>
+
+          <section id="family-entry" className="scroll-mt-6 py-10">
+            <h2 className="text-2xl font-semibold">Start entering families</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-300">Every school should have a director responsible for its roster. If records already exist, complete and verify them. If an import is planned or underway, coordinate missing records with the import owner before entering the same families again.</p>
+            <ol className="mt-5 list-decimal space-y-4 pl-6 text-sm leading-6 text-slate-300">
+              <li><strong className="text-white">Confirm your school and starting point.</strong> Open School setup. Keep the existing import path when moving records from another system. Use the clean workspace path when entering records directly; this does not erase existing records. Set up classrooms before adding enrolled children.</li>
+              <li><strong className="text-white">Gather the current enrollment records.</strong> Have each child&apos;s legal name, birth date, enrollment status, start date, classroom, scheduled days and times, guardian names and contact details, emergency contacts, authorized pickups, safety information, and signed permissions available. Record missing information for follow-up; do not guess.</li>
+              <li><strong className="text-white">Search before adding.</strong> In the Family Workspace, check the Family Directory and past enrollment records. Open an existing family to add siblings or additional guardians. Do not recreate imported families.</li>
+              <li><strong className="text-white">Add the first household.</strong> Open Add Family, Parent + Child. Confirm School / center, enter the primary guardian and child, choose the correct classroom and enrollment status, and select Save Family, Parent + Child. Leave prior balance blank unless a separately approved, verified opening balance must be recorded. Verify permission checkboxes against signed records.</li>
+              <li><strong className="text-white">Finish the household.</strong> After the Saved message, open Complete this family&apos;s details. Add the remaining guardians and children, emergency contacts, authorized pickups, allergies, medical information, schedules, and required documents. A saved intake is the beginning of the record, not a completed school review.</li>
+              <li><strong className="text-white">Continue through the roster.</strong> Use Start next family to clear the previous household before entering another. If a save cannot be confirmed, check the directory for the child before trying again. Work classroom by classroom and compare both family and child totals with the current roster.</li>
+              <li><strong className="text-white">Report progress and resolve gaps.</strong> Record the expected and entered family/child counts, unresolved items, responsible person, and next follow-up date. Return to School setup to review gaps and confirm the school&apos;s data only when the review is complete.</li>
+            </ol>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href="/school-setup" className="rounded-lg border border-white/20 px-4 py-3 text-sm font-semibold hover:text-amber-200">Open School setup</Link>
+              <Link href="/family-detail#family-directory" className="rounded-lg border border-white/20 px-4 py-3 text-sm font-semibold hover:text-amber-200">Review existing families</Link>
+              <Link href="/family-detail#family-intake" className="rounded-lg bg-amber-300 px-4 py-3 text-sm font-semibold text-slate-950">Open family entry</Link>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-300">These workspace links require your existing authorized login. Record counts show progress; they do not prove completeness without comparison to the school&apos;s roster. Keep child and family details in the secure workspace, not in general setup notes or progress messages.</p>
+          </section>
 
           <section id="before-you-begin" className="scroll-mt-6 py-10">
             <h2 className="text-2xl font-semibold">Before you begin</h2>

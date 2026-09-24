@@ -4914,8 +4914,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         <StatCard label="Current-family outstanding" value={money(data.stats.outstandingCents)} />
       </div>
       {data.canProcessAutopay ? <PaymentAutopayActions /> : null}
-      <AgencySubsidyWorkspace
-        key={JSON.stringify(data.workbench.centers.map((center) => center.id))}
+      <AgencySubsidyWorkspace key={JSON.stringify(data.workbench.centers.map((center) => center.id))}
         centers={data.workbench.centers.map((center) => ({ id: center.id, name: center.name, state: center.state, timezone: center.timezone }))}
       />
       <Card className="glass-panel">

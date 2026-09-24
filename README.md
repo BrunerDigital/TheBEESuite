@@ -127,6 +127,7 @@ Primary rollout checklist: [docs/KIDCITY_CORPORATE_ROLLOUT_CHECKLIST_2026-07-07.
 ## Documentation Index
 
 - Current completion status and remaining gates: [docs/CURRENT_COMPLETION_STATUS.md](docs/CURRENT_COMPLETION_STATUS.md)
+- Current two-school read-only readiness baseline: [docs/TWO_SCHOOL_READ_ONLY_BASELINE_2026-09-24.md](docs/TWO_SCHOOL_READ_ONLY_BASELINE_2026-09-24.md)
 - Complete product guide: [docs/BEE_SUITE_COMPLETE_GUIDE.md](docs/BEE_SUITE_COMPLETE_GUIDE.md)
 - Product status: [docs/PRODUCT.md](docs/PRODUCT.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

@@ -1,6 +1,6 @@
 # Current BEE Suite completion status
 
-Last verified: September 23, 2026 (Eastern). This file is the current technical and operational status, not a school launch approval. Earlier dated audits remain historical evidence.
+Last verified: September 24, 2026 (Eastern). This file is the current technical and operational status, not a school launch approval. Earlier dated audits remain historical evidence.
 
 ## Live-service boundary
 
@@ -12,6 +12,7 @@ The web app remains in production on the existing BrunerDigital Vercel and Supab
 - Applied all 49 checked-in Supabase SQL migrations to Recovery Lab. It has 103 application tables with RLS enabled, 1,165 application columns, zero Auth users, zero Storage objects, and no browser-role table grants. Application table names and column counts match production. The migration service assigned new timestamp versions in Recovery Lab, so its 49 ledger entries are not version-identical to production's 49 entries. Prisma's `_prisma_migrations` table is absent because these files were applied through the Supabase migration service rather than Prisma's deployment ledger. Reconcile both ledgers in the restore plan.
 - Compared schema details with production. The one column-definition difference is `FteReport.updatedAt` (`CURRENT_TIMESTAMP` default in production, no default in Recovery Lab). Index definitions differ on 21 tables. These differences require review before calling a restored environment production-equivalent; they are not evidence of missing user data.
 - Verified the configured production Storage server key can list the two private application buckets without exposing its value. An empty-prefix exporter/manifest verification passed with zero objects; this proves connectivity and guard behavior only, not a backup of any file bytes.
+- Hardened offline archive verification and isolated restore against linked archive files, inconsistent duplicate-hash sizes, and archive changes after target inspection. Synthetic CLI tests pass; this does not establish an operational production backup or full restore.
 - Re-ran Supabase security advisors. Both projects report 13 informational RLS-without-policy findings on server-only agency tables; no browser-role table grants were observed. The production performance advisor reports 11 informational unindexed foreign keys, which require query-impact review before any production DDL.
 
 ## Recovery work still open

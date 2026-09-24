@@ -1,6 +1,6 @@
 import "./load-env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { assertRestorePlanApproved, createStorageRestorePlan, storageProjectRef, validateRestoreTarget, type RestoreTargetBucket } from "../src/lib/storage-restore-plan";
 import {
@@ -109,8 +109,25 @@ async function listObjectPaths(client: SupabaseClient, bucketId: string, rootPre
 
 async function ensureNewArchiveDirectory(root: string) {
   await mkdir(root, { recursive: true });
+  if (!(await lstat(root)).isDirectory()) throw new Error(`Backup output must be a directory: ${root}.`);
   const entries = await readdir(root);
   if (entries.length > 0) throw new Error(`Backup output directory must be empty: ${root}.`);
+}
+
+async function readArchiveFile(root: string, archivePath: string) {
+  const filePath = resolveArchivePath(root, archivePath);
+  const rootStat = await lstat(root);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("Archive root must be a real directory.");
+  const segments = archivePath.split("/");
+  let current = root;
+  for (const [index, segment] of segments.entries()) {
+    current = resolve(current, segment);
+    const entry = await lstat(current);
+    if (entry.isSymbolicLink() || (index === segments.length - 1 ? !entry.isFile() : !entry.isDirectory())) {
+      throw new Error(`Archive contains an unsafe file or link: ${archivePath}.`);
+    }
+  }
+  return readFile(filePath);
 }
 
 async function writeArchiveObject(root: string, bytes: Buffer, sha256: string) {
@@ -204,19 +221,21 @@ async function backup(args: string[]) {
 }
 
 async function readAndVerifyArchive(input: string) {
-  const raw = JSON.parse(await readFile(resolve(input, STORAGE_BACKUP_MANIFEST), "utf8")) as unknown;
+  const raw = JSON.parse((await readArchiveFile(input, STORAGE_BACKUP_MANIFEST)).toString("utf8")) as unknown;
   const manifest = validateStorageBackupManifest(raw);
-  const verifiedHashes = new Set<string>();
+  const verifiedHashes = new Map<string, number>();
   for (const bucket of manifest.buckets) {
     for (const object of bucket.objects) {
-      if (verifiedHashes.has(object.sha256)) continue;
-      const filePath = resolveArchivePath(input, object.archivePath);
-      const file = await readFile(filePath);
-      const fileStat = await stat(filePath);
-      if (!fileStat.isFile() || file.length !== object.size || sha256Hex(file) !== object.sha256) {
+      const verifiedSize = verifiedHashes.get(object.sha256);
+      if (verifiedSize !== undefined && verifiedSize !== object.size) {
         throw new Error(`Integrity verification failed for ${bucket.id}/${object.path}.`);
       }
-      verifiedHashes.add(object.sha256);
+      if (verifiedSize !== undefined) continue;
+      const file = await readArchiveFile(input, object.archivePath);
+      if (file.length !== object.size || sha256Hex(file) !== object.sha256) {
+        throw new Error(`Integrity verification failed for ${bucket.id}/${object.path}.`);
+      }
+      verifiedHashes.set(object.sha256, file.length);
     }
   }
   return manifest;
@@ -257,6 +276,9 @@ async function restore(args: string[]) {
     return;
   }
   assertRestorePlanApproved(plan.fingerprint, oneValue(args, "--expected-plan"));
+  // The archive may have changed while the target was inspected. Recheck it
+  // before any bucket or object is created, then check each body on upload.
+  await readAndVerifyArchive(input);
 
   for (const bucket of manifest.buckets) {
     const existing = existingById.get(bucket.id);
@@ -274,7 +296,10 @@ async function restore(args: string[]) {
     }
 
     for (const object of bucket.objects) {
-      const body = await readFile(resolveArchivePath(input, object.archivePath));
+      const body = await readArchiveFile(input, object.archivePath);
+      if (body.length !== object.size || sha256Hex(body) !== object.sha256) {
+        throw new Error(`Archive changed after plan verification: ${bucket.id}/${object.path}.`);
+      }
       const { error } = await client.storage.from(bucket.id).upload(object.path, body, {
         contentType: object.contentType,
         upsert: false,

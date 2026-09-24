@@ -2,7 +2,7 @@
 
 Childcare CRM, school operations, billing, parent portal, teacher portal, and executive reporting platform.
 
-Last refreshed: July 31, 2026
+Last refreshed: September 23, 2026
 
 The BEE Suite is a multi-tenant, white-label operating system for childcare brands and schools. It supports inquiry intake, enrollment, families, children, classrooms, staffing, tuition billing, Stripe Connect payout setup, parent communications, documents, compliance workflows, FTE reporting, role-specific portals, and human-reviewed AI assistance.
 
@@ -126,6 +126,7 @@ Primary rollout checklist: [docs/KIDCITY_CORPORATE_ROLLOUT_CHECKLIST_2026-07-07.
 
 ## Documentation Index
 
+- Current completion status and remaining gates: [docs/CURRENT_COMPLETION_STATUS.md](docs/CURRENT_COMPLETION_STATUS.md)
 - Complete product guide: [docs/BEE_SUITE_COMPLETE_GUIDE.md](docs/BEE_SUITE_COMPLETE_GUIDE.md)
 - Product status: [docs/PRODUCT.md](docs/PRODUCT.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

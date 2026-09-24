@@ -143,32 +143,46 @@ function DeviceForRole({ device, src, alt }: { device: DeviceKind; src: string; 
 
 export function LandingHeroShowcase() {
   return (
-    <div className="relative mx-auto h-[25rem] w-full max-w-[50rem] sm:h-[34rem] lg:h-[38rem] xl:h-[42rem]">
-      <div className="absolute left-[4%] right-[4%] top-0 h-[clamp(11rem,52vw,12.75rem)] w-auto overflow-hidden rounded-[1.4rem] border border-white/10 opacity-95 shadow-[0_24px_64px_rgba(0,0,0,0.3)] sm:left-auto sm:right-0 sm:h-[42%] sm:w-[34%] sm:rounded-[1.8rem] xl:-right-8">
+    <div
+      data-hero-product-stage
+      className="relative -mt-6 mx-auto h-[23rem] w-full max-w-[52rem] sm:mt-0 sm:h-[36rem] lg:h-[40rem] xl:h-[42rem] 2xl:h-[46rem]"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 360 260"
+        className="absolute left-[3%] top-[1%] h-[45%] w-[52%] text-amber-500/15 dark:text-amber-300/12"
+      >
+        <path d="M92 8h76l38 66-38 66H92L54 74 92 8Z" fill="none" stroke="currentColor" strokeWidth="2" />
+        <path d="M210 74h76l38 66-38 66h-76l-38-66 38-66Z" fill="none" stroke="currentColor" strokeWidth="2" />
+        <path d="M92 140h76l38 66-38 66H92l-38-66 38-66Z" fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+
+      <div className="absolute left-[4%] right-[4%] top-0 h-[clamp(11rem,52vw,12.75rem)] w-auto overflow-hidden rounded-l-[1.6rem] border-l-2 border-[#f6bd2c] bg-slate-200 shadow-[0_24px_70px_rgba(20,30,36,0.16)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-3 motion-safe:duration-700 dark:bg-slate-900 sm:left-auto sm:right-0 sm:h-[53%] sm:w-[55%] sm:rounded-l-[2rem]">
         <Image
           src="/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png"
           alt="A parent and school director using The BEE Suite at a childcare front desk"
           fill
-          sizes="(max-width: 639px) 92vw, (max-width: 768px) 34vw, 20vw"
-          className="object-cover object-[52%_40%]"
+          sizes="(max-width: 639px) 92vw, (max-width: 1023px) 55vw, (max-width: 1280px) 34vw, 28vw"
+          className="object-cover object-[54%_38%]"
+          loading="eager"
         />
       </div>
+
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-[4%] bottom-[2%] h-[24%] rounded-[50%] bg-slate-900/18 blur-2xl dark:bg-black/45"
+      />
 
       <LaptopDevice
         src="/brand/the-bee-suite/screenshots/current/director-desktop-dashboard-light.png"
         alt="The BEE Suite director dashboard on a laptop"
-        className="absolute bottom-[10%] left-[11%] z-10 w-[78%]"
+        className="absolute bottom-[18%] right-[1%] z-10 w-[88%] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-5 motion-safe:duration-700 sm:bottom-[6%]"
         preload
-      />
-      <TabletDevice
-        src="/brand/the-bee-suite/screenshots/current/teacher-ipad-daily-report-light.png"
-        alt="The BEE Suite teacher daily report on a tablet"
-        className="absolute bottom-0 right-[1%] z-20 w-[28%] rotate-[2.5deg]"
       />
       <PhoneDevice
         src="/brand/the-bee-suite/screenshots/current/parent-iphone-overview-light.png"
         alt="The BEE Suite parent portal on a phone"
-        className="absolute bottom-[2%] left-[3%] z-20 w-[17%] -rotate-[1.5deg]"
+        className="absolute bottom-[1%] left-[1%] z-20 w-[20%] -rotate-[1.5deg] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-left-3 motion-safe:duration-700"
       />
     </div>
   );

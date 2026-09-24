@@ -1,6 +1,6 @@
 # Supabase Database And Storage Recovery Runbook
 
-Status: implemented recovery tooling and bounded synthetic drill completed July 20, 2026. Production Storage backups are **not operational** until an approved encrypted, versioned off-platform destination and schedule runner are recorded.
+Status: implemented recovery tooling and bounded synthetic drill completed July 20, 2026. A separate Pro recovery project was created September 23, 2026, and all 49 checked-in SQL migrations were applied there. Production Storage backups are **not operational** until an approved encrypted, versioned off-platform destination and schedule runner are recorded. A full production-sized database-and-Storage restore remains unverified. See [current completion status](CURRENT_COMPLETION_STATUS.md).
 
 Supabase database backups include Storage metadata, not the object bodies. Recovering The BEE Suite therefore requires a database restore point and a separately retained Storage archive from the same recovery window.
 
@@ -40,6 +40,8 @@ npm run storage:backup -- --output <new-empty-archive-directory> --bucket <bucke
 ## Storage restore method
 
 Always restore into an isolated target first. Do not modify `storage.objects`, `storage.buckets`, or another Storage schema table directly.
+
+The current production database has an active `stripe-sync-worker` `pg_cron` job scheduled every minute and `pg_net` enabled. Supabase's binary "Restore to a new project" copies database jobs that can run immediately, Auth records, and the encryption root key. It is therefore not the chosen rehearsal path while external effects cannot be stopped before clone startup. Use a reviewed logical export/restore into the prepared target, exclude or disable outbound jobs and production integration credentials before importing data, and preserve source-to-target access isolation. The existing target is `BEE Suite Recovery Lab` (`hptrlvbciwkceqifjnbt`); its schema differs in one column default and 21 tables' indexes, and its migration service assigned new version timestamps to the 49 applied files. Reconcile schema and both Supabase/Prisma migration ledgers in the restore plan. Do not treat schema-only migration success as restored-data evidence.
 
 1. Stop affected writes and external side effects. Preserve request, deployment, audit, and backup identifiers.
 2. Select the approved database restore point and the closest successful Storage archive at or before it. Record the expected RPO and any writes requiring reconciliation.

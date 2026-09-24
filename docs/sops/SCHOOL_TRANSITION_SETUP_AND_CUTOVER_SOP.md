@@ -1,6 +1,6 @@
 # School Transition Setup And Cutover SOP - The BEE Suite
 
-**Updated:** September 11, 2026
+**Updated:** September 23, 2026
 **Audience:** owners, directors, billing owners, and BEE Suite implementation support  
 **Purpose:** prepare one school in The BEE Suite through either a guarded existing-record import or a clean start, without inventing data, duplicating tuition, skipping safety validation, or treating technical setup as launch approval.
 
@@ -109,8 +109,9 @@ The director validates the operational workspace before teachers, parents, or th
 3. Verify the official school name, address, time zone, phone, email, hours, director contact, notification recipients, and parent-facing name.
 4. Verify every classroom name, age group, capacity, ratio, schedule, and active child assignment.
 5. Verify current staff, role, school assignment, classroom assignment, and employment status.
-6. Remove former staff from active operational lists through the approved staff process; do not change Auth access unless that separate gate is authorized.
-7. Test one director and one teacher session. Each user must see only the correct school, classroom, children, documents, messages, attendance, and billing scope.
+6. For each staff member expected to sign in, reconcile the active application user, normalized email, Supabase Auth identity, and exact school/role grant. Classify a missing Auth identity as intentionally uninvited or a blocker with the school owner; an active staff profile or grant alone does not prove login readiness. Do not create accounts or send invitations from this review.
+7. Remove former staff from active operational lists through the approved staff process; do not change Auth access unless that separate gate is authorized.
+8. Test one director and one teacher session. Each user must see only the correct school, classroom, children, documents, messages, attendance, and billing scope.
 
 Wrong-school, wrong-classroom, or wrong-family visibility is an immediate stop condition.
 

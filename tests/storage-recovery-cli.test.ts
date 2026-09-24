@@ -25,9 +25,10 @@ test("restore CLI previews without writes, rejects changed plans, and verifies a
     const callsPath = join(root, "calls.jsonl");
     const hookPath = join(root, "mock.mjs");
     await writeFile(hookPath, `
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 const calls = ${JSON.stringify(callsPath)};
 const objectFile = ${JSON.stringify(objectFile)};
+const manifestFile = ${JSON.stringify(join(root, "manifest.json"))};
 const bytes = Buffer.from(${JSON.stringify(bytes.toString("base64"))}, "base64");
 globalThis.fetch = async (input, init) => {
   const url = new URL(typeof input === "string" ? input : input.url ?? String(input));
@@ -36,7 +37,15 @@ globalThis.fetch = async (input, init) => {
   if (url.origin !== "https://tsrqponmlkjihgfedcba.supabase.co") throw new Error("Unexpected network target");
   const json = (value) => new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json" } });
   if (url.pathname === "/storage/v1/bucket" && method === "GET") {
-    if (process.env.TAMPER_AFTER_CHECK === "1") writeFileSync(objectFile, "tampered after archive check");
+    if (process.env.TAMPER_AFTER_CHECK === "object") writeFileSync(objectFile, "tampered after archive check");
+    if (process.env.TAMPER_AFTER_CHECK === "manifest") {
+      const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
+      manifest.buckets[0].objects = [];
+      manifest.totals.objects = 0;
+      manifest.totals.bytes = 0;
+      writeFileSync(manifestFile, JSON.stringify(manifest));
+      rmSync(objectFile);
+    }
     return json([]);
   }
   if (url.pathname === "/storage/v1/bucket" && method === "POST") return json({ name: "fixture" });
@@ -46,11 +55,11 @@ globalThis.fetch = async (input, init) => {
 };
 `);
     const base = ["--import", pathToFileURL(hookPath).href, "--import", "tsx", "scripts/supabase-storage-recovery.ts", "restore", "--input", root, "--target-project", "tsrqponmlkjihgfedcba"];
-    const run = async (extra: string[] = [], tamper = false) => {
+    const run = async (extra: string[] = [], tamper: "object" | "manifest" | "none" = "none") => {
       await writeFile(callsPath, "");
       const result = spawnSync(process.execPath, [...base, ...extra], {
         cwd: resolve("."), encoding: "utf8", timeout: 20_000,
-        env: { ...process.env, SUPABASE_RESTORE_URL: "https://tsrqponmlkjihgfedcba.supabase.co", SUPABASE_RESTORE_ADMIN_KEY: "synthetic-key-no-provider-access", TAMPER_AFTER_CHECK: tamper ? "1" : "0" },
+        env: { ...process.env, SUPABASE_RESTORE_URL: "https://tsrqponmlkjihgfedcba.supabase.co", SUPABASE_RESTORE_ADMIN_KEY: "synthetic-key-no-provider-access", TAMPER_AFTER_CHECK: tamper },
       });
       const calls = (await readFile(callsPath, "utf8")).trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as { method: string; path: string });
       return { result, calls };
@@ -64,10 +73,17 @@ globalThis.fetch = async (input, init) => {
     assert.equal(rejected.result.status, 1);
     assert.match(rejected.result.stderr, /plan changed or is unapproved/);
     assert.deepEqual(rejected.calls, preview.calls);
-    const tampered = await run(["--apply", "--expected-plan", plan.fingerprint], true);
+    const tampered = await run(["--apply", "--expected-plan", plan.fingerprint], "object");
     assert.equal(tampered.result.status, 1);
     assert.match(tampered.result.stderr, /Integrity verification failed/);
     assert.deepEqual(tampered.calls, preview.calls);
+    await writeFile(objectFile, bytes);
+    const originalManifest = await readFile(join(root, "manifest.json"));
+    const replacedManifest = await run(["--apply", "--expected-plan", plan.fingerprint], "manifest");
+    assert.equal(replacedManifest.result.status, 1);
+    assert.match(replacedManifest.result.stderr, /plan changed or is unapproved/);
+    assert.deepEqual(replacedManifest.calls, preview.calls);
+    await writeFile(join(root, "manifest.json"), originalManifest);
     await writeFile(objectFile, bytes);
     const applied = await run(["--apply", "--expected-plan", plan.fingerprint]);
     assert.equal(applied.result.status, 0, applied.result.stderr);

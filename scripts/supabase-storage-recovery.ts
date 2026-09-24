@@ -278,7 +278,9 @@ async function restore(args: string[]) {
   assertRestorePlanApproved(plan.fingerprint, oneValue(args, "--expected-plan"));
   // The archive may have changed while the target was inspected. Recheck it
   // before any bucket or object is created, then check each body on upload.
-  await readAndVerifyArchive(input);
+  const revalidatedManifest = await readAndVerifyArchive(input);
+  const revalidatedPlan = createStorageRestorePlan(revalidatedManifest, targetProjectRef, inspectedBuckets, allowExistingBuckets);
+  assertRestorePlanApproved(revalidatedPlan.fingerprint, plan.fingerprint);
 
   for (const bucket of manifest.buckets) {
     const existing = existingById.get(bucket.id);

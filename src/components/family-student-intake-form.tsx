@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AlertCircle, CheckCircle2, UserPlus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -80,6 +81,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
   const [photoVideoPermission, setPhotoVideoPermission] = useState(false);
   const [fieldTripPermission, setFieldTripPermission] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [savedFamilyId, setSavedFamilyId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
@@ -116,53 +118,82 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
       setStatusMessage("");
       setErrorMessage("");
       setFieldErrors({});
-      const response = await fetch("/api/families/intake", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          centerId,
-          familyName,
-          address,
-          familyNotes,
-          custodyNotes,
-          guardianName,
-          guardianEmail,
-          guardianPhone,
-          guardianRelation,
-          guardianEmployer,
-          preferredCommunication,
-          checkInPin,
-          childName,
-          preferredName,
-          birthStatus: childNotBornYet ? "expected" : "born",
-          dateOfBirth,
-          expectedDueDate: childNotBornYet ? expectedDueDate : undefined,
-          ageGroup,
-          enrollmentStatus,
-          startDate,
-          classroomId: classroomId === "none" ? "" : classroomId,
-          scheduleNotes,
-          napNotes,
-          feedingNotes,
-          pottyNotes,
-          developmentalNotes,
-          startingBalanceDollars,
-          photoVideoPermission,
-          fieldTripPermission,
-        }),
-      });
-      const json = await response.json().catch(() => null) as IntakeResponse | null;
-      if (!response.ok) {
-        setFieldErrors(json?.errors ?? {});
-        setErrorMessage(json?.error || "Family and student could not be saved.");
-        return;
+      try {
+        const response = await fetch("/api/families/intake", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            centerId,
+            familyName,
+            address,
+            familyNotes,
+            custodyNotes,
+            guardianName,
+            guardianEmail,
+            guardianPhone,
+            guardianRelation,
+            guardianEmployer,
+            preferredCommunication,
+            checkInPin,
+            childName,
+            preferredName,
+            birthStatus: childNotBornYet ? "expected" : "born",
+            dateOfBirth,
+            expectedDueDate: childNotBornYet ? expectedDueDate : undefined,
+            ageGroup,
+            enrollmentStatus,
+            startDate,
+            classroomId: classroomId === "none" ? "" : classroomId,
+            scheduleNotes,
+            napNotes,
+            feedingNotes,
+            pottyNotes,
+            developmentalNotes,
+            startingBalanceDollars,
+            photoVideoPermission,
+            fieldTripPermission,
+          }),
+        });
+        const json = await response.json().catch(() => null) as IntakeResponse | null;
+        if (!response.ok) {
+          setFieldErrors(json?.errors ?? {});
+          setErrorMessage(json?.error || "Family and student could not be saved.");
+          return;
+        }
+        if (!json?.family?.id || !json?.child?.id) {
+          throw new Error("Save confirmation missing");
+        }
+        setSavedFamilyId(json.family.id);
+        setStatusMessage(`${json?.family?.name ?? "Family"} saved with one parent/guardian record for ${json?.guardian?.fullName ?? "the parent"} and ${json?.child?.fullName ?? "the child"}.`);
+        setStartingBalanceDollars("");
+        setCheckInPin("");
+        resetStudentFields();
+        router.refresh();
+      } catch {
+        setErrorMessage("We could not confirm whether the save finished. Your entries are still here. Check the family directory for this child before saving again to avoid a duplicate.");
       }
-      setStatusMessage(`${json?.family?.name ?? "Family"} saved with one parent/guardian record for ${json?.guardian?.fullName ?? "the parent"} and ${json?.child?.fullName ?? "the child"}.`);
-      setStartingBalanceDollars("");
-      setCheckInPin("");
-      resetStudentFields();
-      router.refresh();
     });
+  }
+
+  function startNextFamily() {
+    setFamilyName("");
+    setAddress("");
+    setFamilyNotes("");
+    setCustodyNotes("");
+    setGuardianName("");
+    setGuardianEmail("");
+    setGuardianPhone("");
+    setGuardianRelation("Parent/Guardian");
+    setGuardianEmployer("");
+    setPreferredCommunication("email");
+    setCheckInPin("");
+    setStartingBalanceDollars("");
+    resetStudentFields();
+    setSavedFamilyId(null);
+    setStatusMessage("");
+    setErrorMessage("");
+    setFieldErrors({});
+    document.getElementById(controlId("guardian-name"))?.focus();
   }
 
   function errorFor(name: string) {
@@ -201,21 +232,35 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
       headerActions={<Badge variant="outline">Director workflow</Badge>}
       defaultCollapsed={defaultCollapsed}
     >
+        <div className="rounded-lg border bg-background/40 p-4 text-sm leading-6">
+          <p>Search the family directory first, including past enrollment records. Use the existing family for siblings and additional guardians.</p>
+          <Link href="/resources/director-data-clean-start#family-entry" className="font-medium text-primary underline underline-offset-4">Family entry instructions and completion checklist</Link>
+        </div>
         {statusMessage ? (
           <Alert>
             <CheckCircle2 className="size-4" />
             <AlertTitle>Saved</AlertTitle>
-            <AlertDescription>{statusMessage}</AlertDescription>
+            <AlertDescription>
+              <p>{statusMessage}</p>
+              <p>Open the saved family to add siblings or more guardians. Choose Start next family before entering a different household; the previous household&apos;s details remain below until you clear them.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {savedFamilyId ? <Button variant="outline" nativeButton={false} render={<Link href={`/family-detail?familyId=${encodeURIComponent(savedFamilyId)}#family-editor`} />}>Complete this family&apos;s details</Button> : null}
+                <Button type="button" variant="outline" disabled={isPending} onClick={startNextFamily}>Start next family</Button>
+              </div>
+              <p className="mt-2">Finish emergency contacts, authorized pickups, safety information, schedules, and documents in the family record.</p>
+            </AlertDescription>
           </Alert>
         ) : null}
         {errorMessage ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" />
             <AlertTitle>Needs attention</AlertTitle>
-            <AlertDescription>{errorMessage}</AlertDescription>
+            <AlertDescription>{errorMessage} <Link href="/family-detail#family-directory" className="underline underline-offset-4">Check family directory</Link></AlertDescription>
           </Alert>
         ) : null}
 
+        <fieldset disabled={isPending} className="space-y-5 disabled:opacity-70">
+        <legend className="sr-only">Family, guardian, and child information</legend>
         <section className="space-y-3">
           <div className="text-sm font-medium">Family account</div>
           <div className={`grid gap-3 ${compact ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
@@ -452,6 +497,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
           <UserPlus data-icon="inline-start" />
           Save Family, Parent + Child
         </Button>
+        </fieldset>
     </CollapsibleCard>
   );
 }

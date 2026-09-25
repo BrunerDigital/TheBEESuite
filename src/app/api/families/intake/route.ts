@@ -46,6 +46,7 @@ function dollarsToCents(value: unknown) {
 }
 
 class ReservedAppReviewIdentityMutationError extends Error {}
+class ExistingChildIntakeError extends Error {}
 
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
@@ -204,6 +205,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
+  let existingChildConflict = false;
   const result = await prisma.$transaction(async (tx) => {
     const existingFamily = existingFamilyMatch;
 
@@ -244,6 +246,16 @@ async function POSTHandler(request: NextRequest) {
             custodyNotes: custodyNotes || null,
           },
         });
+
+    if (existingFamily) {
+      // The update locks this family row until commit, so a concurrent retry
+      // cannot pass the duplicate check before the first child is saved.
+      const existingChild = await tx.child.findFirst({
+        where: { familyId: family.id, fullName: { equals: childName, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (existingChild) throw new ExistingChildIntakeError();
+    }
 
     const existingGuardian = await tx.guardian.findFirst({
       where: {
@@ -311,15 +323,7 @@ async function POSTHandler(request: NextRequest) {
       }
     }
 
-    const existingChild = await tx.child.findFirst({
-      where: {
-        familyId: family.id,
-        fullName: childName,
-      },
-      select: { id: true, customFields: true },
-    });
-
-    const childCustomFields = childBirthCustomFields(existingChild?.customFields, birthStatus === "expected"
+    const childCustomFields = childBirthCustomFields(null, birthStatus === "expected"
       ? { birthStatus, expectedDueDate }
       : { birthStatus, actualDateOfBirthProvided: true });
     const childDateOfBirth = birthStatus === "expected" ? expectedChildPlaceholderDate() : dateOfBirth!;
@@ -345,12 +349,7 @@ async function POSTHandler(request: NextRequest) {
         : Prisma.DbNull,
     };
 
-    const child = existingChild
-      ? await tx.child.update({
-          where: { id: existingChild.id },
-          data: childData,
-        })
-      : await tx.child.create({ data: childData });
+    const child = await tx.child.create({ data: childData });
 
     const billingAccount = await tx.billingAccount.upsert({
       where: { familyId: family.id },
@@ -403,10 +402,21 @@ async function POSTHandler(request: NextRequest) {
     };
   }).catch((error: unknown) => {
     if (error instanceof ReservedAppReviewIdentityMutationError) return null;
+    if (error instanceof ExistingChildIntakeError) {
+      existingChildConflict = true;
+      return null;
+    }
     throw error;
   });
 
   if (!result) {
+    if (existingChildConflict) {
+      return NextResponse.json({
+        ok: false,
+        error: "A child with this name already exists in this family. Check the family directory before saving again, or edit the existing child record.",
+        errors: { childName: "This child already exists in the selected family." },
+      }, { status: 409 });
+    }
     return NextResponse.json({
       ok: false,
       error: "Reserved App Review families can only be changed by the dedicated provisioning workflow.",

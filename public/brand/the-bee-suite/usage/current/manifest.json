@@ -1,0 +1,188 @@
+{
+  "title": "The BEE Suite people and product screens",
+  "releaseVersion": "current",
+  "sourceScenePolicy": "Existing synthetic school-use photography paired with current role screenshots; no production data.",
+  "scenes": [
+    {
+      "id": "front-desk-check-in",
+      "file": "front-desk-check-in.png",
+      "roleAndUseCase": "FRONT DESK + FAMILY VIEW",
+      "summary": "Teacher roster and parent overview",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/front-desk-check-in-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/teacher-ipad-roster-light.png",
+          "label": "TEACHER ROSTER"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/parent-iphone-overview-light.png",
+          "label": "PARENT OVERVIEW"
+        }
+      ]
+    },
+    {
+      "id": "classroom-daily-reports",
+      "file": "classroom-daily-reports.png",
+      "roleAndUseCase": "CLASSROOM TO FAMILY",
+      "summary": "Teachers record the day. Families review updates.",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/classroom-daily-reports-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/teacher-ipad-daily-report-light.png",
+          "label": "TEACHER DAILY REPORT"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/parent-iphone-daily-reports-light.png",
+          "label": "PARENT DAILY REPORT"
+        }
+      ]
+    },
+    {
+      "id": "classroom-roster-activities",
+      "file": "classroom-roster-activities.png",
+      "roleAndUseCase": "TEACHER + FAMILY WORKFLOWS",
+      "summary": "Classroom roster beside family activities",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/classroom-roster-activities-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/teacher-ipad-roster-light.png",
+          "label": "CLASSROOM ROSTER"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/parent-iphone-activities-light.png",
+          "label": "FAMILY ACTIVITIES"
+        }
+      ]
+    },
+    {
+      "id": "director-school-operations",
+      "file": "director-school-operations.png",
+      "roleAndUseCase": "DIRECTOR OPERATIONS",
+      "summary": "School operations and daily-report view",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/director-school-operations-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/director-desktop-dashboard-light.png",
+          "label": "SCHOOL OPERATIONS"
+        }
+      ]
+    },
+    {
+      "id": "school-and-family-billing",
+      "file": "school-and-family-billing.png",
+      "roleAndUseCase": "SCHOOL + FAMILY BILLING",
+      "summary": "Authorized school billing and parent balance view",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/school-and-family-billing-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/director-desktop-billing-light.png",
+          "label": "DIRECTOR BILLING"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/parent-iphone-billing-light.png",
+          "label": "PARENT BILLING"
+        }
+      ]
+    },
+    {
+      "id": "executive-school-reporting",
+      "file": "executive-school-reporting.png",
+      "roleAndUseCase": "EXECUTIVE + MULTI-LOCATION",
+      "summary": "Executive dashboard and multi-location FTE reporting",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/executive-school-reporting-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/executive-desktop-dashboard-light.png",
+          "label": "EXECUTIVE DASHBOARD"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/executive-desktop-fte-light.png",
+          "label": "FTE REPORTING"
+        }
+      ]
+    },
+    {
+      "id": "executive-administration",
+      "file": "executive-administration.png",
+      "roleAndUseCase": "EXECUTIVE ADMINISTRATION",
+      "summary": "Location, role, access, and audit views",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/executive-administration-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/executive-desktop-admin-light.png",
+          "label": "ADMIN + ACCESS"
+        }
+      ]
+    },
+    {
+      "id": "family-kiosk-check-in",
+      "file": "family-kiosk-check-in.png",
+      "roleAndUseCase": "FAMILY CHECK-IN",
+      "summary": "Family PIN entry on the BEE Suite kiosk",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/family-kiosk-check-in-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/family-kiosk-check-in-light.png",
+          "label": "FAMILY CHECK-IN"
+        }
+      ]
+    },
+    {
+      "id": "enrollment-inquiries",
+      "file": "enrollment-inquiries.png",
+      "roleAndUseCase": "INQUIRY + ENROLLMENT",
+      "summary": "Inquiry pipeline and school enrollment form",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/enrollment-inquiries-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/director-desktop-enrollment-light.png",
+          "label": "ENROLLMENT PIPELINE"
+        }
+      ]
+    },
+    {
+      "id": "family-messaging",
+      "file": "family-messaging.png",
+      "roleAndUseCase": "FAMILY MESSAGING",
+      "summary": "Parent portal conversation and reply composer",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/family-messaging-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/parent-iphone-messages-light.png",
+          "label": "PARENT MESSAGES"
+        }
+      ]
+    },
+    {
+      "id": "school-data-migration",
+      "file": "school-data-migration.png",
+      "roleAndUseCase": "SCHOOL DATA MIGRATION",
+      "summary": "Previous-system import preparation and review gates",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/school-data-migration-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/director-desktop-procare-import-light.png",
+          "label": "IMPORT PREPARATION"
+        }
+      ]
+    },
+    {
+      "id": "mr-bee-draft-review",
+      "file": "mr-bee-draft-review.png",
+      "roleAndUseCase": "MR. BEE ASSISTANT",
+      "summary": "Mr. Bee follow-up options for human review",
+      "peopleSource": "public/brand/the-bee-suite/usage/current/source/mr-bee-draft-review-people-scene.png",
+      "screens": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/director-mobile-mr-bee-light.png",
+          "label": "MR. BEE DRAFT"
+        }
+      ]
+    }
+  ],
+  "coverageNotes": [
+    "People scenes pair with teacher roster and daily reports, parent overview, family activities, messaging, check-in, school operations, enrollment, billing, executive dashboard, FTE reporting, executive administration, school data migration, and Mr. Bee draft review.",
+    "The migration image shows preparation and review controls only; it does not imply a live import or school activation. Mr. Bee appears as a draft for human review, not as a sent message.",
+    "Screens retain their captured interface content and labels with proportional scaling inside device frames."
+  ]
+}

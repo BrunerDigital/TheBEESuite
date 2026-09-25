@@ -38,6 +38,7 @@ Printed material should use warm white as the page surface, deep navy or ink for
 - Instruction flows: `public/brand/the-bee-suite/explainers/current/`
 - Role/device graphics: `public/brand/the-bee-suite/sop-graphics/current/`
 - Privacy-safe role screenshots: `public/brand/the-bee-suite/screenshots/current/`
+- People-in-use feature scenes: `public/brand/the-bee-suite/usage/current/`
 - Social and paid creative review pack: `public/brand/the-bee-suite/marketing/current/`
 - Sendable Markdown and PDFs: `output/pdf/TEAM_SHARE_GUIDES_CURRENT/`
 
@@ -47,6 +48,8 @@ Do not create another dated or `v2`/`v3` sibling for an updated guide. Replace t
 
 - Use seeded demo records only.
 - Exclude warning banners, browser developer controls, credentials, and production data.
+- For people-in-use imagery, show the current privacy-safe BEE Suite screen in a role-matched device; do not leave device screens blank or invent product UI.
+- Refresh the privacy-safe role captures, then rebuild the people scenes with `python scripts/render-bee-suite-usage-scenes.py`. Review `usage/current/manifest.json` for the screen paired with each scene.
 - Teachers: lead with iPad; include desktop for review work.
 - Directors and executives: desktop.
 - Parents: lead with iPhone; include iPad and desktop where useful.

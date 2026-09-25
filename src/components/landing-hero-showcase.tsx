@@ -163,7 +163,7 @@ export function LandingHeroShowcase() {
           alt="A parent and school director using The BEE Suite at a childcare front desk"
           fill
           sizes="(max-width: 639px) 92vw, (max-width: 1023px) 55vw, (max-width: 1280px) 34vw, 28vw"
-          className="object-cover object-[54%_38%]"
+          className="object-contain object-center"
           loading="eager"
         />
       </div>

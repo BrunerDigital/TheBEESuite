@@ -194,11 +194,12 @@ def draw_device(canvas, d, box):
     shadow = Image.new('RGBA', (frame.width+36, frame.height+36), (0,0,0,0))
     ImageDraw.Draw(shadow).rounded_rectangle((18,18,frame.width+17,frame.height+17), radius=outer, fill=(0,0,0,155))
     shadow = shadow.filter(ImageFilter.GaussianBlur(14))
-    canvas.alpha_composite(shadow, (x-18,y-10))
-    canvas.alpha_composite(frame, (x,y))
+    frame_x = x + max(0, (maxw - frame.width) // 2)
+    canvas.alpha_composite(shadow, (frame_x-18,y-10))
+    canvas.alpha_composite(frame, (frame_x,y))
     dbox = ImageDraw.Draw(canvas)
     label = d['label']
-    bx = x + max(0,(maxw-dbox.textbbox((0,0),label,font=FONT_DEVICE)[2])//2)
+    bx = frame_x + max(0,(frame.width-dbox.textbbox((0,0),label,font=FONT_DEVICE)[2])//2)
     dbox.text((bx,y+frame.height+10), label, fill=WHITE, font=FONT_DEVICE)
 
 

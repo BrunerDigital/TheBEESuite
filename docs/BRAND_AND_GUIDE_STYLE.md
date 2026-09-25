@@ -49,7 +49,7 @@ Do not create another dated or `v2`/`v3` sibling for an updated guide. Replace t
 - Use seeded demo records only.
 - Exclude warning banners, browser developer controls, credentials, and production data.
 - For people-in-use imagery, show the current privacy-safe BEE Suite screen in a role-matched device; do not leave device screens blank or invent product UI.
-- Refresh the privacy-safe role captures, then rebuild the people scenes with `python scripts/render-bee-suite-usage-scenes.py`. Review `usage/current/manifest.json` for the screen paired with each scene.
+- Refresh the privacy-safe role captures, install the renderer dependency with `python -m pip install -r scripts/requirements-bee-usage.txt`, then rebuild the people scenes with `python scripts/render-bee-suite-usage-scenes.py`. Review `usage/current/manifest.json` for the screen paired with each scene.
 - Teachers: lead with iPad; include desktop for review work.
 - Directors and executives: desktop.
 - Parents: lead with iPhone; include iPad and desktop where useful.

@@ -49,6 +49,14 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: "/brand/the-bee-suite/usage/current",
+        destination: "/brand/the-bee-suite/usage/current/index.html",
+      },
+    ];
+  },
   async headers() {
     return [
       {

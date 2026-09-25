@@ -204,19 +204,19 @@ export default function Home() {
             className="scroll-mt-20 bg-[#f5f3ee] px-4 py-20 text-slate-950 dark:bg-[#0d1b26] dark:text-white sm:px-6 sm:py-24 lg:px-10 lg:py-28 xl:px-14"
           >
             <div className="mx-auto grid max-w-[1400px] items-center gap-5 lg:grid-cols-[1.08fr_0.82fr_0.8fr] xl:gap-7">
-              <div className="relative aspect-[1.18/1] overflow-hidden rounded-[1.5rem] bg-slate-200 shadow-[0_24px_60px_rgba(20,30,36,0.12)] dark:bg-slate-900">
+              <div className="relative aspect-[1.6/1] overflow-hidden rounded-[1.5rem] bg-slate-200 shadow-[0_24px_60px_rgba(20,30,36,0.12)] dark:bg-slate-900">
                 <Image
                   src="/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png"
-                  alt="A teacher using The BEE Suite on a tablet in a preschool classroom"
+                  alt="A preschool teacher alongside BEE Suite classroom and family update screens"
                   fill
                   sizes="(max-width: 1024px) 100vw, 43vw"
                   className="object-cover object-center"
                 />
               </div>
-              <div className="relative aspect-[1.03/1] overflow-hidden rounded-[1.5rem] bg-slate-200 shadow-[0_24px_60px_rgba(20,30,36,0.12)] dark:bg-slate-900 lg:translate-y-10">
+              <div className="relative aspect-[1.6/1] overflow-hidden rounded-[1.5rem] bg-slate-200 shadow-[0_24px_60px_rgba(20,30,36,0.12)] dark:bg-slate-900 lg:translate-y-10">
                 <Image
                   src="/brand/the-bee-suite/usage/bee-suite-director-operations.png"
-                  alt="Two school leaders using The BEE Suite together in a childcare office"
+                  alt="A school leader alongside the BEE Suite School Operations screen"
                   fill
                   sizes="(max-width: 1024px) 100vw, 33vw"
                   className="object-cover object-center"

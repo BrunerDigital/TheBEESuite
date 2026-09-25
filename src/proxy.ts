@@ -4,6 +4,8 @@ import { updateSession } from "@/utils/supabase/middleware";
 
 const PUBLIC_SESSIONLESS_PATHS = new Set([
   "/app",
+  "/brand/the-bee-suite/usage/current",
+  "/brand/the-bee-suite/usage/current/",
   "/mobile-apps",
   "/eula",
   "/privacy",

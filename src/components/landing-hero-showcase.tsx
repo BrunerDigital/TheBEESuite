@@ -160,10 +160,10 @@ export function LandingHeroShowcase() {
       <div className="absolute left-[4%] right-[4%] top-0 h-[clamp(11rem,52vw,12.75rem)] w-auto overflow-hidden rounded-l-[1.6rem] border-l-2 border-[#f6bd2c] bg-slate-200 shadow-[0_24px_70px_rgba(20,30,36,0.16)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-3 motion-safe:duration-700 dark:bg-slate-900 sm:left-auto sm:right-0 sm:h-[53%] sm:w-[55%] sm:rounded-l-[2rem]">
         <Image
           src="/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png"
-          alt="A parent and school director using The BEE Suite at a childcare front desk"
+          alt="A family and school leader alongside BEE Suite check-in screens at a childcare front desk"
           fill
           sizes="(max-width: 639px) 92vw, (max-width: 1023px) 55vw, (max-width: 1280px) 34vw, 28vw"
-          className="object-cover object-[54%_38%]"
+          className="object-contain object-center"
           loading="eager"
         />
       </div>

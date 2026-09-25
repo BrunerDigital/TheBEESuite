@@ -28,6 +28,7 @@ import {
   validateNextStaffClockAction,
 } from "@/lib/staff-kiosk";
 import { generateTeacherLoginCredentials, isGeneratedTeacherLoginEmail, type TeacherLoginCredentials } from "@/lib/teacher-login";
+import { randomBytes } from "node:crypto";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 import {
   dailyReportEmailRecipientCustomFields,
@@ -1648,6 +1649,7 @@ async function POSTHandler(request: NextRequest) {
           fullName: staffName,
           emailExists: (candidate) => prisma.user.findUnique({ where: { email: candidate }, select: { id: true } }).then(Boolean),
         });
+    if (generatedLogin) generatedLogin.temporary_password = randomBytes(24).toString("base64url");
     try {
       if (generatedLogin) {
         auth = await provisionTeacherLogin({ login: generatedLogin, name: staffName });

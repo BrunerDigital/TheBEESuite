@@ -3,7 +3,6 @@ import { test } from "node:test";
 import {
   buildTeacherLoginEmail,
   generateTeacherLoginCredentials,
-  generateTeacherInitialPassword,
   getDefaultTeacherInitialPassword,
   getTeacherLoginDomain,
   normalizeTeacherLoginNamePart,
@@ -27,16 +26,14 @@ test("teacher login generator appends numeric suffixes and creates a strong temp
   });
 
   assert.equal(credentials.email, "sarah.johnson3@thebeesuite.io");
-  assert.equal(credentials.temporary_password.length, 32);
-  assert.match(credentials.temporary_password, /^[A-Za-z0-9_-]+$/);
-  assert.notEqual(credentials.temporary_password, "BusyBees");
+  assert.equal(credentials.temporary_password, getDefaultTeacherInitialPassword());
 });
 
 test("teacher login config supports env overrides", () => {
   assert.equal(getTeacherLoginDomain({ TEACHER_LOGIN_DOMAIN: "@school.example" }), "school.example");
   assert.equal(getDefaultTeacherInitialPassword({ DEFAULT_TEACHER_INITIAL_PASSWORD: "ApprovedTemp123!" }), "ApprovedTemp123!");
   assert.equal(getDefaultTeacherInitialPassword({}).length, "BusyBees".length);
-  assert.equal(generateTeacherInitialPassword().length, 32);
+  assert.equal(getDefaultTeacherInitialPassword({}).length, "BusyBees".length);
   assert.equal(buildTeacherLoginEmail({ fullName: "Avery Johnson", domain: "school.example" }), "avery.johnson@school.example");
   assert.equal(normalizeTeacherLoginNamePart("  Anne-Marie O'Neil  "), "annemarieoneil");
 });

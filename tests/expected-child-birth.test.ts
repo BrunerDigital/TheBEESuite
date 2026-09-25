@@ -83,6 +83,10 @@ test("family intake, family editor, and operations APIs expose and validate the 
   assert.match(intakeApi, /childBirthCustomFields\(null/);
   assert.match(intakeApi, /if \(existingChild\) throw new ExistingChildIntakeError\(\)/);
   assert.doesNotMatch(intakeApi, /tx\.child\.update\(/);
+  assert.ok(
+    intakeApi.indexOf("tx.family.update({") < intakeApi.indexOf("if (existingChild) throw new ExistingChildIntakeError()"),
+    "the existing family row must be locked before the duplicate child check",
+  );
   assert.match(editor, /Child not born yet/);
   assert.match(editor, /Expected due date/);
   assert.match(editor, /Expected children stay pending or waitlisted/);

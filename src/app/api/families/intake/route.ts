@@ -210,12 +210,6 @@ async function POSTHandler(request: NextRequest) {
     const existingFamily = existingFamilyMatch;
 
     if (existingFamily) {
-      const existingChild = await tx.child.findFirst({
-        where: { familyId: existingFamily.id, fullName: { equals: childName, mode: "insensitive" } },
-        select: { id: true },
-      });
-      if (existingChild) throw new ExistingChildIntakeError();
-
       const existingFamilyGuardians = await tx.guardian.findMany({
         where: { familyId: existingFamily.id },
         select: {
@@ -252,6 +246,16 @@ async function POSTHandler(request: NextRequest) {
             custodyNotes: custodyNotes || null,
           },
         });
+
+    if (existingFamily) {
+      // The update locks this family row until commit, so a concurrent retry
+      // cannot pass the duplicate check before the first child is saved.
+      const existingChild = await tx.child.findFirst({
+        where: { familyId: family.id, fullName: { equals: childName, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (existingChild) throw new ExistingChildIntakeError();
+    }
 
     const existingGuardian = await tx.guardian.findFirst({
       where: {

@@ -29,7 +29,7 @@ import {
 } from "@/lib/staff-kiosk";
 import { generateTeacherLoginCredentials, isGeneratedTeacherLoginEmail, type TeacherLoginCredentials } from "@/lib/teacher-login";
 import { randomBytes } from "node:crypto";
-import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import { deleteSupabaseAuthUserByEmail, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 import {
   dailyReportEmailRecipientCustomFields,
   dailyReportEmailRecipientGuardianIdsFromPayload,
@@ -1644,6 +1644,7 @@ async function POSTHandler(request: NextRequest) {
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
     let auth: Prisma.InputJsonValue = { skipped: true };
+    let createdAuthLogin = false;
     const generatedLogin = id
       ? undefined
       : await generateTeacherLoginCredentials({
@@ -1654,6 +1655,7 @@ async function POSTHandler(request: NextRequest) {
     try {
       if (generatedLogin) {
         auth = await provisionTeacherLogin({ login: generatedLogin, name: staffName });
+        createdAuthLogin = jsonObject(auth).created === true;
         login = generatedLogin;
       }
     } catch (error) {
@@ -1663,7 +1665,9 @@ async function POSTHandler(request: NextRequest) {
       );
     }
     const staffKioskPinSetAt = staffKioskPin ? new Date() : null;
-    const staffWrite = await prisma.$transaction(async (tx) => {
+    let staffWrite: { staffUser: Awaited<ReturnType<typeof prisma.user.create>>; savedStaffProfile: Awaited<ReturnType<typeof prisma.staffProfile.create>> };
+    try {
+      staffWrite = await prisma.$transaction(async (tx) => {
       const staffUser = existingProfileForEdit
         ? await tx.user.update({
             where: { id: existingProfileForEdit.userId },
@@ -1743,7 +1747,22 @@ async function POSTHandler(request: NextRequest) {
         });
       }
       return { staffUser, savedStaffProfile };
-    });
+      });
+    } catch (error) {
+      if (generatedLogin && createdAuthLogin) {
+        const cleanup = await deleteSupabaseAuthUserByEmail(generatedLogin.email);
+        if (!cleanup.ok) {
+          return NextResponse.json({
+            ok: false,
+            error: "Staff profile was not saved and its new Auth login could not be cleaned up. Contact support before retrying.",
+          }, { status: 500 });
+        }
+      }
+      return NextResponse.json({
+        ok: false,
+        error: error instanceof Error ? error.message : "Staff profile could not be saved.",
+      }, { status: 500 });
+    }
     result = staffWrite.savedStaffProfile;
     if (login) {
       auditMetadata.generatedTeacherLoginEmail = login.email;

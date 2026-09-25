@@ -80,7 +80,9 @@ test("family intake, family editor, and operations APIs expose and validate the 
   assert.match(intakeForm, /disabled=\{childNotBornYet && !isEnrollmentPipelineStatus\(status\)\}/);
   assert.match(intakeApi, /Expected due date is required for a child who is not born yet/);
   assert.match(intakeApi, /birthStatus === "expected" \? expectedChildPlaceholderDate\(\) : dateOfBirth!/);
-  assert.match(intakeApi, /childBirthCustomFields\(existingChild\?\.customFields/);
+  assert.match(intakeApi, /childBirthCustomFields\(null/);
+  assert.match(intakeApi, /if \(existingChild\) throw new ExistingChildIntakeError\(\)/);
+  assert.doesNotMatch(intakeApi, /tx\.child\.update\(/);
   assert.match(editor, /Child not born yet/);
   assert.match(editor, /Expected due date/);
   assert.match(editor, /Expected children stay pending or waitlisted/);

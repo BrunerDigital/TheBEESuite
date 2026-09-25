@@ -254,6 +254,7 @@ async function provisionTeacherLogin(input: {
     password: input.login.temporary_password,
     role: UserRole.TEACHER,
     source: "bee_suite_school_staff_management",
+    rejectIfExists: true,
   });
 }
 

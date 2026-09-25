@@ -465,6 +465,7 @@ export async function upsertSupabaseAuthUserWithPassword({
   source = "bee_suite_executive_admin",
   updateExistingPassword = true,
   allowReservedAppReview = false,
+  rejectIfExists = false,
 }: {
   email: string;
   name?: string;
@@ -473,6 +474,7 @@ export async function upsertSupabaseAuthUserWithPassword({
   source?: string;
   updateExistingPassword?: boolean;
   allowReservedAppReview?: boolean;
+  rejectIfExists?: boolean;
 }) {
   const normalizedEmail = email.toLowerCase();
   if (appReviewReservedIdentityKind(normalizedEmail) && !allowReservedAppReview) {
@@ -486,6 +488,9 @@ export async function upsertSupabaseAuthUserWithPassword({
   const appMetadata = role ? { bee_suite_role: role } : undefined;
 
   if (user) {
+    if (rejectIfExists) {
+      throw new Error("A login with this email already exists. No existing password was changed.");
+    }
     if (!updateExistingPassword) {
       return { ok: true, created: false, updated: false, alreadyExisted: true };
     }

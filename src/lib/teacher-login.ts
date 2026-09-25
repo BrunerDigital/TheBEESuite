@@ -1,5 +1,4 @@
 export const DEFAULT_TEACHER_LOGIN_DOMAIN = "thebeesuite.io";
-export const DEFAULT_TEACHER_INITIAL_PASSWORD = "BusyBees";
 
 type TeacherLoginNameInput = {
   firstName?: string | null;
@@ -30,7 +29,7 @@ export function getTeacherLoginDomain(env: TeacherLoginConfigEnv = process.env) 
 }
 
 export function getDefaultTeacherInitialPassword(env: TeacherLoginConfigEnv = process.env) {
-  return clean(env.DEFAULT_TEACHER_INITIAL_PASSWORD) || DEFAULT_TEACHER_INITIAL_PASSWORD;
+  return clean(env.DEFAULT_TEACHER_INITIAL_PASSWORD) || "BusyBees";
 }
 
 export function normalizeTeacherLoginNamePart(value?: string | null) {

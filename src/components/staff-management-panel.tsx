@@ -966,6 +966,7 @@ export function StaffManagementPanel({
       const json = await response.json().catch(() => null) as {
         error?: string;
         mode?: string;
+        auditWarning?: string;
         auth?: { skipped?: boolean; passwordResetSent?: boolean };
         login?: TeacherLoginResponse;
       } | null;
@@ -977,7 +978,8 @@ export function StaffManagementPanel({
       const loginStatus = json?.login ? " Bee Suite login was generated." : "";
       const kioskStatus = staffKioskPin ? " Staff kiosk code was set." : "";
       const restoreStatus = selectedPreviousTeacher ? " Previous staff member was restored to active staff." : "";
-      setStatusMessage(`Teacher profile ${json?.mode ?? "saved"}.${loginStatus}${kioskStatus}${restoreStatus}`);
+      const auditWarning = json?.auditWarning ? ` Warning: ${json.auditWarning}` : "";
+      setStatusMessage(`Teacher profile ${json?.mode ?? "saved"}.${loginStatus}${kioskStatus}${restoreStatus}${auditWarning}`);
       setSelectedStaffId("new");
       setStaffKioskPin("");
       router.refresh();

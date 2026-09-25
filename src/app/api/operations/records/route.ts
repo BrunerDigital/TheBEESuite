@@ -28,7 +28,8 @@ import {
   validateNextStaffClockAction,
 } from "@/lib/staff-kiosk";
 import { generateTeacherLoginCredentials, isGeneratedTeacherLoginEmail, type TeacherLoginCredentials } from "@/lib/teacher-login";
-import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import { randomBytes } from "node:crypto";
+import { deleteSupabaseAuthUserByEmail, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 import {
   dailyReportEmailRecipientCustomFields,
   dailyReportEmailRecipientGuardianIdsFromPayload,
@@ -253,6 +254,7 @@ async function provisionTeacherLogin(input: {
     password: input.login.temporary_password,
     role: UserRole.TEACHER,
     source: "bee_suite_school_staff_management",
+    rejectIfExists: true,
   });
 }
 
@@ -1642,15 +1644,18 @@ async function POSTHandler(request: NextRequest) {
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
     let auth: Prisma.InputJsonValue = { skipped: true };
+    let createdAuthLogin = false;
     const generatedLogin = id
       ? undefined
       : await generateTeacherLoginCredentials({
           fullName: staffName,
           emailExists: (candidate) => prisma.user.findUnique({ where: { email: candidate }, select: { id: true } }).then(Boolean),
         });
+    if (generatedLogin) generatedLogin.temporary_password = randomBytes(24).toString("base64url");
     try {
       if (generatedLogin) {
         auth = await provisionTeacherLogin({ login: generatedLogin, name: staffName });
+        createdAuthLogin = jsonObject(auth).created === true;
         login = generatedLogin;
       }
     } catch (error) {
@@ -1660,7 +1665,9 @@ async function POSTHandler(request: NextRequest) {
       );
     }
     const staffKioskPinSetAt = staffKioskPin ? new Date() : null;
-    const staffWrite = await prisma.$transaction(async (tx) => {
+    let staffWrite: { staffUser: Awaited<ReturnType<typeof prisma.user.create>>; savedStaffProfile: Awaited<ReturnType<typeof prisma.staffProfile.create>> };
+    try {
+      staffWrite = await prisma.$transaction(async (tx) => {
       const staffUser = existingProfileForEdit
         ? await tx.user.update({
             where: { id: existingProfileForEdit.userId },
@@ -1740,20 +1747,41 @@ async function POSTHandler(request: NextRequest) {
         });
       }
       return { staffUser, savedStaffProfile };
-    });
+      });
+    } catch (error) {
+      if (generatedLogin && createdAuthLogin) {
+        const cleanup = await deleteSupabaseAuthUserByEmail(generatedLogin.email);
+        if (!cleanup.ok) {
+          return NextResponse.json({
+            ok: false,
+            error: "Staff profile was not saved and its new Auth login could not be cleaned up. Contact support before retrying.",
+          }, { status: 500 });
+        }
+      }
+      return NextResponse.json({
+        ok: false,
+        error: error instanceof Error ? error.message : "Staff profile could not be saved.",
+      }, { status: 500 });
+    }
     result = staffWrite.savedStaffProfile;
     if (login) {
       auditMetadata.generatedTeacherLoginEmail = login.email;
-      await writeAuditLog(user, {
-        centerId,
-        action: "teacher_user_created",
-        resource: "User",
-        resourceId: staffWrite.staffUser.id,
-        metadata: {
-          email: login.email,
-          staffProfileId: staffWrite.savedStaffProfile.id,
-        },
-      });
+      try {
+        await writeAuditLog(user, {
+          centerId,
+          action: "teacher_user_created",
+          resource: "User",
+          resourceId: staffWrite.staffUser.id,
+          metadata: {
+            email: login.email,
+            staffProfileId: staffWrite.savedStaffProfile.id,
+          },
+        });
+      } catch {
+        // Keep the one-time generated credential in the successful response if
+        // audit storage is temporarily unavailable after the account commits.
+        auditMetadata.auditWarning = "Staff account was created, but its audit entry could not be saved.";
+      }
     }
     auditMetadata.auth = auth;
     auditMetadata.staffKioskCodeSet = Boolean(staffKioskPin);
@@ -2349,13 +2377,18 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
-  await writeAuditLog(user, {
-    centerId,
-    action: `operations.${entity}.${operationMode}`,
-    resource: entity,
-    resourceId,
-    metadata: auditMetadata as Prisma.InputJsonObject,
-  });
+  try {
+    await writeAuditLog(user, {
+      centerId,
+      action: `operations.${entity}.${operationMode}`,
+      resource: entity,
+      resourceId,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+  } catch {
+    if (!login) throw new Error("Unable to write operations audit log.");
+    auditMetadata.auditWarning = "Staff account was created, but its audit entry could not be saved.";
+  }
   if (centerId && (entity === "invoice" || entity === "ledgerEntry" || entity === "familyMerge")) {
     await prisma.center.update({ where: { id: centerId }, data: { updatedAt: new Date() } });
   }

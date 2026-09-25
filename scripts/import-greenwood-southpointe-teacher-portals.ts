@@ -498,6 +498,8 @@ async function provisionAuthChunk(plan: Plan, admin: SupabaseClient) {
   invariant(targets.length === 36, `Expected 36 active teacher portal records; found ${targets.length}.`);
   const authUsers = await listAllAuthUsers(admin);
   const authByEmail = new Map(authUsers.filter((user) => user.email).map((user) => [normalized(user.email), user]));
+  // This workflow is deliberately split across separate runs; configure the same
+  // strong password before both provisioning and verification.
   const password = getDefaultTeacherInitialPassword();
   invariant(password.length >= 8, "The configured teacher initial password is not acceptable.");
   const results = [];
@@ -545,6 +547,7 @@ async function verifyLoginChunk(plan: Plan, url: string, anonKey: string) {
   const { offset, limit } = chunkArgs();
   const targets = await targetPortalUsers(plan);
   invariant(targets.length === 36, `Expected 36 active teacher portal records; found ${targets.length}.`);
+  // Keep in sync with provisionAuthChunk across separate invocations.
   const password = getDefaultTeacherInitialPassword();
   const results = [];
   const chunk = targets.slice(offset, offset + limit);

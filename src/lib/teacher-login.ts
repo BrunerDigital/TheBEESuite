@@ -1,5 +1,7 @@
+import { randomBytes } from "node:crypto";
+
 export const DEFAULT_TEACHER_LOGIN_DOMAIN = "thebeesuite.io";
-export const DEFAULT_TEACHER_INITIAL_PASSWORD = "BusyBees";
+const DEFAULT_TEACHER_INITIAL_PASSWORD_LENGTH = 24;
 
 type TeacherLoginNameInput = {
   firstName?: string | null;
@@ -30,7 +32,11 @@ export function getTeacherLoginDomain(env: TeacherLoginConfigEnv = process.env) 
 }
 
 export function getDefaultTeacherInitialPassword(env: TeacherLoginConfigEnv = process.env) {
-  return clean(env.DEFAULT_TEACHER_INITIAL_PASSWORD) || DEFAULT_TEACHER_INITIAL_PASSWORD;
+  return clean(env.DEFAULT_TEACHER_INITIAL_PASSWORD) || "BusyBees";
+}
+
+export function generateTeacherInitialPassword() {
+  return randomBytes(DEFAULT_TEACHER_INITIAL_PASSWORD_LENGTH).toString("base64url");
 }
 
 export function normalizeTeacherLoginNamePart(value?: string | null) {
@@ -77,7 +83,7 @@ export async function generateTeacherLoginCredentials(input: TeacherLoginNameInp
     if (!(await input.emailExists(email))) {
       return {
         email,
-        temporary_password: getDefaultTeacherInitialPassword(),
+        temporary_password: generateTeacherInitialPassword(),
       } satisfies TeacherLoginCredentials;
     }
   }

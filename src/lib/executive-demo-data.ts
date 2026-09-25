@@ -302,7 +302,7 @@ export const executiveParentPortalDemo = {
   })),
   media: [{
     id: "exec-demo-parent-photo",
-    url: "/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png",
+    url: "/brand/the-bee-suite/usage/bee-suite-classroom-photo.png",
     caption: "Classroom learning and play update",
     takenAt: isoWithOffset(0, 15, 5),
     child: { fullName: "Mia Rivera" },

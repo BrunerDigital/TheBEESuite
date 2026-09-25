@@ -207,7 +207,7 @@ export default function Home() {
               <div className="relative aspect-[1.6/1] overflow-hidden rounded-[1.5rem] bg-slate-200 shadow-[0_24px_60px_rgba(20,30,36,0.12)] dark:bg-slate-900">
                 <Image
                   src="/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png"
-                  alt="A teacher using The BEE Suite on a tablet in a preschool classroom"
+                  alt="A preschool teacher alongside BEE Suite classroom and family update screens"
                   fill
                   sizes="(max-width: 1024px) 100vw, 43vw"
                   className="object-cover object-center"
@@ -216,7 +216,7 @@ export default function Home() {
               <div className="relative aspect-[1.6/1] overflow-hidden rounded-[1.5rem] bg-slate-200 shadow-[0_24px_60px_rgba(20,30,36,0.12)] dark:bg-slate-900 lg:translate-y-10">
                 <Image
                   src="/brand/the-bee-suite/usage/bee-suite-director-operations.png"
-                  alt="Two school leaders using The BEE Suite together in a childcare office"
+                  alt="A school leader alongside the BEE Suite School Operations screen"
                   fill
                   sizes="(max-width: 1024px) 100vw, 33vw"
                   className="object-cover object-center"

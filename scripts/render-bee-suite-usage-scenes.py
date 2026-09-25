@@ -292,7 +292,7 @@ manifest={
 # Build a review page for all scenes at the canonical current path.
 html='''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The BEE Suite people and product screens</title><style>body{margin:0;background:#f7f4ec;color:#101820;font:16px/1.5 Inter,Segoe UI,Arial,sans-serif}header{padding:38px clamp(20px,5vw,72px);background:#071018;color:#fff}h1{margin:0;color:#ffd247;font-size:clamp(30px,4vw,52px)}header p{max-width:850px;color:#ccd3d9}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:24px;padding:clamp(20px,4vw,60px)}article{overflow:hidden;border:1px solid #e1d8c5;border-radius:20px;background:white;box-shadow:0 15px 38px #09131a14}article img{display:block;width:100%;height:auto}article h2{margin:20px 22px 4px;font-size:23px}article p{margin:0 22px 22px;color:#53606a}</style><header><h1>People using The BEE Suite</h1><p>Real school-use scenes paired with the current privacy-safe BEE Suite role screens. Product UI remains exact inside the device frames.</p></header><main class="grid">'''
 for item in scenes:
-  html+=f'<article><img src="{item["id"]}.png" alt="{item["eyebrow"]}: {item["description"]}"><h2>{item["eyebrow"].title()}</h2><p>{item["description"]}</p></article>'
+  html+=f'<article><img src="/brand/the-bee-suite/usage/current/{item["id"]}.png" alt="{item["eyebrow"]}: {item["description"]}"><h2>{item["eyebrow"].title()}</h2><p>{item["description"]}</p></article>'
 html+='</main></html>\n'
 (OUT/'index.html').write_text(html,encoding='utf-8')
 print(f'Rendered {len(scenes)} people-and-product images in {OUT}')

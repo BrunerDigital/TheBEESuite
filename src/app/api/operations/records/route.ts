@@ -1746,16 +1746,22 @@ async function POSTHandler(request: NextRequest) {
     result = staffWrite.savedStaffProfile;
     if (login) {
       auditMetadata.generatedTeacherLoginEmail = login.email;
-      await writeAuditLog(user, {
-        centerId,
-        action: "teacher_user_created",
-        resource: "User",
-        resourceId: staffWrite.staffUser.id,
-        metadata: {
-          email: login.email,
-          staffProfileId: staffWrite.savedStaffProfile.id,
-        },
-      });
+      try {
+        await writeAuditLog(user, {
+          centerId,
+          action: "teacher_user_created",
+          resource: "User",
+          resourceId: staffWrite.staffUser.id,
+          metadata: {
+            email: login.email,
+            staffProfileId: staffWrite.savedStaffProfile.id,
+          },
+        });
+      } catch {
+        // Keep the one-time generated credential in the successful response if
+        // audit storage is temporarily unavailable after the account commits.
+        auditMetadata.auditWarning = "Staff account was created, but its audit entry could not be saved.";
+      }
     }
     auditMetadata.auth = auth;
     auditMetadata.staffKioskCodeSet = Boolean(staffKioskPin);
@@ -2351,13 +2357,18 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
-  await writeAuditLog(user, {
-    centerId,
-    action: `operations.${entity}.${operationMode}`,
-    resource: entity,
-    resourceId,
-    metadata: auditMetadata as Prisma.InputJsonObject,
-  });
+  try {
+    await writeAuditLog(user, {
+      centerId,
+      action: `operations.${entity}.${operationMode}`,
+      resource: entity,
+      resourceId,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+  } catch {
+    if (!login) throw new Error("Unable to write operations audit log.");
+    auditMetadata.auditWarning = "Staff account was created, but its audit entry could not be saved.";
+  }
   if (centerId && (entity === "invoice" || entity === "ledgerEntry" || entity === "familyMerge")) {
     await prisma.center.update({ where: { id: centerId }, data: { updatedAt: new Date() } });
   }

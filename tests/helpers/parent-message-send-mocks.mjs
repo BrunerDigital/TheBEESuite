@@ -3,11 +3,12 @@ import { mock, test } from "node:test";
 import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 
-const actor = { id: "fake-parent", tenantId: "fake-tenant", role: "PARENT_GUARDIAN", isActive: true, email: "fake@example.test", name: "Fake Parent", primaryCenterId: "fake-school", branding: { kind: "kid-city-usa", name: "Kid City USA" } };
-let user, family, target, uploads, removed, created, audits, deliveries, beforeTransaction, afterCommit, teacher, queries, leaders;
+const actor = { id: "fake-parent", tenantId: "fake-tenant", role: "PARENT_GUARDIAN", isActive: true, email: "fake@example.test", name: "Fake Parent", primaryCenterId: "fake-school", branding: { kind: "miss-honeys-learning-center", name: "Miss Honey's Learning Center" } };
+let user, family, broadcastFamilies, target, uploads, removed, created, audits, deliveries, beforeTransaction, afterCommit, teacher, queries, leaders;
 function reset() {
   user = { ...actor }; uploads = []; removed = []; created = []; audits = []; deliveries = []; queries = []; leaders = []; beforeTransaction = () => {}; afterCommit = () => {};
   family = { id: "fake-family", name: "Fake Family", billingEmail: null, centerId: "fake-school", guardians: [{ userId: actor.id, fullName: "Fake Parent", email: null, phone: null, preferredCommunication: null }], children: [{ id: "fake-child", fullName: "Fake Child", familyId: "fake-family", enrollmentStatus: "active", classroomId: "fake-class", classroom: { id: "fake-class", name: "Fake Classroom", centerId: "fake-school", center: { organization: { tenantId: actor.tenantId } } } }] };
+  broadcastFamilies = [family, { ...family, id: "fake-miss-family", name: "Second Family", centerId: "fake-miss-school", guardians: [{ userId: "fake-miss-parent", fullName: "Second Parent", email: "second@example.test", phone: null, preferredCommunication: null }], children: [{ ...family.children[0], id: "fake-miss-child", familyId: "fake-miss-family", classroomId: "fake-miss-class", classroom: { id: "fake-miss-class", name: "Second Classroom", centerId: "fake-miss-school" } }] }];
   teacher = { id: "fake-teacher", tenantId: actor.tenantId, role: "TEACHER", isActive: true, email: "fake-teacher@example.test", accessGrants: [], staffProfile: { id: "fake-profile", phone: null, centerId: "fake-school", classroomId: "fake-class", center: { organization: { tenantId: actor.tenantId } }, classroom: { id: "fake-class", centerId: "fake-school", children: family.children } } };
   target = { id: "fake-reply", familyId: family.id, subject: "Canonical classroom subject", senderId: teacher.id, assignedToId: null, threadKey: null };
 }
@@ -28,9 +29,12 @@ function matches(value, where) {
   });
 }
 const prisma = {
-  center: { async findMany({ where }) { assert.deepEqual(where, { organization: { tenantId: actor.tenantId } }); return [{ id: "fake-school" }, { id: "fake-other-school" }]; }, async findUnique() { return { name: "Fake School", email: null, phone: null }; } },
+  center: { async findMany({ where }) { if (where.id?.in) return [
+    { id: "fake-school", name: "Fake School", email: null, phone: null, organization: { name: "Kid City USA", tenant: { id: "fake-tenant", name: "Kid City USA", slug: "kid-city-usa" }, brand: { name: "Kid City USA", slug: "kid-city-usa" } } },
+    { id: "fake-miss-school", name: "Second School", email: null, phone: null, organization: { name: "Miss Honey's Learning Center", tenant: { id: "fake-miss-tenant", name: "Miss Honey's Learning Center", slug: "miss-honeys-learning-center" }, brand: { name: "Miss Honey's Learning Center", slug: "miss-honeys-learning-center" } } },
+  ].filter(center => where.id.in.includes(center.id)); assert.deepEqual(where, { organization: { tenantId: actor.tenantId } }); return [{ id: "fake-school" }, { id: "fake-other-school" }]; }, async findUnique() { return { name: "Fake School", email: null, phone: null, organization: { name: "Kid City USA", tenant: { id: "fake-tenant", name: "Kid City USA", slug: "kid-city-usa" }, brand: { name: "Kid City USA", slug: "kid-city-usa" } } }; } },
   guardian: { async findMany({ where }) { return matches({ userId: actor.id, family }, where) ? [{ id: "fake-guardian", familyId: family.id, family: { _count: { children: family.children.filter(child => child.enrollmentStatus === "active").length } } }] : []; } },
-  family: { async findFirst({ where, include, select }) {
+  family: { async findMany({ where }) { return broadcastFamilies.filter(item => where.centerId.in.includes(item.centerId)); }, async findFirst({ where, include, select }) {
     if (!matches(family, where)) return null;
     const childWhere = (include ?? select)?.children?.where;
     return { ...family, children: childWhere ? family.children.filter(child => matches(child, childWhere)) : family.children };
@@ -172,5 +176,14 @@ test("actual parent message sends preserve scope and canonical replies before si
   await t.test("App Review sends remain portal-only with no external delivery", async () => {
     reset(); user.email = "fake+review@example.test"; assert.equal((await post({ channel: "email", sendEmailCopy: true, sendSmsCopy: true, sendPushCopy: true })).status, 201);
     assert.equal(created[0].channel, "portal"); assert.deepEqual(created[0].metadata.deliveryChannels, { portal: true, email: false, sms: false, push: false }); assert.equal(deliveries.length, 0);
+  });
+  await t.test("multi-brand broadcasts use each recipient school's branding", async () => {
+    reset(); user.role = "PLATFORM_OWNER"; user.centerIds = ["fake-school", "fake-miss-school"];
+    const response = await post({ targetMode: "broadcast", familyId: null, replyToMessageId: null, sendEmailCopy: true });
+    assert.equal(response.status, 201);
+    assert.deepEqual(deliveries.map(item => [item.centerId, item.tenantId, item.fromName, item.emailBrandKind]), [
+      ["fake-school", "fake-tenant", "Kid City USA", "kid-city-usa"],
+      ["fake-miss-school", "fake-miss-tenant", "Miss Honey's Learning Center", "miss-honeys-learning-center"],
+    ]);
   });
 });

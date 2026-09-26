@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildBeeSuiteEmailHtml } from "../src/lib/communications-kit";
-import { defaultMessageTemplates, mergeStoredAndDefaultMessageTemplates, renderMessageTemplate } from "../src/lib/message-templates";
+import { defaultMessageTemplates, isVirtualMessageTemplateId, mergeStoredAndDefaultMessageTemplates, renderMessageTemplate } from "../src/lib/message-templates";
 
 test("message templates render expanded family and classroom merge fields", () => {
   const rendered = renderMessageTemplate(
@@ -40,6 +40,12 @@ test("saved school email copy keeps its customization while all other built-in t
   assert.equal(visible.filter((template) => template.name === saved[0].name && template.channel === "email").length, 1);
   assert.ok(visible.some((template) => template.id === "default-general"));
   assert.equal(visible.length, defaultMessageTemplates.length);
+});
+
+test("code-only email kit and reply templates are not persisted as database template IDs", () => {
+  assert.equal(isVirtualMessageTemplateId("kit-school-billing"), true);
+  assert.equal(isVirtualMessageTemplateId("default-general"), true);
+  assert.equal(isVirtualMessageTemplateId("saved-template-id"), false);
 });
 
 test("school communication emails render the selected brand while the platform default remains intact", () => {

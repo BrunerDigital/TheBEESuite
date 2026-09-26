@@ -125,6 +125,10 @@ export const defaultMessageTemplates: MessageTemplateView[] = [
   ...communicationsKitTemplates.map((template) => ({ ...template, channel: "email", mergeFields: [...template.mergeFields] })),
 ];
 
+export function isVirtualMessageTemplateId(id: string) {
+  return id.startsWith("default-") || id.startsWith("kit-");
+}
+
 export function mergeStoredAndDefaultMessageTemplates(stored: MessageTemplateView[]): MessageTemplateView[] {
   const storedKeys = new Set(stored.map((template) => `${template.channel}:${template.name.trim().toLowerCase()}`));
   return [

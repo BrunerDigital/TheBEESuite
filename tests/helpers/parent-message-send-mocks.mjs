@@ -4,9 +4,9 @@ import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 
 const actor = { id: "fake-parent", tenantId: "fake-tenant", role: "PARENT_GUARDIAN", isActive: true, email: "fake@example.test", name: "Fake Parent", primaryCenterId: "fake-school", branding: { kind: "miss-honeys-learning-center", name: "Miss Honey's Learning Center" } };
-let user, family, broadcastFamilies, target, uploads, removed, created, audits, deliveries, beforeTransaction, afterCommit, teacher, queries, leaders;
+let user, family, broadcastFamilies, target, uploads, removed, created, audits, deliveries, pushes, preferences, beforeTransaction, afterCommit, teacher, queries, leaders;
 function reset() {
-  user = { ...actor }; uploads = []; removed = []; created = []; audits = []; deliveries = []; queries = []; leaders = []; beforeTransaction = () => {}; afterCommit = () => {};
+  user = { ...actor }; uploads = []; removed = []; created = []; audits = []; deliveries = []; pushes = []; preferences = []; queries = []; leaders = []; beforeTransaction = () => {}; afterCommit = () => {};
   family = { id: "fake-family", name: "Fake Family", billingEmail: null, centerId: "fake-school", guardians: [{ userId: actor.id, fullName: "Fake Parent", email: null, phone: null, preferredCommunication: null }], children: [{ id: "fake-child", fullName: "Fake Child", familyId: "fake-family", enrollmentStatus: "active", classroomId: "fake-class", classroom: { id: "fake-class", name: "Fake Classroom", centerId: "fake-school", center: { organization: { tenantId: actor.tenantId } } } }] };
   broadcastFamilies = [family, { ...family, id: "fake-miss-family", name: "Second Family", centerId: "fake-miss-school", guardians: [{ userId: "fake-miss-parent", fullName: "Second Parent", email: "second@example.test", phone: null, preferredCommunication: null }], children: [{ ...family.children[0], id: "fake-miss-child", familyId: "fake-miss-family", classroomId: "fake-miss-class", classroom: { id: "fake-miss-class", name: "Second Classroom", centerId: "fake-miss-school" } }] }];
   teacher = { id: "fake-teacher", tenantId: actor.tenantId, role: "TEACHER", isActive: true, email: "fake-teacher@example.test", accessGrants: [], staffProfile: { id: "fake-profile", phone: null, centerId: "fake-school", classroomId: "fake-class", center: { organization: { tenantId: actor.tenantId } }, classroom: { id: "fake-class", centerId: "fake-school", children: family.children } } };
@@ -49,8 +49,8 @@ const prisma = {
     async create({ data }) { const row = { ...data, id: "fake-created", createdAt: new Date() }; created.push(row); return row; },
     async updateMany() { return { count: 0 }; },
   },
-  notificationPreference: { async findMany() { return []; } },
-  notification: { async create() { throw new Error("Unexpected fake notification write"); } },
+  notificationPreference: { async findMany() { return preferences; } },
+  notification: { async create({ data }) { pushes.push(data); return { id: `fake-push-${pushes.length}`, ...data }; } },
   async $transaction(callback, options) { assert.equal(options.isolationLevel, "Serializable"); beforeTransaction(); const result = await callback(prisma); afterCommit(); return result; },
 };
 mock.module("@/lib/prisma", { namedExports: { prisma } });
@@ -65,7 +65,7 @@ mock.module("@/lib/location-users", { namedExports: { async getCenterLeadershipU
 mock.module("@/lib/audit", { namedExports: { async writeAuditLog(_user, entry) { audits.push(entry); } } });
 mock.module("@/lib/supabase-auth", { namedExports: { getAppBaseUrl(url) { return new URL(url).origin; } } });
 mock.module("@/lib/notification-delivery", { namedExports: {
-  resolveNotificationDeliveryRecipientChannels() { return { pushEnabled: false }; },
+  resolveNotificationDeliveryRecipientChannels({ recipient, preferences: rows }) { return { pushEnabled: rows.find(row => row.userId === recipient.userId || (!row.userId && row.role === recipient.role))?.pushEnabled ?? false }; },
   async deliverNotificationExternalChannels(input) { deliveries.push(input); return { email: { attempted: 0, sent: 0 }, sms: { attempted: 0, sent: 0 } }; },
 } });
 mock.module("@/lib/request-response-logging", { namedExports: { withApiLogging(_method, handler) { return handler; } } });
@@ -85,6 +85,7 @@ test("actual parent message sends preserve scope and canonical replies before si
       assert.equal(deliveries[0].fromName, "Kid City USA"); assert.equal(deliveries[0].emailBrandKind, "kid-city-usa");
     }
     reset(); target.subject = "A".repeat(200); assert.equal((await post({ subject: "" })).status, 201); assert.equal(created[0].subject.length, 200);
+    reset(); assert.equal((await post({ templateId: "kit-school-billing" })).status, 201); assert.equal(created[0].templateId, null); assert.equal(created[0].metadata.templateId, "kit-school-billing");
   });
   await t.test("foreign family stale guardian moved child and forged reply stop before upload", async () => {
     for (const file of [false, true]) for (const mutate of [() => { family.guardians = []; }, () => { family.children[0].enrollmentStatus = "inactive"; }, () => { family.centerId = "foreign-school"; },
@@ -179,11 +180,17 @@ test("actual parent message sends preserve scope and canonical replies before si
   });
   await t.test("multi-brand broadcasts use each recipient school's branding", async () => {
     reset(); user.role = "PLATFORM_OWNER"; user.centerIds = ["fake-school", "fake-miss-school"];
-    const response = await post({ targetMode: "broadcast", familyId: null, replyToMessageId: null, sendEmailCopy: true });
+    preferences = [
+      { tenantId: "fake-tenant", userId: null, role: "PARENT_GUARDIAN", type: "messages", emailEnabled: true, smsEnabled: false, pushEnabled: false },
+      { tenantId: "fake-miss-tenant", userId: null, role: "PARENT_GUARDIAN", type: "messages", emailEnabled: true, smsEnabled: false, pushEnabled: true },
+    ];
+    const response = await post({ targetMode: "broadcast", familyId: null, replyToMessageId: null, templateId: "kit-school-billing", sendEmailCopy: true, sendPushCopy: true });
     assert.equal(response.status, 201);
+    assert.deepEqual(created.map(item => item.templateId), [null, null]);
     assert.deepEqual(deliveries.map(item => [item.centerId, item.tenantId, item.fromName, item.emailBrandKind]), [
       ["fake-school", "fake-tenant", "Kid City USA", "kid-city-usa"],
       ["fake-miss-school", "fake-miss-tenant", "Miss Honey's Learning Center", "miss-honeys-learning-center"],
     ]);
+    assert.deepEqual(pushes.map(item => item.userId), ["fake-miss-parent"]);
   });
 });

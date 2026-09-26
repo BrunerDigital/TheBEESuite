@@ -21,7 +21,7 @@ import { parentCurrentChildScope } from "@/lib/parent-document-query";
 import { createParentFamilyMessage, ParentMessageScopeChanged } from "@/lib/parent-message-commit";
 import { currentParentMessageLeadership, currentParentMessageReplyRecipientWhere, currentParentMessageTeacherWhere, parentMessageCenterId } from "@/lib/parent-message-recipients";
 import { messageContentSafetyMetadata, screenMessageContent } from "@/lib/message-content-safety";
-import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
+import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, isVirtualMessageTemplateId, renderMessageTemplate } from "@/lib/message-templates";
 import {
   broadcastSegmentIsEmpty,
   broadcastSegmentSummary,
@@ -669,7 +669,7 @@ async function POSTHandler(request: NextRequest) {
     const centerById = new Map(centerRows.map((center) => [center.id, center]));
 
     let selectedTemplate: { name?: string | null; subject: string; body: string; category: string } | null = null;
-    if (templateId && !templateId.startsWith("default-")) {
+    if (templateId && !isVirtualMessageTemplateId(templateId)) {
       const storedTemplate = await prisma.messageTemplate.findFirst({
         where: {
           id: templateId,
@@ -759,6 +759,7 @@ async function POSTHandler(request: NextRequest) {
     for (const targetFamily of targetFamilies) {
       const center = targetFamily.centerId ? centerById.get(targetFamily.centerId) ?? null : null;
       const deliveryBranding = messageCenterBranding(center);
+      const centerNotificationPreferences = broadcastNotificationPreferences.filter((preference) => preference.tenantId === center?.organization.tenant.id);
       const context = buildTemplateContext({
         family: targetFamily,
         center,
@@ -772,7 +773,7 @@ async function POSTHandler(request: NextRequest) {
           familyId: targetFamily.id,
           senderId: user.id,
           assignedToId,
-          templateId: templateId && !templateId.startsWith("default-") ? templateId : null,
+          templateId: templateId && !isVirtualMessageTemplateId(templateId) ? templateId : null,
           threadKey: `family:${targetFamily.id}`,
           subject: renderedSubject,
           body: renderedMessage,
@@ -813,7 +814,7 @@ async function POSTHandler(request: NextRequest) {
         title: `Message from ${user.name}: ${renderedSubject}`,
         body: appendInAppMessageReplyInstructions(renderedMessage, parentReplyUrl),
         recipients: familyNotificationDeliveryRecipients(targetFamily),
-        preferences: broadcastNotificationPreferences.filter((preference) => preference.tenantId === center?.organization.tenant.id),
+        preferences: centerNotificationPreferences,
         emailRequested: sendEmailCopy,
         smsRequested: sendSmsCopy,
         replyTo: null,
@@ -832,7 +833,7 @@ async function POSTHandler(request: NextRequest) {
           if (guardian.userId && pushEnabledForMessageRecipient({
             userId: guardian.userId,
             role: UserRole.PARENT_GUARDIAN,
-          }, broadcastNotificationPreferences)) {
+          }, centerNotificationPreferences)) {
             pushNotifications.push(await prisma.notification.create({
               data: {
                 userId: guardian.userId,
@@ -978,7 +979,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   let selectedTemplateCategory: string | undefined;
-  if (templateId && !templateId.startsWith("default-")) {
+  if (templateId && !isVirtualMessageTemplateId(templateId)) {
     const storedTemplate = await prisma.messageTemplate.findFirst({
       where: {
         id: templateId,
@@ -1073,7 +1074,7 @@ async function POSTHandler(request: NextRequest) {
       senderId: user.id,
       assignedToId,
       replyToMessageId,
-      templateId: templateId && !templateId.startsWith("default-") ? templateId : null,
+      templateId: templateId && !isVirtualMessageTemplateId(templateId) ? templateId : null,
       threadKey: familyId ? `family:${familyId}` : `internal:${user.primaryCenterId ?? user.tenantId}`,
       subject,
       body: message,

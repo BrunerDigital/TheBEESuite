@@ -1,3 +1,9 @@
+import {
+  KID_CITY_USA_BRANDING,
+  MISS_HONEYS_LEARNING_CENTER_BRANDING,
+  type BrandKind,
+} from "@/lib/brand-assets";
+
 export type CommunicationsAudience = "schools" | "parents" | "teachers" | "executives";
 
 export type CommunicationsTemplate = {
@@ -68,9 +74,23 @@ function linkify(value: string) {
   return escapeHtml(value).replace(/https:\/\/[^\s<]+/g, (url) => `<a href="${url}" style="color:#9a6700;font-weight:700">${url}</a>`);
 }
 
-export function buildBeeSuiteEmailHtml({ title, body, category = "general", appBaseUrl = "https://thebeesuite.io" }: { title: string; body: string; category?: string; appBaseUrl?: string }) {
+export function buildBeeSuiteEmailHtml({ title, body, category = "general", appBaseUrl = "https://thebeesuite.io", brandKind = "bee-suite" }: { title: string; body: string; category?: string; appBaseUrl?: string; brandKind?: BrandKind }) {
   const base = appBaseUrl.replace(/\/+$/, "");
   const guide = guideByCategory[category];
+  const schoolBranding = brandKind === "kid-city-usa"
+    ? KID_CITY_USA_BRANDING
+    : brandKind === "miss-honeys-learning-center"
+      ? MISS_HONEYS_LEARNING_CENTER_BRANDING
+      : null;
+  const header = schoolBranding
+    ? `<tr><td style="background:#ffffff;padding:20px 30px;border-bottom:1px solid #e5dfcf"><img src="${base}${schoolBranding.logoSrc}" width="${schoolBranding.kind === "kid-city-usa" ? 205 : 125}" alt="${escapeHtml(schoolBranding.logoAlt)}" style="display:block;max-width:100%;height:auto;max-height:150px"><div style="margin-top:12px;color:#475569;font-size:12px;font-weight:700">Powered by The BEE Suite</div></td></tr>`
+    : `<tr><td style="background:#080a0d;padding:24px 30px"><img src="${base}/brand/the-bee-suite/logo-primary-horizontal-white.png" width="230" alt="The BEE Suite" style="display:block;max-width:100%;height:auto"></td></tr>`;
+  const eyebrow = schoolBranding
+    ? `${escapeHtml(schoolBranding.name)} • THE BEE SUITE`
+    : "THE BEE SUITE • STEP-BY-STEP GUIDE";
+  const footer = schoolBranding
+    ? `${escapeHtml(schoolBranding.name)} uses The BEE Suite for school records, family communication, billing, and reporting. Do not reply with passwords, payment credentials, medical files, or custody documents.`
+    : "Use The BEE Suite for school records, family communication, billing, and reporting. Do not reply with passwords, payment credentials, medical files, or custody documents.";
   const paragraphs = body.split(/\n{2,}/).map((paragraph) => `<p style="margin:0 0 18px;line-height:1.65;color:#334155">${linkify(paragraph).replace(/\n/g, "<br>")}</p>`).join("");
-  return `<!doctype html><html><body style="margin:0;background:#f4f1e8;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1e8;padding:28px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #e5dfcf"><tr><td style="background:#080a0d;padding:24px 30px"><img src="${base}/brand/the-bee-suite/logo-primary-horizontal-white.png" width="230" alt="The BEE Suite" style="display:block;max-width:100%;height:auto"></td></tr>${guide ? `<tr><td><img src="${base}${guide}" width="680" alt="BEE Suite step-by-step guide" style="display:block;width:100%;height:auto"></td></tr>` : ""}<tr><td style="padding:32px 34px"><div style="color:#a16207;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">THE BEE SUITE • STEP-BY-STEP GUIDE</div><h1 style="margin:0 0 22px;color:#111827;font-size:28px;line-height:1.2">${escapeHtml(title)}</h1>${paragraphs}<div style="margin-top:26px;padding:16px 18px;border-radius:14px;background:#fff8dc;color:#713f12;font-size:13px;line-height:1.55"><strong>Safety note:</strong> Contact the school directly for urgent health, safety, custody, pickup, or same-day care decisions.</div></td></tr><tr><td style="padding:22px 34px;background:#111827;color:#cbd5e1;font-size:12px;line-height:1.6">Use The BEE Suite for school records, family communication, billing, and reporting. Do not reply with passwords, payment credentials, medical files, or custody documents.</td></tr></table></td></tr></table></body></html>`;
+  return `<!doctype html><html><body style="margin:0;background:#f4f1e8;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1e8;padding:28px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #e5dfcf">${header}${guide ? `<tr><td><img src="${base}${guide}" width="680" alt="BEE Suite step-by-step guide" style="display:block;width:100%;height:auto"></td></tr>` : ""}<tr><td style="padding:32px 34px"><div style="color:#a16207;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">${eyebrow}</div><h1 style="margin:0 0 22px;color:#111827;font-size:28px;line-height:1.2">${escapeHtml(title)}</h1>${paragraphs}<div style="margin-top:26px;padding:16px 18px;border-radius:14px;background:#fff8dc;color:#713f12;font-size:13px;line-height:1.55"><strong>Safety note:</strong> Contact the school directly for urgent health, safety, custody, pickup, or same-day care decisions.</div></td></tr><tr><td style="padding:22px 34px;background:#111827;color:#cbd5e1;font-size:12px;line-height:1.6">${footer}</td></tr></table></td></tr></table></body></html>`;
 }

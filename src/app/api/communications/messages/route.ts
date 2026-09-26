@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian, messageCenterIdsForUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { BEE_SUITE_BRANDING, resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
@@ -20,7 +21,7 @@ import { parentCurrentChildScope } from "@/lib/parent-document-query";
 import { createParentFamilyMessage, ParentMessageScopeChanged } from "@/lib/parent-message-commit";
 import { currentParentMessageLeadership, currentParentMessageReplyRecipientWhere, currentParentMessageTeacherWhere, parentMessageCenterId } from "@/lib/parent-message-recipients";
 import { messageContentSafetyMetadata, screenMessageContent } from "@/lib/message-content-safety";
-import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
+import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, isVirtualMessageTemplateId, renderMessageTemplate } from "@/lib/message-templates";
 import {
   broadcastSegmentIsEmpty,
   broadcastSegmentSummary,
@@ -233,7 +234,23 @@ type MessageCenterContext = {
   name: string;
   email: string | null;
   phone: string | null;
+  organization: {
+    name: string;
+    tenant: { id: string; name: string; slug: string };
+    brand: { name: string; slug: string } | null;
+  };
 };
+
+function messageCenterBranding(center: MessageCenterContext | null) {
+  if (!center) return BEE_SUITE_BRANDING;
+  return resolveWorkspaceBranding({
+    tenantName: center.organization.tenant.name,
+    tenantSlug: center.organization.tenant.slug,
+    brandName: center.organization.brand?.name,
+    brandSlug: center.organization.brand?.slug,
+    organizationName: center.organization.name,
+  });
+}
 
 function firstName(value: string | null | undefined) {
   return (value ?? "").split(" ").filter(Boolean)[0] ?? "";
@@ -647,12 +664,12 @@ async function POSTHandler(request: NextRequest) {
     const familyCenterIds = uniqueStrings(targetFamilies.map((family) => family.centerId));
     const centerRows = await prisma.center.findMany({
       where: { id: { in: familyCenterIds } },
-      select: { id: true, name: true, email: true, phone: true },
+      select: { id: true, name: true, email: true, phone: true, organization: { select: { name: true, tenant: { select: { id: true, name: true, slug: true } }, brand: { select: { name: true, slug: true } } } } },
     });
     const centerById = new Map(centerRows.map((center) => [center.id, center]));
 
     let selectedTemplate: { name?: string | null; subject: string; body: string; category: string } | null = null;
-    if (templateId && !templateId.startsWith("default-")) {
+    if (templateId && !isVirtualMessageTemplateId(templateId)) {
       const storedTemplate = await prisma.messageTemplate.findFirst({
         where: {
           id: templateId,
@@ -722,17 +739,17 @@ async function POSTHandler(request: NextRequest) {
 
     const statusCallbackUrl = sendSmsCopy ? twilioStatusCallbackUrl(request) : null;
     const broadcastParentUserIds = uniqueStrings(targetFamilies.flatMap((familyRow) => familyRow.guardians.map((guardian) => guardian.userId)));
-    const broadcastNotificationPreferences: NotificationPreferenceRecord[] = (sendEmailCopy || sendSmsCopy || sendPushCopy)
+    const broadcastNotificationPreferences: Array<NotificationPreferenceRecord & { tenantId: string }> = (sendEmailCopy || sendSmsCopy || sendPushCopy)
       ? await prisma.notificationPreference.findMany({
           where: {
-            tenantId: user.tenantId,
+            tenantId: { in: uniqueStrings(centerRows.map((center) => center.organization.tenant.id)) },
             type: "messages",
             OR: [
               ...(broadcastParentUserIds.length ? [{ userId: { in: broadcastParentUserIds } }] : []),
               { role: UserRole.PARENT_GUARDIAN },
             ],
           },
-          select: { userId: true, role: true, type: true, emailEnabled: true, smsEnabled: true, pushEnabled: true },
+          select: { tenantId: true, userId: true, role: true, type: true, emailEnabled: true, smsEnabled: true, pushEnabled: true },
         })
       : [];
     const createdMessages = [];
@@ -741,6 +758,8 @@ async function POSTHandler(request: NextRequest) {
 
     for (const targetFamily of targetFamilies) {
       const center = targetFamily.centerId ? centerById.get(targetFamily.centerId) ?? null : null;
+      const deliveryBranding = messageCenterBranding(center);
+      const centerNotificationPreferences = broadcastNotificationPreferences.filter((preference) => preference.tenantId === center?.organization.tenant.id);
       const context = buildTemplateContext({
         family: targetFamily,
         center,
@@ -754,7 +773,7 @@ async function POSTHandler(request: NextRequest) {
           familyId: targetFamily.id,
           senderId: user.id,
           assignedToId,
-          templateId: templateId && !templateId.startsWith("default-") ? templateId : null,
+          templateId: templateId && !isVirtualMessageTemplateId(templateId) ? templateId : null,
           threadKey: `family:${targetFamily.id}`,
           subject: renderedSubject,
           body: renderedMessage,
@@ -788,18 +807,19 @@ async function POSTHandler(request: NextRequest) {
         subject: renderedSubject,
       });
       const delivery = await deliverNotificationExternalChannels({
-        tenantId: user.tenantId,
+        tenantId: center?.organization.tenant.id ?? user.tenantId,
         centerId: targetFamily.centerId,
         messageId: created.id,
         type: "messages",
         title: `Message from ${user.name}: ${renderedSubject}`,
         body: appendInAppMessageReplyInstructions(renderedMessage, parentReplyUrl),
         recipients: familyNotificationDeliveryRecipients(targetFamily),
-        preferences: broadcastNotificationPreferences,
+        preferences: centerNotificationPreferences,
         emailRequested: sendEmailCopy,
         smsRequested: sendSmsCopy,
         replyTo: null,
-        fromName: "The BEE Suite",
+        fromName: deliveryBranding.name,
+        emailBrandKind: deliveryBranding.kind,
         statusCallbackUrl,
         emailPurpose: "communication_email",
         emailCategory: selectedTemplate?.category,
@@ -813,7 +833,7 @@ async function POSTHandler(request: NextRequest) {
           if (guardian.userId && pushEnabledForMessageRecipient({
             userId: guardian.userId,
             role: UserRole.PARENT_GUARDIAN,
-          }, broadcastNotificationPreferences)) {
+          }, centerNotificationPreferences)) {
             pushNotifications.push(await prisma.notification.create({
               data: {
                 userId: guardian.userId,
@@ -939,7 +959,7 @@ async function POSTHandler(request: NextRequest) {
     familyCenter = familyContextCenterId
       ? await prisma.center.findUnique({
           where: { id: familyContextCenterId },
-          select: { name: true, email: true, phone: true },
+          select: { name: true, email: true, phone: true, organization: { select: { name: true, tenant: { select: { id: true, name: true, slug: true } }, brand: { select: { name: true, slug: true } } } } },
         })
       : null;
   }
@@ -959,7 +979,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   let selectedTemplateCategory: string | undefined;
-  if (templateId && !templateId.startsWith("default-")) {
+  if (templateId && !isVirtualMessageTemplateId(templateId)) {
     const storedTemplate = await prisma.messageTemplate.findFirst({
       where: {
         id: templateId,
@@ -1054,7 +1074,7 @@ async function POSTHandler(request: NextRequest) {
       senderId: user.id,
       assignedToId,
       replyToMessageId,
-      templateId: templateId && !templateId.startsWith("default-") ? templateId : null,
+      templateId: templateId && !isVirtualMessageTemplateId(templateId) ? templateId : null,
       threadKey: familyId ? `family:${familyId}` : `internal:${user.primaryCenterId ?? user.tenantId}`,
       subject,
       body: message,
@@ -1151,7 +1171,7 @@ async function POSTHandler(request: NextRequest) {
   const notificationPreferenceRows: NotificationPreferenceRecord[] = sendEmailCopy || sendSmsCopy || sendPushCopy
     ? await prisma.notificationPreference.findMany({
         where: {
-          tenantId: user.tenantId,
+          tenantId: familyCenter?.organization.tenant.id ?? user.tenantId,
           type: "messages",
           OR: [
             ...(notificationUserIds.length ? [{ userId: { in: notificationUserIds } }] : []),
@@ -1237,9 +1257,10 @@ async function POSTHandler(request: NextRequest) {
       : familyNotificationDeliveryRecipients(family)
     : [];
   const statusCallbackUrl = sendSmsCopy && deliveryRecipients.length ? twilioStatusCallbackUrl(request) : null;
+  const deliveryBranding = messageCenterBranding(familyCenter);
   const delivery = family && !appReviewKind
     ? await deliverNotificationExternalChannels({
-        tenantId: user.tenantId,
+        tenantId: familyCenter?.organization.tenant.id ?? user.tenantId,
         centerId: senderIsParent ? familyMessageCenterId : family.centerId,
         messageId: created.id,
         type: "messages",
@@ -1250,7 +1271,8 @@ async function POSTHandler(request: NextRequest) {
         emailRequested: sendEmailCopy,
         smsRequested: sendSmsCopy,
         replyTo: null,
-        fromName: "The BEE Suite",
+        fromName: deliveryBranding.name,
+        emailBrandKind: deliveryBranding.kind,
         statusCallbackUrl,
         emailPurpose: "communication_email",
         emailCategory: selectedTemplateCategory,

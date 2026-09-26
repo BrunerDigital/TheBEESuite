@@ -2,7 +2,7 @@
 
 **Updated:** September 23, 2026
 
-Attach the six numbered PDFs in this folder to the standalone owner/director transition email. The ready-to-send email copy is included as `00_BEE_SUITE_SCHOOL_TRANSITION_ANNOUNCEMENT_EMAIL.md`.
+The August announcement draft in this folder is held for historical reference. Review the school-specific copy in `docs/ROLLOUT_EMAIL_REVIEW_PACKET_2026-09-25.md` and attach only the numbered PDFs approved for the exact recipient school.
 
 This is a manual email packet for Brenden's pre-week announcement. It is not part of the automated or dashboard-linked email sequence and should not be added to a dashboard.
 
@@ -27,7 +27,7 @@ Use these only when the recipients need deeper procedures:
 
 ## Sending Rules
 
-- Confirm the submitted-school import, invitation, and Stripe-link statements are accurate for the recipients before sending the email.
+- Confirm the exact recipient school, current roster state, setup path, sender, wording, links, and any selected attachments before sending.
 - Do not attach ProCare exports, credentials, bank details, payment details, medical records, or custody records.
 - Sending the packet does not activate parent invitations, kiosk/PIN, billing, payments, payouts, or ProCare retirement.
 - Keep ProCare as the billing source of record until the named school has a written cutover boundary and GO decision.

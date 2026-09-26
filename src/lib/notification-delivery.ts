@@ -6,6 +6,7 @@ import {
 import { sendEmail, sendSms, uniqueEmails, type IntegrationSendResult } from "@/lib/integrations";
 import { notificationDedupeKey } from "@/lib/notification-policy";
 import { buildBeeSuiteEmailHtml } from "@/lib/communications-kit";
+import type { BrandKind } from "@/lib/brand-assets";
 import {
   resolveNotificationPreferenceChannels,
   type NotificationPreferenceRecord,
@@ -38,6 +39,7 @@ export type NotificationExternalDeliveryInput = {
   disableEmailClickTracking?: boolean;
   replyTo?: string | null;
   fromName?: string;
+  emailBrandKind?: BrandKind;
   statusCallbackUrl?: string | null;
   emailPurpose?: Extract<IntegrationDeliveryPurpose, "communication_email" | "notification_email">;
   smsPurpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "notification_sms">;
@@ -165,6 +167,7 @@ export async function deliverNotificationExternalChannels({
   disableEmailClickTracking = false,
   replyTo = null,
   fromName = "The BEE Suite",
+  emailBrandKind = "bee-suite",
   statusCallbackUrl = null,
   emailPurpose = "notification_email",
   smsPurpose = "notification_sms",
@@ -202,7 +205,7 @@ export async function deliverNotificationExternalChannels({
       to: emailRecipients,
       subject: title,
       text: body,
-      html: buildBeeSuiteEmailHtml({ title, body, category: emailCategory || type }),
+      html: buildBeeSuiteEmailHtml({ title, body, category: emailCategory || type, brandKind: emailBrandKind }),
       replyTo,
       fromName,
       categories: [emailPurpose, type],

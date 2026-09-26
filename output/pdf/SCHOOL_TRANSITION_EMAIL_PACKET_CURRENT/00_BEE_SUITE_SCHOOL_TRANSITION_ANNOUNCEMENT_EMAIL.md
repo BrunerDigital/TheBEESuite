@@ -1,5 +1,7 @@
 # The BEE Suite School Transition Announcement Email
 
+> **Hold for historical reference.** This August draft makes fleet-wide import, parent-invitation, and Stripe-link claims that have not been verified for every school. Use the school-specific review copy in `docs/ROLLOUT_EMAIL_REVIEW_PACKET_2026-09-25.md` after exact recipient and wording approval.
+
 **Updated:** August 11, 2026
 **Audience:** school owners and directors  
 **Use:** standalone owner/director announcement sent manually before the new week. This is not an automated or dashboard-linked email.

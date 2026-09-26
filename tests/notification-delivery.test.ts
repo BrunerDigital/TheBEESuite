@@ -118,6 +118,8 @@ test("notification external delivery sends through enabled channels and records 
       },
     ],
     emailPurpose: "communication_email",
+    emailBrandKind: "miss-honeys-learning-center",
+    fromName: "Miss Honey's Learning Center",
     smsPurpose: "communication_sms",
     disableEmailClickTracking: true,
     statusCallbackUrl: "https://example.com/api/twilio/status",
@@ -148,6 +150,9 @@ test("notification external delivery sends through enabled channels and records 
   assert.equal(summary.sms.error, "Twilio returned 400.");
   assert.equal(emailInputs.length, 1);
   assert.equal((emailInputs[0] as { disableClickTracking?: boolean }).disableClickTracking, true);
+  assert.equal((emailInputs[0] as { fromName?: string }).fromName, "Miss Honey's Learning Center");
+  assert.match((emailInputs[0] as { html: string }).html, /miss-honeys-learning-center\/logo-transparent\.png/);
+  assert.doesNotMatch((emailInputs[0] as { html: string }).html, /src="https:\/\/thebeesuite\.io\/brand\/kid-city-usa\/logo-horizontal\.png"/);
   assert.equal(smsInputs.length, 1);
   assert.equal(emailRecords.length, 1);
   assert.equal(smsRecords.length, 1);

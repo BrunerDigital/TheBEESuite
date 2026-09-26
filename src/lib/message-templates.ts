@@ -125,6 +125,14 @@ export const defaultMessageTemplates: MessageTemplateView[] = [
   ...communicationsKitTemplates.map((template) => ({ ...template, channel: "email", mergeFields: [...template.mergeFields] })),
 ];
 
+export function mergeStoredAndDefaultMessageTemplates(stored: MessageTemplateView[]): MessageTemplateView[] {
+  const storedKeys = new Set(stored.map((template) => `${template.channel}:${template.name.trim().toLowerCase()}`));
+  return [
+    ...stored,
+    ...defaultMessageTemplates.filter((template) => !storedKeys.has(`${template.channel}:${template.name.trim().toLowerCase()}`)),
+  ];
+}
+
 const schoolBillingCloseTemplate = communicationsKitTemplates.find((template) => template.id === "kit-school-billing");
 
 export function canonicalizeSystemMessageTemplate<T extends { name?: string | null; subject: string; body: string; category: string }>(template: T): T {

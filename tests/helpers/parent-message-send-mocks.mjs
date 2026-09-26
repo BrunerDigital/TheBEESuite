@@ -3,7 +3,7 @@ import { mock, test } from "node:test";
 import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 
-const actor = { id: "fake-parent", tenantId: "fake-tenant", role: "PARENT_GUARDIAN", isActive: true, email: "fake@example.test", name: "Fake Parent", primaryCenterId: "fake-school" };
+const actor = { id: "fake-parent", tenantId: "fake-tenant", role: "PARENT_GUARDIAN", isActive: true, email: "fake@example.test", name: "Fake Parent", primaryCenterId: "fake-school", branding: { kind: "kid-city-usa", name: "Kid City USA" } };
 let user, family, target, uploads, removed, created, audits, deliveries, beforeTransaction, afterCommit, teacher, queries, leaders;
 function reset() {
   user = { ...actor }; uploads = []; removed = []; created = []; audits = []; deliveries = []; queries = []; leaders = []; beforeTransaction = () => {}; afterCommit = () => {};
@@ -78,6 +78,7 @@ test("actual parent message sends preserve scope and canonical replies before si
     for (const subject of ["Re: Canonical classroom subject", ""]) {
       reset(); const response = await post({ subject }); assert.equal(response.status, 201); assert.equal(created[0].subject, "Re: Canonical classroom subject");
       assert.deepEqual((await response.json()).message, { id: "fake-created" }); assert.equal(audits.length, 1);
+      assert.equal(deliveries[0].fromName, "Kid City USA"); assert.equal(deliveries[0].emailBrandKind, "kid-city-usa");
     }
     reset(); target.subject = "A".repeat(200); assert.equal((await post({ subject: "" })).status, 201); assert.equal(created[0].subject.length, 200);
   });

@@ -181,7 +181,7 @@ import {
   shouldCreateRecurringTuitionInvoice,
   utcBillingWeekday,
 } from "@/lib/billing-workflows";
-import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
+import { canonicalizeSystemMessageTemplate, mergeStoredAndDefaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { signMessageAttachmentsFromMetadata } from "@/lib/message-attachments";
 import { parentMessageFamilyWhere, parentMessageOrder, parentMessagePageRows, parentMessageSelect, parentMessageViews } from "@/lib/parent-message-query";
 import { PARENT_MESSAGE_PAGE_SIZE } from "@/lib/parent-message-history";
@@ -3716,8 +3716,8 @@ async function renderLivePage(
           .map((guardian) => guardian.phone),
       ).length,
     })));
-    const templateOptions = templates.length
-      ? templates.map((template) => {
+    const templateOptions = mergeStoredAndDefaultMessageTemplates(
+      templates.map((template) => {
           const canonicalTemplate = canonicalizeSystemMessageTemplate(template);
           return {
             id: canonicalTemplate.id,
@@ -3728,8 +3728,8 @@ async function renderLivePage(
             channel: canonicalTemplate.channel,
             mergeFields: normalizeMergeFields(canonicalTemplate.mergeFields),
           };
-        })
-      : defaultMessageTemplates;
+        }),
+    );
     type MessageThread = {
       key: string;
       familyId: string | null;

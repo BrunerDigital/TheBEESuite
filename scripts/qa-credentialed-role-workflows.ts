@@ -49,7 +49,8 @@ const workflows: Record<(typeof SYNTHETIC_ROLE_QA_ACCOUNTS)[number]["key"], read
     { id: "documents", href: "/parent-portal?view=family&section=documents" },
   ],
   pickup: [
-    { id: "pickup-access", href: "/parent-portal?view=home", expectedHref: "/parent-portal" },
+    // The pickup workspace ignores parent-view parameters without rewriting the URL.
+    { id: "pickup-access", href: "/parent-portal?view=home" },
     { id: "pickup-home", href: "/parent-portal" },
   ],
   auditor: [

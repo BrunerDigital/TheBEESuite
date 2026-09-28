@@ -5,7 +5,7 @@ import { chromium, type Page, type Request } from "playwright";
 import { SYNTHETIC_ROLE_QA_ACCOUNTS } from "@/lib/synthetic-role-qa";
 import { prisma } from "@/lib/prisma";
 import { assertSyntheticRoleQaPreflight } from "./ensure-synthetic-role-qa";
-import { credentialedQaBaseUrl, credentialedQaPasswords, credentialedQaRequestAllowed } from "./credentialed-qa-policy";
+import { credentialedPickupScopeAllowed, credentialedQaBaseUrl, credentialedQaPasswords, credentialedQaRequestAllowed } from "./credentialed-qa-policy";
 
 type Viewport = { id: "desktop" | "mobile"; width: number; height: number };
 type Workflow = { id: string; href: string; expectedHref?: string };
@@ -350,6 +350,22 @@ function metricsPass(metrics: PageMetricsResult, viewport: Viewport) {
     && (viewport.id !== "mobile" || metrics.undersizedInteractiveCount === 0);
 }
 
+async function pickupScopePass(page: Page) {
+  const surface = await page.evaluate<{ headings: string[]; actionNames: string[]; links: string[] }>(`(() => {
+    const visible = (element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+    };
+    return {
+      headings: Array.from(document.querySelectorAll("main h1, main h2, main h3")).filter(visible).map((element) => element.textContent?.trim() ?? ""),
+      actionNames: Array.from(document.querySelectorAll("main button, main a[href], nav button, nav a[href]")).filter(visible).map((element) => element.getAttribute("aria-label") || element.textContent?.trim() || ""),
+      links: Array.from(document.querySelectorAll("a[href]")).filter(visible).map((element) => element.getAttribute("href") ?? ""),
+    };
+  })()`);
+  return credentialedPickupScopeAllowed(surface);
+}
+
 async function main() {
   await mkdir(outputDirectory, { recursive: true });
   await assertSyntheticRoleQaPreflight(targetAccounts);
@@ -414,6 +430,7 @@ async function main() {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         const status = await visit(page, account.landingPath);
         const metrics = await pageMetrics(page);
+        const landingPickupScope = account.key !== "pickup" || await pickupScopePass(page);
         const keyboard = await keyboardProbe(page);
         await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
         const disclosure = await disclosureProbe(page);
@@ -427,6 +444,7 @@ async function main() {
         const click = await clickWorkflowLink(page, primary.href);
         const clickedPath = safePath(page.url());
         const primaryMetrics = await pageMetrics(page);
+        const primaryPickupScope = account.key !== "pickup" || await pickupScopePass(page);
         const historyRequired = click.clicked && !matchesWorkflow(landingActual, primaryExpected);
         if (historyRequired) {
           await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
@@ -448,6 +466,7 @@ async function main() {
         const secondaryStatus = await visit(page, secondary.href);
         const secondaryActual = safePath(page.url());
         const secondaryMetrics = await pageMetrics(page);
+        const secondaryPickupScope = account.key !== "pickup" || await pickupScopePass(page);
         const secondaryScreenshot = resolve(outputDirectory, account.key, viewport.id, `${secondary.id}.png`);
         await mkdir(dirname(secondaryScreenshot), { recursive: true });
         await page.screenshot({ path: secondaryScreenshot, fullPage: true });
@@ -465,7 +484,8 @@ async function main() {
           && Boolean(back && matchesWorkflow(back, account.landingPath))
           && Boolean(forward && matchesWorkflow(forward, primaryExpected))
           && matchesWorkflow(secondaryActual, secondary.expectedHref ?? secondary.href)
-          && metricsPass(secondaryMetrics, viewport);
+          && metricsPass(secondaryMetrics, viewport)
+          && landingPickupScope && primaryPickupScope && secondaryPickupScope;
 
         results.push({
           role: account.key,
@@ -475,6 +495,7 @@ async function main() {
           metrics,
           keyboard,
           disclosure,
+          ...(account.key === "pickup" ? { pickupScope: { landing: landingPickupScope, primary: primaryPickupScope, secondary: secondaryPickupScope } } : {}),
           primaryWorkflow: { ...primary, ...click, clickedPath, back, forward, metrics: primaryMetrics, screenshot: primaryScreenshot },
           secondaryWorkflow: { ...secondary, status: secondaryStatus, actual: secondaryActual, metrics: secondaryMetrics, screenshot: secondaryScreenshot },
           screenshot,

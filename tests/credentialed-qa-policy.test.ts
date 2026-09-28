@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { credentialedQaBaseUrl, credentialedQaPasswords, credentialedQaRequestAllowed } from "../scripts/credentialed-qa-policy";
+import { credentialedPickupScopeAllowed, credentialedQaBaseUrl, credentialedQaPasswords, credentialedQaRequestAllowed } from "../scripts/credentialed-qa-policy";
 import { buildLoginRequest } from "../src/lib/login-request";
+
+test("pickup scope requires the restricted workspace and excludes guardian capabilities", () => {
+  const pickup = { headings: ["Kokomo pickup", "Pickup access"], actionNames: ["Sign out"], links: ["/parent-portal?view=home", "/privacy"] };
+  assert.equal(credentialedPickupScopeAllowed(pickup), true);
+  assert.equal(credentialedPickupScopeAllowed({ ...pickup, headings: ["Family home"] }), false);
+  assert.equal(credentialedPickupScopeAllowed({ ...pickup, headings: ["Kokomo pickup", "Access needs review"] }), false);
+  for (const action of ["Billing", "Messages", "Documents", "Make payment", "Family profile", "Daily updates"]) {
+    assert.equal(credentialedPickupScopeAllowed({ ...pickup, actionNames: [action] }), false);
+  }
+  for (const link of ["/billing", "/messages", "/documents", "/parent-portal?view=billing", "/parent-portal?view=messages", "/parent-portal?view=documents"]) {
+    assert.equal(credentialedPickupScopeAllowed({ ...pickup, links: [link] }), false);
+  }
+});
 
 test("private QA credentials match exactly one selected role and email", () => {
   const selected = [{ key: "director", email: "director@synthetic.thebeesuite.io" }];

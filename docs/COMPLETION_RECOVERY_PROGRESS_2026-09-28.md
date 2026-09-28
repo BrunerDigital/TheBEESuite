@@ -12,6 +12,8 @@ The canonical browser run passed 16 of 18 cases, with no unexpected writes, HTTP
 
 ## Current school gates
 
+Automated review identified an additional pickup verification gap: a retained URL and generic layout metrics alone could miss an incorrect guardian workspace. The focused production rerun now passes both desktop and mobile with explicit restricted-workspace headings and absence checks for guardian billing, messaging, document, payment, family and update actions or links at all three navigation checkpoints. A policy regression test covers both accepted pickup content and rejected guardian capabilities.
+
 The canonical Prisma readiness checker ran for Kokomo and Centennial with setup, invitations, kiosk and billing selected. Result: **BLOCKED**, covering eight school/module gates. Configuration and connectivity checks passed; local configuration presence does not establish provider activation.
 
 Both schools have classrooms, staff profiles and director/billing grants. Neither has current children missing classroom assignments or cross-school child/classroom assignments. Both require an explicit current business-profile confirmation.

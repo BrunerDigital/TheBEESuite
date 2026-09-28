@@ -4,7 +4,7 @@ Status: implemented recovery tooling and bounded synthetic drill completed July 
 
 Supabase database backups include Storage metadata, not the object bodies. Recovering The BEE Suite therefore requires a database restore point and a separately retained Storage archive from the same recovery window.
 
-The current physical daily backups are available for Supabase-managed restoration but are not a downloadable off-platform logical archive. A separate logical export is required for the independent vault. Production's saved local database credentials are stale. Supabase's temporary database access could avoid resetting the existing password, but it requires SSL enforcement; that setting is off in production and must not be changed without confirming all live database clients are compatible. Keep the live application's connection path unchanged during a rehearsal.
+The current physical daily backups support Supabase-managed restoration but are not a downloadable off-platform logical archive. A separate logical export is required. On September 28, the official CLI login was refreshed and its managed database role provided export access without changing production's application password or SSL setting. Use verified TLS and keep the live application's connection unchanged. Capture credential-bearing CLI output only in restricted process memory; never print it, commit it or reuse it as a runtime credential. See [current recovery progress](COMPLETION_RECOVERY_PROGRESS_2026-09-28.md) for archive evidence and remaining gates.
 
 ## Owners and response targets
 

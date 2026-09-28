@@ -1,4 +1,19 @@
 /** Network boundary for read-only credentialed role verification. */
+export function credentialedPickupScopeAllowed(input: {
+  headings: string[]; actionNames: string[]; links: string[];
+}) {
+  if (!/ pickup$/i.test(input.headings[0] ?? "") || !input.headings.includes("Pickup access")) return false;
+  const guardianAction = /\b(billing|messages?|documents?|payments?|tuition|family profile|daily updates)\b/i;
+  if (input.headings.some((name) => guardianAction.test(name)) || input.actionNames.some((name) => guardianAction.test(name))) return false;
+  return input.links.every((href) => {
+    try {
+      const url = new URL(href, "https://thebeesuite.io");
+      if (["/billing", "/billing-invoices", "/family-detail", "/documents", "/messages", "/payments"].includes(url.pathname)) return false;
+      return url.pathname !== "/parent-portal" || !["billing", "payments", "messages", "documents", "family", "updates"].includes(url.searchParams.get("view") ?? "");
+    } catch { return false; }
+  });
+}
+
 export function credentialedQaPasswords(accounts: readonly { key: string; email: string }[], input: unknown) {
   const document = input && typeof input === "object" ? input as Record<string, unknown> : {};
   if (!Array.isArray(document.accounts)) throw new Error("QA credential file must contain an accounts array.");

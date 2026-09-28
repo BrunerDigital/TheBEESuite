@@ -24,13 +24,15 @@ Both schools have classrooms, staff profiles and director/billing grants. Neithe
 | Guardians without kiosk PINs | 12 | 8 |
 | Source package | No additional source-package blocker in this report | Import errors/warnings/dispositions; unconfirmed inventory; incomplete enrollment, parent, relationship and child-information report package |
 
-These are review populations, not approved invitation or PIN populations. Do not guess contact details or certify an import from counts. Centennial's separate 14 unmatched active staff Auth identities still require classification.
+These are review populations, not approved invitation or PIN populations. Do not guess contact details or certify an import from counts. Centennial's separate 14 unmatched active staff Auth identities still require classification. The preserved August 25 review package was already marked BLOCKED: child-information was an explicit empty placeholder, and capacity/ratio, recurring tuition and staff-contact source evidence remained incomplete. Its old counts cannot certify today's records; retain its stable-ID/source hashes while requesting fresh authoritative evidence.
 
 ## Encrypted recovery staging
 
 PostgreSQL 18 `pg_dump` streamed directly into AES-256-GCM encrypted local staging over verified TLS with Supabase's CA. The valid database archive contains **45,618,555 encrypted bytes**, passes full GCM authentication, and has a readable PostgreSQL catalog of 1,697 lines. These establish archive integrity, not a successful restore.
 
-The database snapshot's Storage inventory contains **632 objects / 780,477,675 metadata bytes**. It was extracted in memory and retained encrypted. Private-file export is in progress with decrypted SHA-256 and size checks. The database snapshot, final file manifest and current Storage metadata must reconcile before a matched recovery window is claimed.
+The database snapshot's Storage inventory contains **632 objects / 780,477,675 bytes**. Every snapshot object was exported encrypted and reverified after decryption against SHA-256, byte size and its snapshot eTag content digest. There are zero missing objects or digest/size mismatches. A fresh source query also matches the exact snapshot-scoped inventory fingerprint (IDs, paths, millisecond timestamps, sizes and eTags).
+
+The complete file export has 634 objects / 784,211,509 bytes because two uploads arrived after the database snapshot. They are retained as separate later evidence and excluded from the encrypted **632-object snapshot restore manifest**. This establishes a matched logical database/file recovery point in local staging without stopping production uploads. It does not establish an atomic global freeze, off-platform vault operation, restored Auth, a working restored app or a successful restore drill.
 
 Staging is limited to the Windows owner and SYSTEM. Filesystem encryption was unsupported, so payloads are explicitly encrypted before disk writes. The random archive key is protected locally through Windows DPAPI. The local encrypted envelope requires its reviewed decrypt/verification procedure; it is not a plaintext archive accepted directly by the standard Storage restore command. Company vault transfer, independent key custody, versioning/retention, scheduling, alerts and a second human recovery owner remain open. Local staging is not an operational backup vault.
 

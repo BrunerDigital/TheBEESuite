@@ -31,6 +31,7 @@ const safeValueKeys = new Set([
   "page",
   "priority",
   "provider",
+  "reference",
   "role",
   "scope",
   "selected",

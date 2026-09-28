@@ -46,6 +46,8 @@ export function buildParentPortalInvitationText({
   loginUrl,
   initialPasswordIssued = true,
   initialPassword = DEFAULT_PARENT_INITIAL_PASSWORD,
+  passwordSetupRequired = false,
+  setupLinkExpiresAt,
   transitioningFromProcare = false,
   billingCutoverApproved = false,
 }: {
@@ -55,6 +57,8 @@ export function buildParentPortalInvitationText({
   loginUrl: string;
   initialPasswordIssued?: boolean;
   initialPassword?: string;
+  passwordSetupRequired?: boolean;
+  setupLinkExpiresAt?: Date;
   transitioningFromProcare?: boolean;
   billingCutoverApproved?: boolean;
 }) {
@@ -96,12 +100,14 @@ export function buildParentPortalInvitationText({
     ...transitionCopy,
     "Complete these steps in order:",
     `1. Open ${loginUrl}`,
-    "2. Sign in with the parent login below.",
+    passwordSetupRequired ? "2. Use this private one-time link to choose your own password, then complete parent setup." : "2. Sign in with the parent login below.",
     `   Email: ${email}`,
-    initialPasswordIssued
+    passwordSetupRequired
+      ? `   This link expires${setupLinkExpiresAt ? ` at ${setupLinkExpiresAt.toISOString()}` : " after one hour"} and stops working after use. Ask the school for a new invitation if it expires.`
+      : initialPasswordIssued
       ? `   Password from your school invitation: ${initialPassword}`
       : "   Use your current password. Choose Forgot password on the sign-in page if you need a new one.",
-    initialPasswordIssued
+    !passwordSetupRequired && initialPasswordIssued
       ? "   You can keep this password or choose a private password anytime from Parent Portal settings."
       : null,
     "3. Confirm that your name, phone number, children, and school are correct. Stop and contact the school before continuing if anything is wrong.",
@@ -125,6 +131,8 @@ export function buildParentPortalInvitationHtml({
   loginUrl,
   initialPasswordIssued = true,
   initialPassword = DEFAULT_PARENT_INITIAL_PASSWORD,
+  passwordSetupRequired = false,
+  setupLinkExpiresAt,
   transitioningFromProcare = false,
   billingCutoverApproved = false,
   branding,
@@ -135,6 +143,8 @@ export function buildParentPortalInvitationHtml({
   loginUrl: string;
   initialPasswordIssued?: boolean;
   initialPassword?: string;
+  passwordSetupRequired?: boolean;
+  setupLinkExpiresAt?: Date;
   transitioningFromProcare?: boolean;
   billingCutoverApproved?: boolean;
   branding: ParentInvitationBranding;
@@ -142,7 +152,9 @@ export function buildParentPortalInvitationHtml({
   const baseUrl = new URL(loginUrl).origin;
   const logoUrl = new URL(branding.logoSrc, `${baseUrl}/`).toString();
   const safeLoginUrl = escapeHtml(loginUrl);
-  const passwordBlock = initialPasswordIssued
+  const passwordBlock = passwordSetupRequired
+    ? `<div style="font-size:13px;color:#713f12">CHOOSE YOUR PRIVATE PASSWORD</div><p style="margin:8px 0 0;font-size:15px;line-height:1.5">Use the private one-time link below to choose your password, then complete parent setup. This link expires${setupLinkExpiresAt ? ` at ${escapeHtml(setupLinkExpiresAt.toISOString())}` : " after one hour"} and stops working after use. Ask the school for a new invitation if it expires.</p>`
+    : initialPasswordIssued
     ? `<div style="font-size:13px;color:#713f12">PASSWORD FROM YOUR SCHOOL INVITATION</div><div style="margin-top:4px;font-size:18px;font-weight:700">${escapeHtml(initialPassword)}</div><p style="margin:12px 0 0;font-size:13px;line-height:1.5">You can keep this password or choose a private password anytime from Parent Portal settings.</p>`
     : `<div style="font-size:13px;color:#713f12">PASSWORD</div><div style="margin-top:4px;font-size:15px;line-height:1.5">Use your current password. Choose <strong>Forgot password</strong> on the sign-in page if you need a new one.</div>`;
   const billingTransitionBlock = billingCutoverApproved
@@ -178,7 +190,7 @@ export function buildParentPortalInvitationHtml({
                 <p style="text-align:center"><a href="${safeLoginUrl}" style="display:inline-block;padding:14px 24px;border-radius:12px;background:#f4c430;color:#111827;text-decoration:none;font-weight:800">Start Parent Setup</a></p>
                 <h2 style="margin-top:28px;font-size:19px">Complete these steps in order</h2>
                 <ol style="padding-left:22px;font-size:15px;line-height:1.65">
-                  <li>Sign in with the email shown above.</li>
+                  <li>${passwordSetupRequired ? "Choose your own password using the private link above, then complete parent setup." : "Sign in with the email shown above."}</li>
                   <li>Confirm your name, phone number, children, and school. Stop and contact the school if anything is wrong.</li>
                   <li>Choose or confirm a private 4 digit kiosk PIN that only authorized adults know.</li>
                   <li>Finish setup and open the Parent Portal.</li>

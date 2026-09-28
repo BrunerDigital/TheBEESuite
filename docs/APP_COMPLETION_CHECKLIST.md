@@ -1,6 +1,6 @@
 # The BEE Suite App Completion Checklist
 
-Current evidence: [September 13 school UI and release index](SCHOOL_UI_RELEASE_EVIDENCE_2026-09-13.md). The dated checklist below is historical; a checked item is not proof of current production, all-role authentication or native submission readiness.
+Current working queue: [remaining tasks](REMAINING_TASKS.md), reconciled September 28. The dated checklist below is historical; a checked item is not proof of current production, all-role authentication or native submission readiness.
 
 Last updated: July 29, 2026
 

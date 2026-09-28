@@ -3,7 +3,7 @@
 Date: August 31, 2026
 Purpose: one evidence-based backlog organized by user type and feature category.
 
-Current reconciliation: [September 15 completion checkpoint](COMPLETION_STATUS_2026-09-15.md). This August discovery checklist is historical; unchecked rows may have shipped since its creation.
+Current working queue: [remaining tasks](REMAINING_TASKS.md), reconciled September 28. This August discovery checklist is historical; unchecked rows may have shipped since its creation.
 
 This is a discovery checklist, not a production activation record. A checked-in feature can still need school configuration, provider setup, credentialed verification, training, or explicit business approval.
 

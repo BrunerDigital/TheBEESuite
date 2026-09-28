@@ -2,6 +2,8 @@
 
 September 28, 2026. This supersedes the local-access blocker in the earlier same-day checkpoint. It does not approve school activation.
 
+Later same-day evidence: [combined isolated recovery verification](COMBINED_RECOVERY_DRILL_2026-09-28.md) records the restored application, durable identities, private files, financial/ledger integrity and cleanup. Export-stage limits below describe the earlier checkpoint; the new record is authoritative for the subsequent exercise and its remaining operational limits.
+
 ## Access and canonical QA
 
 The owner's existing dashboard session refreshed the expired CLI login through Supabase's official authorization flow. The isolated completion checkout now connects through managed `cli_login_postgres` access. Production's application password, SSL-enforcement setting, normal connection path, browser grants, school identities and access grants were preserved.

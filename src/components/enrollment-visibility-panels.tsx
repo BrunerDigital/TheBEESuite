@@ -721,7 +721,8 @@ export function FamilyProfilesEnrollmentPanel({
           <CardTitle as="h2">Parent Portal access</CardTitle>
           <CardDescription>
             Create Parent Portal access for the guardian email, send the welcome and installation steps, or send the parent feature
-            guide after the account is linked. The invitation includes the password.
+            guide after the account is linked. New parents use a private link to choose their password, then set a private Family PIN
+            during parent setup before kiosk check-in/out. Existing passwords and PINs are preserved.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-2">

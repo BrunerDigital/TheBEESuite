@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
@@ -12,7 +13,9 @@ import {
   buildParentLoginSetupUrl,
   buildParentPortalUrl,
   DIRECT_PARENT_PORTAL_INVITE_MODE,
+  PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
+import { issueParentPortalSetupLink, recordParentPortalSetupLinkDelivery } from "@/lib/parent-portal-setup-links";
 import {
   ensureParentPortalLoginForGuardian,
   parentPortalInvitationSentFields,
@@ -26,7 +29,7 @@ import { buildManualEmailCopy } from "@/lib/manual-email-copy";
 import { prisma } from "@/lib/prisma";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 
-import { withApiLogging } from "@/lib/request-response-logging";
+import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 const MAX_STATUS_BATCH_SIZE = 200;
@@ -257,6 +260,8 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
 
+  const targetActor = { id: user.id, tenantId: center.organization.tenantId };
+  let invitationStage = "preflight";
   try {
     const appBaseUrl = getAppBaseUrl(request.url);
     const branding = resolveWorkspaceBranding({
@@ -300,6 +305,7 @@ async function POSTHandler(request: NextRequest) {
       });
       const subject = `${centerLabel}: parent app guide, features, and FAQ`;
       const manualCopy = buildManualEmailCopy({ to: email, subject, body: guideText });
+      invitationStage = "email_delivery";
       const emailCopy = await sendEmail({
         to: [email],
         subject,
@@ -309,10 +315,10 @@ async function POSTHandler(request: NextRequest) {
         disableClickTracking: true,
         categories: ["parent_guide_email"],
         customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
-        tenantId: user.tenantId,
+        tenantId: targetActor.tenantId,
       });
       await recordEmailDeliveryAttempt({
-        tenantId: user.tenantId,
+        tenantId: targetActor.tenantId,
         centerId: center.id,
         purpose: "parent_guide_email",
         to: [email],
@@ -323,7 +329,7 @@ async function POSTHandler(request: NextRequest) {
         result: emailCopy,
         metadata: { guardianId: guardian.id, familyId: guardian.familyId, brand: branding.kind },
       });
-      await writeAuditLog(user, {
+      await writeAuditLog(targetActor, {
         centerId: center.id,
         action: "parent_portal.guide_sent",
         resource: "Guardian",
@@ -412,13 +418,13 @@ async function POSTHandler(request: NextRequest) {
     const defaultPinData = !guardian.checkInPinHash
       ? defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id })
       : null;
-    const preparedWithoutInvite = record(record(guardian.customFields).parentPortal).preparedWithoutInvite === true;
+    invitationStage = "account_link";
     const provisioned = await ensureParentPortalLoginForGuardian({
       guardianId: guardian.id,
       linkedBy: user.email,
       linkedReason: "direct_parent_invitation",
-      resetToInitialPassword: preparedWithoutInvite,
-      inviteMode: DIRECT_PARENT_PORTAL_INVITE_MODE,
+      randomizeNewCredential: true,
+      inviteMode: PARENT_PORTAL_INVITE_MODE,
     });
     if (!provisioned.ok) {
       const status = provisioned.status && provisioned.status >= 400 ? provisioned.status : 409;
@@ -430,14 +436,35 @@ async function POSTHandler(request: NextRequest) {
     }
 
     const updatedGuardian = await prisma.guardian.findUnique({ where: { id: guardian.id } });
-    const loginUrl = buildParentLoginSetupUrl(appBaseUrl);
-    const initialPasswordIssued = provisioned.credentialCreated || preparedWithoutInvite;
+    invitationStage = "password_setup";
+    const setupLink = provisioned.requiresSetupLink || provisioned.credentialCreated
+      ? await issueParentPortalSetupLink({
+          requestUrl: request.url,
+          user: targetActor,
+          parentUserId: provisioned.userId,
+          guardianId: guardian.id,
+          email,
+          centerId: center.id,
+          familyId: guardian.familyId,
+          reason: "direct_parent_invitation",
+        })
+      : null;
+    if (setupLink && !setupLink.ok) {
+      const reference = randomUUID();
+      logOperationalError("parent_invitation.password_setup", new Error("Setup link provider failure"), { reference, stage: invitationStage, status: 502 });
+      return NextResponse.json({ ok: false, error: `The parent account is linked, but password setup could not be prepared. No invitation email was sent. Contact support with reference ${reference}.`, reference }, { status: 502 });
+    }
+    const passwordSetupRequired = Boolean(setupLink?.ok);
+    const loginUrl = setupLink?.ok ? setupLink.setupUrl : buildParentLoginSetupUrl(appBaseUrl);
+    const initialPasswordIssued = false;
     const invitationText = buildParentPortalInvitationText({
       guardianName: guardian.fullName,
       centerLabel,
       email,
       loginUrl,
       initialPasswordIssued,
+      passwordSetupRequired,
+      setupLinkExpiresAt: setupLink?.ok ? setupLink.expiresAt : undefined,
       transitioningFromProcare,
       billingCutoverApproved,
     });
@@ -447,12 +474,15 @@ async function POSTHandler(request: NextRequest) {
       email,
       loginUrl,
       initialPasswordIssued,
+      passwordSetupRequired,
+      setupLinkExpiresAt: setupLink?.ok ? setupLink.expiresAt : undefined,
       transitioningFromProcare,
       billingCutoverApproved,
       branding,
     });
     const subject = `${centerLabel}: your BEE Suite Parent Portal is ready`;
     const manualCopy = buildManualEmailCopy({ to: email, subject, body: invitationText });
+    invitationStage = "email_delivery";
     const emailCopy = await sendEmail({
       to: [email],
       subject,
@@ -461,21 +491,24 @@ async function POSTHandler(request: NextRequest) {
       fromName: branding.name,
       disableClickTracking: true,
       categories: ["parent_invitation_email"],
-      customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
-      tenantId: user.tenantId,
+      customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id, ...(setupLink?.ok ? { setupTokenId: setupLink.tokenId } : {}) },
+      tenantId: targetActor.tenantId,
     });
     await recordEmailDeliveryAttempt({
-      tenantId: user.tenantId,
+      tenantId: targetActor.tenantId,
       centerId: center.id,
       purpose: "parent_invitation_email",
       to: [email],
       subject,
-      text: invitationText,
-      html: invitationHtml,
+      text: setupLink?.ok ? invitationText.split(setupLink.setupUrl).join("[private setup link redacted]") : invitationText,
+      html: setupLink?.ok ? undefined : invitationHtml,
       fromName: branding.name,
+      // Private one-time links cannot be stored or replayed by the generic mail retry worker.
+      ...(setupLink?.ok ? { maxAttempts: 1 } : {}),
       result: emailCopy,
-      metadata: { guardianId: guardian.id, familyId: guardian.familyId, brand: branding.kind },
+      metadata: { guardianId: guardian.id, familyId: guardian.familyId, brand: branding.kind, ...(setupLink?.ok ? { setupTokenId: setupLink.tokenId } : {}) },
     });
+    if (setupLink?.ok) await recordParentPortalSetupLinkDelivery({ tokenId: setupLink.tokenId, delivered: emailCopy.ok });
 
     if (emailCopy.ok) {
       const linkedGuardians = await prisma.guardian.findMany({
@@ -488,7 +521,7 @@ async function POSTHandler(request: NextRequest) {
       })));
     }
 
-    await writeAuditLog(user, {
+    await writeAuditLog(targetActor, {
       centerId: center.id,
       action: "parent_portal.guardian_invited",
       resource: "Guardian",
@@ -497,9 +530,11 @@ async function POSTHandler(request: NextRequest) {
         familyId: guardian.familyId,
         parentUserId: provisioned.userId,
         email,
-        authMode: DIRECT_PARENT_PORTAL_INVITE_MODE,
+        authMode: passwordSetupRequired ? PARENT_PORTAL_INVITE_MODE : DIRECT_PARENT_PORTAL_INVITE_MODE,
         credentialCreated: provisioned.credentialCreated,
         initialPasswordIssued,
+        passwordSetupRequired,
+        ...(setupLink?.ok ? { setupTokenId: setupLink.tokenId } : {}),
         kioskPinDefaultedFromPhone: Boolean(defaultPinData),
         emailBrand: branding.kind,
         emailAcceptedByProvider: emailCopy.ok,
@@ -512,7 +547,7 @@ async function POSTHandler(request: NextRequest) {
         {
           ok: false,
           error: emailCopy.error || "The parent account was linked, but the invitation email could not be sent. Use the manual email copy provided.",
-          auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailAccepted: false },
+          auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, passwordSetupRequired, emailAccepted: false },
           emailCopy,
           manualCopy,
         },
@@ -528,16 +563,20 @@ async function POSTHandler(request: NextRequest) {
         email: updatedGuardian?.email ?? guardian.email,
         userId: provisioned.userId,
       },
-      auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailAccepted: true },
+      auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, passwordSetupRequired, emailAccepted: true },
       emailCopy,
       manualCopy,
     });
-  } catch {
+  } catch (error) {
+    const reference = randomUUID();
+    logOperationalError("parent_invitation", error, { reference, stage: invitationStage });
     return NextResponse.json(
       {
         ok: false,
-        error:
-          "We couldn't confirm whether the invitation finished. Refresh this family before trying again. If the status is still unclear, contact support.",
+        error: invitationStage === "email_delivery"
+          ? `We couldn't confirm whether the invitation finished. Refresh this family before trying again. Contact support with reference ${reference}.`
+          : `Parent access could not be prepared. No invitation email was sent. Contact support with reference ${reference}.`,
+        reference,
       },
       { status: 502 },
     );

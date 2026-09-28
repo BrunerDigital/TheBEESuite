@@ -122,7 +122,8 @@ test("director guide action requires a linked parent and keeps delivery school-s
   assert.match(route, /action: "parent_portal\.guide_sent"/);
   assert.match(route, /disableClickTracking: true/);
   assert.match(route, /canAccessCenter\(user, center\.id\)/);
-  assert.match(route, /resetToInitialPassword:\s*preparedWithoutInvite/);
+  assert.match(route, /issueParentPortalSetupLink/);
+  assert.doesNotMatch(route, /resetToInitialPassword:/);
   assert.match(route, /guardian\.family\.sourceSystem\?\.toLowerCase\(\) === "procare"/);
   assert.match(route, /guardian\.family\.children\.some/);
   assert.match(route, /stripeSchoolBillingApproval/);

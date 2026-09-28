@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle, BookOpenText, CheckCircle2, Copy, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +78,7 @@ const inviteStatusLabel: Record<InviteStatus, string> = {
 };
 
 export function ParentPortalInviteButton({ guardianId, guardianName, email, linked }: Props) {
+  const router = useRouter();
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [manualCopy, setManualCopy] = useState<ManualEmailCopy | null>(null);
@@ -94,6 +96,15 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
     return () => { active = false; };
   }, [email, guardianId]);
 
+  async function reloadInviteStatus() {
+    try {
+      const payload = await loadInviteStatus(guardianId);
+      if (payload?.status) setInviteStatus(payload.status);
+    } catch {
+      // Keep the send error visible when the status request also fails.
+    }
+  }
+
   function submit(messageType: "invitation" | "guide") {
     startTransition(async () => {
       setStatusMessage("");
@@ -103,11 +114,19 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guardianId, messageType }),
-      });
-      const json = await response.json().catch(() => null) as { error?: string; auth?: { credentialCreated?: boolean }; manualCopy?: ManualEmailCopy } | null;
+      }).catch(() => null);
+      if (!response) {
+        setErrorMessage("The invitation status could not be confirmed. Refresh this family before trying again.");
+        await reloadInviteStatus();
+        router.refresh();
+        return;
+      }
+      const json = await response.json().catch(() => null) as { error?: string; auth?: { credentialCreated?: boolean; passwordSetupRequired?: boolean }; manualCopy?: ManualEmailCopy } | null;
       setManualCopy(json?.manualCopy ?? null);
       if (!response.ok) {
         setErrorMessage(json?.error || "Parent portal access could not be created.");
+        await reloadInviteStatus();
+        router.refresh();
         return;
       }
       if (messageType === "guide") {
@@ -115,11 +134,12 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
         return;
       }
       setStatusMessage(
-        json?.auth?.credentialCreated
-          ? "The welcome email was accepted for delivery. It includes sign-in details, family verification, the Family PIN, Add to Home Screen steps, and payment guidance when available."
+        json?.auth?.passwordSetupRequired
+          ? "The welcome email was accepted for delivery. The parent uses its private one-time link to choose a password, confirm their family, and set a private Family PIN before school check-in/out. The link expires after one hour."
           : "The welcome reminder was accepted for delivery. The parent's current password was not changed; the email includes Forgot password, Add to Home Screen steps, and payment guidance when available.",
       );
       setInviteStatus("accepted");
+      router.refresh();
     });
   }
 
@@ -168,7 +188,8 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
         <p className="text-xs leading-5 text-muted-foreground">
           This gives an already saved guardian access to the parent app; it is separate from the registration form used to collect a new family&apos;s enrollment packet.{" "}
           Before creating access or contacting the parent, BEE Suite checks the current school and family-child links, active or pending
-          enrollment, guardian identity, email, phone, and duplicate conflicts. Import history is diagnostic when present but is not required
+          enrollment, guardian identity, email, phone, and duplicate conflicts. New parents choose their own password using a private setup link.
+          Before kiosk check-in/out, they must complete parent setup and choose a private 4-digit Family PIN. Import history is diagnostic when present but is not required
           for a safely entered current family. Accepted email is tracked separately from confirmed delivery.
         </p>
         <Button disabled={isPending || !email} onClick={() => submit("invitation")} className="w-full">
@@ -177,7 +198,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
         </Button>
         {linked ? (
           <p className="text-xs text-muted-foreground">
-            This guardian is already linked. Resend sends a reminder only; their existing account and password are preserved.
+            This guardian is already linked. Resend preserves their existing account and password. If password setup is incomplete, the email includes a new private setup link.
           </p>
         ) : null}
         <Button

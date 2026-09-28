@@ -43,7 +43,7 @@ export async function issueParentPortalSetupLink({
   reason,
 }: {
   requestUrl: string;
-  user: CurrentUser;
+  user: Pick<CurrentUser, "id" | "tenantId">;
   parentUserId: string;
   guardianId: string;
   email: string;

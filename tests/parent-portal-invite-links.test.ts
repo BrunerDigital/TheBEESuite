@@ -84,10 +84,10 @@ test("setup-link flows randomize only new parent credentials", () => {
   assert.match(documentRequests, /login\.requiresSetupLink/);
   assert.match(provisioning, /existingUser\?\.mustResetPassword && !resetToInitialPassword/);
   assert.match(provisioning, /requiresSetupLink,/);
-  assert.match(provisioning, /prepareWithoutInvite \|\| randomizeNewCredential/);
+  assert.match(provisioning, /prepareWithoutInvite \|\| \(randomizeNewCredential && !resetToInitialPassword\)/);
   assert.match(
     provisioning,
-    /updateExistingPassword:\s*resetToInitialPassword \|\| \(randomizeNewCredential && !existingUser\)/,
+    /updateExistingPassword:\s*resetToInitialPassword,/,
   );
 });
 
@@ -95,8 +95,9 @@ test("direct parent invitations preflight ProCare data and activate prepared acc
   const source = readFileSync(new URL("../src/app/api/parent/invitations/route.ts", import.meta.url), "utf8");
   assert.match(source, /evaluateParentInvitationReadiness/);
   assert.match(source, /buildParentLoginSetupUrl/);
-  assert.match(source, /preparedWithoutInvite/);
-  assert.match(source, /resetToInitialPassword:\s*preparedWithoutInvite/);
+  assert.match(source, /issueParentPortalSetupLink/);
+  assert.match(source, /randomizeNewCredential:\s*true/);
+  assert.doesNotMatch(source, /resetToInitialPassword:/);
   assert.match(source, /parentPortalInvitationSentFields/);
   assert.match(source, /provisioned\.status\s*>=\s*400/);
 });

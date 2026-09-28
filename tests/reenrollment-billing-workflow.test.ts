@@ -49,5 +49,6 @@ test("re-enrollment does not send invitations or alter existing parent credentia
   );
   assert.doesNotMatch(childBranch, /parent\/invitations|sendEmail|inviteUserByEmail|updateUserById|ensureParentPortalLoginForGuardian/);
   assert.match(inviteButton, /linked \? "Resend Parent App Invite" : "Send Parent App Invite"/);
-  assert.match(inviteButton, /Resend sends a reminder only; their existing account and password are preserved/);
+  assert.match(inviteButton, /Resend preserves their existing account and password/);
+  assert.match(inviteButton, /If password setup is incomplete, the email includes a new private setup link/);
 });

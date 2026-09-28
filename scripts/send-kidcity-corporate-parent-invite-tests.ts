@@ -2,7 +2,6 @@ import "./load-env";
 import { pathToFileURL } from "node:url";
 import type { Prisma } from "@prisma/client";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
-import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import {
@@ -18,9 +17,10 @@ import {
   buildParentPortalInvitationHtml,
   buildParentPortalInvitationText,
   buildParentPortalUrl,
-  DIRECT_PARENT_PORTAL_INVITE_MODE,
+  PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
 import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
+import { issueParentPortalSetupLink, recordParentPortalSetupLinkDelivery } from "@/lib/parent-portal-setup-links";
 import { prisma } from "@/lib/prisma";
 
 const TEST_SOURCE = "bee_suite_parent_invite_test";
@@ -347,6 +347,7 @@ async function sendTests(args: Args) {
   for (const item of plan) {
     const center = resolved.find(({ center: candidate }) => candidate.id === item.centerId)?.center;
     if (!center) throw new Error(`Center disappeared from the resolved plan: ${item.centerId}`);
+    if (center.organization.tenantId !== corporateActor.tenantId) throw new Error("Corporate test school tenant does not match the authorized actor.");
 
     const fixture = await ensureTestFixture({ center, loginEmail: item.loginEmail, runId: args.runId });
     if (args.fixtureOnly) {
@@ -365,24 +366,11 @@ async function sendTests(args: Args) {
       linkedBy: corporateActor.id,
       linkedReason: TEST_SOURCE,
       resetToInitialPassword: false,
-      inviteMode: DIRECT_PARENT_PORTAL_INVITE_MODE,
+      randomizeNewCredential: true,
+      inviteMode: PARENT_PORTAL_INVITE_MODE,
     });
     if (!provisioned.ok) {
       throw new Error(`${center.name} test parent provisioning failed: ${provisioned.reason}`);
-    }
-
-    const guardian = await prisma.guardian.findUnique({
-      where: { id: fixture.guardianId },
-      select: { checkInPinHash: true, phone: true },
-    });
-    if (!guardian?.checkInPinHash) {
-      const pinData = defaultGuardianPinUpdate({
-        guardianId: fixture.guardianId,
-        phone: guardian?.phone,
-        setById: corporateActor.id,
-      });
-      if (!pinData) throw new Error(`${center.name} test guardian could not receive a default kiosk PIN.`);
-      await prisma.guardian.update({ where: { id: fixture.guardianId }, data: pinData });
     }
 
     if (args.provisionOnly) {
@@ -406,20 +394,38 @@ async function sendTests(args: Args) {
       email: center.email,
     });
     const centerLabel = center.crmLocationId ?? center.name;
-    const loginUrl = buildParentLoginSetupUrl("https://thebeesuite.io");
+    const setupLink = provisioned.requiresSetupLink || provisioned.credentialCreated
+      ? await issueParentPortalSetupLink({
+          requestUrl: "https://thebeesuite.io",
+          user: corporateActor,
+          parentUserId: provisioned.userId,
+          guardianId: fixture.guardianId,
+          email: item.loginEmail,
+          centerId: center.id,
+          familyId: fixture.familyId,
+          reason: TEST_SOURCE,
+        })
+      : null;
+    if (setupLink && !setupLink.ok) throw new Error(`${center.name} test password setup link could not be prepared.`);
+    const passwordSetupRequired = Boolean(setupLink?.ok);
+    const loginUrl = setupLink?.ok ? setupLink.setupUrl : buildParentLoginSetupUrl("https://thebeesuite.io");
     const text = buildParentPortalInvitationText({
       guardianName: "Brenden Bruner - Parent Invite Test",
       centerLabel,
       email: item.loginEmail,
       loginUrl,
-      initialPasswordIssued: provisioned.credentialCreated,
+      initialPasswordIssued: false,
+      passwordSetupRequired,
+      setupLinkExpiresAt: setupLink?.ok ? setupLink.expiresAt : undefined,
     });
     const html = buildParentPortalInvitationHtml({
       guardianName: "Brenden Bruner - Parent Invite Test",
       centerLabel,
       email: item.loginEmail,
       loginUrl,
-      initialPasswordIssued: provisioned.credentialCreated,
+      initialPasswordIssued: false,
+      passwordSetupRequired,
+      setupLinkExpiresAt: setupLink?.ok ? setupLink.expiresAt : undefined,
       branding,
     });
     const subject = `[TEST ${args.runId}] ${centerLabel}: finish your parent app setup`;
@@ -439,6 +445,7 @@ async function sendTests(args: Args) {
         guardianId: fixture.guardianId,
         familyId: fixture.familyId,
         centerId: center.id,
+        ...(setupLink?.ok ? { setupTokenId: setupLink.tokenId } : {}),
       },
       tenantId: center.organization.tenantId,
     });
@@ -449,9 +456,10 @@ async function sendTests(args: Args) {
       purpose: "parent_invitation_email",
       to: [args.recipient],
       subject,
-      text,
-      html,
+      text: setupLink?.ok ? text.split(setupLink.setupUrl).join("[private setup link redacted]") : text,
+      html: setupLink?.ok ? undefined : html,
       fromName: branding.name,
+      ...(setupLink?.ok ? { maxAttempts: 1 } : {}),
       result: emailResult,
       metadata: {
         test: true,
@@ -460,8 +468,10 @@ async function sendTests(args: Args) {
         guardianId: fixture.guardianId,
         familyId: fixture.familyId,
         schoolEmail: center.email,
+        ...(setupLink?.ok ? { setupTokenId: setupLink.tokenId } : {}),
       },
     });
+    if (setupLink?.ok) await recordParentPortalSetupLinkDelivery({ tokenId: setupLink.tokenId, delivered: emailResult.ok });
     await prisma.auditLog.create({
       data: {
         tenantId: center.organization.tenantId,

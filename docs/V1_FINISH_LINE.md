@@ -8,7 +8,7 @@ The release boundary is the existing BEE Suite web product and Parent/Teacher iO
 | --- | --- | --- |
 | Existing web product | Required role workflows, responsive UI, isolation and full build pass on the released commit | September 15 prior release evidence covers nine designated roles. Recheck changed flows on the final source. |
 | Account security | Self-service primary/backup authenticator setup, protected removal, fresh login after changes, session-aware required-role policy | Implementation in this pass; provider enrollment/recovery rehearsal and approved role rollout remain required. |
-| Recovery | Encrypted off-platform DB/Storage backups, verified destination copy, retained restore keys, monitored schedule and isolated full restore | Storage exporter and guarded restore already exist. Destination, staging environment and owner acceptance are outstanding. |
+| Recovery | Encrypted off-platform DB/Storage backups, verified destination copy, retained restore keys, monitored schedule and isolated full restore | The September 28 combined database/Auth/private-file/application rehearsal and exact lab cleanup are verified; see [evidence and limits](COMBINED_RECOVERY_DRILL_2026-09-28.md). Independent vault/key custody, monitored schedule, alerts and owner acceptance remain outstanding. Regenerated Storage IDs/timestamps still need a real-recovery metadata disposition. |
 | School readiness | Source-backed owner confirmations for every school included in this version's rollout | Private 69-school worklist exists; missing entries cannot be invented or counted as confirmed. Product completion and school activation are separate. |
 | Financial/access exceptions | Review source evidence, approve exact corrections, verify current ledger and access results | Three private exceptions remain; no repair has been applied. |
 | Operations | Named responders, delivery/reply evidence, payroll/report reconciliation, physical-device/kiosk verification | Requires selected school, school representative, devices and safe test recipient details. |
@@ -30,7 +30,7 @@ Recommended rollout roles to review: `PLATFORM_OWNER,BRAND_ADMIN,REGIONAL_MANAGE
 
 1. Confirm current version scope and MFA role policy.
 2. Sign in to Apple directly; identify the approved pilot school and a physical-device tester.
-3. Choose the staging organization and approve its quoted provider cost before creation.
+3. Review the completed isolated recovery evidence and its Storage metadata limitations before accepting a real production recovery plan.
 4. Identify the company-controlled backup vault and primary/backup alert owners. Keep secrets in secure provider configuration, never chat or source control.
 5. Supply school-owner source confirmations and evidence for the private financial exceptions.
 

@@ -21,6 +21,8 @@ Reconciled September 28, 2026, after merged PRs #430, #431 and #432, from Git/PR
 
 ## Already completed — keep out of the remaining queue
 
+Parent provisioning release checkpoint, September 28 at 19:18 UTC: merge `014b1e751b367a06f5f279c316601e95aab129a5` is Vercel Ready in `dpl_ApmGdLZE2KVQY5MgBdxyYKQsFruw` on primary/www/beta/main aliases; homepage/parent entry and database health passed. The release task verified the authenticated family UI and reported all 2,544 tests passing, including synthetic invitation → private PIN → check-in/out. The post-deployment runtime-error query returned only the earlier handled push-subscription rejection retained in task 07. These close the scoped code-release checks; no real invitation, family repair or attendance write was performed. The diagnostic report's earlier “no deployment” checkpoint is historical, not the current release status. Any later code change requires a fresh intended-commit, alias, health/log and authenticated changed-flow check.
+
 - Parent invitation provisioning, retry/delivery feedback and target-tenant isolation correction: merged PR #432. Exact-family operational follow-up remains task 01; no automatic family repair or resend was included.
 - Teacher-password strength, onboarding failure/collision safeguards: merged PR #425.
 - People/product screenshot gallery: merged PR #424; unique later local creative edits are preserved separately.

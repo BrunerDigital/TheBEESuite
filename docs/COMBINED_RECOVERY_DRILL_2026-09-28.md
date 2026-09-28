@@ -23,7 +23,7 @@ The local application's outbound guard allowed only loopback, the exact lab data
 | Parent media layout | At 1440px and 390px, the fixture was visible, decoded successfully and produced no horizontal overflow; screenshots reviewed |
 | Exercise fixtures | The synthetic media database row and its exact uploaded path were removed |
 
-The role checks establish negative access to Kokomo and Centennial from the isolated demo accounts. They do not establish either school's positive staff/guardian access or business readiness. The canonical production desktop/mobile role baseline remains separate evidence. A broader lab browser run was interrupted after overlapping logout checks invalidated its sessions; it is not counted as a completed eighteen-case lab run.
+The role checks establish negative access to Kokomo and Centennial from the isolated demo accounts. They do not establish either school's positive staff/guardian access or business readiness. Complete bidirectional Auth/Prisma email-and-grant reconciliation and disposition of unmatched identity populations remain open acceptance checks. Snapshot sessions and refresh tokens were excluded from the load, but this exercise did not perform an explicit replay of snapshot-era Supabase tokens; the application-cookie rejection results do not establish that separate provider-token rejection gate. The canonical production desktop/mobile role baseline remains separate evidence. A broader lab browser run was interrupted after overlapping logout checks invalidated its sessions; it is not counted as a completed eighteen-case lab run.
 
 ## Recovery point and operational limits
 

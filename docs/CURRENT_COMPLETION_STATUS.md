@@ -1,5 +1,7 @@
 # Current BEE Suite completion status
 
+Working completion queue: [remaining tasks](REMAINING_TASKS.md). The [September 28 worktree closeout](WORKTREE_CLOSEOUT_2026-09-28.md) separates merged work, active investigations, retained financial archives and inert cache residue.
+
 Latest access, canonical QA, school-gate and encrypted-export evidence: [September 28 recovery progress](COMPLETION_RECOVERY_PROGRESS_2026-09-28.md). The earlier [September 28 execution checkpoint](COMPLETION_EXECUTION_2026-09-28.md) contains the provider/school inventory, with Kokomo and Centennial selected as the first verification pair. Recovery infrastructure details below were initially verified September 24, 2026 (Eastern); use the newer progress record for resolved access and archive evidence. This is not a school launch approval.
 
 ## Live-service boundary

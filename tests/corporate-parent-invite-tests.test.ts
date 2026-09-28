@@ -1,9 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import {
   buildCorporateParentInviteTestLoginEmail,
   parseCorporateParentInviteTestArgs,
 } from "@/../scripts/send-kidcity-corporate-parent-invite-tests";
+
+test("corporate invitation apply uses tracked private setup instead of an unusable shared password", () => {
+  const source = readFileSync("scripts/send-kidcity-corporate-parent-invite-tests.ts", "utf8");
+  assert.match(source, /provisioned\.requiresSetupLink \|\| provisioned\.credentialCreated[\s\S]*issueParentPortalSetupLink/);
+  assert.equal((source.match(/initialPasswordIssued: false,/g) ?? []).length, 2);
+  assert.equal((source.match(/passwordSetupRequired,/g) ?? []).length, 2);
+  assert.match(source, /recordParentPortalSetupLinkDelivery/);
+  assert.match(source, /maxAttempts: 1/);
+  assert.match(source, /private setup link redacted/);
+  assert.doesNotMatch(source, /defaultGuardianPinUpdate|initialPasswordIssued: provisioned\.credentialCreated/);
+  assert.ok(source.indexOf("if (args.provisionOnly)") < source.indexOf("const setupLink ="));
+});
 
 test("corporate parent invite tests use isolated Gmail login aliases without changing the delivery inbox", () => {
   assert.equal(

@@ -12,7 +12,7 @@ type AuditInput = {
 
 type AuditClient = Pick<Prisma.TransactionClient, "auditLog" | "center">;
 
-export async function writeAuditLog(user: CurrentUser, input: AuditInput, client: AuditClient = prisma) {
+export async function writeAuditLog(user: Pick<CurrentUser, "id" | "tenantId">, input: AuditInput, client: AuditClient = prisma) {
   await client.auditLog.create({
     data: {
       tenantId: user.tenantId,

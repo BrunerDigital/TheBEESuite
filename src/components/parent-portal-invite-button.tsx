@@ -96,6 +96,15 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
     return () => { active = false; };
   }, [email, guardianId]);
 
+  async function reloadInviteStatus() {
+    try {
+      const payload = await loadInviteStatus(guardianId);
+      if (payload?.status) setInviteStatus(payload.status);
+    } catch {
+      // Keep the send error visible when the status request also fails.
+    }
+  }
+
   function submit(messageType: "invitation" | "guide") {
     startTransition(async () => {
       setStatusMessage("");
@@ -108,6 +117,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       }).catch(() => null);
       if (!response) {
         setErrorMessage("The invitation status could not be confirmed. Refresh this family before trying again.");
+        await reloadInviteStatus();
         router.refresh();
         return;
       }
@@ -115,6 +125,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       setManualCopy(json?.manualCopy ?? null);
       if (!response.ok) {
         setErrorMessage(json?.error || "Parent portal access could not be created.");
+        await reloadInviteStatus();
         router.refresh();
         return;
       }

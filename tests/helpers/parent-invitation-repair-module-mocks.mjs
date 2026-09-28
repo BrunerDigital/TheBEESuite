@@ -4,6 +4,8 @@ import { mock, test } from 'node:test';
 // All state is synthetic and in memory. No database or provider can be reached.
 const state = {};
 function reset() {
+  state.actorTenant = 'tenant-test';
+  state.allCenters = false;
   Object.assign(state, { authExists: false, authFailure: false, mailFailure: false, setupFailure: false, parentSession: false, tokenUsed: false, chosenPassword: null, account: null, authCalls: [], sends: [], deliveries: [], audits: [], tokens: [], userWrites: 0, logs: [], attendance: null });
   state.center = { id: 'school-test', name: 'Synthetic School', organizationId: 'org-test', timezone: 'America/Indiana/Indianapolis', organization: { tenantId: 'tenant-test', name: 'Synthetic Organization', tenant: { name: 'Synthetic', slug: 'synthetic' } } };
   state.guardian = { id: 'guardian-test', familyId: 'family-test', fullName: 'Synthetic Parent', email: 'synthetic@example.com', phone: '5551234567', userId: null, checkInPinHash: null, customFields: { retained: 'history' }, family: { id: 'family-test', centerId: 'school-test', name: 'Synthetic Family', children: [{ id: 'child-test', fullName: 'Synthetic Child', enrollmentStatus: 'enrolled', classroom: { id: 'class-test', centerId: 'school-test' } }] } };
@@ -32,7 +34,7 @@ const db = {
   $transaction: async (callback) => typeof callback === 'function' ? callback(db) : Promise.all(callback),
 };
 mock.module('@/lib/prisma', { namedExports: { prisma: db } });
-mock.module('@/lib/auth', { namedExports: { getCurrentUser: async () => state.parentSession ? { id: 'parent-test', tenantId: 'tenant-test', email: state.guardian.email, role: 'PARENT_GUARDIAN' } : ({ id: 'director-test', tenantId: 'tenant-test', email: 'director@example.com', centerIds: ['school-test'] }), isParentGuardian: (user) => user.role === 'PARENT_GUARDIAN', canAccessAllCenters: () => false, canAccessCenter: (_user, id) => id === 'school-test', canManageOperations: () => true } });
+mock.module('@/lib/auth', { namedExports: { getCurrentUser: async () => state.parentSession ? { id: 'parent-test', tenantId: 'tenant-test', email: state.guardian.email, role: 'PARENT_GUARDIAN' } : ({ id: 'director-test', tenantId: state.actorTenant, email: 'director@example.com', centerIds: ['school-test'], role: state.allCenters ? 'PLATFORM_OWNER' : 'CENTER_DIRECTOR' }), isParentGuardian: (user) => user.role === 'PARENT_GUARDIAN', canAccessAllCenters: () => state.allCenters, canAccessCenter: (_user, id) => id === 'school-test', canManageOperations: () => true } });
 mock.module('@/lib/parent-portal-family-scope', { namedExports: { getParentPortalFamilyScope: async (userId, tenantId, familyId) => ({ ok: userId === state.guardian.userId && tenantId === 'tenant-test' && familyId === 'family-test', familyId: 'family-test' }) } });
 mock.module('@/lib/supabase-auth', { namedExports: {
   getAppBaseUrl: () => 'https://app.test', isSupabaseAuthCompatibleEmail: () => true,
@@ -50,7 +52,7 @@ mock.module('@/lib/supabase-auth', { namedExports: {
     return { ok: true, created: true };
   },
 } });
-mock.module('@/lib/audit', { namedExports: { writeAuditLog: async (_actor, data) => state.audits.push(data), writeSystemAuditLog: async (data) => state.audits.push(data) } });
+mock.module('@/lib/audit', { namedExports: { writeAuditLog: async (actor, data) => state.audits.push({ ...data, tenantId: actor.tenantId, userId: actor.id }), writeSystemAuditLog: async (data) => state.audits.push(data) } });
 mock.module('@/lib/integrations', { namedExports: { sendEmail: async (data) => { state.sends.push(data); return state.mailFailure ? { ok: false, error: 'Synthetic delivery failure' } : { ok: true, status: 202 }; } } });
 mock.module('@/lib/integration-deliveries', { namedExports: { recordEmailDeliveryAttempt: async (data) => state.deliveries.push(data) } });
 mock.module('@/lib/request-response-logging', { namedExports: { withApiLogging: (_method, handler) => handler, logOperationalError: () => {} } });
@@ -59,10 +61,10 @@ mock.module('@/lib/stripe-billing-approval', { namedExports: { stripeSchoolBilli
 mock.module('@/lib/rate-limit', { namedExports: { checkPersistentRateLimit: async () => ({ ok: true }), requestIp: () => 'test', retryAfterSeconds: () => 1 } });
 mock.module('@/lib/daily-report-email', { namedExports: { sendCheckoutDailyReportEmail: async () => ({ ok: true, skipped: true }) } });
 mock.module('@/lib/parent-portal-setup-links', { namedExports: {
-  issueParentPortalSetupLink: async () => {
+  issueParentPortalSetupLink: async (input) => {
     if (state.setupFailure) return { ok: false, error: 'Synthetic setup failure' };
     const link = { ok: true, tokenId: `token-${state.tokens.length}`, setupUrl: 'https://app.test/reset-password?token_hash=synthetic-private-token&next=/parent-portal/setup', expiresAt: new Date(Date.now() + 3600000) };
-    state.tokens.push(link); return link;
+    state.tokens.push({ ...link, input }); return link;
   },
   recordParentPortalSetupLinkDelivery: async (data) => { state.tokenDelivery = data; },
   claimParentPortalSetupToken: async () => state.tokenUsed ? { ok: false } : { ok: true, tracked: true, token: { id: 'token-0' } },
@@ -77,6 +79,17 @@ const { POST: parentSetup } = await import('../../src/app/api/parent/setup/route
 const { ensureParentPortalLoginForGuardian: provision } = await import('../../src/lib/parent-portal-logins.ts');
 const request = (path, body) => new Request(`https://app.test${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 const inviteRequest = () => invite(request('/api/parent/invitations', { guardianId: 'guardian-test' }));
+
+test('platform invitations scope setup, mail, delivery and audit to the target school tenant', async () => {
+  reset(); state.actorTenant = 'platform-identity-tenant'; state.allCenters = true;
+  const response = await inviteRequest();
+  assert.equal(response.status, 200);
+  assert.equal(state.account.tenantId, 'tenant-test');
+  assert.deepEqual(state.tokens[0].input.user, { id: 'director-test', tenantId: 'tenant-test' });
+  assert.equal(state.sends[0].tenantId, 'tenant-test');
+  assert.equal(state.deliveries[0].tenantId, 'tenant-test');
+  assert.equal(state.audits.find(item => item.action === 'parent_portal.guardian_invited').tenantId, 'tenant-test');
+});
 
 test('new parent invitation reaches safe mail sink with private setup, then private PIN authorizes check-in/out', async () => {
   reset();

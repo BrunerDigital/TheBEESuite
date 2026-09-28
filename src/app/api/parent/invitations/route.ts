@@ -260,6 +260,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
 
+  const targetActor = { id: user.id, tenantId: center.organization.tenantId };
   let invitationStage = "preflight";
   try {
     const appBaseUrl = getAppBaseUrl(request.url);
@@ -314,10 +315,10 @@ async function POSTHandler(request: NextRequest) {
         disableClickTracking: true,
         categories: ["parent_guide_email"],
         customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
-        tenantId: user.tenantId,
+        tenantId: targetActor.tenantId,
       });
       await recordEmailDeliveryAttempt({
-        tenantId: user.tenantId,
+        tenantId: targetActor.tenantId,
         centerId: center.id,
         purpose: "parent_guide_email",
         to: [email],
@@ -328,7 +329,7 @@ async function POSTHandler(request: NextRequest) {
         result: emailCopy,
         metadata: { guardianId: guardian.id, familyId: guardian.familyId, brand: branding.kind },
       });
-      await writeAuditLog(user, {
+      await writeAuditLog(targetActor, {
         centerId: center.id,
         action: "parent_portal.guide_sent",
         resource: "Guardian",
@@ -439,7 +440,7 @@ async function POSTHandler(request: NextRequest) {
     const setupLink = provisioned.requiresSetupLink || provisioned.credentialCreated
       ? await issueParentPortalSetupLink({
           requestUrl: request.url,
-          user,
+          user: targetActor,
           parentUserId: provisioned.userId,
           guardianId: guardian.id,
           email,
@@ -491,10 +492,10 @@ async function POSTHandler(request: NextRequest) {
       disableClickTracking: true,
       categories: ["parent_invitation_email"],
       customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id, ...(setupLink?.ok ? { setupTokenId: setupLink.tokenId } : {}) },
-      tenantId: user.tenantId,
+      tenantId: targetActor.tenantId,
     });
     await recordEmailDeliveryAttempt({
-      tenantId: user.tenantId,
+      tenantId: targetActor.tenantId,
       centerId: center.id,
       purpose: "parent_invitation_email",
       to: [email],
@@ -520,7 +521,7 @@ async function POSTHandler(request: NextRequest) {
       })));
     }
 
-    await writeAuditLog(user, {
+    await writeAuditLog(targetActor, {
       centerId: center.id,
       action: "parent_portal.guardian_invited",
       resource: "Guardian",

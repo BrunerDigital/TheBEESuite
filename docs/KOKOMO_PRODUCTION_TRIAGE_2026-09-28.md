@@ -1,6 +1,6 @@
 # Kokomo production triage — September 28, 2026
 
-Status: diagnosis with confirmed production evidence and synthetic route reproduction. No live repair, invitation resend, password change, PIN change, family/guardian mutation, attendance mutation, or deployment was performed. Exact reporter resend correlation and repair review remain open.
+Status: sanitized source-control summary with confirmed production evidence and synthetic route reproduction. Family/person identifiers and provider request identifiers are pseudonyms; the exact trace is retained only in the ignored local incident artifact. No live repair, invitation resend, password change, PIN change, family/guardian mutation, attendance mutation, or deployment was performed. Exact reporter resend correlation and repair review remain open.
 
 ## Production and investigation boundaries
 
@@ -8,26 +8,26 @@ Status: diagnosis with confirmed production evidence and synthetic route reprodu
 - Current Supabase project: `nqjrlktoewiueiwrubas`. Kokomo center: `cmp4ewela003u6alw9ii7uffs`.
 - Live inspection used SELECT queries, retained Auth logs, audit metadata, delivery state, and the existing signed-in brand-admin browser session. Only the session workspace selection was changed to Kokomo.
 - The shared checkout has unrelated dirty work and is behind origin/main. It was preserved. Diagnostic tests and this report were created in an isolated worktree at the current production source commit.
-- No affected family or resend time was provided. Wash Family was selected because it has an exact production guardian-provisioning failure correlated with Auth logs. This is a demonstrated diagnostic case, not confirmation that Wash is the reporter's named resend case.
+- No affected family or resend time was provided. Diagnostic Family A was selected because it has an exact production guardian-provisioning failure correlated with Auth logs. This is a demonstrated diagnostic case, not confirmation that Family A is the reporter's named resend case.
 
 ## Exact family trace
 
-Family `cmueezwwz0000le04jerh87nj` (Wash Family), created September 23 at 18:06:36.900 UTC.
+Family `family-A` (Diagnostic Family A), created September 23 at 18:06:36.900 UTC.
 
 | Stage | Current evidence | Interpretation |
 | --- | --- | --- |
-| Enrollment | Child `cmueezwxv0004le04u5os80n5` is enrolled and has a classroom whose center is Kokomo | No school/classroom mismatch in this case |
-| Family/guardian association | Guardians `cmueezwxa0002le04bfrhlk8d` and `cmuefgztj0010l304jwxqglfo` both belong to that same family | Relationship records exist |
+| Enrollment | Child `child-A` is enrolled and has a classroom whose center is Kokomo | No school/classroom mismatch in this case |
+| Family/guardian association | Guardians `guardian-A1` and `guardian-A2` both belong to that same family | Relationship records exist |
 | Parent account | Both guardian userId values are null; no corresponding Auth user was found by guardian email | Parent login is not provisioned |
 | Access grant | No grant linked through either guardian userId | Consequence of missing application identity; not evidence that a broad grant should be added. Parent family authorization is resolved through guardian links and tenant scope |
 | Invitation | Zero parent_invitation_email delivery records and zero ParentPortalSetupToken records for either guardian | No recorded invitation attempt reached delivery tracking for these guardians |
 | Kiosk credential | Both checkInPinHash values are null | Neither guardian can authorize a PIN lookup; no corresponding guardian QR credential can be generated |
 | Attendance | One AttendanceRecord exists for the child | Existing attendance must be preserved; its existence does not establish successful guardian kiosk authorization |
 
-Live UI at the exact Wash family profile showed:
+Live UI at the exact diagnostic family A profile showed:
 
 - “0 of 2 guardian profiles have a linked Parent Portal account record.”
-- Jillian Jacobs and Joseph Wash invitation cards: “Not linked,” “Not invited,” “Send Parent App Invite.”
+- Guardian A2 and Guardian A1 invitation cards: “Not linked,” “Not invited,” “Send Parent App Invite.”
 - Selected guardian: “No PIN,” “Family PIN needed,” “Set a 4-Digit Family PIN to create the matching QR code.”
 - The parent portal login checkbox is enabled in saved guardian metadata even though provisioning failed. That intent flag does not prove an account exists.
 
@@ -35,8 +35,8 @@ Live UI at the exact Wash family profile showed:
 
 Exact production correlation:
 
-- Guardian `cmuefgztj0010l304jwxqglfo`: `operations.guardian.created` audit at `2026-09-23T18:19:54.891Z`, with `parentPortalLogin.status=failed` and error “Password is known to be weak and easy to guess, please choose a different one.”
-- Supabase Auth at `2026-09-23T18:19:54Z`: `POST /admin/users`, HTTP **422**, same error, request ID `01a0cf7e-e45a-76e5-80b9-1caee5923bf9`.
+- Guardian `guardian-A2`: `operations.guardian.created` audit at `2026-09-23T18:19:54.891Z`, with `parentPortalLogin.status=failed` and error “Password is known to be weak and easy to guess, please choose a different one.”
+- Supabase Auth at `2026-09-23T18:19:54Z`: `POST /admin/users`, HTTP **422**, same error, request ID `incident-request-A`.
 - The operations guardian path saves the guardian before provisioning and catches the provisioning exception into audit metadata. The historical HTTP response/UI banner for that specific save was not retained in this investigation.
 
 Safe synthetic replay against the current production route source:
@@ -54,22 +54,22 @@ The invitation route uses the fixed school-issued initial credential for new acc
 
 ## September 25 and fleet comparison
 
-- Kokomo Perez-family guardian provisioning failed at `2026-09-25T14:44:59.548Z`; Auth request `01a0d906-d7eb-7a2b-a176-d3d816049bab` returned 422 at 14:44:59 UTC.
-- Kokomo Smith-family guardian provisioning failed at `2026-09-25T17:23:57.934Z`; Auth request `01a0d998-6352-7deb-878f-954962215d74` returned 422 at 17:23:57 UTC.
+- Kokomo Family B guardian provisioning failed at `2026-09-25T14:44:59.548Z`; Auth request `incident-request-B` returned 422 at 14:44:59 UTC.
+- Kokomo Family C guardian provisioning failed at `2026-09-25T17:23:57.934Z`; Auth request `incident-request-C` returned 422 at 17:23:57 UTC.
 - These records support an account-provisioning explanation for some missing welcome emails: the flow stopped before sending. They do not establish the cause of every September 25 missing email report.
 - The same weak-password failure is confirmed in Pisgah Forest audit records on September 24 and September 28. Therefore it is **not school-specific**.
 - Seven new Kokomo families with enrolled children since September 23 had ten email-bearing guardians without userId links; eight guardian rows lacked PINs. Three new Pisgah Forest families with enrolled children had five email-bearing unlinked guardians and five missing PINs. These are review candidates, not a blanket repair target set or proof that every record experienced an invitation failure.
 - Kokomo and Pisgah Forest share the Kid City tenant. A different tenant, Centennial/Miss Honey's, had seven parent invitation delivery records marked delivered on September 25. The shared Auth project and shared provisioning code make the failing credential path a cross-tenant technical exposure, but an actual failing invitation in another tenant was **not demonstrated**. Successful alternate flows do not prove that tenant is immune.
-- Separate delivery failures exist: Kokomo's Valdez invitation on September 22 has `SendGrid bounced event.`; Cordera's September 28 invitation has `SendGrid suppressed event.` Neither is the Wash provisioning failure, and neither authorizes suppression removal or a resend.
+- Separate delivery failures exist: Kokomo's a separate family invitation on September 22 has `SendGrid bounced event.`; Cordera's September 28 invitation has `SendGrid suppressed event.` Neither is the Family A provisioning failure, and neither authorizes suppression removal or a resend.
 
 ## Change comparison
 
 - `b65de0c3`, September 8, PR #318: removed phone-derived default kiosk PIN creation. Existing hashes were retained. New guardians now require an explicit private PIN. Current welcome copy instructs parents to choose a PIN. Restoring a phone-derived default would reverse an intentional security control.
-- `dac12a16`, September 8, PR #327: reserved review-identity safeguards in invitation/account paths; no evidence of a reserved identity in the Wash case.
+- `dac12a16`, September 8, PR #327: reserved review-identity safeguards in invitation/account paths; no evidence of a reserved identity in the Family A case.
 - `e9b36156`, September 25, PR #426: duplicate-child intake safeguards. It did not modify parent invitation provisioning or kiosk credential generation.
 - September 25 teacher credential fixes affect staff account creation; the parent path still uses the rejected fixed initial credential.
-- `f73c592c`, September 1, PR #283: parent setup-link lifetime fixes. Wash has no setup-token record, so token expiration is not this case's failure.
-- Parent family scope history includes September 2 past-family payment access and August 14 multiple-linked-family support. Wash's two guardians are in one current family; no demonstrated multi-family access ambiguity here.
+- `f73c592c`, September 1, PR #283: parent setup-link lifetime fixes. Family A has no setup-token record, so token expiration is not this case's failure.
+- Parent family scope history includes September 2 past-family payment access and August 14 multiple-linked-family support. Family A's two guardians are in one current family; no demonstrated multi-family access ambiguity here.
 - The exact timing of a Supabase password-policy change was not verified. Logs prove rejection by September 23; do not attribute its onset to a particular release without configuration/audit evidence.
 
 ## Safe reproduction and verification

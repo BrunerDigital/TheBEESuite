@@ -26,6 +26,19 @@ export async function readBlockedMessageSenderIds(db: Pick<PrismaClient, "user">
   return blockedMessageSenderIds(user?.customFields);
 }
 
+/** Share the recipient row lock with blocking so late notifications cannot reappear. */
+export async function createMessageNotification(db: PrismaClient, senderId: string, { data }: { data: Prisma.NotificationUncheckedCreateInput }) {
+  const recipientId = data.userId;
+  if (!recipientId) return null;
+  return db.$transaction(async tx => {
+    const recipients = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "User" WHERE "id" = ${recipientId} FOR UPDATE`;
+    if (!recipients.length) return null;
+    const recipient = await tx.user.findUnique({ where: { id: recipientId }, select: { isActive: true, customFields: true } });
+    if (!recipient?.isActive || blockedMessageSenderIds(recipient.customFields).includes(senderId)) return null;
+    return tx.notification.create({ data });
+  });
+}
+
 export async function messageRecipientsAllowed<T extends { userId?: string | null; email?: string | null; phone?: string | null }>(
   db: Pick<PrismaClient, "user">, tenantId: string, senderId: string, recipients: T[],
 ) {

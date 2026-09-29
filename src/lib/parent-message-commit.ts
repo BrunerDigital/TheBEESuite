@@ -21,8 +21,9 @@ export async function createParentFamilyMessage(db: PrismaClient, input: { userI
     const currentCenterId = parentMessageCenterId(family);
     if (!currentCenterId || currentCenterId !== input.expectedCenterId) throw new ParentMessageScopeChanged();
     if (input.data.replyToMessageId) {
-      const target = await tx.message.findFirst({ where: { ...messagesExcludingBlockedSenders(blockedMessageSenderIds(actor.customFields)), id: input.data.replyToMessageId, familyId: input.familyId, family: where }, select: { subject: true } });
-      if (!target || input.data.subject !== replySubject(target.subject)) throw new ParentMessageScopeChanged();
+      const target = await tx.message.findFirst({ where: { ...messagesExcludingBlockedSenders(blockedMessageSenderIds(actor.customFields)), id: input.data.replyToMessageId, familyId: input.familyId, family: where }, select: { subject: true, sender: { select: { customFields: true } } } });
+      if (!target || input.data.subject !== replySubject(target.subject)
+        || blockedMessageSenderIds(target.sender?.customFields).includes(input.userId)) throw new ParentMessageScopeChanged();
     }
     if (input.data.assignedToId) {
       if (blockedMessageSenderIds(actor.customFields).includes(input.data.assignedToId)) throw new ParentMessageScopeChanged();

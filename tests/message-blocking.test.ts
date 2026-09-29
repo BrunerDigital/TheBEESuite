@@ -4,8 +4,55 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import type { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { blockedMessageSenderIds, messagesExcludingBlockedSenders, recipientsAllowingMessageSender, messageNotificationSenderId } from "../src/lib/message-block-policy";
-import { messageRecipientsAllowed, permittedMessageRetryRecipients, visibleReceivedMessage } from "../src/lib/message-block-store";
+import { createMessageNotification, messageRecipientsAllowed, permittedMessageRetryRecipients, setMessageSenderBlock, visibleReceivedMessage } from "../src/lib/message-block-store";
+
+test("blocking and notification insertion share a recipient lock in either commit order", async () => {
+  for (const blockFirst of [true, false]) {
+    let fields: Record<string, unknown> = {};
+    const notifications: Array<{ dedupeKey: string; archivedAt: Date | null }> = [];
+    let releaseFirst!: () => void;
+    const firstPaused = new Promise<void>(resolve => { releaseFirst = resolve; });
+    let locked!: () => void;
+    const firstLocked = new Promise<void>(resolve => { locked = resolve; });
+    let lockTail = Promise.resolve();
+    let first = true;
+    const db = { async $transaction(callback: (tx: Prisma.TransactionClient) => Promise<unknown>) {
+      const previous = lockTail;
+      let unlock!: () => void;
+      lockTail = new Promise<void>(resolve => { unlock = resolve; });
+      await previous;
+      const waitOnFirst = async () => { if (first) { first = false; locked(); await firstPaused; } };
+      const tx = {
+        async $queryRaw(strings: TemplateStringsArray, ...values: unknown[]) {
+          const query = Prisma.sql(strings, ...values);
+          assert.match(query.text, /WHERE "id" = \$1 FOR UPDATE/); assert.deepEqual(query.values, ["recipient"]);
+          await waitOnFirst(); return [{ id: "recipient" }];
+        },
+        async $executeRaw() { fields = { messageBlocks: { sender: true } }; await waitOnFirst(); return 1; },
+        user: { async findUnique() { return { isActive: true, customFields: fields }; } },
+        notification: {
+          async create({ data }: { data: { dedupeKey: string } }) { const row = { ...data, archivedAt: null }; notifications.push(row); return row; },
+          async updateMany({ where }: { where: { dedupeKey: { startsWith: string } } }) {
+            for (const notification of notifications) if (notification.dedupeKey.startsWith(where.dedupeKey.startsWith)) notification.archivedAt = new Date();
+          },
+        },
+        auditLog: { async create() {} },
+      } as unknown as Prisma.TransactionClient;
+      try { return await callback(tx); } finally { unlock(); }
+    } } as unknown as PrismaClient;
+    const notify = () => createMessageNotification(db, "sender", { data: { userId: "recipient", title: "Synthetic message", body: "Synthetic content", dedupeKey: "message-sender:sender:message:recipient", type: "message" } });
+    const block = () => db.$transaction(tx => setMessageSenderBlock(tx, { userId: "recipient", identityTenantId: "tenant", tenantId: "tenant", senderId: "sender", centerId: null, blocked: true }));
+    const firstAction = blockFirst ? block() : notify();
+    await firstLocked;
+    const secondAction = blockFirst ? notify() : block();
+    assert.equal(notifications.length, 0);
+    releaseFirst(); await Promise.all([firstAction, secondAction]);
+    assert.equal(notifications.filter(notification => !notification.archivedAt).length, 0);
+    assert.equal(notifications.length, blockFirst ? 0 : 1);
+  }
+});
 
 test("blocking preferences accept only explicit safe sender IDs and preserve system messages", () => {
   for (const fields of [null, [], "invalid", { messageBlocks: null }, { messageBlocks: [] }]) assert.deepEqual(blockedMessageSenderIds(fields), []);

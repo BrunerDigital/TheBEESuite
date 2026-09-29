@@ -4,9 +4,9 @@ import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 
 const actor = { id: "fake-parent", tenantId: "fake-tenant", identityTenantId: "fake-tenant", role: "PARENT_GUARDIAN", isActive: true, email: "fake@example.test", name: "Fake Parent", primaryCenterId: "fake-school", branding: { kind: "miss-honeys-learning-center", name: "Miss Honey's Learning Center" } };
-let user, family, broadcastFamilies, target, uploads, removed, created, audits, deliveries, pushes, preferences, beforeTransaction, afterCommit, teacher, queries, leaders;
+let user, family, broadcastFamilies, target, uploads, removed, created, audits, deliveries, pushes, preferences, beforeTransaction, afterCommit, teacher, queries, leaders, beforeNotificationLock;
 function reset() {
-  user = { ...actor }; uploads = []; removed = []; created = []; audits = []; deliveries = []; pushes = []; preferences = []; queries = []; leaders = []; beforeTransaction = () => {}; afterCommit = () => {};
+  user = { ...actor }; uploads = []; removed = []; created = []; audits = []; deliveries = []; pushes = []; preferences = []; queries = []; leaders = []; beforeTransaction = () => {}; afterCommit = () => {}; beforeNotificationLock = () => {};
   family = { id: "fake-family", name: "Fake Family", billingEmail: null, centerId: "fake-school", guardians: [{ userId: actor.id, fullName: "Fake Parent", email: null, phone: null, preferredCommunication: null }], children: [{ id: "fake-child", fullName: "Fake Child", familyId: "fake-family", enrollmentStatus: "active", classroomId: "fake-class", classroom: { id: "fake-class", name: "Fake Classroom", centerId: "fake-school", center: { organization: { tenantId: actor.tenantId } } } }] };
   broadcastFamilies = [family, { ...family, id: "fake-miss-family", name: "Second Family", centerId: "fake-miss-school", guardians: [{ userId: "fake-miss-parent", fullName: "Second Parent", email: "second@example.test", phone: null, preferredCommunication: null }], children: [{ ...family.children[0], id: "fake-miss-child", familyId: "fake-miss-family", classroomId: "fake-miss-class", classroom: { id: "fake-miss-class", name: "Second Classroom", centerId: "fake-miss-school" } }] }];
   teacher = { id: "fake-teacher", tenantId: actor.tenantId, role: "TEACHER", isActive: true, email: "fake-teacher@example.test", accessGrants: [], staffProfile: { id: "fake-profile", phone: null, centerId: "fake-school", classroomId: "fake-class", center: { organization: { tenantId: actor.tenantId } }, classroom: { id: "fake-class", centerId: "fake-school", children: family.children } } };
@@ -40,19 +40,20 @@ const prisma = {
     return { ...family, children: childWhere ? family.children.filter(child => matches(child, childWhere)) : family.children };
   } },
   user: {
-    async findUnique({ where }) { return [user, teacher].find(item => item?.id === where.id) ?? null; },
+    async findUnique({ where }) { return [user, teacher, ...leaders, ...broadcastFamilies.flatMap(row => row.guardians.map(guardian => ({ id: guardian.userId, isActive: true })))].find(item => item?.id === where.id) ?? null; },
     async findFirst({ where }) { return [user, teacher].find(item => item && matches(item, where)) ?? null; },
     async findMany({ where, select }) { queries.push(where); return [teacher, ...leaders].filter(item => matches(item, where)).map(item => ({ ...item, accessGrants: select?.accessGrants?.where ? item.accessGrants.filter(grant => matches(grant, select.accessGrants.where)) : item.accessGrants })); },
   },
   staffProfile: { async findUnique() { return { classroomId: user.assignedClassroomId ?? "fake-class" }; } },
   message: {
-    async findFirst({ where }) { return target && matches({ ...target, family: target.familyId === family.id ? family : null }, where) ? { ...target } : null; },
+    async findFirst({ where }) { return target && matches({ ...target, family: target.familyId === family.id ? family : null }, where) ? { ...target, sender: [user, teacher, ...leaders].find(item => item.id === target.senderId) ?? null } : null; },
     async create({ data }) { const row = { ...data, id: "fake-created", createdAt: new Date() }; created.push(row); return row; },
     async updateMany() { return { count: 0 }; },
   },
   notificationPreference: { async findMany() { return preferences; } },
   notification: { async create({ data }) { pushes.push(data); return { id: `fake-push-${pushes.length}`, ...data }; } },
-  async $transaction(callback, options) { assert.equal(options.isolationLevel, "Serializable"); beforeTransaction(); const result = await callback(prisma); afterCommit(); return result; },
+  async $queryRaw(strings, ...values) { const query = Prisma.sql(strings, ...values); assert.match(query.text, /FOR UPDATE/); beforeNotificationLock(); return [{ id: query.values[0] }]; },
+  async $transaction(callback, options) { if (options) { assert.equal(options.isolationLevel, "Serializable"); beforeTransaction(); } const result = await callback(prisma); if (options) afterCommit(); return result; },
 };
 mock.module("@/lib/prisma", { namedExports: { prisma } });
 mock.module("@/lib/auth", { namedExports: { async getCurrentUser() { return user?.isActive ? user : null; }, isParentGuardian(value) { return value.role === "PARENT_GUARDIAN"; },
@@ -85,10 +86,22 @@ test("actual parent message sends preserve scope and canonical replies before si
     assert.equal((await post({ replyToMessageId: null, subject: "New message", assignedToId: "fake-teacher" }, true)).status, 409);
     assert.deepEqual([uploads.length, created.length, deliveries.length], [0, 0, 0]);
   });
-  await t.test("recipient blocks suppress message copies without deleting school history", async () => {
+  await t.test("an unassigned parent reply respects its sender recipient block at commit", async () => {
     reset(); teacher.customFields = { messageBlocks: { "fake-parent": true } }; preferences = [{ userId: teacher.id, role: "TEACHER", pushEnabled: true }];
     const response = await post({ sendEmailCopy: true, sendPushCopy: true });
-    assert.equal(response.status, 201); assert.equal(created.length, 1); assert.equal(pushes.length, 0); assert.deepEqual(deliveries[0].recipients, []);
+    assert.equal(response.status, 409); assert.equal(created.length, 0); assert.equal(pushes.length, 0); assert.equal(deliveries.length, 0);
+    reset(); beforeTransaction = () => { teacher.customFields = { messageBlocks: { [user.id]: true } }; };
+    assert.equal((await post({ assignedToId: null }, true)).status, 409); assert.equal(created.length, 0); assert.deepEqual(removed, ["message-attachments/fake-1"]);
+  });
+  await t.test("a recipient block arriving after copy filtering suppresses the notification", async () => {
+    for (const direct of [false, true]) {
+      reset(); user.role = "CENTER_DIRECTOR"; preferences = [{ userId: teacher.id, role: "TEACHER", pushEnabled: true }];
+      beforeNotificationLock = () => { teacher.customFields = { messageBlocks: { [user.id]: true } }; };
+      const response = await post({ sendPushCopy: true, ...(direct ? { targetMode: "staff", familyId: null, assignedToId: teacher.id, replyToMessageId: null } : {}) });
+      assert.equal(response.status, 201); assert.equal(created.length, 1); assert.equal(pushes.length, 0);
+    }
+    reset(); preferences = [{ userId: teacher.id, role: "TEACHER", pushEnabled: true }];
+    assert.equal((await post({ sendPushCopy: true })).status, 201); assert.equal(pushes.length, 1);
   });
   await t.test("blocks changed during attachment upload prevent assigned parent and staff commits", async () => {
     for (const staff of [false, true]) for (const recipientBlocks of [false, true]) {

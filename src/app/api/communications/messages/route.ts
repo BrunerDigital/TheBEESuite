@@ -43,7 +43,7 @@ import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 
 import { withApiLogging } from "@/lib/request-response-logging";
-import { createDirectMessage, MessageRecipientBlockChanged, messageRecipientsAllowed, readBlockedMessageSenderIds } from "@/lib/message-block-store";
+import { createDirectMessage, createMessageNotification, MessageRecipientBlockChanged, messageRecipientsAllowed, readBlockedMessageSenderIds } from "@/lib/message-block-store";
 import { messagesExcludingBlockedSenders } from "@/lib/message-block-policy";
 export const runtime = "nodejs";
 
@@ -567,7 +567,7 @@ async function POSTHandler(request: NextRequest) {
     }
 
     const notification = sendPushCopy
-      ? await prisma.notification.create({
+      ? await createMessageNotification(prisma, user.id, {
           data: {
             userId: recipient.id,
             title: `New staff message: ${subject}`,
@@ -854,7 +854,7 @@ async function POSTHandler(request: NextRequest) {
             userId: guardian.userId,
             role: UserRole.PARENT_GUARDIAN,
           }, centerNotificationPreferences)) {
-            pushNotifications.push(await prisma.notification.create({
+            const notification = await createMessageNotification(prisma, user.id, {
               data: {
                 userId: guardian.userId,
                 title: `New school message: ${renderedSubject}`,
@@ -863,7 +863,8 @@ async function POSTHandler(request: NextRequest) {
                 dedupeKey: `message-sender:${user.id}:${created.id}:${guardian.userId}`,
                 priority,
               },
-            }));
+            });
+            if (notification) pushNotifications.push(notification);
           }
         }
       }
@@ -1216,7 +1217,7 @@ async function POSTHandler(request: NextRequest) {
       sendPushCopy && pushEnabledForMessageRecipient({
         userId: recipient.id,
         role: recipient.role,
-      }, notificationPreferenceRows) ? prisma.notification.create({
+      }, notificationPreferenceRows) ? createMessageNotification(prisma, user.id, {
         data: {
           userId: recipient.id,
           title: senderIsParent
@@ -1239,7 +1240,7 @@ async function POSTHandler(request: NextRequest) {
       sendPushCopy && guardian.userId && allowedParentUserIds.has(guardian.userId) && pushEnabledForMessageRecipient({
         userId: guardian.userId,
         role: UserRole.PARENT_GUARDIAN,
-      }, notificationPreferenceRows) ? prisma.notification.create({
+      }, notificationPreferenceRows) ? createMessageNotification(prisma, user.id, {
         data: {
           userId: guardian.userId,
           title: `New school message: ${subject}`,

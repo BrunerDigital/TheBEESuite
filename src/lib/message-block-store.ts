@@ -33,12 +33,14 @@ export async function messageRecipientsAllowed<T extends { userId?: string | nul
   const emails = recipients.map(recipient => recipient.email?.trim()).filter((email): email is string => Boolean(email));
   const phones = recipients.map(recipient => recipient.phone).filter((phone): phone is string => Boolean(phone));
   if (!ids.length && !emails.length && !phones.length) return recipients;
-  const users = await db.user.findMany({ where: { tenantId, OR: [
+  // Routing already authorized these exact recipients. A platform owner's identity
+  // can live outside the school tenant; all other foreign identities stay excluded.
+  const users = await db.user.findMany({ where: { AND: [{ OR: [{ tenantId }, { role: "PLATFORM_OWNER" }] }, { OR: [
     ...(ids.length ? [{ id: { in: ids } }] : []),
     ...emails.map(email => ({ email: { equals: email, mode: "insensitive" as const } })),
     ...emails.map(email => ({ guardians: { some: { email: { equals: email, mode: "insensitive" as const } } } })),
     ...(phones.length ? [{ guardians: { some: { phone: { in: phones } } } }, { staffProfile: { phone: { in: phones } } }] : []),
-  ] }, select: { id: true, email: true, customFields: true, guardians: { select: { email: true, phone: true } }, staffProfile: { select: { phone: true } } } });
+  ] }] }, select: { id: true, email: true, customFields: true, guardians: { select: { email: true, phone: true } }, staffProfile: { select: { phone: true } } } });
   return recipientsAllowingMessageSender(recipients, users, senderId);
 }
 
@@ -79,9 +81,9 @@ export async function permittedMessageRetryRecipients(db: MessageDb, tenantId: s
   const message = await db.message.findUnique({ where: { id: messageId }, select: { senderId: true, assignedToId: true, family: { select: { guardians: { select: { userId: true } } } } } });
   if (!message?.senderId) return [];
   const ids = [...new Set([...recipientIds, message.assignedToId, ...(message.family?.guardians.map(guardian => guardian.userId) ?? [])].filter((id): id is string => Boolean(id)))];
-  const users = await db.user.findMany({ where: { tenantId, OR: [
+  const users = await db.user.findMany({ where: { AND: [{ OR: [{ tenantId }, { role: "PLATFORM_OWNER" }] }, { OR: [
     ...(ids.length ? [{ id: { in: ids } }] : []),
     ...recipients.filter(recipient => recipient.email).map(recipient => ({ email: { equals: recipient.email!, mode: "insensitive" as const } })),
-  ] }, select: { id: true, email: true, customFields: true, guardians: { select: { email: true, phone: true } }, staffProfile: { select: { phone: true } } } });
+  ] }] }, select: { id: true, email: true, customFields: true, guardians: { select: { email: true, phone: true } }, staffProfile: { select: { phone: true } } } });
   return recipientsAllowingMessageSender(recipients, users, message.senderId);
 }

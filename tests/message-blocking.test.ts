@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import type { PrismaClient } from "@prisma/client";
 import { blockedMessageSenderIds, messagesExcludingBlockedSenders, recipientsAllowingMessageSender, messageNotificationSenderId } from "../src/lib/message-block-policy";
-import { permittedMessageRetryRecipients, visibleReceivedMessage } from "../src/lib/message-block-store";
+import { messageRecipientsAllowed, permittedMessageRetryRecipients, visibleReceivedMessage } from "../src/lib/message-block-store";
 
 test("blocking preferences accept only explicit safe sender IDs and preserve system messages", () => {
   for (const fields of [null, [], "invalid", { messageBlocks: null }, { messageBlocks: [] }]) assert.deepEqual(blockedMessageSenderIds(fields), []);
@@ -55,8 +55,8 @@ test("a pending delivery rechecks the current block and fails closed for a delet
   let blocked = true;
   const db = {
     message: { findUnique: async () => exists ? { senderId: "sender", assignedToId: null, family: { guardians: [{ userId: "parent" }] } } : null },
-    user: { findMany: async ({ where }: { where: { tenantId: string } }) => {
-      assert.equal(where.tenantId, "tenant-1");
+    user: { findMany: async ({ where }: { where: { AND: Array<{ OR: unknown[] }> } }) => {
+      assert.deepEqual(where.AND[0].OR, [{ tenantId: "tenant-1" }, { role: "PLATFORM_OWNER" }]);
       return [{ id: "parent", email: "parent@example.test", customFields: { messageBlocks: { sender: blocked } }, guardians: [{ email: "parent@example.test", phone: "5555550123" }] }];
     } },
   } as unknown as PrismaClient;
@@ -66,6 +66,25 @@ test("a pending delivery rechecks the current block and fails closed for a delet
   assert.deepEqual(await permittedMessageRetryRecipients(db, "tenant-1", "message", [], recipients), recipients);
   exists = false;
   assert.deepEqual(await permittedMessageRetryRecipients(db, "tenant-1", "message", [], recipients), []);
+});
+
+test("authorized owner copies respect identity-tenant blocks while foreign ordinary accounts remain outside lookup scope", async () => {
+  const recipients = [{ userId: "owner", email: "owner@example.test" }, { userId: "foreign", email: "foreign@example.test" }, { userId: "parent", email: "parent@example.test" }];
+  const rows = [
+    { id: "owner", tenantId: "platform-tenant", role: "PLATFORM_OWNER", email: recipients[0].email, customFields: { messageBlocks: { sender: true } } },
+    { id: "foreign", tenantId: "other-school", role: "TEACHER", email: recipients[1].email, customFields: { messageBlocks: { sender: true } } },
+    { id: "parent", tenantId: "school", role: "PARENT_GUARDIAN", email: recipients[2].email, customFields: {} },
+  ];
+  const db = { message: { findUnique: async () => ({ senderId: "sender", assignedToId: null, family: null }) }, user: {
+    findMany: async ({ where }: { where: { AND: Array<{ OR: Array<Record<string, string>> }> } }) => {
+      assert.deepEqual(where.AND[0].OR, [{ tenantId: "school" }, { role: "PLATFORM_OWNER" }]);
+      return rows.filter(row => where.AND[0].OR.some(branch => Object.entries(branch).every(([key, value]) => row[key as "tenantId" | "role"] === value)));
+    },
+  } } as unknown as PrismaClient;
+  assert.deepEqual(await messageRecipientsAllowed(db, "school", "sender", recipients), recipients.slice(1));
+  // Older email payloads lack recipient IDs; exact delivery addresses still find owners.
+  const addresses = recipients.map(({ email }) => ({ email }));
+  assert.deepEqual(await permittedMessageRetryRecipients(db, "school", "message", [], addresses), addresses.slice(1));
 });
 
 test("actual blocking endpoints reject forged scope and keep reversible changes private", () => {

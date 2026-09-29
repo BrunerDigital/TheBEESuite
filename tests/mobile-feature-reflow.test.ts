@@ -23,9 +23,9 @@ test("the full authenticated toolbar fits small phones with 44px icon targets", 
   assert.match(readFileSync("scripts/qa-mobile-features.ts", "utf8"), /:is\(main,\.app-header\) :is\(button/);
 });
 
-test("enlarged bottom navigation reflows into readable touch-sized rows", () => {
-  assert.match(quality, /\.bee-app-frame \.app-bottom-navigation > div\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap/);
-  assert.match(quality, /\.bee-app-frame \.app-bottom-navigation > div > :is\(a, button\)\s*\{[^}]*flex: 1 0 44px;[^}]*min-width: max-content/);
+test("enlarged bottom navigation keeps one readable touch-sized row", () => {
+  assert.match(quality, /\.bee-app-frame \.app-bottom-navigation > div\s*\{[^}]*display: grid/);
+  assert.match(quality, /\.bee-app-frame \.app-bottom-navigation > div > :is\(a, button\)\s*\{[^}]*min-width: 0;[^}]*overflow-wrap: anywhere/);
   assert.match(quality, /\.app-bottom-navigation > div > :is\(a, button\)\s*\{[^}]*min-height: 48px/);
   assert.match(readFileSync("scripts/qa-mobile-features.ts", "utf8"), /\.app-bottom-navigation :is\(a,button\)/);
 });
@@ -80,7 +80,8 @@ test("empty updates have one explanation and report anchors remain unique", () =
 });
 
 test("short phone viewports retain usable form space below enlarged shell controls", () => {
-  assert.match(quality, /@media \(max-height: 640px\) and \(max-width: 1023px\)[^}]*\.app-header\s*\{\s*position: relative/);
+  assert.match(quality, /@media \(max-width: 1023px\)[^}]*\.bee-app-frame:has\(\.app-bottom-navigation\)\s*\{[^}]*height: 100dvh;[^}]*overflow: hidden/);
+  assert.match(quality, /#workspace-main\s*\{[^}]*overflow-y: auto;[^}]*overscroll-behavior-y: contain/);
   assert.match(quality, /scroll-margin-block: calc\(var\(--bee-app-header-height, 4\.75rem\) \+ 1rem\) 8rem/);
   assert.match(readFileSync("src/components/app-shell.tsx", "utf8"), /sm:pb-\[calc\(7rem\+env\(safe-area-inset-bottom\)\)\] lg:pb-6/);
 });

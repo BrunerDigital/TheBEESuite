@@ -35,12 +35,10 @@ test("shared child picker shows full current identity without fallback or privat
   assert.doesNotMatch(source, /children\[0\]|useState|useEffect|fetch\(|truncate|custody|medical|allerg/i);
 });
 
-test("short teacher screens stop reserving a header that is no longer sticky", () => {
+test("teacher focus targets align inside the scrolling mobile content", () => {
   const source = readFileSync("src/app/product-ui.css", "utf8");
-  const marker = "/* The short-screen header is in document flow";
-  const start = source.indexOf(marker);
-  assert.ok(start > source.indexOf('scroll-margin-top: calc(var(--bee-app-header-height, 4.75rem) + 1rem)'));
-  assert.match(source.slice(start - 65, start), /@media \(max-height: 640px\) and \(max-width: 1023px\)/);
+  const start = source.indexOf('@media (max-width: 1023px)', source.indexOf('scroll-margin-top: calc(var(--bee-app-header-height, 4.75rem) + 1rem)'));
+  assert.ok(start > 0);
   const rule = source.slice(start, source.indexOf("\n  }", start));
   assert.match(rule, /\.bee-app-frame:has\(\.app-bottom-navigation\) \.teacher-mobile-workspace/);
   assert.match(rule, /#teacher-quick-log, #teacher-home-heading, a, button, input, textarea, \[role="combobox"\]/);

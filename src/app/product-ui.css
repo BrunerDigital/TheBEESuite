@@ -248,10 +248,9 @@
       height: 40px;
     }
 
-    /* Reflow enlarged navigation labels into rows instead of breaking each
-       word into tiny fragments. Icon targets stay at least 48px tall. */
+    /* Let enlarged labels wrap inside each destination while preserving
+       the 48px minimum touch target and the single navigation row. */
     .app-bottom-navigation > div {
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 3.4rem), 1fr));
       gap: 4px;
       font-size: 0.68rem;
     }
@@ -269,21 +268,19 @@
       flex-shrink: 0;
     }
 
-    /* Keep every role's destinations readable at enlarged text sizes.
-       Intrinsic label widths wrap only when needed; non-text padding stays
-       compact while font size and the existing 48px targets are preserved. */
+    /* Keep the navigation on one row. Labels may wrap inside their own item,
+       but the entire bar must not become a second row while scrolling. */
     .bee-app-frame .app-bottom-navigation {
       padding: 8px 8px max(8px, env(safe-area-inset-bottom));
     }
 
     .bee-app-frame .app-bottom-navigation > div {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
     }
 
     .bee-app-frame .app-bottom-navigation > div > :is(a, button) {
-      flex: 1 0 44px;
-      min-width: max-content;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .app-header-scope {
@@ -633,11 +630,42 @@
     scroll-margin-block: calc(var(--bee-app-header-height, 4.75rem) + 1rem) 8rem;
   }
 
-  /* A short phone viewport needs room for the form itself, particularly with
-     enlarged text. Keep the header in document flow; navigation stays available. */
-  @media (max-height: 640px) and (max-width: 1023px) {
+  /* The shell occupies the visual viewport. Only the page content scrolls,
+     so iOS overscroll cannot move or stretch the top and bottom controls. */
+  @media (max-width: 1023px) {
+    .bee-app-frame:has(.app-bottom-navigation) {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .bee-app-frame:has(.app-bottom-navigation) > div:has(> .app-header) {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      min-height: 0;
+    }
+
     .bee-app-frame:has(.app-bottom-navigation) .app-header {
       position: relative;
+      flex: none;
+    }
+
+    .bee-app-frame:has(.app-bottom-navigation) #workspace-main {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      padding-bottom: 16px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .bee-app-frame:has(.app-bottom-navigation) .app-bottom-navigation {
+      position: relative;
+      flex: none;
     }
   }
 
@@ -864,9 +892,7 @@
     scroll-margin-top: calc(var(--bee-app-header-height, 4.75rem) + 1rem);
   }
 
-  @media (max-height: 640px) and (max-width: 1023px) {
-    /* The short-screen header is in document flow, so task arrival and keyboard
-       focus must not reserve its former sticky height above the form. */
+  @media (max-width: 1023px) {
     .bee-app-frame:has(.app-bottom-navigation) .teacher-mobile-workspace :is([data-collapsible-card="true"], #teacher-quick-log, #teacher-home-heading, a, button, input, textarea, [role="combobox"]) {
       scroll-margin-block-start: 12px;
     }

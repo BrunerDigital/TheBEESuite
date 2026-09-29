@@ -33,8 +33,16 @@ async function layoutFindings(page: Page) {
     if (document.documentElement.scrollWidth > innerWidth) issues.push({ pageOverflow: document.documentElement.scrollWidth - innerWidth });
     const navigation = document.querySelector<HTMLElement>(".app-bottom-navigation");
     const main = document.querySelector("main");
-    if (navigation && main && navigation.getBoundingClientRect().height > Number.parseFloat(getComputedStyle(main).paddingBottom)) {
-      issues.push({ navigationClearance: "Bottom navigation exceeds the reserved content space" });
+    if (navigation && main) {
+      const navStyle = getComputedStyle(navigation);
+      const mainBox = main.getBoundingClientRect();
+      const navBox = navigation.getBoundingClientRect();
+      if (navStyle.position === "fixed" && navBox.height > Number.parseFloat(getComputedStyle(main).paddingBottom)) {
+        issues.push({ navigationClearance: "Bottom navigation exceeds the reserved content space" });
+      }
+      if (navStyle.position !== "fixed" && mainBox.bottom > navBox.top + 1) {
+        issues.push({ navigationClearance: "Scrolling content overlaps the bottom navigation" });
+      }
     }
     for (const element of document.querySelectorAll<HTMLElement>(":is(main,.app-header) :is(button,input,textarea,select,[role=combobox],summary), .app-bottom-navigation :is(a,button)")) {
       const box = element.getBoundingClientRect(), style = getComputedStyle(element);

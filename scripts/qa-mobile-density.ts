@@ -51,7 +51,7 @@ async function main() {
             const navigation = [...document.querySelectorAll<HTMLAnchorElement>(".app-bottom-navigation a")].map((link) => {
               const box = link.getBoundingClientRect(), label = link.querySelector("span");
               const labelBox = label?.getBoundingClientRect();
-              return { href: link.getAttribute("href"), text: link.textContent?.trim(), width: box.width, height: box.height, top: box.top, focusable: link.tabIndex >= 0, labelHeight: labelBox?.height ?? 0, lineHeight: label ? parseFloat(getComputedStyle(label).lineHeight) : 0 };
+              return { href: link.getAttribute("href"), text: link.textContent?.trim(), width: box.width, height: box.height, top: box.top, focusable: link.tabIndex >= 0, labelHeight: labelBox?.height ?? 0, labelBottom: labelBox?.bottom ?? 0, itemBottom: box.bottom };
             });
             const actions = [...document.querySelectorAll<HTMLAnchorElement>('[data-parent-home-actions] a, nav[aria-label="Teacher task shortcuts"] a')].map((a) => {
               const box = a.getBoundingClientRect();
@@ -67,9 +67,10 @@ async function main() {
             assert.equal(metrics.navigation.length, 5, "All parent destinations remain available");
             for (const link of metrics.navigation) {
               assert.ok(link.href && link.focusable && link.height >= 44 && link.width >= 44, "Every navigation link remains focusable and touch sized");
-              assert.ok(link.labelHeight <= link.lineHeight + 1, "Navigation labels remain complete single lines");
+              assert.ok(link.labelBottom <= link.itemBottom + 1, "Navigation labels remain inside their touch target");
             }
-            if (width <= 390) assert.ok(metrics.navigationHeight <= (zoom === 2 ? 145 : 70), "Parent navigation uses at most two enlarged rows or one default row");
+            assert.ok(metrics.navigation.every((link) => Math.abs(link.top - metrics.navigation[0].top) < 1), "Parent navigation remains on one row");
+            if (width <= 390) assert.ok(metrics.navigationHeight <= (zoom === 2 ? 145 : 70), "Parent navigation stays compact");
           }
           if (zoom === 1 && width <= 390 && ["single-review", "school-context", "teacher"].includes(scenario)) {
             assert.ok(metrics.actions.every((action) => action.visible), "Every primary action fits above navigation at default phone text size");

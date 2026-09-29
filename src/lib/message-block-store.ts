@@ -6,9 +6,15 @@ import { blockedMessageSenderIds, recipientsAllowingMessageSender } from "./mess
 type MessageDb = Pick<PrismaClient, "user" | "message" | "center">;
 export class MessageRecipientBlockChanged extends Error {}
 
+export async function lockMessageUsers(tx: Prisma.TransactionClient, ids: Array<string | null | undefined>) {
+  const userIds = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  if (userIds.length) await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" IN (${Prisma.join(userIds)}) ORDER BY "id" FOR UPDATE`;
+}
+
 /** Attachment uploads precede this transaction; read both preferences again. */
 export async function createDirectMessage(db: PrismaClient, input: { userId: string; identityTenantId: string; senderRole: UserRole; recipientTenantId: string; recipientId: string; recipientRole?: UserRole; data: Prisma.MessageUncheckedCreateInput }) {
   return db.$transaction(async tx => {
+    await lockMessageUsers(tx, [input.userId, input.recipientId]);
     const [sender, recipient] = await Promise.all([
       tx.user.findFirst({ where: { id: input.userId, tenantId: input.identityTenantId, isActive: true }, select: { role: true, customFields: true } }),
       tx.user.findFirst({ where: { id: input.recipientId, tenantId: input.recipientTenantId, isActive: true }, select: { role: true, customFields: true } }),
@@ -19,6 +25,19 @@ export async function createDirectMessage(db: PrismaClient, input: { userId: str
       || blockedMessageSenderIds(recipient.customFields).includes(input.userId)) throw new MessageRecipientBlockChanged();
     return tx.message.create({ data: input.data });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+function recipientUserWhere(tenantId: string, ids: string[], emails: string[], phones: string[]): Prisma.UserWhereInput {
+  // Last-four matching only selects candidates with formatted stored phones.
+  // The delivery policy still requires the complete normalized phone to match.
+  const phoneSuffixes = [...new Set(phones.map(phone => phone.replace(/\D/g, "").slice(-4)).filter(phone => phone.length === 4))];
+  return { AND: [{ OR: [{ tenantId }, { role: "PLATFORM_OWNER" }] }, { OR: [
+    ...(ids.length ? [{ id: { in: ids } }] : []),
+    ...emails.map(email => ({ email: { equals: email, mode: "insensitive" as const } })),
+    ...emails.map(email => ({ guardians: { some: { email: { equals: email, mode: "insensitive" as const } } } })),
+    ...(phones.length ? [{ guardians: { some: { phone: { in: phones } } } }, { staffProfile: { phone: { in: phones } } }] : []),
+    ...phoneSuffixes.flatMap(phone => [{ guardians: { some: { phone: { contains: phone } } } }, { staffProfile: { phone: { contains: phone } } }]),
+  ] }] };
 }
 
 export async function readBlockedMessageSenderIds(db: Pick<PrismaClient, "user">, userId: string) {
@@ -50,12 +69,7 @@ export async function messageRecipientsAllowed<T extends { userId?: string | nul
   if (!ids.length && !emails.length && !phones.length) return recipients;
   // Routing already authorized these exact recipients. A platform owner's identity
   // can live outside the school tenant; all other foreign identities stay excluded.
-  const users = await db.user.findMany({ where: { AND: [{ OR: [{ tenantId }, { role: "PLATFORM_OWNER" }] }, { OR: [
-    ...(ids.length ? [{ id: { in: ids } }] : []),
-    ...emails.map(email => ({ email: { equals: email, mode: "insensitive" as const } })),
-    ...emails.map(email => ({ guardians: { some: { email: { equals: email, mode: "insensitive" as const } } } })),
-    ...(phones.length ? [{ guardians: { some: { phone: { in: phones } } } }, { staffProfile: { phone: { in: phones } } }] : []),
-  ] }] }, select: { id: true, email: true, customFields: true, guardians: { select: { email: true, phone: true } }, staffProfile: { select: { phone: true } } } });
+  const users = await db.user.findMany({ where: recipientUserWhere(tenantId, ids, emails, phones), select: { id: true, email: true, customFields: true, guardians: { select: { email: true, phone: true } }, staffProfile: { select: { phone: true } } } });
   return recipientsAllowingMessageSender(recipients, users, senderId);
 }
 
@@ -101,9 +115,8 @@ export async function permittedMessageRetryRecipients(db: MessageDb, tenantId: s
   const message = await db.message.findUnique({ where: { id: messageId }, select: { senderId: true, assignedToId: true, family: { select: { guardians: { select: { userId: true } } } } } });
   if (!message?.senderId) return [];
   const ids = [...new Set([...recipientIds, message.assignedToId, ...(message.family?.guardians.map(guardian => guardian.userId) ?? [])].filter((id): id is string => Boolean(id)))];
-  const users = await db.user.findMany({ where: { AND: [{ OR: [{ tenantId }, { role: "PLATFORM_OWNER" }] }, { OR: [
-    ...(ids.length ? [{ id: { in: ids } }] : []),
-    ...recipients.filter(recipient => recipient.email).map(recipient => ({ email: { equals: recipient.email!, mode: "insensitive" as const } })),
-  ] }] }, select: { id: true, email: true, customFields: true, guardians: { select: { email: true, phone: true } }, staffProfile: { select: { phone: true } } } });
+  const emails = recipients.map(recipient => recipient.email?.trim()).filter((email): email is string => Boolean(email));
+  const phones = recipients.map(recipient => recipient.phone).filter((phone): phone is string => Boolean(phone));
+  const users = await db.user.findMany({ where: recipientUserWhere(tenantId, ids, emails, phones), select: { id: true, email: true, customFields: true, guardians: { select: { email: true, phone: true } }, staffProfile: { select: { phone: true } } } });
   return recipientsAllowingMessageSender(recipients, users, message.senderId);
 }

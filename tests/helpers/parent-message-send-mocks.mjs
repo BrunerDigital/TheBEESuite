@@ -52,7 +52,7 @@ const prisma = {
   },
   notificationPreference: { async findMany() { return preferences; } },
   notification: { async create({ data }) { pushes.push(data); return { id: `fake-push-${pushes.length}`, ...data }; } },
-  async $queryRaw(strings, ...values) { const query = Prisma.sql(strings, ...values); assert.match(query.text, /FOR UPDATE/); beforeNotificationLock(); return [{ id: query.values[0] }]; },
+  async $queryRaw(strings, ...values) { const query = Prisma.sql(strings, ...values); assert.match(query.text, /FOR UPDATE/); if (query.text.includes('WHERE "id" IN')) { assert.match(query.text, /ORDER BY "id" FOR UPDATE/); assert.ok(query.values.includes(user.id)); return query.values.map(id => ({ id })); } beforeNotificationLock(); return [{ id: query.values[0] }]; },
   async $transaction(callback, options) { if (options) { assert.equal(options.isolationLevel, "Serializable"); beforeTransaction(); } const result = await callback(prisma); if (options) afterCommit(); return result; },
 };
 mock.module("@/lib/prisma", { namedExports: { prisma } });

@@ -6,7 +6,55 @@ import { readFile } from "node:fs/promises";
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { blockedMessageSenderIds, messagesExcludingBlockedSenders, recipientsAllowingMessageSender, messageNotificationSenderId } from "../src/lib/message-block-policy";
-import { createMessageNotification, messageRecipientsAllowed, permittedMessageRetryRecipients, setMessageSenderBlock, visibleReceivedMessage } from "../src/lib/message-block-store";
+import { createDirectMessage, createMessageNotification, messageRecipientsAllowed, permittedMessageRetryRecipients, setMessageSenderBlock, visibleReceivedMessage } from "../src/lib/message-block-store";
+
+test("a concurrent recipient block cannot commit between the message preference read and insertion", { timeout: 5000 }, async () => {
+  let rowTail = Promise.resolve(), blocked = false;
+  const events: string[] = [];
+  let readReached!: () => void, finishRead!: () => void;
+  const readStarted = new Promise<void>(resolve => { readReached = resolve; });
+  const readGate = new Promise<void>(resolve => { finishRead = resolve; });
+  const db = { async $transaction(callback: (tx: Prisma.TransactionClient) => Promise<unknown>) {
+    let unlock: (() => void) | undefined;
+    async function acquire() { if (unlock) return; const previous = rowTail; rowTail = new Promise<void>(resolve => { unlock = resolve; }); await previous; }
+    const tx = {
+      async $queryRaw(strings: TemplateStringsArray, ...values: unknown[]) {
+        const query = Prisma.sql(strings, ...values); assert.match(query.text, /ORDER BY "id" FOR UPDATE/);
+        assert.deepEqual([...query.values].sort(), ["recipient", "sender"]); await acquire(); return query.values.map(id => ({ id }));
+      },
+      async $executeRaw() { await acquire(); blocked = true; events.push("block"); return 1; },
+      user: { async findFirst({ where }: { where: { id: string } }) {
+        if (where.id === "recipient") { readReached(); await readGate; }
+        return { role: where.id === "sender" ? "CENTER_DIRECTOR" : "TEACHER", customFields: { messageBlocks: { sender: where.id === "recipient" && blocked } } };
+      } },
+      message: { async create() { events.push("message"); return { id: "synthetic-message" }; } },
+      notification: { async updateMany() {} }, auditLog: { async create() {} },
+    } as unknown as Prisma.TransactionClient;
+    try { return await callback(tx); } finally { unlock?.(); }
+  } } as unknown as PrismaClient;
+  const send = createDirectMessage(db, { userId: "sender", identityTenantId: "tenant", senderRole: "CENTER_DIRECTOR", recipientTenantId: "tenant", recipientId: "recipient", recipientRole: "TEACHER", data: { senderId: "sender", assignedToId: "recipient", subject: "Synthetic subject", body: "Synthetic message" } });
+  await readStarted;
+  const block = db.$transaction(tx => setMessageSenderBlock(tx, { userId: "recipient", identityTenantId: "tenant", tenantId: "tenant", senderId: "sender", centerId: null, blocked: true }));
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(blocked, false); finishRead(); await Promise.all([send, block]);
+  assert.deepEqual(events, ["message", "block"]);
+});
+
+test("a legacy phone-only SMS retry finds formatted staff phones and verifies the complete number", async () => {
+  let blocked = true;
+  const storedPhone = "(555) 555-0123";
+  const db = { message: { findUnique: async () => ({ senderId: "parent", assignedToId: null, family: null }) }, user: {
+    findMany: async ({ where }: { where: { AND: [{ OR: unknown[] }, { OR: Array<{ staffProfile?: { phone?: { contains?: string; in?: string[] } } }> }] } }) => {
+      assert.deepEqual(where.AND[0].OR, [{ tenantId: "tenant" }, { role: "PLATFORM_OWNER" }]);
+      const found = where.AND[1].OR.some(branch => branch.staffProfile?.phone?.contains ? storedPhone.includes(branch.staffProfile.phone.contains) : branch.staffProfile?.phone?.in?.includes(storedPhone));
+      return found ? [{ id: "director", email: "director@example.test", customFields: { messageBlocks: { parent: blocked } }, staffProfile: { phone: storedPhone } }] : [];
+    },
+  } } as unknown as PrismaClient;
+  const recipients = [{ phone: "+15555550123" }, { phone: "+15550000123" }];
+  assert.deepEqual(await permittedMessageRetryRecipients(db, "tenant", "message", [], recipients), [recipients[1]]);
+  blocked = false;
+  assert.deepEqual(await permittedMessageRetryRecipients(db, "tenant", "message", [], recipients), recipients);
+});
 
 test("blocking and notification insertion share a recipient lock in either commit order", async () => {
   for (const blockFirst of [true, false]) {

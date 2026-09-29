@@ -71,6 +71,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ParentKioskCredentialPanel } from "@/components/parent-kiosk-credential-panel";
 import { MessageReportButton } from "@/components/message-report-button";
+import { BlockedMessageSenders } from "@/components/blocked-message-senders";
 import {
   Select,
   SelectContent,
@@ -4019,6 +4020,7 @@ function ParentPortalWorkspaceView({
             </div>
           </CardHeader>
           <CardContent className={`${styles.parentChatContent} p-0`}>
+            <BlockedMessageSenders />
             {messageSchoolUnavailable ? <p role="alert" className="px-4 py-2 text-sm text-destructive">Your family’s current school needs confirmation. You can read messages here, but contact your school office before sending a new one.</p> : null}
             {requestedReplyUnavailable ? <p role="alert" className="px-4 py-2 text-sm text-destructive">That reply is not available in this family conversation. Choose a visible message to reply, or start a new message below.</p> : null}
             <p role="status" aria-live="polite" aria-atomic="true" className={messageHistory.notice ? "px-4 py-2 text-sm text-muted-foreground" : "sr-only"}>{messageHistory.notice}</p>
@@ -4863,6 +4865,7 @@ function ParentPortalWorkspaceView({
                   </Badge>
                 ) : null}
               </div>
+              <p className="text-sm text-muted-foreground">We aim to complete account deletion within 30 days of your request. If required record review takes longer, support will contact you with an updated timeframe. We will email your account address when deletion is complete. Deletion removes your login and personal account profile; your school may retain required childcare, safety, licensing, billing, payment and audit records.</p>
               {accountDeletionRequest ? (
                 <div className="rounded-lg border bg-background/60 p-3 text-sm">
                   <div className="font-medium">

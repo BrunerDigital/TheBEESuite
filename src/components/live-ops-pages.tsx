@@ -132,6 +132,7 @@ import {
   type MessageConversationThread,
 } from "@/components/message-conversation-inbox";
 import { MessageReportButton } from "@/components/message-report-button";
+import { BlockedMessageSenders } from "@/components/blocked-message-senders";
 import {
   NotificationPreferencesPanel,
   type NotificationPreferenceRow,
@@ -2133,6 +2134,8 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
           </Badge>
         </div>
       </section>
+
+      <BlockedMessageSenders />
       {data.demoMode ? <DemoDataNotice section="parent messaging" /> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Messages" value={data.stats.total.toLocaleString()} />

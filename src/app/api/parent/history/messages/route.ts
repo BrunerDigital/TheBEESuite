@@ -4,6 +4,8 @@ import { getParentPortalFamilyScope, getParentPortalTenantCenterIds } from "@/li
 import { parentMessageFamilyWhere, parentMessageViews, readParentMessageRows } from "@/lib/parent-message-query";
 import { isParentHistoryId, type ParentMessagePage } from "@/lib/parent-message-history";
 import { prisma } from "@/lib/prisma";
+import { readBlockedMessageSenderIds } from "@/lib/message-block-store";
+import { messagesExcludingBlockedSenders } from "@/lib/message-block-policy";
 import { withApiLogging } from "@/lib/request-response-logging";
 
 export const runtime = "nodejs";
@@ -28,7 +30,7 @@ async function GETHandler(request: NextRequest) {
     const family = await tx.family.findFirst({ where: familyWhere, select: { id: true } });
     if (!family) return { kind: "unavailable" as const };
     // Repeat the current-family relation on every cursor/content read, never just a bare family ID.
-    const page = await readParentMessageRows(tx.message, { familyId, family: familyWhere }, cursor);
+    const page = await readParentMessageRows(tx.message, { ...messagesExcludingBlockedSenders(await readBlockedMessageSenderIds(tx, user.id)), familyId, family: familyWhere }, cursor);
     return page ? { kind: "page" as const, page } : { kind: "cursor" as const };
   }, { isolationLevel: "RepeatableRead" });
   if (result.kind === "unavailable") return reply({ ok: false, error: "Current family access is required for this conversation." }, 403);

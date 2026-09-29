@@ -40,6 +40,7 @@ const prisma = {
     return { ...family, children: childWhere ? family.children.filter(child => matches(child, childWhere)) : family.children };
   } },
   user: {
+    async findUnique({ where }) { return [user, teacher].find(item => item?.id === where.id) ?? null; },
     async findFirst({ where }) { return [user, teacher].find(item => item && matches(item, where)) ?? null; },
     async findMany({ where, select }) { queries.push(where); return [teacher, ...leaders].filter(item => matches(item, where)).map(item => ({ ...item, accessGrants: select?.accessGrants?.where ? item.accessGrants.filter(grant => matches(grant, select.accessGrants.where)) : item.accessGrants })); },
   },
@@ -78,6 +79,17 @@ function post(input = {}, file = false) {
   return POST(new NextRequest("https://fixture.invalid/api/communications/messages", { method: "POST", headers, body }));
 }
 test("actual parent message sends preserve scope and canonical replies before side effects", async t => {
+  await t.test("blocked reply targets and explicit recipients stop before uploads or writes", async () => {
+    reset(); user.customFields = { messageBlocks: { "fake-teacher": true } };
+    assert.equal((await post({}, true)).status, 400); assert.deepEqual([uploads.length, created.length, deliveries.length], [0, 0, 0]);
+    assert.equal((await post({ replyToMessageId: null, subject: "New message", assignedToId: "fake-teacher" }, true)).status, 409);
+    assert.deepEqual([uploads.length, created.length, deliveries.length], [0, 0, 0]);
+  });
+  await t.test("recipient blocks suppress message copies without deleting school history", async () => {
+    reset(); teacher.customFields = { messageBlocks: { "fake-parent": true } }; preferences = [{ userId: teacher.id, role: "TEACHER", pushEnabled: true }];
+    const response = await post({ sendEmailCopy: true, sendPushCopy: true });
+    assert.equal(response.status, 201); assert.equal(created.length, 1); assert.equal(pushes.length, 0); assert.deepEqual(deliveries[0].recipients, []);
+  });
   await t.test("canonical and omitted subjects use database identity without leaking creation metadata", async () => {
     for (const subject of ["Re: Canonical classroom subject", ""]) {
       reset(); const response = await post({ subject }); assert.equal(response.status, 201); assert.equal(created[0].subject, "Re: Canonical classroom subject");

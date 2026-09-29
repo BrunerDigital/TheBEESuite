@@ -240,6 +240,7 @@ export async function deliverNotificationExternalChannels({
       metadata: {
         ...metadata,
         notificationType: type,
+        ...(type === "messages" ? { messageRecipientIds: recipients.map(recipient => recipient.userId).filter(Boolean) } : {}),
       },
     });
   }
@@ -258,6 +259,7 @@ export async function deliverNotificationExternalChannels({
       statusCallbackUrl,
       result,
       purpose: smsPurpose,
+      metadata: { ...metadata, ...(type === "messages" ? { messageId, messageRecipientIds: recipients.map(recipient => recipient.userId).filter(Boolean) } : {}) },
     });
     smsResults.push({
       ok: result.ok,

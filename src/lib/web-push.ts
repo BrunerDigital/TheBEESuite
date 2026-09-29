@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import * as webpush from "web-push";
 import { activeNotificationWhere } from "@/lib/notification-policy";
+import { blockedMessageSenderIds, messageNotificationSenderId } from "@/lib/message-block-policy";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { resolveNotificationPreferenceChannels } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
@@ -153,6 +154,7 @@ async function loadCandidates(limit: number, now: Date) {
               tenantId: true,
               role: true,
               isActive: true,
+              customFields: true,
             },
           },
         },
@@ -244,6 +246,11 @@ async function dispatchCandidate(
   if (appReviewReservedIdentityKind(user.email)) {
     await cancelSubscriptionDeliveries(subscription.id, "app_review_delivery_disabled", now);
     return "cancelled" as const;
+  }
+  const messageSenderId = messageNotificationSenderId(notification.dedupeKey);
+  if (messageSenderId && blockedMessageSenderIds(user.customFields).includes(messageSenderId)) {
+    await skipDelivery(candidate.id, "message_sender_blocked", now);
+    return "skipped" as const;
   }
   if (
     !subscription.isActive ||

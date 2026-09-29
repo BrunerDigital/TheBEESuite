@@ -43,6 +43,8 @@ import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 
 import { withApiLogging } from "@/lib/request-response-logging";
+import { messageRecipientsAllowed, readBlockedMessageSenderIds } from "@/lib/message-block-store";
+import { messagesExcludingBlockedSenders } from "@/lib/message-block-policy";
 export const runtime = "nodejs";
 
 const maxMessageAttachments = 5;
@@ -484,6 +486,10 @@ async function POSTHandler(request: NextRequest) {
     if (!recipient) {
       return NextResponse.json({ ok: false, error: "Staff recipient is not available in your school scope." }, { status: 400 });
     }
+    if ((await readBlockedMessageSenderIds(prisma, user.id)).includes(recipient.id)
+      || !(await messageRecipientsAllowed(prisma, user.tenantId, user.id, [{ userId: recipient.id }])).length) {
+      return NextResponse.json({ ok: false, error: "This direct conversation is unavailable. Review Blocked senders or contact your school office. Your draft has not been sent." }, { status: 409 });
+    }
 
     const recipientIsTeacher = recipient.role === UserRole.TEACHER;
     const recipientIsDirector = recipient.role === UserRole.CENTER_DIRECTOR || recipient.role === UserRole.ASSISTANT_DIRECTOR;
@@ -497,7 +503,7 @@ async function POSTHandler(request: NextRequest) {
     const threadKey = staffThreadKey(user.id, recipient.id);
     if (replyToMessageId) {
       const replyTarget = await prisma.message.findFirst({
-        where: { id: replyToMessageId, threadKey },
+        where: { ...messagesExcludingBlockedSenders(await readBlockedMessageSenderIds(prisma, user.id)), id: replyToMessageId, threadKey },
         select: { id: true },
       });
       if (!replyTarget) {
@@ -556,6 +562,7 @@ async function POSTHandler(request: NextRequest) {
             title: `New staff message: ${subject}`,
             body: `${user.name}: ${message}`,
             type: "message",
+            dedupeKey: `message-sender:${user.id}:${created.id}:${recipient.id}`,
             priority,
           },
         })
@@ -813,7 +820,7 @@ async function POSTHandler(request: NextRequest) {
         type: "messages",
         title: `Message from ${user.name}: ${renderedSubject}`,
         body: appendInAppMessageReplyInstructions(renderedMessage, parentReplyUrl),
-        recipients: familyNotificationDeliveryRecipients(targetFamily),
+        recipients: await messageRecipientsAllowed(prisma, center?.organization.tenant.id ?? user.tenantId, user.id, familyNotificationDeliveryRecipients(targetFamily)),
         preferences: centerNotificationPreferences,
         emailRequested: sendEmailCopy,
         smsRequested: sendSmsCopy,
@@ -829,8 +836,10 @@ async function POSTHandler(request: NextRequest) {
       deliverySummaries.push(delivery);
 
       if (sendPushCopy) {
+        const allowedPushRecipients = await messageRecipientsAllowed(prisma, center?.organization.tenant.id ?? user.tenantId, user.id, targetFamily.guardians.map(guardian => ({ userId: guardian.userId, email: guardian.email, phone: guardian.phone })));
+        const allowedPushUserIds = new Set(allowedPushRecipients.map(recipient => recipient.userId));
         for (const guardian of targetFamily.guardians) {
-          if (guardian.userId && pushEnabledForMessageRecipient({
+          if (guardian.userId && allowedPushUserIds.has(guardian.userId) && pushEnabledForMessageRecipient({
             userId: guardian.userId,
             role: UserRole.PARENT_GUARDIAN,
           }, centerNotificationPreferences)) {
@@ -840,6 +849,7 @@ async function POSTHandler(request: NextRequest) {
                 title: `New school message: ${renderedSubject}`,
                 body: `${user.name}: ${renderedMessage}`,
                 type: "message",
+                dedupeKey: `message-sender:${user.id}:${created.id}:${guardian.userId}`,
                 priority,
               },
             }));
@@ -967,7 +977,7 @@ async function POSTHandler(request: NextRequest) {
   let replyTargetMessage: { id: string; senderId: string | null; assignedToId: string | null; subject: string | null } | null = null;
   if (replyToMessageId) {
     replyTargetMessage = await prisma.message.findFirst({
-      where: { id: replyToMessageId, ...(familyId
+      where: { ...messagesExcludingBlockedSenders(await readBlockedMessageSenderIds(prisma, user.id)), id: replyToMessageId, ...(familyId
         ? { familyId, ...(parentFamilyWhere ? { family: parentFamilyWhere } : {}) }
         : { familyId: null, threadKey: `internal:${user.primaryCenterId ?? user.tenantId}` }) },
       select: { id: true, senderId: true, assignedToId: true, subject: true },
@@ -1049,6 +1059,10 @@ async function POSTHandler(request: NextRequest) {
     });
     if (!assignee) {
       return NextResponse.json({ ok: false, error: senderIsParent ? "Teacher is not assigned to your child’s current classroom." : "Assigned staff user is not available for this family." }, { status: 400 });
+    }
+    if ((await readBlockedMessageSenderIds(prisma, user.id)).includes(assignee.id)
+      || !(await messageRecipientsAllowed(prisma, user.tenantId, user.id, [{ userId: assignee.id }])).length) {
+      return NextResponse.json({ ok: false, error: "This recipient is unavailable. Review Blocked senders or contact your school office. Your draft has not been sent." }, { status: 409 });
     }
   }
 
@@ -1150,7 +1164,7 @@ async function POSTHandler(request: NextRequest) {
         },
       })
     : [];
-  const staffNotificationUsers = uniqueMessageNotificationUsers([
+  const candidateStaffNotificationUsers = uniqueMessageNotificationUsers([
     ...directors,
     ...directStaffRecipients.map((recipient) => ({
       id: recipient.id,
@@ -1159,8 +1173,11 @@ async function POSTHandler(request: NextRequest) {
       phone: recipient.staffProfile?.phone ?? null,
     })),
   ], user.id);
+  const staffNotificationUsers = (await messageRecipientsAllowed(prisma, user.tenantId, user.id, candidateStaffNotificationUsers.map(recipient => ({ ...recipient, userId: recipient.id }))));
+  const allowedFamilyRecipients = family ? await messageRecipientsAllowed(prisma, familyCenter?.organization.tenant.id ?? user.tenantId, user.id, familyNotificationDeliveryRecipients(family)) : [];
+  const allowedParentUserIds = new Set(allowedFamilyRecipients.map(recipient => recipient.userId));
   const parentUserIds = !senderIsParent && family
-    ? Array.from(new Set(family.guardians.map((guardian) => guardian.userId).filter((value): value is string => Boolean(value))))
+    ? Array.from(new Set(family.guardians.map((guardian) => guardian.userId).filter((value): value is string => Boolean(value) && allowedParentUserIds.has(value))))
     : [];
 
   const notificationUserIds = [...staffNotificationUsers.map((recipient) => recipient.id), ...parentUserIds];
@@ -1201,11 +1218,12 @@ async function POSTHandler(request: NextRequest) {
             : message,
           type: "message",
           priority,
+          dedupeKey: `message-sender:${user.id}:${created.id}:${recipient.id}`,
         },
       }) : null,
     ),
     ...(!senderIsParent ? family?.guardians ?? [] : []).map((guardian) =>
-      sendPushCopy && guardian.userId && pushEnabledForMessageRecipient({
+      sendPushCopy && guardian.userId && allowedParentUserIds.has(guardian.userId) && pushEnabledForMessageRecipient({
         userId: guardian.userId,
         role: UserRole.PARENT_GUARDIAN,
       }, notificationPreferenceRows) ? prisma.notification.create({
@@ -1215,6 +1233,7 @@ async function POSTHandler(request: NextRequest) {
           body: `${user.name}: ${message}`,
           type: "message",
           priority,
+          dedupeKey: `message-sender:${user.id}:${created.id}:${guardian.userId}`,
         },
       }) : null,
     ),
@@ -1254,7 +1273,7 @@ async function POSTHandler(request: NextRequest) {
   const deliveryRecipients = family
     ? senderIsParent
       ? leadershipNotificationDeliveryRecipients(staffNotificationUsers)
-      : familyNotificationDeliveryRecipients(family)
+      : allowedFamilyRecipients
     : [];
   const statusCallbackUrl = sendSmsCopy && deliveryRecipients.length ? twilioStatusCallbackUrl(request) : null;
   const deliveryBranding = messageCenterBranding(familyCenter);

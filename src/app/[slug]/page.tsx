@@ -184,6 +184,8 @@ import {
 import { canonicalizeSystemMessageTemplate, mergeStoredAndDefaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { signMessageAttachmentsFromMetadata } from "@/lib/message-attachments";
 import { parentMessageFamilyWhere, parentMessageOrder, parentMessagePageRows, parentMessageSelect, parentMessageViews } from "@/lib/parent-message-query";
+import { readBlockedMessageSenderIds } from "@/lib/message-block-store";
+import { messagesExcludingBlockedSenders } from "@/lib/message-block-policy";
 import { PARENT_MESSAGE_PAGE_SIZE } from "@/lib/parent-message-history";
 import { isParentUpdateDay } from "@/lib/parent-updates-history";
 import { logOperationalError } from "@/lib/request-response-logging";
@@ -2521,7 +2523,7 @@ async function renderLivePage(
     const paymentContinuityAccess = Boolean(family && family.children.length === 0);
     const resolvedParentPortalView = paymentContinuityAccess ? "payments" : parentPortalView;
     const parentPortalContentFamilyId = paymentContinuityAccess ? "__payment_continuity__" : familyId;
-    const parentMessageWhere: Prisma.MessageWhereInput = { familyId: parentPortalContentFamilyId, family: user.role === UserRole.PARENT_GUARDIAN
+    const parentMessageWhere: Prisma.MessageWhereInput = { ...messagesExcludingBlockedSenders(await readBlockedMessageSenderIds(prisma, user.id)), familyId: parentPortalContentFamilyId, family: user.role === UserRole.PARENT_GUARDIAN
       ? parentMessageFamilyWhere({ familyId: parentPortalContentFamilyId, userId: user.id, tenantId: user.tenantId, tenantCenterIds: parentPortalTenantCenterIds })
       : { id: parentPortalContentFamilyId, children: { some: parentCurrentChildScope(user.tenantId) } } };
     const parentClassroomIds = Array.from(new Set(
@@ -3496,7 +3498,7 @@ async function renderLivePage(
         ? { children: { some: { AND: [{ classroomId: teacherStaffProfile.classroomId }, currentlyEnrolledChildWhere()] } } }
         : { id: "__no_teacher_classroom__" }
       : { ...visibleFamilyWhere(messageCenterIds), children: { some: currentlyEnrolledChildWhere() } };
-    const messageWhere: Prisma.MessageWhereInput = verifiedAppReviewKind === "teacher"
+    const scopedMessageWhere: Prisma.MessageWhereInput = verifiedAppReviewKind === "teacher"
       ? { family: { is: familyScopeWhere } }
       : buildVisibleMessageWhere({
           userId: user.id,
@@ -3506,6 +3508,7 @@ async function renderLivePage(
           tenantId: user.tenantId,
           nonFamilyCenterIds: allCenters ? undefined : messageCenterIds,
         });
+    const messageWhere: Prisma.MessageWhereInput = { AND: [scopedMessageWhere, messagesExcludingBlockedSenders(await readBlockedMessageSenderIds(prisma, user.id))] };
     const classroomWhere: Prisma.ClassroomWhereInput = teacherMessageScope
       ? { id: teacherAssignedClassroomId ?? "__no_assigned_teacher_classroom__" }
       : visibleClassroomWhere(messageCenterIds);

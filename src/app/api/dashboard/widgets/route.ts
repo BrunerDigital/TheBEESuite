@@ -14,10 +14,6 @@ import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function recordFromJson(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 async function getPreferenceUser(userId: string, tenantId: string) {
   return prisma.user.findFirst({
     where: {
@@ -58,35 +54,24 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-  const preferenceUser = await getPreferenceUser(user.id, user.tenantId);
-  if (!preferenceUser) {
-    return NextResponse.json({ ok: false, error: "User not found." }, { status: 404 });
-  }
-
-  const customFields = recordFromJson(preferenceUser.customFields);
-  const nextCustomFields = { ...customFields };
   const reset = body.reset === true;
   const dashboardWidgets = normalizeDashboardWidgetPreferences({
     role: user.role,
     value: reset ? undefined : body,
   });
 
-  if (reset) {
-    delete nextCustomFields[dashboardWidgetPreferencesKey];
-  } else {
-    nextCustomFields[dashboardWidgetPreferencesKey] = dashboardWidgetPreferencesForStorage(dashboardWidgets, {
+  // Patch only this preference in the current row. Replacing an earlier snapshot
+  // could erase a sender block or a profile update that committed in between.
+  const currentFields = Prisma.sql`CASE WHEN jsonb_typeof("customFields") = 'object' THEN "customFields" ELSE '{}'::jsonb END`;
+  const nextFields = reset
+    ? Prisma.sql`${currentFields} - ${dashboardWidgetPreferencesKey}::text`
+    : Prisma.sql`jsonb_set(${currentFields}, ARRAY[${dashboardWidgetPreferencesKey}::text], ${JSON.stringify(dashboardWidgetPreferencesForStorage(dashboardWidgets, {
       updatedAt: new Date().toISOString(),
       updatedByUserId: user.id,
       updatedByEmail: user.email,
-    });
-  }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      customFields: nextCustomFields as Prisma.InputJsonValue,
-    },
-  });
+    }))}::jsonb, true)`;
+  const saved = await prisma.$executeRaw`UPDATE "User" SET "customFields" = ${nextFields}, "updatedAt" = NOW() WHERE "id" = ${user.id} AND "tenantId" = ${user.tenantId} AND "isActive" = true`;
+  if (saved !== 1) return NextResponse.json({ ok: false, error: "User not found." }, { status: 404 });
 
   await writeAuditLog(user, {
     action: reset ? "dashboard.widgets.reset" : "dashboard.widgets.updated",

@@ -87,7 +87,9 @@ async function PATCHHandler(request: NextRequest) {
     };
 
     const update = await prisma.user.updateMany({
-      where: { id: user.id, updatedAt: existingUser.updatedAt },
+      where: { id: user.id, updatedAt: existingUser.updatedAt, AND: [existingUser.customFields === null
+        ? { OR: [{ customFields: { equals: Prisma.DbNull } }, { customFields: { equals: Prisma.JsonNull } }] }
+        : { customFields: { equals: existingUser.customFields } }] },
       data: { customFields: nextCustomFields as Prisma.InputJsonValue },
     });
     if (update.count === 1) {
@@ -123,4 +125,3 @@ async function PATCHHandler(request: NextRequest) {
 }
 
 export const PATCH = withApiLogging("PATCH", PATCHHandler);
-

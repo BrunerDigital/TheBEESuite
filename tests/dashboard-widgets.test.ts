@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { UserRole } from "@prisma/client";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   dashboardWidgetPreferencesForStorage,
   normalizeDashboardWidgetPreferences,
 } from "../src/lib/dashboard-widgets";
+
+test("the widget preference endpoint preserves current blocking and profile changes", () => {
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_NO_WARNINGS: "1" }; delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, ["--experimental-test-module-mocks", "--import", "tsx", "--test", fileURLToPath(new URL("./helpers/dashboard-widget-route-mocks.mjs", import.meta.url))], { encoding: "utf8", env });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});
 
 test("director dashboard widgets default to school operating widgets", () => {
   const config = normalizeDashboardWidgetPreferences({ role: UserRole.CENTER_DIRECTOR });

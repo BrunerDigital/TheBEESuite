@@ -43,6 +43,8 @@ import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 
 import { withApiLogging } from "@/lib/request-response-logging";
+import { createDirectMessage, createMessageNotification, MessageRecipientBlockChanged, messageRecipientsAllowed, readBlockedMessageSenderIds } from "@/lib/message-block-store";
+import { messagesExcludingBlockedSenders } from "@/lib/message-block-policy";
 export const runtime = "nodejs";
 
 const maxMessageAttachments = 5;
@@ -484,7 +486,6 @@ async function POSTHandler(request: NextRequest) {
     if (!recipient) {
       return NextResponse.json({ ok: false, error: "Staff recipient is not available in your school scope." }, { status: 400 });
     }
-
     const recipientIsTeacher = recipient.role === UserRole.TEACHER;
     const recipientIsDirector = recipient.role === UserRole.CENTER_DIRECTOR || recipient.role === UserRole.ASSISTANT_DIRECTOR;
     const senderIsTeacher = user.role === UserRole.TEACHER;
@@ -493,11 +494,15 @@ async function POSTHandler(request: NextRequest) {
     if (!senderCanMessageTeacher && !senderCanMessageDirector) {
       return NextResponse.json({ ok: false, error: "Direct staff messages are limited to director and teacher conversations." }, { status: 403 });
     }
+    if ((await readBlockedMessageSenderIds(prisma, user.id)).includes(recipient.id)
+      || !(await messageRecipientsAllowed(prisma, user.tenantId, user.id, [{ userId: recipient.id }])).length) {
+      return NextResponse.json({ ok: false, error: "This direct conversation is unavailable. Review Blocked senders or contact your school office. Your draft has not been sent." }, { status: 409 });
+    }
 
     const threadKey = staffThreadKey(user.id, recipient.id);
     if (replyToMessageId) {
       const replyTarget = await prisma.message.findFirst({
-        where: { id: replyToMessageId, threadKey },
+        where: { ...messagesExcludingBlockedSenders(await readBlockedMessageSenderIds(prisma, user.id)), id: replyToMessageId, threadKey },
         select: { id: true },
       });
       if (!replyTarget) {
@@ -520,7 +525,10 @@ async function POSTHandler(request: NextRequest) {
       );
     }
 
-    const created = await prisma.message.create({
+    let created: Awaited<ReturnType<typeof createDirectMessage>>;
+    try {
+    created = await createDirectMessage(prisma, {
+      userId: user.id, identityTenantId: user.identityTenantId, senderRole: user.role, recipientTenantId: user.tenantId, recipientId: recipient.id, recipientRole: recipient.role,
       data: {
         familyId: null,
         senderId: user.id,
@@ -548,14 +556,24 @@ async function POSTHandler(request: NextRequest) {
         }, attachments),
       },
     });
+    } catch (error) {
+      if (!(error instanceof MessageRecipientBlockChanged) && !(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034")) throw error;
+      for (const attachment of attachments) {
+        if (attachment.storageKey.startsWith("inline-demo-upload")) continue;
+        try { await deleteMessageAttachmentObject(attachment.storageKey); }
+        catch { console.error("staff_message_uncommitted_attachment_cleanup_failed"); }
+      }
+      return NextResponse.json({ ok: false, error: "This conversation changed while the message was being prepared. It was not sent. Refresh Blocked senders or contact your school office." }, { status: 409 });
+    }
 
     const notification = sendPushCopy
-      ? await prisma.notification.create({
+      ? await createMessageNotification(prisma, user.id, {
           data: {
             userId: recipient.id,
             title: `New staff message: ${subject}`,
             body: `${user.name}: ${message}`,
             type: "message",
+            dedupeKey: `message-sender:${user.id}:${created.id}:${recipient.id}`,
             priority,
           },
         })
@@ -813,7 +831,7 @@ async function POSTHandler(request: NextRequest) {
         type: "messages",
         title: `Message from ${user.name}: ${renderedSubject}`,
         body: appendInAppMessageReplyInstructions(renderedMessage, parentReplyUrl),
-        recipients: familyNotificationDeliveryRecipients(targetFamily),
+        recipients: await messageRecipientsAllowed(prisma, center?.organization.tenant.id ?? user.tenantId, user.id, familyNotificationDeliveryRecipients(targetFamily)),
         preferences: centerNotificationPreferences,
         emailRequested: sendEmailCopy,
         smsRequested: sendSmsCopy,
@@ -829,20 +847,24 @@ async function POSTHandler(request: NextRequest) {
       deliverySummaries.push(delivery);
 
       if (sendPushCopy) {
+        const allowedPushRecipients = await messageRecipientsAllowed(prisma, center?.organization.tenant.id ?? user.tenantId, user.id, targetFamily.guardians.map(guardian => ({ userId: guardian.userId, email: guardian.email, phone: guardian.phone })));
+        const allowedPushUserIds = new Set(allowedPushRecipients.map(recipient => recipient.userId));
         for (const guardian of targetFamily.guardians) {
-          if (guardian.userId && pushEnabledForMessageRecipient({
+          if (guardian.userId && allowedPushUserIds.has(guardian.userId) && pushEnabledForMessageRecipient({
             userId: guardian.userId,
             role: UserRole.PARENT_GUARDIAN,
           }, centerNotificationPreferences)) {
-            pushNotifications.push(await prisma.notification.create({
+            const notification = await createMessageNotification(prisma, user.id, {
               data: {
                 userId: guardian.userId,
                 title: `New school message: ${renderedSubject}`,
                 body: `${user.name}: ${renderedMessage}`,
                 type: "message",
+                dedupeKey: `message-sender:${user.id}:${created.id}:${guardian.userId}`,
                 priority,
               },
-            }));
+            });
+            if (notification) pushNotifications.push(notification);
           }
         }
       }
@@ -967,7 +989,7 @@ async function POSTHandler(request: NextRequest) {
   let replyTargetMessage: { id: string; senderId: string | null; assignedToId: string | null; subject: string | null } | null = null;
   if (replyToMessageId) {
     replyTargetMessage = await prisma.message.findFirst({
-      where: { id: replyToMessageId, ...(familyId
+      where: { ...messagesExcludingBlockedSenders(await readBlockedMessageSenderIds(prisma, user.id)), id: replyToMessageId, ...(familyId
         ? { familyId, ...(parentFamilyWhere ? { family: parentFamilyWhere } : {}) }
         : { familyId: null, threadKey: `internal:${user.primaryCenterId ?? user.tenantId}` }) },
       select: { id: true, senderId: true, assignedToId: true, subject: true },
@@ -1050,6 +1072,10 @@ async function POSTHandler(request: NextRequest) {
     if (!assignee) {
       return NextResponse.json({ ok: false, error: senderIsParent ? "Teacher is not assigned to your child’s current classroom." : "Assigned staff user is not available for this family." }, { status: 400 });
     }
+    if ((await readBlockedMessageSenderIds(prisma, user.id)).includes(assignee.id)
+      || !(await messageRecipientsAllowed(prisma, user.tenantId, user.id, [{ userId: assignee.id }])).length) {
+      return NextResponse.json({ ok: false, error: "This recipient is unavailable. Review Blocked senders or contact your school office. Your draft has not been sent." }, { status: 409 });
+    }
   }
 
   let attachments: StoredMessageAttachment[] = [];
@@ -1102,9 +1128,11 @@ async function POSTHandler(request: NextRequest) {
     try {
       return senderIsParent && familyId
         ? await createParentFamilyMessage(prisma, { userId: user.id, tenantId: user.tenantId, familyId, expectedCenterId: familyMessageCenterId, data: messageData })
-        : await prisma.message.create({ data: messageData });
+        : assignedToId
+          ? await createDirectMessage(prisma, { userId: user.id, identityTenantId: user.identityTenantId, senderRole: user.role, recipientTenantId: user.tenantId, recipientId: assignedToId, data: messageData })
+          : await prisma.message.create({ data: messageData });
     } catch (error) {
-      const knownRollback = error instanceof ParentMessageScopeChanged || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034");
+      const knownRollback = error instanceof ParentMessageScopeChanged || error instanceof MessageRecipientBlockChanged || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034");
       if (!knownRollback) throw error; // Unknown commit outcome: retain recoverable attachment objects.
       for (const attachment of attachments) {
         if (attachment.storageKey.startsWith("inline-demo-upload")) continue;
@@ -1114,7 +1142,7 @@ async function POSTHandler(request: NextRequest) {
       return null;
     }
   })();
-  if (!created) return NextResponse.json({ ok: false, error: "Your family access or reply changed while this message was being prepared. It was not sent. Refresh the conversation and try again." }, { status: 409 });
+  if (!created) return NextResponse.json({ ok: false, error: "Your conversation changed while this message was being prepared. It was not sent. Refresh the conversation or review Blocked senders." }, { status: 409 });
 
   const shouldNotifyLeadership = shouldNotifyLeadershipOfFamilyMessage({
     senderIsParent,
@@ -1150,7 +1178,7 @@ async function POSTHandler(request: NextRequest) {
         },
       })
     : [];
-  const staffNotificationUsers = uniqueMessageNotificationUsers([
+  const candidateStaffNotificationUsers = uniqueMessageNotificationUsers([
     ...directors,
     ...directStaffRecipients.map((recipient) => ({
       id: recipient.id,
@@ -1159,8 +1187,11 @@ async function POSTHandler(request: NextRequest) {
       phone: recipient.staffProfile?.phone ?? null,
     })),
   ], user.id);
+  const staffNotificationUsers = (await messageRecipientsAllowed(prisma, user.tenantId, user.id, candidateStaffNotificationUsers.map(recipient => ({ ...recipient, userId: recipient.id }))));
+  const allowedFamilyRecipients = family ? await messageRecipientsAllowed(prisma, familyCenter?.organization.tenant.id ?? user.tenantId, user.id, familyNotificationDeliveryRecipients(family)) : [];
+  const allowedParentUserIds = new Set(allowedFamilyRecipients.map(recipient => recipient.userId));
   const parentUserIds = !senderIsParent && family
-    ? Array.from(new Set(family.guardians.map((guardian) => guardian.userId).filter((value): value is string => Boolean(value))))
+    ? Array.from(new Set(family.guardians.map((guardian) => guardian.userId).filter((value): value is string => Boolean(value) && allowedParentUserIds.has(value))))
     : [];
 
   const notificationUserIds = [...staffNotificationUsers.map((recipient) => recipient.id), ...parentUserIds];
@@ -1186,7 +1217,7 @@ async function POSTHandler(request: NextRequest) {
       sendPushCopy && pushEnabledForMessageRecipient({
         userId: recipient.id,
         role: recipient.role,
-      }, notificationPreferenceRows) ? prisma.notification.create({
+      }, notificationPreferenceRows) ? createMessageNotification(prisma, user.id, {
         data: {
           userId: recipient.id,
           title: senderIsParent
@@ -1201,20 +1232,22 @@ async function POSTHandler(request: NextRequest) {
             : message,
           type: "message",
           priority,
+          dedupeKey: `message-sender:${user.id}:${created.id}:${recipient.id}`,
         },
       }) : null,
     ),
     ...(!senderIsParent ? family?.guardians ?? [] : []).map((guardian) =>
-      sendPushCopy && guardian.userId && pushEnabledForMessageRecipient({
+      sendPushCopy && guardian.userId && allowedParentUserIds.has(guardian.userId) && pushEnabledForMessageRecipient({
         userId: guardian.userId,
         role: UserRole.PARENT_GUARDIAN,
-      }, notificationPreferenceRows) ? prisma.notification.create({
+      }, notificationPreferenceRows) ? createMessageNotification(prisma, user.id, {
         data: {
           userId: guardian.userId,
           title: `New school message: ${subject}`,
           body: `${user.name}: ${message}`,
           type: "message",
           priority,
+          dedupeKey: `message-sender:${user.id}:${created.id}:${guardian.userId}`,
         },
       }) : null,
     ),
@@ -1254,7 +1287,7 @@ async function POSTHandler(request: NextRequest) {
   const deliveryRecipients = family
     ? senderIsParent
       ? leadershipNotificationDeliveryRecipients(staffNotificationUsers)
-      : familyNotificationDeliveryRecipients(family)
+      : allowedFamilyRecipients
     : [];
   const statusCallbackUrl = sendSmsCopy && deliveryRecipients.length ? twilioStatusCallbackUrl(request) : null;
   const deliveryBranding = messageCenterBranding(familyCenter);

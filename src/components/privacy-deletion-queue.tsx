@@ -48,7 +48,7 @@ export function PrivacyDeletionQueue({ rows }: { rows: PrivacyDeletionQueueRow[]
       });
       const result = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
       if (!response.ok || !result?.ok) throw new Error(result?.error || "Privacy request could not be updated.");
-      setMessage(action === "approve" ? "Request approved. A separate exact confirmation is still required to delete the login." : "Login deletion completed and retained records were preserved.");
+      setMessage(action === "approve" ? "Request approved. A separate exact confirmation is still required to delete the login." : "Login deletion completed, retained records were preserved, and a completion email was queued for delivery.");
       window.location.reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Privacy request could not be updated.");
@@ -61,7 +61,7 @@ export function PrivacyDeletionQueue({ rows }: { rows: PrivacyDeletionQueueRow[]
     <Card className="glass-panel border-amber-500/35">
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2"><ShieldCheck className="size-5 text-amber-500" />Account-deletion review</CardTitle>
-        <CardDescription>Parent login deletion is a two-stage, audited action. Childcare, safety, billing, payment, and audit history remains intact.</CardDescription>
+        <CardDescription>Parent login deletion is a two-stage, audited action. Review requests within their 30-day target; contact the parent with an updated timeframe if review takes longer. Completion queues an email to the account address. Check delivery status and resolve failed confirmations in Integration Deliveries. Childcare, safety, billing, payment, and audit history remains intact.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {message ? <div className="rounded-lg border bg-background/60 p-3 text-sm" role="status">{message}</div> : null}

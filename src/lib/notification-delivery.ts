@@ -13,6 +13,8 @@ import {
 } from "@/lib/notification-preferences";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
+import { prisma } from "@/lib/prisma";
+import { permittedMessageRetryRecipients } from "@/lib/message-block-store";
 
 export type NotificationDeliveryRecipient = {
   userId?: string | null;
@@ -53,6 +55,7 @@ export type NotificationDeliveryProviders = {
   sendSms: (input: Parameters<typeof sendSms>[0]) => Promise<IntegrationSendResult>;
   recordEmailDeliveryAttempt: typeof recordEmailDeliveryAttempt;
   recordCommunicationSmsDeliveryAttempt: typeof recordCommunicationSmsDeliveryAttempt;
+  permittedMessageRecipients: (tenantId: string, messageId: string, recipientIds: string[], copies: Array<{ email?: string; phone?: string }>) => Promise<Array<{ email?: string; phone?: string }>>;
 };
 
 export type NotificationDeliverySummary = {
@@ -180,15 +183,26 @@ export async function deliverNotificationExternalChannels({
     sendSms,
     recordEmailDeliveryAttempt,
     recordCommunicationSmsDeliveryAttempt,
+    permittedMessageRecipients: (...args) => permittedMessageRetryRecipients(prisma, ...args),
     ...providerOverrides,
   };
 
-  const emailRecipients = emailRequested
+  let emailRecipients = emailRequested
     ? collectNotificationEmailRecipients({ type, recipients, preferences })
     : [];
   const smsRecipients = smsRequested
     ? collectNotificationSmsRecipients({ type, recipients, preferences })
     : [];
+
+  // Earlier route filtering can become stale during notification transactions.
+  // Check each provider call again, including SMS copies after a slower email.
+  const recipientIds = recipients.map(recipient => recipient.userId).filter((id): id is string => Boolean(id));
+  async function currentMessageRecipients(copies: Array<{ email?: string; phone?: string }>) {
+    if (type !== "messages") return copies;
+    if (!messageId || !copies.length) return [];
+    return providers.permittedMessageRecipients(tenantId, messageId, recipientIds, copies);
+  }
+  emailRecipients = (await currentMessageRecipients(emailRecipients.map(email => ({ email })))).flatMap(copy => copy.email ? [copy.email] : []);
 
   const emailSummary: NotificationDeliverySummary["email"] = {
     requested: emailRequested,
@@ -240,13 +254,17 @@ export async function deliverNotificationExternalChannels({
       metadata: {
         ...metadata,
         notificationType: type,
+        ...(type === "messages" ? { messageRecipientIds: recipients.map(recipient => recipient.userId).filter(Boolean) } : {}),
       },
     });
   }
 
   const smsResults: NotificationDeliverySummary["sms"]["results"] = [];
+  const attemptedSmsRecipients: string[] = [];
   const smsBody = formatNotificationSmsBody(title, body);
   for (const to of smsRecipients) {
+    if (!(await currentMessageRecipients([{ phone: to }])).length) continue;
+    attemptedSmsRecipients.push(to);
     const result = await providers.sendSms({ to, body: smsBody, statusCallbackUrl, tenantId });
     await providers.recordCommunicationSmsDeliveryAttempt({
       tenantId,
@@ -258,6 +276,7 @@ export async function deliverNotificationExternalChannels({
       statusCallbackUrl,
       result,
       purpose: smsPurpose,
+      metadata: { ...metadata, ...(type === "messages" ? { messageId, messageRecipientIds: recipients.map(recipient => recipient.userId).filter(Boolean) } : {}) },
     });
     smsResults.push({
       ok: result.ok,
@@ -272,14 +291,14 @@ export async function deliverNotificationExternalChannels({
     email: emailSummary,
     sms: {
       requested: smsRequested,
-      attempted: smsRecipients.length,
+      attempted: attemptedSmsRecipients.length,
       sent: smsResults.filter((result) => result.ok).length,
       configured: smsResults.some((result) => result.configured),
       provider: "twilio",
-      error: smsRequested && !smsRecipients.length
+      error: smsRequested && !attemptedSmsRecipients.length
         ? "No SMS-enabled recipients are available."
         : smsResults.find((result) => result.error)?.error ?? null,
-      recipients: smsRecipients,
+      recipients: attemptedSmsRecipients,
       results: smsResults,
     },
   };

@@ -7,6 +7,7 @@ import {
 import { sendEmail, sendSms, type IntegrationSendResult } from "@/lib/integrations";
 import { fteExternalEscalationWindow, getFteDueState } from "@/lib/fte-report-guardrails";
 import { prisma } from "@/lib/prisma";
+import { permittedMessageRetryRecipients } from "@/lib/message-block-store";
 
 export type IntegrationDeliveryProvider = "google_sheets" | "sendgrid" | "twilio";
 export type IntegrationDeliveryPurpose =
@@ -480,6 +481,12 @@ const SENDGRID_EMAIL_PURPOSES = new Set([
 ]);
 
 async function sendDelivery(provider: string, purpose: string, payload: Record<string, unknown>) {
+  if (["communication_email", "communication_sms"].includes(purpose) && typeof payload.messageId === "string" && payload.messageId) {
+    const recipients = provider === "sendgrid" ? stringArray(payload.to).map(email => ({ email })) : [{ phone: stringValue(payload.to) }];
+    const allowed = await permittedMessageRetryRecipients(prisma, stringValue(payload.tenantId), payload.messageId, stringArray(payload.messageRecipientIds), recipients);
+    if (!allowed.length) return { ok: false, configured: true, provider, skipped: true, error: "Message copies suppressed by recipient blocking." };
+    payload = { ...payload, to: provider === "sendgrid" ? allowed.map(recipient => recipient.email) : allowed[0].phone };
+  }
   if (provider === "google_sheets" && purpose === "inquiry_backup") {
     return forwardInquiryToGoogleSheets(payload);
   }

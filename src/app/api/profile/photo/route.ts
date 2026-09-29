@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
@@ -9,7 +9,7 @@ import {
   validateProfilePhotoFile,
 } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
-import { isSupabaseStorageConfigured, uploadProfilePhotoBuffer } from "@/lib/supabase-storage";
+import { getSupabaseStorageClient, isSupabaseStorageConfigured, uploadProfilePhotoBuffer } from "@/lib/supabase-storage";
 import { withApiLogging } from "@/lib/request-response-logging";
 
 export const runtime = "nodejs";
@@ -78,12 +78,20 @@ async function POSTHandler(request: NextRequest) {
     uploadedAt: new Date().toISOString(),
   };
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      customFields: mergeProfilePhotoCustomFields(existingUser.customFields, profilePhoto) as Prisma.InputJsonValue,
-    },
+  const saved = await prisma.$transaction(async tx => {
+    // Serialize the profile write with account cleanup after the external upload.
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${user.id} AND "tenantId" = ${user.identityTenantId} FOR UPDATE`;
+    const current = await tx.user.findFirst({ where: { id: user.id, tenantId: user.identityTenantId, isActive: true }, select: { customFields: true } });
+    const deletion = await tx.dataDeletionRequest.findFirst({ where: { userId: user.id, status: { in: ["executing", "partially_completed", "completed"] } }, select: { id: true } });
+    if (!current || deletion) return false;
+    await tx.user.update({ where: { id: user.id }, data: { customFields: mergeProfilePhotoCustomFields(current.customFields, profilePhoto) as Prisma.InputJsonValue } });
+    return true;
   });
+  if (!saved) {
+    const { error } = await getSupabaseStorageClient().storage.from(upload.bucket).remove([upload.storageKey]);
+    if (error) throw new Error("An interrupted profile upload needs storage cleanup.");
+    return NextResponse.json({ ok: false, error: "Your account is being deleted. This profile photo was not saved." }, { status: 409 });
+  }
 
   await writeAuditLog(user, {
     action: "user.profile_photo.updated",

@@ -14,6 +14,8 @@ import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/ra
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { deleteSupabaseAuthUserByEmail } from "@/lib/supabase-auth";
+import { accountDeletionCompletionDelivery } from "@/lib/account-deletion-notice";
+import { deleteAccountProfilePhotos } from "@/lib/account-deletion-profile-photos";
 
 export const runtime = "nodejs";
 
@@ -130,6 +132,8 @@ async function PATCHHandler(request: NextRequest, context: { params: Promise<{ i
 
   const executionAttemptId = randomUUID();
   const executionStartedAt = new Date();
+  // Validate the confirmation destination before removing the authentication identity.
+  accountDeletionCompletionDelivery({ requestId: deletionRequest.id, tenantId: deletionRequest.tenantId, centerId: deletionRequest.centerId, email: target.email, completedAt: executionStartedAt });
   const claimed = await prisma.dataDeletionRequest.updateMany({
     where: { id: deletionRequest.id, status: deletionRequest.status, updatedAt: deletionRequest.updatedAt },
     data: {
@@ -181,6 +185,7 @@ async function PATCHHandler(request: NextRequest, context: { params: Promise<{ i
   const tombstone = createHash("sha256").update(`${target.id}:${deletionRequest.id}`).digest("hex").slice(0, 24);
   const deletedEmail = `deleted+${tombstone}@accounts.invalid`;
   try {
+    await deleteAccountProfilePhotos({ tenantId: target.tenantId, userId: target.id, customFields: target.customFields });
     await prisma.$transaction(async (tx) => {
       await tx.userAccessGrant.updateMany({ where: { userId: target.id, isActive: true }, data: { isActive: false } });
       await tx.deviceSession.updateMany({ where: { userId: target.id, revokedAt: null }, data: { revokedAt: completedAt, revokedById: actor.id } });
@@ -229,6 +234,7 @@ async function PATCHHandler(request: NextRequest, context: { params: Promise<{ i
           metadata: { targetUserId: target.id, fingerprint, authIdentityRemoved: true, historicalRecordsPreserved: true },
         },
       });
+      await tx.integrationDelivery.create({ data: accountDeletionCompletionDelivery({ requestId: deletionRequest.id, tenantId: deletionRequest.tenantId, centerId: deletionRequest.centerId, email: target.email, completedAt }) });
     });
   } catch {
     await prisma.$transaction([

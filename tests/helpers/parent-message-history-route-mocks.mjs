@@ -36,6 +36,7 @@ const message = {
   },
 };
 const prisma = {
+  user: { async findUnique() { return user; } },
   center: { async findMany({ where }) { assert.deepEqual(where, { organization: { tenantId: actor.tenantId } }); return [{ id: "fake-school" }]; } },
   guardian: { async findMany({ where }) { return matches({ userId: actor.id, family }, where) ? [{ id: "fake-guardian", familyId: family.id, family: { _count: { children: family.children.filter(child => child.enrollmentStatus === "active").length } } }] : []; } },
   family: { async findFirst({ where }) { return matches(family, where) ? { id: family.id } : null; } }, message,
@@ -48,6 +49,12 @@ mock.module("@/lib/request-response-logging", { namedExports: { withApiLogging(_
 const { GET } = await import("../../src/app/api/parent/history/messages/route.ts");
 const get = (query = "familyId=fake-family") => GET(new NextRequest(`https://fixture.invalid/api/parent/history/messages?${query}`));
 test("parent message history actual GET uses current-family scope and stable bounded pages", async t => {
+  await t.test("blocked messages and blocked cursor anchors never expose content or attachments", async () => {
+    reset(); user.customFields = { messageBlocks: { "fake-teacher": true } };
+    const response = await get(); assert.equal(response.status, 200);
+    const page = await response.json(); assert.deepEqual(page.items, []); assert.equal(page.nextCursor, null); assert.equal(signed.length, 0);
+    assert.equal((await get("familyId=fake-family&cursor=message-020")).status, 400);
+  });
   await t.test("41 equal-timestamp messages continue without gaps after a concurrent newer insert", async () => {
     reset(); const first = await get(); assert.equal(first.status, 200); assert.equal(first.headers.get("cache-control"), "private, no-store");
     const a = await first.json(); assert.equal(a.items.length, 20); assert.equal(a.nextCursor, "message-021");

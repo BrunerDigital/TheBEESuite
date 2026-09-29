@@ -25,6 +25,8 @@ import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
 import { loadDataReadinessWorkspace } from "@/lib/data-readiness-server";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
+import { readBlockedMessageSenderIds } from "@/lib/message-block-store";
+import { messagesExcludingBlockedSenders } from "@/lib/message-block-policy";
 import { buildRegistrationShareUrl } from "@/lib/registration-sharing";
 import { registrationReviewFromData } from "@/lib/registration-packet";
 import { homePathForRole, loginHrefForNextPath } from "@/lib/login-routing";
@@ -147,6 +149,7 @@ export default async function DashboardPage() {
     centerId: scopedCenterFilter,
     children: { some: currentEnrollmentWhere },
   };
+  const messageWhere = { ...messagesExcludingBlockedSenders(await readBlockedMessageSenderIds(prisma, user.id)), family: currentFamilyWhere };
   const today = new Date();
   const dashboardServiceDay = serviceDayWindowInTimeZone(today, user.timeZone);
   const startOfDay = dashboardServiceDay.start;
@@ -216,8 +219,8 @@ export default async function DashboardPage() {
     }),
     prisma.message.count({
       where: {
+        ...messageWhere,
         readAt: null,
-        family: currentFamilyWhere,
       },
     }),
     prisma.incidentReport.count({
@@ -292,9 +295,7 @@ export default async function DashboardPage() {
       },
     }),
     prisma.message.findMany({
-      where: {
-        family: currentFamilyWhere,
-      },
+      where: messageWhere,
       orderBy: { createdAt: "desc" },
       take: 5,
       select: {

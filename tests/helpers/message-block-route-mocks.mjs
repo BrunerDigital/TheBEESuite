@@ -3,9 +3,16 @@ import { mock, test } from "node:test";
 import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 
-let actor, fields, writes, audits, rateAllowed, senderTenant, guardians;
+let actor, fields, writes, audits, rateAllowed, senderTenant, guardians, notifications;
 function reset() {
   actor = { id: "parent-1", identityTenantId: "tenant-1", tenantId: "tenant-1", role: "PARENT_GUARDIAN", centerIds: [], assignedClassroomId: null };
+  notifications = [
+    { id: "blocked", userId: actor.id, dedupeKey: "message-sender:school-sender:message:parent-1", type: "message", title: "Received message", archivedAt: null },
+    { id: "legacy", userId: actor.id, dedupeKey: null, type: "message", title: "Incoming parent SMS", archivedAt: null },
+    { id: "other-recipient", userId: "another-user", dedupeKey: null, type: "message", title: "Incoming parent SMS", archivedAt: null },
+    { id: "other-sender", userId: actor.id, dedupeKey: "message-sender:other-sender:message:parent-1", type: "message", title: "Received message", archivedAt: null },
+    { id: "billing", userId: actor.id, dedupeKey: null, type: "billing", title: "Billing notice", archivedAt: null },
+  ];
   fields = { unrelated: { retained: true } }; writes = []; audits = []; rateAllowed = true; senderTenant = "tenant-1"; guardians = [{ userId: actor.id }];
 }
 const tx = {
@@ -18,7 +25,11 @@ const tx = {
     else delete fields.messageBlocks[senderId];
     writes.push(senderId); return 1;
   },
-  notification: { async updateMany({ where }) { assert.equal(where.userId, actor.id); return { count: 0 }; } },
+  notification: { async updateMany({ where, data }) {
+    assert.equal(where.userId, actor.id); let count = 0;
+    for (const row of notifications) if (row.userId === where.userId && row.archivedAt === where.archivedAt && where.OR.some(branch => Object.entries(branch).every(([key, filter]) => filter && typeof filter === "object" ? row[key]?.startsWith(filter.startsWith) : row[key] === filter))) { row.archivedAt = data.archivedAt; count++; }
+    return { count };
+  } },
   auditLog: { async create({ data }) { audits.push(data); return data; } },
 };
 const prisma = {
@@ -46,6 +57,7 @@ test("actual block and unblock routes scope preferences to the authenticated rec
   });
   await t.test("blocking preserves unrelated settings and audit evidence; only the blocker can undo their block", async () => {
     reset(); assert.equal((await block()).status, 200); assert.equal(fields.messageBlocks["school-sender"], true);
+    assert.deepEqual(notifications.filter(row => row.archivedAt).map(row => row.id), ["blocked", "legacy"]);
     assert.deepEqual(fields.unrelated, { retained: true }); assert.equal(audits[0].userId, actor.id); assert.equal(audits[0].action, "message.sender.blocked");
     const list = await GET(); assert.equal(list.headers.get("cache-control"), "private, no-store"); assert.deepEqual((await list.json()).senders, [{ id: "school-sender", name: "Synthetic School Sender" }]);
     assert.equal((await PATCH(request("PATCH", { senderId: "not-blocked", userId: "another-user" }))).status, 404);

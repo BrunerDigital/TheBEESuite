@@ -13,7 +13,7 @@ export function MessageReportButton({ messageId, inverse = false }: { messageId:
   const router = useRouter();
 
   async function block() {
-    if (!window.confirm("Block this sender? Their messages will be hidden from your inbox and message copies to you will stop. School records are preserved. You can unblock them in Blocked senders. Contact your school directly for urgent safety concerns.")) return;
+    if (!window.confirm("Block this sender? Their messages will be hidden from your inbox and message copies to you will stop. Older SMS notification previews may also be hidden. School records are preserved. You can unblock them in Blocked senders. Contact your school directly for urgent safety concerns.")) return;
     setBlocking(true);
     setBlockError("");
     try {

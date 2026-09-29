@@ -15,6 +15,7 @@ import {
   validateTwilioSignatureAgainstConfiguredTokens,
 } from "@/lib/twilio-messaging";
 import { resolveTwilioInboundGuardian } from "@/lib/twilio-inbound-scope";
+import { createMessageNotificationInTransaction } from "@/lib/message-block-store";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -227,19 +228,22 @@ async function POSTHandler(request: NextRequest) {
             roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
             client: tx,
           });
-          await Promise.all(
-            directors.map((director) =>
-              tx.notification.create({
-                data: {
-                  userId: director.id,
-                  title: "Incoming parent SMS",
-                  body: `${guardian.family.name}: ${body}`,
-                  type: "message",
-                  priority: "normal",
-                },
-              }),
-            ),
-          );
+          // Consistent lock ordering avoids concurrent inbound deliveries taking
+          // the same director rows in different orders.
+          for (const director of directors.sort((a, b) => a.id.localeCompare(b.id))) {
+            await createMessageNotificationInTransaction(tx, guardian.userId, {
+              data: {
+                userId: director.id,
+                title: "Incoming parent SMS",
+                body: `${guardian.family.name}: ${body}`,
+                type: "message",
+                priority: "normal",
+                dedupeKey: guardian.userId
+                  ? `message-sender:${guardian.userId}:${created.id}:${director.id}`
+                  : `sms-inbound:${created.id}:${director.id}`,
+              },
+            });
+          }
         }
       }
 

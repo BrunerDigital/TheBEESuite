@@ -28,15 +28,17 @@ export async function readBlockedMessageSenderIds(db: Pick<PrismaClient, "user">
 
 /** Share the recipient row lock with blocking so late notifications cannot reappear. */
 export async function createMessageNotification(db: PrismaClient, senderId: string, { data }: { data: Prisma.NotificationUncheckedCreateInput }) {
+  return db.$transaction(tx => createMessageNotificationInTransaction(tx, senderId, { data }));
+}
+
+export async function createMessageNotificationInTransaction(tx: Prisma.TransactionClient, senderId: string | null, { data }: { data: Prisma.NotificationUncheckedCreateInput }) {
   const recipientId = data.userId;
   if (!recipientId) return null;
-  return db.$transaction(async tx => {
-    const recipients = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "User" WHERE "id" = ${recipientId} FOR UPDATE`;
-    if (!recipients.length) return null;
-    const recipient = await tx.user.findUnique({ where: { id: recipientId }, select: { isActive: true, customFields: true } });
-    if (!recipient?.isActive || blockedMessageSenderIds(recipient.customFields).includes(senderId)) return null;
-    return tx.notification.create({ data });
-  });
+  const recipients = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "User" WHERE "id" = ${recipientId} FOR UPDATE`;
+  if (!recipients.length) return null;
+  const recipient = await tx.user.findUnique({ where: { id: recipientId }, select: { isActive: true, customFields: true } });
+  if (!recipient?.isActive || senderId && blockedMessageSenderIds(recipient.customFields).includes(senderId)) return null;
+  return tx.notification.create({ data });
 }
 
 export async function messageRecipientsAllowed<T extends { userId?: string | null; email?: string | null; phone?: string | null }>(
@@ -82,7 +84,12 @@ export async function setMessageSenderBlock(tx: Prisma.TransactionClient, input:
   const changedBlocks = input.blocked ? Prisma.sql`${blocks} || jsonb_build_object(${input.senderId}::text, true)` : Prisma.sql`${blocks} - ${input.senderId}::text`;
   const count = await tx.$executeRaw`UPDATE "User" SET "customFields" = jsonb_set(${fields}, '{messageBlocks}', ${changedBlocks}, true), "updatedAt" = NOW() WHERE "id" = ${input.userId} AND "tenantId" = ${input.identityTenantId}`;
   if (count !== 1) throw new Error("Your account could not be updated. Sign in again.");
-  if (input.blocked) await tx.notification.updateMany({ where: { userId: input.userId, dedupeKey: { startsWith: `message-sender:${input.senderId}:` }, archivedAt: null }, data: { archivedAt: new Date() } });
+  // Legacy inbound SMS previews lack sender metadata. Archive those recipient-only
+  // previews conservatively; messages and other recipients remain intact.
+  if (input.blocked) await tx.notification.updateMany({ where: { userId: input.userId, archivedAt: null, OR: [
+    { dedupeKey: { startsWith: `message-sender:${input.senderId}:` } },
+    { dedupeKey: null, type: "message", title: "Incoming parent SMS" },
+  ] }, data: { archivedAt: new Date() } });
   await tx.auditLog.create({ data: { tenantId: input.tenantId, centerId: input.centerId, userId: input.userId,
     action: input.blocked ? "message.sender.blocked" : "message.sender.unblocked", resource: "User", resourceId: input.senderId,
     metadata: { privateRecipientPreference: true },

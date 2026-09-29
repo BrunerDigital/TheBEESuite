@@ -34,8 +34,9 @@ test("blocking and notification insertion share a recipient lock in either commi
         user: { async findUnique() { return { isActive: true, customFields: fields }; } },
         notification: {
           async create({ data }: { data: { dedupeKey: string } }) { const row = { ...data, archivedAt: null }; notifications.push(row); return row; },
-          async updateMany({ where }: { where: { dedupeKey: { startsWith: string } } }) {
-            for (const notification of notifications) if (notification.dedupeKey.startsWith(where.dedupeKey.startsWith)) notification.archivedAt = new Date();
+          async updateMany({ where }: { where: { userId: string; OR: [{ dedupeKey: { startsWith: string } }, unknown] } }) {
+            assert.equal(where.userId, "recipient"); assert.deepEqual(where.OR[1], { dedupeKey: null, type: "message", title: "Incoming parent SMS" });
+            for (const notification of notifications) if (notification.dedupeKey.startsWith(where.OR[0].dedupeKey.startsWith)) notification.archivedAt = new Date();
           },
         },
         auditLog: { async create() {} },

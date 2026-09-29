@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { assertPrivacyManifest, parsePrivacyManifest } from "./ios-privacy-manifest.mjs";
+import { assertSceneConfiguration } from "./ios-scene-configuration.mjs";
 
 const roles = [
   {
@@ -83,6 +84,13 @@ function normalizeLineEndings(value) {
 function checkNativeRole(role, shared) {
   const project = read(`${role.iosPath}/App/App.xcodeproj/project.pbxproj`);
   const info = read(`${role.iosPath}/App/App/Info.plist`);
+  assertSceneConfiguration(parsePrivacyManifest(info));
+  assert.match(project, /SceneDelegate\.swift in Sources/);
+  const sceneDelegate = read(`${role.iosPath}/App/App/SceneDelegate.swift`);
+  assert.match(sceneDelegate, /UIWindowSceneDelegate/);
+  assert.match(sceneDelegate, /SceneDelegateProxy\.shared\.scene\(scene, willConnectTo:/);
+  assert.match(sceneDelegate, /SceneDelegateProxy\.shared\.scene\(scene, openURLContexts:/);
+  assert.match(sceneDelegate, /SceneDelegateProxy\.shared\.scene\(scene, continue:/);
   const privacy = read(`${role.iosPath}/App/App/PrivacyInfo.xcprivacy`);
   const iconContents = JSON.parse(read(`${role.iosPath}/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json`));
   const splashContents = JSON.parse(read(`${role.iosPath}/App/App/Assets.xcassets/Splash.imageset/Contents.json`));

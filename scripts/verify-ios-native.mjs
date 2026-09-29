@@ -6,6 +6,7 @@ import path from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { assertPackagedPrivacyManifest } from "./ios-privacy-manifest.mjs";
+import { assertSceneConfiguration } from "./ios-scene-configuration.mjs";
 
 // A fresh iOS 26 simulator performs OS data migration before SpringBoard is ready.
 export const SIMULATOR_BOOT_TIMEOUT_MS = 12 * 60 * 1000;
@@ -170,6 +171,7 @@ export async function verifyNative(role) {
       assert.equal(info.MinimumOSVersion, "16.0");
       assert.equal(info.DTPlatformName, sdk);
       assert.equal(info.ITSAppUsesNonExemptEncryption, false);
+      assertSceneConfiguration(info, { compiled: true });
       assertPackagedConfiguration(JSON.parse(readFileSync(path.join(app, "capacitor.config.json"), "utf8")), target);
       assert.ok(existsSync(path.join(app, "PrivacyInfo.xcprivacy")), "Privacy manifest must be in compiled resources");
       const sourcePrivacyPath = `${role === "parent" ? "ios" : "ios-teacher"}/App/App/PrivacyInfo.xcprivacy`;
@@ -186,7 +188,7 @@ export async function verifyNative(role) {
       assert.equal(readFileSync(path.join(app, "public", target.launchPath.slice(1), "index.html"), "utf8").replaceAll("\r\n", "\n"),
         readFileSync(`native/${role}-shell/index.html`, "utf8").replaceAll("\r\n", "\n"),
         "Capacitor's local appStartFileURL must exist and contain the current role shell");
-      check(`${sdk} Release compiled; bundle, privacy manifest, HTTPS and offline resources verified`);
+      check(`${sdk} Release compiled; scene lifecycle, bundle, privacy manifest, HTTPS and offline resources verified`);
     }
 
     run("xcrun", ["simctl", "boot", createdDevice]);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { readFile } from "node:fs/promises";
 import type { PrismaClient } from "@prisma/client";
 import { blockedMessageSenderIds, messagesExcludingBlockedSenders, recipientsAllowingMessageSender, messageNotificationSenderId } from "../src/lib/message-block-policy";
 import { permittedMessageRetryRecipients, visibleReceivedMessage } from "../src/lib/message-block-store";
@@ -71,4 +72,11 @@ test("actual blocking endpoints reject forged scope and keep reversible changes 
   const env: NodeJS.ProcessEnv = { ...process.env, NODE_NO_WARNINGS: "1" }; delete env.NODE_TEST_CONTEXT;
   const result = spawnSync(process.execPath, ["--experimental-test-module-mocks", "--import", "tsx", "--test", fileURLToPath(new URL("./helpers/message-block-route-mocks.mjs", import.meta.url))], { encoding: "utf8", env });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});
+
+test("dashboard previews and unread counts both use the viewer's blocked-sender scope", async () => {
+  const dashboard = await readFile(new URL("../src/app/dashboard/page.tsx", import.meta.url), "utf8");
+  assert.match(dashboard, /const messageWhere = \{ \.\.\.messagesExcludingBlockedSenders\(await readBlockedMessageSenderIds\(prisma, user\.id\)\), family: currentFamilyWhere \}/);
+  assert.match(dashboard, /prisma\.message\.count\(\{\s*where: \{\s*\.\.\.messageWhere,\s*readAt: null/);
+  assert.match(dashboard, /prisma\.message\.findMany\(\{\s*where: messageWhere/);
 });

@@ -43,7 +43,7 @@ import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 
 import { withApiLogging } from "@/lib/request-response-logging";
-import { messageRecipientsAllowed, readBlockedMessageSenderIds } from "@/lib/message-block-store";
+import { createDirectMessage, MessageRecipientBlockChanged, messageRecipientsAllowed, readBlockedMessageSenderIds } from "@/lib/message-block-store";
 import { messagesExcludingBlockedSenders } from "@/lib/message-block-policy";
 export const runtime = "nodejs";
 
@@ -486,11 +486,6 @@ async function POSTHandler(request: NextRequest) {
     if (!recipient) {
       return NextResponse.json({ ok: false, error: "Staff recipient is not available in your school scope." }, { status: 400 });
     }
-    if ((await readBlockedMessageSenderIds(prisma, user.id)).includes(recipient.id)
-      || !(await messageRecipientsAllowed(prisma, user.tenantId, user.id, [{ userId: recipient.id }])).length) {
-      return NextResponse.json({ ok: false, error: "This direct conversation is unavailable. Review Blocked senders or contact your school office. Your draft has not been sent." }, { status: 409 });
-    }
-
     const recipientIsTeacher = recipient.role === UserRole.TEACHER;
     const recipientIsDirector = recipient.role === UserRole.CENTER_DIRECTOR || recipient.role === UserRole.ASSISTANT_DIRECTOR;
     const senderIsTeacher = user.role === UserRole.TEACHER;
@@ -498,6 +493,10 @@ async function POSTHandler(request: NextRequest) {
     const senderCanMessageDirector = senderIsTeacher && recipientIsDirector;
     if (!senderCanMessageTeacher && !senderCanMessageDirector) {
       return NextResponse.json({ ok: false, error: "Direct staff messages are limited to director and teacher conversations." }, { status: 403 });
+    }
+    if ((await readBlockedMessageSenderIds(prisma, user.id)).includes(recipient.id)
+      || !(await messageRecipientsAllowed(prisma, user.tenantId, user.id, [{ userId: recipient.id }])).length) {
+      return NextResponse.json({ ok: false, error: "This direct conversation is unavailable. Review Blocked senders or contact your school office. Your draft has not been sent." }, { status: 409 });
     }
 
     const threadKey = staffThreadKey(user.id, recipient.id);
@@ -526,7 +525,10 @@ async function POSTHandler(request: NextRequest) {
       );
     }
 
-    const created = await prisma.message.create({
+    let created: Awaited<ReturnType<typeof createDirectMessage>>;
+    try {
+    created = await createDirectMessage(prisma, {
+      userId: user.id, identityTenantId: user.identityTenantId, senderRole: user.role, recipientTenantId: user.tenantId, recipientId: recipient.id, recipientRole: recipient.role,
       data: {
         familyId: null,
         senderId: user.id,
@@ -554,6 +556,15 @@ async function POSTHandler(request: NextRequest) {
         }, attachments),
       },
     });
+    } catch (error) {
+      if (!(error instanceof MessageRecipientBlockChanged) && !(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034")) throw error;
+      for (const attachment of attachments) {
+        if (attachment.storageKey.startsWith("inline-demo-upload")) continue;
+        try { await deleteMessageAttachmentObject(attachment.storageKey); }
+        catch { console.error("staff_message_uncommitted_attachment_cleanup_failed"); }
+      }
+      return NextResponse.json({ ok: false, error: "This conversation changed while the message was being prepared. It was not sent. Refresh Blocked senders or contact your school office." }, { status: 409 });
+    }
 
     const notification = sendPushCopy
       ? await prisma.notification.create({
@@ -1116,9 +1127,11 @@ async function POSTHandler(request: NextRequest) {
     try {
       return senderIsParent && familyId
         ? await createParentFamilyMessage(prisma, { userId: user.id, tenantId: user.tenantId, familyId, expectedCenterId: familyMessageCenterId, data: messageData })
-        : await prisma.message.create({ data: messageData });
+        : assignedToId
+          ? await createDirectMessage(prisma, { userId: user.id, identityTenantId: user.identityTenantId, senderRole: user.role, recipientTenantId: user.tenantId, recipientId: assignedToId, data: messageData })
+          : await prisma.message.create({ data: messageData });
     } catch (error) {
-      const knownRollback = error instanceof ParentMessageScopeChanged || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034");
+      const knownRollback = error instanceof ParentMessageScopeChanged || error instanceof MessageRecipientBlockChanged || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034");
       if (!knownRollback) throw error; // Unknown commit outcome: retain recoverable attachment objects.
       for (const attachment of attachments) {
         if (attachment.storageKey.startsWith("inline-demo-upload")) continue;
@@ -1128,7 +1141,7 @@ async function POSTHandler(request: NextRequest) {
       return null;
     }
   })();
-  if (!created) return NextResponse.json({ ok: false, error: "Your family access or reply changed while this message was being prepared. It was not sent. Refresh the conversation and try again." }, { status: 409 });
+  if (!created) return NextResponse.json({ ok: false, error: "Your conversation changed while this message was being prepared. It was not sent. Refresh the conversation or review Blocked senders." }, { status: 409 });
 
   const shouldNotifyLeadership = shouldNotifyLeadershipOfFamilyMessage({
     senderIsParent,

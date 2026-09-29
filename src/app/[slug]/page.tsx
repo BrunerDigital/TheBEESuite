@@ -5086,7 +5086,7 @@ async function renderLivePage(
           _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
         },
       }),
-      prisma.message.count({ where: { readAt: null, family: { centerId: scopedCenterIds } } }),
+      prisma.message.count({ where: { ...messagesExcludingBlockedSenders(await readBlockedMessageSenderIds(prisma, user.id)), readAt: null, family: { centerId: scopedCenterIds } } }),
       prisma.invoice.count({ where: aiOpenInvoiceWhere }),
       prisma.invoice.count({ where: aiOverdueInvoiceWhere }),
       prisma.incidentReport.count({

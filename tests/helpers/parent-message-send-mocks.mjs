@@ -3,7 +3,7 @@ import { mock, test } from "node:test";
 import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 
-const actor = { id: "fake-parent", tenantId: "fake-tenant", role: "PARENT_GUARDIAN", isActive: true, email: "fake@example.test", name: "Fake Parent", primaryCenterId: "fake-school", branding: { kind: "miss-honeys-learning-center", name: "Miss Honey's Learning Center" } };
+const actor = { id: "fake-parent", tenantId: "fake-tenant", identityTenantId: "fake-tenant", role: "PARENT_GUARDIAN", isActive: true, email: "fake@example.test", name: "Fake Parent", primaryCenterId: "fake-school", branding: { kind: "miss-honeys-learning-center", name: "Miss Honey's Learning Center" } };
 let user, family, broadcastFamilies, target, uploads, removed, created, audits, deliveries, pushes, preferences, beforeTransaction, afterCommit, teacher, queries, leaders;
 function reset() {
   user = { ...actor }; uploads = []; removed = []; created = []; audits = []; deliveries = []; pushes = []; preferences = []; queries = []; leaders = []; beforeTransaction = () => {}; afterCommit = () => {};
@@ -89,6 +89,34 @@ test("actual parent message sends preserve scope and canonical replies before si
     reset(); teacher.customFields = { messageBlocks: { "fake-parent": true } }; preferences = [{ userId: teacher.id, role: "TEACHER", pushEnabled: true }];
     const response = await post({ sendEmailCopy: true, sendPushCopy: true });
     assert.equal(response.status, 201); assert.equal(created.length, 1); assert.equal(pushes.length, 0); assert.deepEqual(deliveries[0].recipients, []);
+  });
+  await t.test("blocks changed during attachment upload prevent assigned parent and staff commits", async () => {
+    for (const staff of [false, true]) for (const recipientBlocks of [false, true]) {
+      reset(); if (staff) user.role = "CENTER_DIRECTOR";
+      beforeTransaction = () => { if (recipientBlocks) teacher.customFields = { messageBlocks: { [user.id]: true } }; else user.customFields = { messageBlocks: { [teacher.id]: true } }; };
+      const response = await post({ assignedToId: teacher.id, replyToMessageId: null, subject: "New message", ...(staff ? { targetMode: "staff", familyId: null } : {}) }, true);
+      assert.equal(response.status, 409); assert.equal(created.length, 0); assert.equal(deliveries.length, 0); assert.equal(pushes.length, 0); assert.deepEqual(removed, ["message-attachments/fake-1"]);
+    }
+  });
+  await t.test("unauthorized staff role pairs never reveal a recipient block", async () => {
+    for (const blocked of [false, true]) {
+      reset(); user.role = "TEACHER"; teacher.customFields = { messageBlocks: { [user.id]: blocked } };
+      assert.equal((await post({ targetMode: "staff", familyId: null, assignedToId: teacher.id, replyToMessageId: null }, true)).status, 403);
+      assert.deepEqual([uploads.length, created.length], [0, 0]);
+    }
+  });
+  await t.test("an authorized unblocked staff message commits after its current preference check", async () => {
+    reset(); user.role = "CENTER_DIRECTOR";
+    const response = await post({ targetMode: "staff", familyId: null, assignedToId: teacher.id, replyToMessageId: null }, true);
+    assert.equal(response.status, 201); assert.equal(created.length, 1); assert.equal(created[0].assignedToId, teacher.id); assert.deepEqual(removed, []);
+  });
+  await t.test("staff roles changed during upload cannot use a stale authorized pair", async () => {
+    for (const recipientChanged of [false, true]) {
+      reset(); user.role = "CENTER_DIRECTOR";
+      beforeTransaction = () => { if (recipientChanged) teacher.role = "AUTHORIZED_PICKUP"; else user.role = "AUTHORIZED_PICKUP"; };
+      assert.equal((await post({ targetMode: "staff", familyId: null, assignedToId: teacher.id, replyToMessageId: null }, true)).status, 409);
+      assert.equal(created.length, 0); assert.deepEqual(removed, ["message-attachments/fake-1"]);
+    }
   });
   await t.test("canonical and omitted subjects use database identity without leaking creation metadata", async () => {
     for (const subject of ["Re: Canonical classroom subject", ""]) {

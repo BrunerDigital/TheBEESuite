@@ -26,8 +26,8 @@ export async function createParentFamilyMessage(db: PrismaClient, input: { userI
     }
     if (input.data.assignedToId) {
       if (blockedMessageSenderIds(actor.customFields).includes(input.data.assignedToId)) throw new ParentMessageScopeChanged();
-      const teacher = await tx.user.findFirst({ where: { id: input.data.assignedToId, ...currentParentMessageTeacherWhere(input.tenantId, input.familyId, currentCenterId, family.children) }, select: { id: true } });
-      if (!teacher) throw new ParentMessageScopeChanged();
+      const teacher = await tx.user.findFirst({ where: { id: input.data.assignedToId, ...currentParentMessageTeacherWhere(input.tenantId, input.familyId, currentCenterId, family.children) }, select: { id: true, customFields: true } });
+      if (!teacher || blockedMessageSenderIds(teacher.customFields).includes(input.userId)) throw new ParentMessageScopeChanged();
     }
     return tx.message.create({ data: input.data });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

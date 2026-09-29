@@ -1,9 +1,26 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient, type UserRole } from "@prisma/client";
 import { currentlyEnrolledChildWhere } from "./enrollment-status";
 import { canReportVisibleMessage } from "./message-report-policy";
 import { blockedMessageSenderIds, recipientsAllowingMessageSender } from "./message-block-policy";
 
 type MessageDb = Pick<PrismaClient, "user" | "message" | "center">;
+export class MessageRecipientBlockChanged extends Error {}
+
+/** Attachment uploads precede this transaction; read both preferences again. */
+export async function createDirectMessage(db: PrismaClient, input: { userId: string; identityTenantId: string; senderRole: UserRole; recipientTenantId: string; recipientId: string; recipientRole?: UserRole; data: Prisma.MessageUncheckedCreateInput }) {
+  return db.$transaction(async tx => {
+    const [sender, recipient] = await Promise.all([
+      tx.user.findFirst({ where: { id: input.userId, tenantId: input.identityTenantId, isActive: true }, select: { role: true, customFields: true } }),
+      tx.user.findFirst({ where: { id: input.recipientId, tenantId: input.recipientTenantId, isActive: true }, select: { role: true, customFields: true } }),
+    ]);
+    if (!sender || !recipient || sender.role !== input.senderRole || input.recipientRole && recipient.role !== input.recipientRole
+      || input.data.senderId !== input.userId || input.data.assignedToId !== input.recipientId
+      || blockedMessageSenderIds(sender.customFields).includes(input.recipientId)
+      || blockedMessageSenderIds(recipient.customFields).includes(input.userId)) throw new MessageRecipientBlockChanged();
+    return tx.message.create({ data: input.data });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function readBlockedMessageSenderIds(db: Pick<PrismaClient, "user">, userId: string) {
   const user = await db.user.findUnique({ where: { id: userId }, select: { customFields: true } });
   return blockedMessageSenderIds(user?.customFields);

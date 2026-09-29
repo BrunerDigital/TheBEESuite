@@ -32,7 +32,7 @@ test("a concurrent recipient block cannot commit between the message preference 
     } as unknown as Prisma.TransactionClient;
     try { return await callback(tx); } finally { unlock?.(); }
   } } as unknown as PrismaClient;
-  const send = createDirectMessage(db, { userId: "sender", identityTenantId: "tenant", senderRole: "CENTER_DIRECTOR", recipientTenantId: "tenant", recipientId: "recipient", recipientRole: "TEACHER", data: { senderId: "sender", assignedToId: "recipient", subject: "Synthetic subject", body: "Synthetic message" } });
+  const send = createDirectMessage(db, { userId: "sender", identityTenantId: "tenant", senderRole: "CENTER_DIRECTOR", recipientTenantId: "tenant", recipientId: "recipient", recipientRole: "TEACHER", data: { senderId: "sender", assignedToId: "recipient", subject: "Synthetic subject", body: "Synthetic message", channel: "portal" } });
   await readStarted;
   const block = db.$transaction(tx => setMessageSenderBlock(tx, { userId: "recipient", identityTenantId: "tenant", tenantId: "tenant", senderId: "sender", centerId: null, blocked: true }));
   await Promise.resolve(); await Promise.resolve();

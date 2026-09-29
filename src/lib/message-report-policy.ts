@@ -1,3 +1,19 @@
+import { appReviewReservedIdentityKind } from "./app-review-targeting";
+
+export async function resolveMessageReportLeaders<T>({
+  reporterEmail,
+  centerId,
+  loadLeaders,
+}: {
+  reporterEmail: string;
+  centerId: string | null;
+  loadLeaders: (centerId: string) => Promise<T[]>;
+}): Promise<T[]> {
+  // Demo reports retain their audit trail without reaching operational inboxes.
+  if (!centerId || appReviewReservedIdentityKind(reporterEmail)) return [];
+  return loadLeaders(centerId);
+}
+
 type MessageReportViewer = {
   id: string;
   tenantId: string;

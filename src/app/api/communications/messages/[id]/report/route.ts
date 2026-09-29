@@ -4,7 +4,7 @@ import { Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, getCurrentUser } from "@/lib/auth";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
-import { canReportVisibleMessage } from "@/lib/message-report-policy";
+import { canReportVisibleMessage, resolveMessageReportLeaders } from "@/lib/message-report-policy";
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
@@ -87,9 +87,15 @@ async function POSTHandler(request: NextRequest, context: { params: Promise<{ id
   });
   if (!visible) return NextResponse.json({ ok: false, error: "Message is not available in your access scope." }, { status: 404 });
 
-  const leaders = centerId
-    ? await getCenterLeadershipUsers({ centerId, excludeUserId: user.id, roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR] })
-    : [];
+  const leaders = await resolveMessageReportLeaders({
+    reporterEmail: user.email,
+    centerId,
+    loadLeaders: (reportCenterId) => getCenterLeadershipUsers({
+      centerId: reportCenterId,
+      excludeUserId: user.id,
+      roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
+    }),
+  });
   const reportId = deterministicReportId(user.tenantId, user.id, message.id);
   const reportedAt = new Date();
   try {

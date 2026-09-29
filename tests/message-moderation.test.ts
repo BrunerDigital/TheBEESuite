@@ -2,7 +2,49 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { screenMessageContent } from "../src/lib/message-content-safety";
-import { canReportVisibleMessage } from "../src/lib/message-report-policy";
+import { canReportVisibleMessage, resolveMessageReportLeaders } from "../src/lib/message-report-policy";
+
+test("reserved review reports never resolve operational notification recipients", async () => {
+  for (const reporterEmail of [
+    "app-review-parent@thebeesuite.io",
+    "app-review-teacher@thebeesuite.io",
+    " APP-REVIEW-TEACHER@THEBEESUITE.IO ",
+  ]) {
+    const recipients = await resolveMessageReportLeaders({
+      reporterEmail,
+      centerId: "demo-center",
+      loadLeaders: async () => {
+        assert.fail("Review reports must not look up school leadership inboxes.");
+      },
+    });
+    assert.deepEqual(recipients, []);
+  }
+});
+
+test("ordinary school reports retain all resolved leadership recipients", async () => {
+  const leaders = [{ id: "director" }, { id: "assistant-director" }];
+  const queriedCenters: string[] = [];
+  const recipients = await resolveMessageReportLeaders({
+    reporterEmail: "parent@example.com",
+    centerId: "school-center",
+    loadLeaders: async (centerId) => {
+      queriedCenters.push(centerId);
+      return leaders;
+    },
+  });
+  assert.deepEqual(queriedCenters, ["school-center"]);
+  assert.deepEqual(recipients, leaders);
+});
+
+test("a report without a school does not resolve leadership recipients", async () => {
+  assert.deepEqual(await resolveMessageReportLeaders({
+    reporterEmail: "parent@example.com",
+    centerId: null,
+    loadLeaders: async () => {
+      assert.fail("A report without a school must not query operational recipients.");
+    },
+  }), []);
+});
 
 test("message safety screen blocks executable links, hidden controls, solicitation, credential requests, and direct threats", () => {
   assert.equal(screenMessageContent("Hello", "Ordinary childcare update.").allowed, true);

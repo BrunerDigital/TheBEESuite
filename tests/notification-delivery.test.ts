@@ -124,6 +124,7 @@ test("notification external delivery sends through enabled channels and records 
     disableEmailClickTracking: true,
     statusCallbackUrl: "https://example.com/api/twilio/status",
     providers: {
+      permittedMessageRecipients: async (_tenantId, _messageId, _ids, copies) => copies,
       sendEmail: async (input) => {
         emailInputs.push(input);
         return { ok: true, configured: true, provider: "sendgrid", id: "email-1" };
@@ -162,4 +163,39 @@ test("notification SMS copy is compacted for provider-safe delivery", () => {
   const body = formatNotificationSmsBody("Update", " ".repeat(4) + "x".repeat(800), 80);
   assert.equal(body.length, 80);
   assert.match(body, /\.\.\.$/);
+});
+
+test("external message copies recheck late blocks before email and each SMS provider call", async () => {
+  for (const blockAt of ["before-email", "during-email", "during-first-sms"]) {
+    let blocked = blockAt === "before-email";
+    const emails: string[][] = [], sms: string[] = [], records: string[] = [];
+    const summary = await deliverNotificationExternalChannels({
+      tenantId: "tenant-1", messageId: "message-1", type: "messages", title: "Synthetic message", body: "Synthetic content",
+      recipients: [
+        { userId: "guardian-1", role: "PARENT_GUARDIAN", email: "one@example.test", phone: "+15555550101" },
+        { userId: "guardian-2", role: "PARENT_GUARDIAN", phone: "+15555550102" },
+      ],
+      preferences: [{ userId: null, role: "PARENT_GUARDIAN", type: "messages", emailEnabled: true, smsEnabled: true, pushEnabled: true }],
+      providers: {
+        permittedMessageRecipients: async (tenantId, messageId, ids, copies) => {
+          assert.equal(tenantId, "tenant-1"); assert.equal(messageId, "message-1"); assert.deepEqual(ids, ["guardian-1", "guardian-2"]);
+          return blocked ? [] : copies;
+        },
+        sendEmail: async input => {
+          emails.push(input.to as string[]); if (blockAt === "during-email") blocked = true;
+          return { ok: true, configured: true, provider: "sendgrid" };
+        },
+        sendSms: async input => {
+          sms.push(input.to); if (blockAt === "during-first-sms") blocked = true;
+          return { ok: true, configured: true, provider: "twilio" };
+        },
+        recordEmailDeliveryAttempt: async () => { records.push("email"); return null as never; },
+        recordCommunicationSmsDeliveryAttempt: async () => { records.push("sms"); return null as never; },
+      },
+    });
+    assert.equal(emails.length, blockAt === "before-email" ? 0 : 1);
+    assert.deepEqual(sms, blockAt === "during-first-sms" ? ["+15555550101"] : []);
+    assert.equal(summary.email.attempted, emails.length); assert.equal(summary.sms.attempted, sms.length);
+    assert.deepEqual(summary.sms.recipients, sms); assert.equal(records.length, emails.length + sms.length);
+  }
 });

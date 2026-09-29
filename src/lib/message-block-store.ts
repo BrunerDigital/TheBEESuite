@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient, type UserRole } from "@prisma/client";
 import { currentlyEnrolledChildWhere } from "./enrollment-status";
 import { canReportVisibleMessage } from "./message-report-policy";
 import { blockedMessageSenderIds, recipientsAllowingMessageSender } from "./message-block-policy";
+import { parentMessageCenterId } from "./parent-message-recipients";
 
 type MessageDb = Pick<PrismaClient, "user" | "message" | "center">;
 export class MessageRecipientBlockChanged extends Error {}
@@ -76,10 +77,10 @@ export async function messageRecipientsAllowed<T extends { userId?: string | nul
 export async function visibleReceivedMessage(db: MessageDb, viewer: Parameters<typeof canReportVisibleMessage>[0], messageId: string) {
   const message = await db.message.findUnique({ where: { id: messageId }, include: {
     sender: { select: { tenantId: true } }, assignedTo: { select: { tenantId: true } },
-    family: { include: { guardians: { select: { userId: true } }, children: { where: currentlyEnrolledChildWhere(), select: { classroomId: true } } } },
+    family: { include: { guardians: { select: { userId: true } }, children: { where: currentlyEnrolledChildWhere(), select: { classroomId: true, classroom: { select: { centerId: true } } } } } },
   } });
   if (!message) return null;
-  const centerId = message.family?.centerId ?? (message.threadKey?.startsWith("internal:") ? message.threadKey.slice(9) : null);
+  const centerId = (message.family ? parentMessageCenterId(message.family) : null) ?? (message.threadKey?.startsWith("internal:") ? message.threadKey.slice(9) : null);
   const center = centerId ? await db.center.findUnique({ where: { id: centerId }, select: { organization: { select: { tenantId: true } } } }) : null;
   const visible = canReportVisibleMessage(viewer, {
     senderId: message.senderId, assignedToId: message.assignedToId, threadKey: message.threadKey,

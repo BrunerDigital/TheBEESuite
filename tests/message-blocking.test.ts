@@ -164,6 +164,26 @@ test("a pending delivery rechecks the current block and fails closed for a delet
   assert.deepEqual(await permittedMessageRetryRecipients(db, "tenant-1", "message", [], recipients), []);
 });
 
+test("centerless family blocking resolves a single current school and rejects mixed or foreign classrooms", async () => {
+  let children = [{ classroomId: "room", classroom: { centerId: "center" } }];
+  let tenantId = "tenant";
+  const viewer = { id: "teacher", tenantId: "tenant", role: "TEACHER", centerIds: ["center"], assignedClassroomId: "room", canAccessEveryCenter: false };
+  const db = {
+    message: { findUnique: async ({ include }: { include: { family: { include: { children: { select: unknown } } } } }) => {
+      assert.deepEqual(include.family.include.children.select, { classroomId: true, classroom: { select: { centerId: true } } });
+      return { senderId: "parent", assignedToId: null, familyId: "family", threadKey: "family:family", sender: { tenantId }, family: { centerId: null, guardians: [{ userId: "parent" }], children } };
+    } },
+    center: { findUnique: async () => ({ organization: { tenantId } }) },
+  } as unknown as PrismaClient;
+  assert.deepEqual(await visibleReceivedMessage(db, viewer, "message"), { senderId: "parent", centerId: "center" });
+  assert.deepEqual(await visibleReceivedMessage(db, { ...viewer, role: "CENTER_DIRECTOR", assignedClassroomId: null }, "message"), { senderId: "parent", centerId: "center" });
+  assert.equal(await visibleReceivedMessage(db, { ...viewer, assignedClassroomId: "other-room" }, "message"), null);
+  tenantId = "foreign-tenant"; assert.equal(await visibleReceivedMessage(db, viewer, "message"), null); tenantId = "tenant";
+  children = [...children, { classroomId: "other-room", classroom: { centerId: "other-center" } }];
+  assert.equal(await visibleReceivedMessage(db, viewer, "message"), null);
+  children = []; assert.equal(await visibleReceivedMessage(db, viewer, "message"), null);
+});
+
 test("authorized owner copies respect identity-tenant blocks while foreign ordinary accounts remain outside lookup scope", async () => {
   const recipients = [{ userId: "owner", email: "owner@example.test" }, { userId: "foreign", email: "foreign@example.test" }, { userId: "parent", email: "parent@example.test" }];
   const rows = [

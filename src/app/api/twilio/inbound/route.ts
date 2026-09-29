@@ -8,7 +8,7 @@ import {
   parseTwilioWebhookParams,
   isTwilioWebhookReceiptUniqueConflict,
   phoneMatchKey,
-  twilioSmsConsentAction,
+  twilioSmsCommand,
   type TwilioSmsConsentAction,
   twilioWebhookUrl,
   twimlResponse,
@@ -107,6 +107,11 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid Twilio signature." }, { status: 403 });
   }
 
+  const consentAction = twilioSmsCommand(params.Body, params.OptOutType);
+  // Twilio handles HELP replies. Do not turn a provider command into a parent
+  // message or notify school staff, and do not send a duplicate response.
+  if (consentAction === "help") return twimlResponse();
+
   const messageSid = clean(params.MessageSid);
   if (!messageSid) return twimlResponse();
   const existing = await prisma.integrationDelivery.findUnique({
@@ -119,7 +124,7 @@ async function POSTHandler(request: NextRequest) {
   const to = clean(params.To);
   const body = clean(params.Body) || (Number(params.NumMedia || 0) > 0 ? "[SMS media message]" : "");
   const fromKey = phoneMatchKey(from);
-  if (!fromKey || !body) return twimlResponse();
+  if (!fromKey || (!body && !consentAction)) return twimlResponse();
 
   const signatureTenantCenterIds = signatureMatch.tenantId
     ? (await prisma.center.findMany({
@@ -175,7 +180,6 @@ async function POSTHandler(request: NextRequest) {
   const guardian = resolvedGuardian.candidate;
   const tenantId = resolvedGuardian.tenantId;
 
-  const consentAction = twilioSmsConsentAction(body);
   let createdMessageId: string | null = null;
   try {
     await prisma.$transaction(async (tx) => {

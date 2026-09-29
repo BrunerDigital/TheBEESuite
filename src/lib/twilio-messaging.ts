@@ -4,8 +4,9 @@ import { getTenantIntegrationCredentialEntries } from "@/lib/integration-credent
 
 export type TwilioDeliveryStatus = "delivered" | "failed" | "pending";
 export type TwilioSmsConsentAction = "opt_in" | "opt_out";
+export type TwilioSmsCommand = TwilioSmsConsentAction | "help";
 
-export const TWILIO_SMS_OPT_OUT_KEYWORDS = ["stop", "stopall", "unsubscribe", "cancel", "end", "quit"] as const;
+export const TWILIO_SMS_OPT_OUT_KEYWORDS = ["stop", "stopall", "unsubscribe", "cancel", "end", "quit", "revoke", "optout"] as const;
 export const TWILIO_SMS_OPT_IN_KEYWORDS = ["start", "yes", "unstop"] as const;
 
 const twilioSmsOptOutKeywords = new Set<string>(TWILIO_SMS_OPT_OUT_KEYWORDS);
@@ -167,11 +168,24 @@ export function isTwilioWebhookReceiptUniqueConflict(error: unknown) {
   return fields.some((field) => field.includes("providerMessageId"));
 }
 
-export function twilioSmsConsentAction(value: unknown): TwilioSmsConsentAction | null {
+// Only use optOutType from a signature-validated webhook. Twilio has already
+// interpreted localized/custom keywords and sent the confirmation response.
+export function twilioSmsCommand(value: unknown, optOutType?: unknown): TwilioSmsCommand | null {
+  const providerCommand = clean(optOutType).toUpperCase();
+  if (providerCommand === "STOP") return "opt_out";
+  if (providerCommand === "START") return "opt_in";
+  if (providerCommand === "HELP") return "help";
+
   const command = normalizedSmsCommand(value);
   if (twilioSmsOptOutKeywords.has(command)) return "opt_out";
   if (twilioSmsOptInKeywords.has(command)) return "opt_in";
+  if (command === "help" || command === "info") return "help";
   return null;
+}
+
+export function twilioSmsConsentAction(value: unknown, optOutType?: unknown): TwilioSmsConsentAction | null {
+  const command = twilioSmsCommand(value, optOutType);
+  return command === "help" ? null : command;
 }
 
 export function formDataToRecord(form: FormData) {

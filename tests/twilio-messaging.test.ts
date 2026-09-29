@@ -12,6 +12,7 @@ import {
   twilioSignatureTokenCandidates,
   twilioStateTransition,
   twilioSmsConsentAction,
+  twilioSmsCommand,
   uniqueSmsRecipients,
   validateTwilioSignature,
 } from "@/lib/twilio-messaging";
@@ -129,11 +130,41 @@ test("Twilio SMS consent keywords require exact opt-in or opt-out commands", () 
   assert.equal(twilioSmsConsentAction(" stop. "), "opt_out");
   assert.equal(twilioSmsConsentAction("stopall"), "opt_out");
   assert.equal(twilioSmsConsentAction("unsubscribe"), "opt_out");
+  assert.equal(twilioSmsConsentAction("REVOKE"), "opt_out");
+  assert.equal(twilioSmsConsentAction(" optout! "), "opt_out");
   assert.equal(twilioSmsConsentAction("START"), "opt_in");
   assert.equal(twilioSmsConsentAction(" yes! "), "opt_in");
   assert.equal(twilioSmsConsentAction("unstop"), "opt_in");
   assert.equal(twilioSmsConsentAction("please stop by the office"), null);
   assert.equal(twilioSmsConsentAction("stop reminders"), null);
+});
+
+test("signed Advanced Opt-Out classification supports localized commands and takes precedence over body", () => {
+  assert.equal(twilioSmsCommand("BAJA", "STOP"), "opt_out");
+  assert.equal(twilioSmsCommand("ALTA", "START"), "opt_in");
+  assert.equal(twilioSmsCommand("AYUDA", "HELP"), "help");
+  assert.equal(twilioSmsCommand("START", "STOP"), "opt_out");
+  assert.equal(twilioSmsCommand("STOP", "HELP"), "help");
+  assert.equal(twilioSmsCommand("", "STOP"), "opt_out");
+  assert.equal(twilioSmsCommand("STOP", "unknown"), "opt_out");
+  assert.equal(twilioSmsCommand("Pickup question", "unknown"), null);
+  assert.equal(twilioSmsConsentAction("AYUDA", "HELP"), null);
+});
+
+test("HELP and INFO are provider commands while ordinary sentences remain school messages", () => {
+  assert.equal(twilioSmsCommand("HELP"), "help");
+  assert.equal(twilioSmsCommand(" info. "), "help");
+  assert.equal(twilioSmsCommand("help with pickup"), null);
+  assert.equal(twilioSmsCommand("information about my child"), null);
+});
+
+test("changing a signed OptOutType invalidates the webhook signature", () => {
+  const authToken = "test_auth_token";
+  const url = "https://thebeesuite.io/api/twilio/inbound";
+  const params = { MessageSid: "SM123", Body: "BAJA", OptOutType: "STOP" };
+  const validSignature = signature(authToken, url, params);
+  assert.equal(validateTwilioSignature({ authToken, signature: validSignature, url, params }), true);
+  assert.equal(validateTwilioSignature({ authToken, signature: validSignature, url, params: { ...params, OptOutType: "START" } }), false);
 });
 
 test("Twilio webhook parsing accepts form posts and rejects malformed content", async () => {

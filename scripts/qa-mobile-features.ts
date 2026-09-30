@@ -75,9 +75,14 @@ async function checkSelectors(page: Page) {
     await settle(page);
     const bounds = await popup.evaluate((element) => {
       const box = element.getBoundingClientRect();
-      return { left: box.left, right: box.right, viewport: innerWidth, clipped: element.scrollWidth > element.clientWidth + 3 };
+      const arrows = [...element.querySelectorAll<HTMLElement>('[data-slot="select-scroll-up-button"], [data-slot="select-scroll-down-button"]')]
+        .filter((arrow) => getComputedStyle(arrow).visibility !== "hidden")
+        .map((arrow) => { const rect = arrow.getBoundingClientRect(); return { left: rect.left, right: rect.right, width: rect.width }; });
+      return { left: box.left, right: box.right, viewport: innerWidth, clipped: element.scrollWidth > element.clientWidth + 3, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, verticalOverflow: element.scrollHeight > element.clientHeight + 3, arrows };
     });
-    assert.ok(bounds.left >= -1 && bounds.right <= bounds.viewport + 1 && !bounds.clipped, "Selector options remain inside the viewport");
+    assert.ok(bounds.left >= -1 && bounds.right <= bounds.viewport + 1 && !bounds.clipped, `Selector options remain inside the viewport: ${JSON.stringify({ trigger: await trigger.getAttribute("aria-label") ?? await trigger.textContent(), bounds })}`);
+    assert.ok(!bounds.verticalOverflow || bounds.arrows.length > 0, `Scrollable selector has a visible scroll arrow: ${JSON.stringify(bounds)}`);
+    assert.ok(bounds.arrows.every((arrow) => arrow.left >= bounds.left - 1 && arrow.right <= bounds.right + 1 && arrow.width >= bounds.right - bounds.left - 20), `Selector scroll arrows remain full-width hit targets: ${JSON.stringify(bounds)}`);
     await page.keyboard.press("Escape");
     await popup.waitFor({ state: "hidden" });
     checked++;

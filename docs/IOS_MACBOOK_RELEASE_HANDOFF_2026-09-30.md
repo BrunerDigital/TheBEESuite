@@ -1,0 +1,28 @@
+# Parent and Teacher iOS MacBook release handoff — September 30, 2026
+
+## Current release state
+
+The Parent and Teacher portals are live at `https://thebeesuite.io`. The mobile shell controls remain fixed while content scrolls; the compact Parent home fits a 390 × 844 viewport when its content is quiet. The selector overflow found at large text sizes was fixed in PR #440. The reviewed application source is Git commit `c19b9779de89279e3bbefc5906a01534f40af800`. No later native or application code changes are required for this handoff.
+
+The exact-source [iOS verification run](https://github.com/BrunerDigital/TheBEESuite/actions/runs/36653424977) passed for both roles on Xcode 26.6: unsigned Release builds for iPhone and simulator, compiled identity/privacy/HTTPS checks, and native cold launch and relaunch with the correct sign-in screens. All four public launch screenshots were visually inspected. This does not certify signing, authenticated native workflows, physical-device behavior, TestFlight or App Store submission.
+
+At the September 30 Windows-side check, `npm run mobile:store:check` passed; GitHub main CI and push checks passed on the same source; Vercel production deployment `dpl_F6Nhxx5zR2oV5zyxntzWKaFsMH3c` was Ready on the canonical aliases; `/api/health` returned 200 with the database connected; recent production error logs were empty; and all 49 repository Supabase migrations matched the production migration ledger. No database change is pending for this mobile release.
+
+Both Xcode projects currently specify version `1.0`, build `5`. App Store Connect previously had version `1.0` build `4` selected for both listings. Build 4 predates the iOS 27 scene-lifecycle fix and must not be resubmitted. Build 5 was prepared in source and tested as a locally development-signed launch on iOS 27.0.1; this handoff has no verified record that build 5 was uploaded. Confirm the next unused build number in each live listing before archiving. The two apps may need different next numbers.
+
+| App | Bundle ID | App Store Connect Apple ID | Project |
+| --- | --- | --- | --- |
+| Parent | `com.brunerdigital.thebeesuite.parent` | `6811279592` | `ios/App/App.xcodeproj` |
+| Teacher | `com.brunerdigital.thebeesuite.teacher` | `6811280080` | `ios-teacher/App/App.xcodeproj` |
+
+## MacBook execution order
+
+1. Sign in to the Apple Developer team that owns both bundle IDs, confirm the current status of the two version 1.0 listings and the next unused build number, and accept any account-level requirements directly in Apple’s interface. Do not share passwords, verification codes, certificates or private keys through chat or Git.
+2. In a clean Mac checkout of the latest `origin/main`, record `git rev-parse HEAD` and confirm no native/app code differs from `c19b9779de89279e3bbefc5906a01534f40af800`. Install locked dependencies with Node 24, then run `npm run mobile:assets:generate`, `npm run mobile:store:check`, `npm run ios:parent:sync`, and `npm run ios:teacher:sync`.
+3. Confirm the intended Apple team, exact bundle IDs, iPhone-only target and version/build in both Xcode projects. If build 5 is unavailable, increment the relevant project’s build number before archive and repeat the store check. Archive each role with Xcode 26 or later and the required current iOS SDK. Validate the signed archives and export their privacy reports; reconcile each report with the app manifest and the live App Privacy answers. Record the Git SHA, archive UUID, signing team and build number for each role.
+4. Upload both validated archives to their matching App Store Connect listings. The owner’s September 30 request explicitly authorizes the Parent and Teacher uploads and work toward App Store publication. Wait for processing, resolve build warnings and export-compliance questions, and assign only the approved internal TestFlight group.
+5. Install the exact processed builds through TestFlight on the physical iPhone. Use the reserved synthetic Parent and Teacher review accounts. Complete the [physical-device evidence packet](MOBILE_APP_PHYSICAL_DEVICE_EVIDENCE_PACKET.md), including authenticated role scope, dashboard, messages, media/file selection, keyboard and safe areas, background/relaunch, offline recovery and logout. Avoid charges, real-family data, real messages and deletion of the review identities.
+6. Capture final native screenshots and the requested launch-to-workflow recordings from the processed builds using synthetic data. Reconcile the listing screenshots, review notes, privacy labels, age rating and support information. The prior Apple 2.1 rejection requested fuller developer and feature evidence; [review recovery](IOS_APP_REVIEW_RECOVERY_2026-09-28.md) records the exact correspondence. Current review notes must describe the now-live received-message **Report** and **Block sender** controls and Parent account-deletion path accurately, replacing stale text that said blocking was unavailable or recordings were pending.
+7. Select each tested build in its version 1.0 submission, send the completed evidence and replies to Apple, submit both apps for App Review, and track review/approval. Do not call them publicly available until each US listing is live and installable. The owner authorized completing the path to App Store publication in this conversation; record any Apple legal agreement or sensitive access decision separately at action time.
+
+The [Parent](PARENT_IOS_BUILD_RUNBOOK.md) and [Teacher](TEACHER_IOS_BUILD_RUNBOOK.md) runbooks contain role-specific workflows. The GitHub unsigned run is a build baseline, not the TestFlight candidate. Keep production web service available throughout Apple review because both Capacitor shells load its HTTPS portal.

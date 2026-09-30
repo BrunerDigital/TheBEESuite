@@ -1,6 +1,6 @@
 # Parent iOS Build Runbook
 
-Last updated: September 11, 2026
+Last updated: September 30, 2026
 
 This runbook covers the native iOS shell for the first App Store submission: BEE Suite Parent Portal.
 
@@ -16,7 +16,7 @@ For repeatable unsigned GitHub/macOS builds and the single remaining human-actio
 | App Store name | `BEE Suite Parent Portal` |
 | Device display name | `BEE Suite` |
 | Version | `1.0` |
-| Build | `1` |
+| Build in current source | `5`; confirm it is unused in App Store Connect before archiving |
 | Minimum iOS | `16.0` |
 | Target devices | iPhone only |
 | Launch URL | `https://thebeesuite.io/parents` |
@@ -48,7 +48,7 @@ In Xcode:
 1. Select the `App` target.
 2. Set Signing & Capabilities Team to the Apple Developer team.
 3. Confirm Bundle Identifier is `com.brunerdigital.thebeesuite.parent`.
-4. Confirm Version is `1.0` and Build is `1`.
+4. Confirm Version is `1.0` and Build is the next unused number for this bundle ID. Current source is `5`; increment both Release and Debug project settings if App Store Connect already has build 5.
 5. Confirm iPhone-only support.
 6. Select a real iPhone or iOS simulator and run the app.
 7. Smoke test parent login, parent dashboard, messages, documents, billing, and password reset.
@@ -56,7 +56,7 @@ In Xcode:
 9. Use **Product > Archive**.
 10. Before uploading, generate/export the privacy report for this exact archive and complete the reconciliation below. Resolve discrepancies in the binary, vendor inventory and disclosures; rebuild/re-archive if anything changes.
 11. In Organizer, select the reconciled archive and run **Validate App**. Resolve every signing, entitlement, icon, privacy, or bundle error.
-12. Stop for exact upload approval naming this app, Git commit, version/build and archive UUID. Only after approval, use **Distribute App > App Store Connect > Upload** and keep symbol upload enabled unless the release owner documents otherwise.
+12. Use the current [MacBook release handoff](IOS_MACBOOK_RELEASE_HANDOFF_2026-09-30.md) for the exact source and evidence. Stop for approval tied to this app, Git commit, version/build and validated archive UUID. Only then use **Distribute App > App Store Connect > Upload** and keep symbol upload enabled unless the release owner documents otherwise.
 13. Record the archive UUID, version, build, Git commit, signing team, privacy-report signoff, upload time, and processing result.
 
 ## Privacy Report And TestFlight

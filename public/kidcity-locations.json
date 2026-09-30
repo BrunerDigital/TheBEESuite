@@ -141,14 +141,14 @@
       "phone": "386-269-4607"
     },
     {
-      "crmLocationId": "Kid City USA - FL | Leesburg",
-      "locationId": "Kid City USA - FL | Leesburg",
-      "name": "Kid City USA - Leesburg",
-      "address": "710 Carpenter Ave.",
-      "city": "Leesburg",
+      "crmLocationId": "Kid City USA - FL | Longwood - Wekiva",
+      "locationId": "Kid City USA - FL | Longwood - Wekiva",
+      "name": "Kid City USA - Wekiva",
+      "address": "935 Wekiva Springs Rd.",
+      "city": "Longwood",
       "state": "FL",
-      "postalCode": "34748",
-      "phone": "352-460-0627"
+      "postalCode": "32779",
+      "phone": "407-786-4023"
     },
     {
       "crmLocationId": "Kid City USA - FL | Middleburg",
@@ -171,16 +171,6 @@
       "phone": "407-542-0030"
     },
     {
-      "crmLocationId": "Kid City USA - FL | Palatka",
-      "locationId": "Kid City USA - FL | Palatka",
-      "name": "Kid City USA - Palatka",
-      "address": "3420 St. Johns Ave.",
-      "city": "Palatka",
-      "state": "FL",
-      "postalCode": "32177",
-      "phone": "386-385-3054"
-    },
-    {
       "crmLocationId": "Kid City USA - FL | Saint Cloud",
       "locationId": "Kid City USA - FL | Saint Cloud",
       "name": "Kid City USA - St. Cloud",
@@ -191,16 +181,6 @@
       "phone": "321-805-4780"
     },
     {
-      "crmLocationId": "Kid City USA - FL | Sanford",
-      "locationId": "Kid City USA - FL | Sanford",
-      "name": "Kid City USA - Sanford",
-      "address": "1320 Hickory Ave",
-      "city": "Sanford",
-      "state": "FL",
-      "postalCode": "32771",
-      "phone": "407-942-3242"
-    },
-    {
       "crmLocationId": "Kid City USA - FL | Sarasota",
       "locationId": "Kid City USA - FL | Sarasota",
       "name": "Kid City USA - Sarasota",
@@ -209,16 +189,6 @@
       "state": "FL",
       "postalCode": "34243",
       "phone": "941-210-4482"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Longwood - Wekiva",
-      "locationId": "Kid City USA - FL | Longwood - Wekiva",
-      "name": "Kid City USA - Wekiva",
-      "address": "935 Wekiva Springs Rd.",
-      "city": "Longwood",
-      "state": "FL",
-      "postalCode": "32779",
-      "phone": "407-786-4023"
     },
     {
       "crmLocationId": "Kid City USA - FL | Winter Park",
@@ -301,6 +271,26 @@
       "phone": "855-543-2489"
     },
     {
+      "crmLocationId": "Kid City USA - IN | Newburgh - Paradise",
+      "locationId": "Kid City USA - IN | Newburgh - Paradise",
+      "name": "Kid City USA - Paradise",
+      "address": "2699 St Route 261",
+      "city": "Newburgh",
+      "state": "IN",
+      "postalCode": "47630",
+      "phone": "812-490-1191"
+    },
+    {
+      "crmLocationId": "Kid City USA - IN | Petersburg",
+      "locationId": "Kid City USA - IN | Petersburg",
+      "name": "Kid City USA - Petersburg",
+      "address": "106 West Pike Avenue",
+      "city": "Petersburg",
+      "state": "IN",
+      "postalCode": "47567",
+      "phone": "812-380-9100"
+    },
+    {
       "crmLocationId": "Kid City USA - IN | Southpointe",
       "locationId": "Kid City USA - IN | Southpointe",
       "name": "Kid City USA - Southpointe",
@@ -381,16 +371,6 @@
       "phone": "931-292-6059"
     },
     {
-      "crmLocationId": "Kid City USA - TN | Soddy Daisy",
-      "locationId": "Kid City USA - TN | Soddy Daisy",
-      "name": "Kid City USA - Soddy Daisy",
-      "address": "9834 Dayton Pike",
-      "city": "Soddy Daisy",
-      "state": "TN",
-      "postalCode": "37379",
-      "phone": "423-654-4049"
-    },
-    {
       "crmLocationId": "Kid City USA - TX | Corpus Christi",
       "locationId": "Kid City USA - TX | Corpus Christi",
       "name": "Kid City USA - Corpus Christi",
@@ -429,16 +409,6 @@
       "state": "TX",
       "postalCode": "76182",
       "phone": "682-888-5247"
-    },
-    {
-      "crmLocationId": "Kid City USA - TX | Tyler",
-      "locationId": "Kid City USA - TX | Tyler",
-      "name": "Kid City USA - Tyler",
-      "address": "2101 Shiloh Road",
-      "city": "Tyler",
-      "state": "TX",
-      "postalCode": "75703",
-      "phone": "409-757-8396"
     }
   ]
 }

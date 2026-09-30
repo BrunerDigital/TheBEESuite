@@ -56,7 +56,7 @@ In Xcode:
 9. Use **Product > Archive**.
 10. Before uploading, generate/export the privacy report for this exact archive and complete the reconciliation below. Resolve discrepancies in the binary, vendor inventory and disclosures; rebuild/re-archive if anything changes.
 11. In Organizer, select the reconciled archive and run **Validate App**. Resolve every signing, entitlement, icon, privacy, or bundle error.
-12. Use the current [MacBook release handoff](IOS_MACBOOK_RELEASE_HANDOFF_2026-09-30.md) for the exact source and evidence. The September 30 owner request authorizes uploading both Parent and Teacher candidates after archive validation and privacy reconciliation. Use **Distribute App > App Store Connect > Upload** and keep symbol upload enabled unless the release owner documents otherwise.
+12. Use the current [MacBook release handoff](IOS_MACBOOK_RELEASE_HANDOFF_2026-09-30.md) for the exact source and evidence. Stop for approval tied to this app, Git commit, version/build and validated archive UUID. Only then use **Distribute App > App Store Connect > Upload** and keep symbol upload enabled unless the release owner documents otherwise.
 13. Record the archive UUID, version, build, Git commit, signing team, privacy-report signoff, upload time, and processing result.
 
 ## Privacy Report And TestFlight

@@ -75,9 +75,9 @@ async function checkSelectors(page: Page) {
     await settle(page);
     const bounds = await popup.evaluate((element) => {
       const box = element.getBoundingClientRect();
-      return { left: box.left, right: box.right, viewport: innerWidth, clipped: element.scrollWidth > element.clientWidth + 3 };
+      return { left: box.left, right: box.right, viewport: innerWidth, clipped: element.scrollWidth > element.clientWidth + 3, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth };
     });
-    assert.ok(bounds.left >= -1 && bounds.right <= bounds.viewport + 1 && !bounds.clipped, "Selector options remain inside the viewport");
+    assert.ok(bounds.left >= -1 && bounds.right <= bounds.viewport + 1 && !bounds.clipped, `Selector options remain inside the viewport: ${JSON.stringify({ trigger: await trigger.getAttribute("aria-label") ?? await trigger.textContent(), bounds })}`);
     await page.keyboard.press("Escape");
     await popup.waitFor({ state: "hidden" });
     checked++;

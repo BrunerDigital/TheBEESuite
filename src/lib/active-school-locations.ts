@@ -31,6 +31,17 @@ export type PublicKidCityLocation = {
 
 const clean = cleanLocationIdentifier;
 
+// These centers were added to the public removal scope after the original
+// offboarding batch. Keep them out of the live feed while their center records
+// are being closed.
+const retiredPublicLocationIds = new Set([
+  "Kid City USA - FL | Leesburg",
+  "Kid City USA - FL | Palatka",
+  "Kid City USA - FL | Sanford",
+  "Kid City USA - TN | Soddy Daisy",
+  "Kid City USA - TX | Tyler",
+]);
+
 function canonicalKidCityLocationId(value: string | null | undefined) {
   return canonicalSchoolLocationId({
     brandName: "Kid City USA",
@@ -65,7 +76,9 @@ export function defaultCenterNameFromCrmLocationId(value: string | null | undefi
 }
 
 export function isActivePublicSchoolCandidate(center: CenterPublicLocationInput) {
-  return center.status === "active" && isValidCrmLocationId(center.crmLocationId);
+  return center.status === "active"
+    && isValidCrmLocationId(center.crmLocationId)
+    && !retiredPublicLocationIds.has(normalizeCrmLocationId(center.crmLocationId));
 }
 
 export function toPublicKidCityLocation(center: CenterPublicLocationInput): PublicKidCityLocation {

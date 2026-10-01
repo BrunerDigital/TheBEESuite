@@ -17,7 +17,7 @@ let audits = [];
 let conflictId = "";
 let auditFailure = false;
 let options = [];
-function overlaps(where, claim) { return claim.servicePeriodStart <= where.servicePeriodEnd.gte && claim.servicePeriodEnd >= where.servicePeriodStart.lte; }
+function overlaps(where, claim) { return claim.servicePeriodStart <= where.servicePeriodStart.lte && claim.servicePeriodEnd >= where.servicePeriodEnd.gte; }
 const database = {
   agencyProgram: { async findFirst({ where }) { return where.id === program.id && where.centerId === program.centerId ? program : null; } },
   subsidyAuthorization: {
@@ -108,4 +108,13 @@ test("bulk draft rolls back when its audit fails", async () => {
   reset(1); const preview = (await post("previewBulkClaims")).body; auditFailure = true;
   await assert.rejects(() => post("createBulkClaims", { entries: preview.rows }), /audit unavailable/);
   assert.equal(created.length, 0); assert.equal(audits.length, 0);
+});
+test("a partial overlap under another authorization blocks preview and a previously reviewed write", async () => {
+  reset(1); const preview = (await post("previewBulkClaims")).body;
+  created.push({ authorizationId: "old-authorization", number: "PRIOR-ELC", servicePeriodStart: new Date("2026-10-01"), servicePeriodEnd: new Date("2026-10-06"), lines: { create: [{ childId: records[0].childId, serviceUnits: 1 }] } });
+  const refreshed = await post("previewBulkClaims");
+  assert.match(refreshed.body.rows[0].error, /PRIOR-ELC/); assert.equal(refreshed.body.rows[0].fingerprint, "");
+  const result = await post("createBulkClaims", { entries: preview.rows });
+  assert.equal(result.body.results[0].status, "exception"); assert.match(result.body.results[0].error, /PRIOR-ELC/);
+  assert.equal(created.length, 1); assert.equal(audits.length, 0);
 });

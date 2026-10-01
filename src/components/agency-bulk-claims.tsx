@@ -46,7 +46,7 @@ export function AgencyBulkClaims({ centerId, programs, disabled, onCreated }: {
         entries: rows.map((row) => ({ authorizationId: row.authorizationId, serviceUnits: row.serviceUnits, attendanceDays: row.attendanceDays })) });
       if (!mounted.current) return;
       const nextRows = body.rows as BulkClaimRow[];
-      setRows(nextRows); setSelected(new Set(nextRows.filter((row) => !row.error).map((row) => row.authorizationId))); setPreviewCurrent(true);
+      setRows(nextRows); setSelected(new Set(nextRows.filter((row) => !row.error && (!rows.length || selected.has(row.authorizationId))).map((row) => row.authorizationId))); setPreviewCurrent(true);
       setMessage(nextRows.length ? "Review the units, attendance, and amount for each child, then select the drafts to create." : "No active authorizations found for this agency.");
     } catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : "Preview could not be loaded."); }
     finally { running.current = false; if (mounted.current) setBusy(false); }
@@ -103,6 +103,7 @@ export function AgencyBulkClaims({ centerId, programs, disabled, onCreated }: {
       {message ? <p role="status" className="text-sm">{message}</p> : null}
       {rows.length ? <>
         <div className="flex flex-wrap items-center gap-3 text-sm"><Button type="button" variant="outline" disabled={locked || !previewCurrent} onClick={() => setSelected(selected.size === eligible.length ? new Set() : new Set(eligible.map((row) => row.authorizationId)))}>{selected.size === eligible.length ? "Deselect all" : "Select all eligible"}</Button><span>{eligible.length} eligible · {rows.length - eligible.length} exceptions · {selectedRows.length} selected · {money(selectedRows.reduce((total, row) => total + row.claimedCents, 0))}{!previewCurrent ? " (refresh required)" : ""}</span></div>
+        <Button type="button" disabled={locked || !previewCurrent || !selectedRows.length} onClick={() => void create()}>Create {selectedRows.length} selected draft{selectedRows.length === 1 ? "" : "s"}</Button>
         <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Select</TableHead><TableHead>Child / authorization</TableHead><TableHead>Authorized rate</TableHead><TableHead>Units</TableHead><TableHead>Attendance days</TableHead><TableHead>Draft amount</TableHead><TableHead>Review</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => {
           const result = results.find((item) => item.authorizationId === row.authorizationId);
           return <TableRow key={row.authorizationId}>
@@ -115,7 +116,6 @@ export function AgencyBulkClaims({ centerId, programs, disabled, onCreated }: {
             <TableCell className="min-w-48 text-sm">{result?.status === "created" ? `Created ${result.number}` : result?.error || row.error || "Ready for review"}</TableCell>
           </TableRow>;
         })}</TableBody></Table></div>
-        <Button type="button" disabled={locked || !previewCurrent || !selectedRows.length} onClick={() => void create()}>Create {selectedRows.length} selected draft{selectedRows.length === 1 ? "" : "s"}</Button>
       </> : null}
     </CardContent>
   </Card>;

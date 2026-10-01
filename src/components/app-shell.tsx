@@ -28,6 +28,7 @@ import { BrandIcon, BrandLogo } from "@/components/brand-logo";
 import { AccountsReceivableSheet } from "@/components/accounts-receivable-sheet";
 import { LiveRefreshStatus } from "@/components/live-refresh-status";
 import { teacherActiveTask, teacherTaskHref } from "@/lib/teacher-navigation";
+import { loginEntryPathForRole } from "@/lib/login-routing";
 import { activeShellNavigationHref, mobileScopeDetail } from "@/lib/shell-navigation-state";
 import { ProfilePhotoUploader } from "@/components/profile-photo-uploader";
 import { Button } from "@/components/ui/button";
@@ -1398,7 +1399,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
       // Logout must still revoke the server session when managed storage is unavailable.
     }
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
+    router.replace(loginEntryPathForRole(currentUser?.role));
     router.refresh();
   }
 

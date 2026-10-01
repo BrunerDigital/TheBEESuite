@@ -1,26 +1,6 @@
 {
   "locations": [
     {
-      "crmLocationId": "Kid City USA - CO | Colorado Springs - Cordera",
-      "locationId": "Kid City USA - CO | Colorado Springs - Cordera",
-      "name": "Kid City USA - Cordera (Colorado Springs)",
-      "address": "10085 Pearl Pass View",
-      "city": "Colorado Springs",
-      "state": "CO",
-      "postalCode": "80924",
-      "phone": "719-301-0049"
-    },
-    {
-      "crmLocationId": "Kid City USA - CO | Grand Junction",
-      "locationId": "Kid City USA - CO | Grand Junction",
-      "name": "Kid City USA - Grand Junction",
-      "address": "3170 D 1/2 Road",
-      "city": "Grand Junction",
-      "state": "CO",
-      "postalCode": "81504",
-      "phone": "970-837-3211"
-    },
-    {
       "crmLocationId": "Kid City USA - CO | Highlands Ranch",
       "locationId": "Kid City USA - CO | Highlands Ranch",
       "name": "Kid City USA - Highlands Ranch",
@@ -29,16 +9,6 @@
       "state": "CO",
       "postalCode": "80126",
       "phone": "303-791-5547"
-    },
-    {
-      "crmLocationId": "Kid City USA - CO | Longmont",
-      "locationId": "Kid City USA - CO | Longmont",
-      "name": "Kid City USA - Longmont",
-      "address": "1941 Terry St.",
-      "city": "Longmont",
-      "state": "CO",
-      "postalCode": "80501",
-      "phone": "303-651-3780"
     },
     {
       "crmLocationId": "Kid City USA - CO | Woodland Park - East Midland",
@@ -59,16 +29,6 @@
       "state": "FL",
       "postalCode": "32714",
       "phone": "407-682-5437"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Altamonte - Fruitland",
-      "locationId": "Kid City USA - FL | Altamonte - Fruitland",
-      "name": "Kid City USA - Altamonte - Fruitland",
-      "address": "480 Fruitland St.",
-      "city": "Altamonte Springs",
-      "state": "FL",
-      "postalCode": "32714",
-      "phone": "407-339-2337"
     },
     {
       "crmLocationId": "Kid City USA - FL | Altamonte - Maitland",
@@ -141,26 +101,6 @@
       "phone": "386-860-7979"
     },
     {
-      "crmLocationId": "Kid City USA - FL | Glen Saint Mary",
-      "locationId": "Kid City USA - FL | Glen Saint Mary",
-      "name": "Kid City USA - Glen St. Mary",
-      "address": "10274 N. Sherman Ave.",
-      "city": "Glen St. Mary",
-      "state": "FL",
-      "postalCode": "32040",
-      "phone": "904-259-4899"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Hampton",
-      "locationId": "Kid City USA - FL | Hampton",
-      "name": "Kid City USA - Hampton",
-      "address": "10228 N Division Street",
-      "city": "Hampton",
-      "state": "FL",
-      "postalCode": "32044",
-      "phone": "352-468-1008"
-    },
-    {
       "crmLocationId": "Kid City USA - FL | Holly Hill",
       "locationId": "Kid City USA - FL | Holly Hill",
       "name": "Kid City USA - Holly Hill",
@@ -179,16 +119,6 @@
       "state": "FL",
       "postalCode": "32216",
       "phone": "904-575-9649"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Jacksonville - Fruit Cove",
-      "locationId": "Kid City USA - FL | Jacksonville - Fruit Cove",
-      "name": "Kid City USA - Fruit Cove",
-      "address": "1461 Fruit Cove Rd S,",
-      "city": "Saint Johns",
-      "state": "FL",
-      "postalCode": "32259",
-      "phone": "904-615-1595"
     },
     {
       "crmLocationId": "Kid City USA - FL | Jacksonville - Oakleaf",
@@ -211,54 +141,14 @@
       "phone": "386-269-4607"
     },
     {
-      "crmLocationId": "Kid City USA - FL | Lake Wales",
-      "locationId": "Kid City USA - FL | Lake Wales",
-      "name": "Kid City USA - Lake Wales",
-      "address": "712 N. Scenic Hwy",
-      "city": "Lake Wales",
-      "state": "FL",
-      "postalCode": "33853",
-      "phone": "863-676-2351"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Leesburg",
-      "locationId": "Kid City USA - FL | Leesburg",
-      "name": "Kid City USA - Leesburg",
-      "address": "710 Carpenter Ave.",
-      "city": "Leesburg",
-      "state": "FL",
-      "postalCode": "34748",
-      "phone": "352-460-0627"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Longwood - SR 434",
-      "locationId": "Kid City USA - FL | Longwood - SR 434",
-      "name": "Kid City USA - Longwood",
-      "address": "382 W SR 434",
+      "crmLocationId": "Kid City USA - FL | Longwood - Wekiva",
+      "locationId": "Kid City USA - FL | Longwood - Wekiva",
+      "name": "Kid City USA - Wekiva",
+      "address": "935 Wekiva Springs Rd.",
       "city": "Longwood",
       "state": "FL",
-      "postalCode": "32750",
-      "phone": "407-539-2337"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Macclenny",
-      "locationId": "Kid City USA - FL | Macclenny",
-      "name": "Kid City USA - MacClenny",
-      "address": "5418 County Rd 23B",
-      "city": "Macclenny",
-      "state": "FL",
-      "postalCode": "32063",
-      "phone": "904-259-5438"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Melbourne",
-      "locationId": "Kid City USA - FL | Melbourne",
-      "name": "Kid City USA - Melbourne",
-      "address": "4950 Dairy Rd.",
-      "city": "Melbourne",
-      "state": "FL",
-      "postalCode": "32904",
-      "phone": "855-543-2489"
+      "postalCode": "32779",
+      "phone": "407-786-4023"
     },
     {
       "crmLocationId": "Kid City USA - FL | Middleburg",
@@ -281,36 +171,6 @@
       "phone": "407-542-0030"
     },
     {
-      "crmLocationId": "Kid City USA - FL | Palatka",
-      "locationId": "Kid City USA - FL | Palatka",
-      "name": "Kid City USA - Palatka",
-      "address": "3420 St. Johns Ave.",
-      "city": "Palatka",
-      "state": "FL",
-      "postalCode": "32177",
-      "phone": "386-385-3054"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Palm Bay",
-      "locationId": "Kid City USA - FL | Palm Bay",
-      "name": "Kid City USA - Palm Bay",
-      "address": "1516 Norman Street NE",
-      "city": "Palm Bay",
-      "state": "FL",
-      "postalCode": "32907",
-      "phone": "321-728-5503"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Port Orange",
-      "locationId": "Kid City USA - FL | Port Orange",
-      "name": "Kid City USA - Port Orange",
-      "address": "3911 S. Nova Rd.",
-      "city": "Port Orange",
-      "state": "FL",
-      "postalCode": "32127",
-      "phone": "386-317-2337"
-    },
-    {
       "crmLocationId": "Kid City USA - FL | Saint Cloud",
       "locationId": "Kid City USA - FL | Saint Cloud",
       "name": "Kid City USA - St. Cloud",
@@ -321,16 +181,6 @@
       "phone": "321-805-4780"
     },
     {
-      "crmLocationId": "Kid City USA - FL | Sanford",
-      "locationId": "Kid City USA - FL | Sanford",
-      "name": "Kid City USA - Sanford",
-      "address": "1320 Hickory Ave",
-      "city": "Sanford",
-      "state": "FL",
-      "postalCode": "32771",
-      "phone": "407-942-3242"
-    },
-    {
       "crmLocationId": "Kid City USA - FL | Sarasota",
       "locationId": "Kid City USA - FL | Sarasota",
       "name": "Kid City USA - Sarasota",
@@ -339,46 +189,6 @@
       "state": "FL",
       "postalCode": "34243",
       "phone": "941-210-4482"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | South Daytona",
-      "locationId": "Kid City USA - FL | South Daytona",
-      "name": "Kid City USA - South Daytona",
-      "address": "712 Reed Canal Rd.",
-      "city": "S. Daytona",
-      "state": "FL",
-      "postalCode": "32119",
-      "phone": "386-322-0103"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Starke",
-      "locationId": "Kid City USA - FL | Starke",
-      "name": "Kid City USA - Starke",
-      "address": "202 West Market Road",
-      "city": "Starke",
-      "state": "FL",
-      "postalCode": "32091",
-      "phone": "855-543-2489"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Vero Beach",
-      "locationId": "Kid City USA - FL | Vero Beach",
-      "name": "Kid City USA - Vero Beach",
-      "address": "760 20th Avenue",
-      "city": "Vero Beach",
-      "state": "FL",
-      "postalCode": "32962",
-      "phone": "772-778-2262"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Longwood - Wekiva",
-      "locationId": "Kid City USA - FL | Longwood - Wekiva",
-      "name": "Kid City USA - Wekiva",
-      "address": "935 Wekiva Springs Rd.",
-      "city": "Longwood",
-      "state": "FL",
-      "postalCode": "32779",
-      "phone": "407-786-4023"
     },
     {
       "crmLocationId": "Kid City USA - FL | Winter Park",
@@ -421,16 +231,6 @@
       "phone": "855-543-2489"
     },
     {
-      "crmLocationId": "Kid City USA - IN | Fishers",
-      "locationId": "Kid City USA - IN | Fishers",
-      "name": "Kid City USA - Fishers",
-      "address": "9000 Fitness Lane",
-      "city": "Fishers",
-      "state": "IN",
-      "postalCode": "46038",
-      "phone": "855-543-2489"
-    },
-    {
       "crmLocationId": "Kid City USA - IN | Greenwood",
       "locationId": "Kid City USA - IN | Greenwood",
       "name": "Kid City USA - Greenwood",
@@ -439,16 +239,6 @@
       "state": "IN",
       "postalCode": "46143",
       "phone": "317-300-0108"
-    },
-    {
-      "crmLocationId": "Kid City USA - IN | Jasper - Baden Strasse",
-      "locationId": "Kid City USA - IN | Jasper - Baden Strasse",
-      "name": "Kid City USA - Jasper - Baden Strasse",
-      "address": "4312 Baden Strasse Rd.",
-      "city": "Jasper",
-      "state": "IN",
-      "postalCode": "47546",
-      "phone": "812-481-8230"
     },
     {
       "crmLocationId": "Kid City USA - IN | Jasper - Truman",
@@ -581,16 +371,6 @@
       "phone": "931-292-6059"
     },
     {
-      "crmLocationId": "Kid City USA - TN | Soddy Daisy",
-      "locationId": "Kid City USA - TN | Soddy Daisy",
-      "name": "Kid City USA - Soddy Daisy",
-      "address": "9834 Dayton Pike",
-      "city": "Soddy Daisy",
-      "state": "TN",
-      "postalCode": "37379",
-      "phone": "423-654-4049"
-    },
-    {
       "crmLocationId": "Kid City USA - TX | Corpus Christi",
       "locationId": "Kid City USA - TX | Corpus Christi",
       "name": "Kid City USA - Corpus Christi",
@@ -599,16 +379,6 @@
       "state": "TX",
       "postalCode": "78410",
       "phone": "361-222-4124"
-    },
-    {
-      "crmLocationId": "Kid City USA - TX | Friendswood",
-      "locationId": "Kid City USA - TX | Friendswood",
-      "name": "Kid City USA - Friendswood",
-      "address": "1601 W Parkwood Avenue",
-      "city": "Friendswood",
-      "state": "TX",
-      "postalCode": "77546",
-      "phone": "832-569-4674"
     },
     {
       "crmLocationId": "Kid City USA - TX | Garland",
@@ -639,36 +409,6 @@
       "state": "TX",
       "postalCode": "76182",
       "phone": "682-888-5247"
-    },
-    {
-      "crmLocationId": "Kid City USA - TX | Pilot Point",
-      "locationId": "Kid City USA - TX | Pilot Point",
-      "name": "Kid City USA - Pilot Point",
-      "address": "1200 S Washington St",
-      "city": "Pilot Point",
-      "state": "TX",
-      "postalCode": "76258",
-      "phone": "940-343-5327"
-    },
-    {
-      "crmLocationId": "Kid City USA - TX | Terrell",
-      "locationId": "Kid City USA - TX | Terrell",
-      "name": "Kid City USA - Terrell",
-      "address": "400 9th Street",
-      "city": "Terrell",
-      "state": "TX",
-      "postalCode": "75160",
-      "phone": "972-674-1078"
-    },
-    {
-      "crmLocationId": "Kid City USA - TX | Tyler",
-      "locationId": "Kid City USA - TX | Tyler",
-      "name": "Kid City USA - Tyler",
-      "address": "2101 Shiloh Road",
-      "city": "Tyler",
-      "state": "TX",
-      "postalCode": "75703",
-      "phone": "409-757-8396"
     }
   ]
 }

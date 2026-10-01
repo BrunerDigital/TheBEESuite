@@ -53,6 +53,20 @@ test("active public school candidates require active status and a valid CRM loca
     locationId: "Kid City USA - Sarasota",
     name: "Kid City USA - Sarasota",
   }), false);
+  for (const crmLocationId of [
+    "Kid City USA - FL | Leesburg",
+    "Kid City USA - FL | Palatka",
+    "Kid City USA - FL | Sanford",
+    "Kid City USA - TN | Soddy Daisy",
+    "Kid City USA - TX | Tyler",
+  ]) {
+    assert.equal(isActivePublicSchoolCandidate({
+      status: "active",
+      crmLocationId,
+      locationId: crmLocationId,
+      name: crmLocationId,
+    }), false, `${crmLocationId} must not return from an active center`);
+  }
 });
 
 test("public Kid City location serialization feeds the inquiry dropdown", () => {
@@ -79,22 +93,6 @@ test("public Kid City location serialization feeds the inquiry dropdown", () => 
     phone: "941-210-4482",
   });
   assert.equal(defaultCenterNameFromCrmLocationId("FL | Sarasota"), "Kid City USA - Sarasota");
-});
-
-test("static Kid City fallback locations use the canonical branded Vero Beach ID", () => {
-  const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
-  const location = file.locations.find((item) => item.crmLocationId === "Kid City USA - FL | Vero Beach");
-
-  assert.deepEqual(location, {
-    crmLocationId: "Kid City USA - FL | Vero Beach",
-    locationId: "Kid City USA - FL | Vero Beach",
-    name: "Kid City USA - Vero Beach",
-    address: "760 20th Avenue",
-    city: "Vero Beach",
-    state: "FL",
-    postalCode: "32962",
-    phone: "772-778-2262",
-  });
 });
 
 test("static Kid City fallback includes the Loogootee inquiry location", () => {
@@ -126,7 +124,7 @@ test("static Kid City fallback excludes confirmed inactive schools", () => {
   ]) {
     assert.equal(ids.has(id), false, `${id} must not return through the public fallback`);
   }
-  assert.equal(ids.has("Kid City USA - IN | Fishers"), true);
+  assert.equal(ids.has("Kid City USA - IN | Fishers"), false);
 });
 
 test("live Kid City location API results keep static locations missing from the database", () => {
@@ -177,19 +175,86 @@ test("live Kid City location API results keep static locations missing from the 
   );
 });
 
-test("WordPress Avada inquiry snippet uses the branded Vero Beach location ID", () => {
-  const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
-
-  assert.match(snippet, /<option value="Kid City USA - FL \| Vero Beach"[^>]*>Kid City USA - FL \| Vero Beach<\/option>/);
-  assert.match(snippet, /data-location-name="Kid City USA - Vero Beach"/);
-});
-
 test("WordPress Avada inquiry snippet matches the corrected Indiana and closed-school routing", () => {
   const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
 
-  assert.match(snippet, /<option value="Kid City USA - IN \| Fishers"/);
+  assert.doesNotMatch(snippet, /<option value="Kid City USA - IN \| Fishers"/);
   assert.match(snippet, /<option value="Kid City USA - IN \| Loogootee"[^>]*data-address="505 N\. Oak Street"/);
   for (const retiredLocation of ["Forest Edge", "Durbin", "Brownsburg", "Elkhart", "Lees Summit"]) {
     assert.doesNotMatch(snippet, new RegExp(`value="[^"]*${retiredLocation}`));
+  }
+});
+
+test("Paradise and Petersburg stay available in public inquiry options", () => {
+  const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
+  const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
+  const ids = new Set(file.locations.map((item) => item.crmLocationId));
+  for (const id of ["Kid City USA - IN | Newburgh - Paradise", "Kid City USA - IN | Petersburg"]) {
+    assert.equal(ids.has(id), true, `${id} must be in the fallback`);
+    assert.equal(snippet.includes(`value="${id}"`), true, `${id} must be in Avada`);
+  }
+});
+
+test("green-X school removals cannot return through fallback or Avada options", () => {
+  const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
+  const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
+  const ids = new Set(file.locations.map((item) => item.crmLocationId));
+  for (const id of [
+    "Kid City USA - CO | Colorado Springs - Cordera",
+    "Kid City USA - CO | Grand Junction",
+    "Kid City USA - CO | Longmont",
+    "Kid City USA - FL | Altamonte - Fruitland",
+    "Kid City USA - FL | Anthony",
+    "Kid City USA - FL | Bunnell",
+    "Kid City USA - FL | Crystal River",
+    "Kid City USA - FL | Eustis",
+    "Kid City USA - FL | Gainesville",
+    "Kid City USA - FL | Glen Saint Mary",
+    "Kid City USA - FL | Hampton",
+    "Kid City USA - FL | Heathrow",
+    "Kid City USA - FL | Jacksonville - Abess",
+    "Kid City USA - FL | Jacksonville - Fruit Cove",
+    "Kid City USA - FL | Jacksonville - Jacksonville Heights",
+    "Kid City USA - FL | Lake Mary",
+    "Kid City USA - FL | Lake Wales",
+    "Kid City USA - FL | Longwood - SR 434",
+    "Kid City USA - FL | Macclenny",
+    "Kid City USA - FL | Melbourne",
+    "Kid City USA - FL | Mount Dora",
+    "Kid City USA - FL | New Smyrna Beach",
+    "Kid City USA - FL | Ocala",
+    "Kid City USA - FL | Ocala - 1st Terrace",
+    "Kid City USA - FL | Ocala - 35th Street",
+    "Kid City USA - FL | Ormond Beach 2",
+    "Kid City USA - FL | Palm Bay",
+    "Kid City USA - FL | Palm Coast",
+    "Kid City USA - FL | Panama City",
+    "Kid City USA - FL | Port Orange",
+    "Kid City USA - FL | Riverview",
+    "Kid City USA - FL | South Daytona",
+    "Kid City USA - FL | Starke",
+    "Kid City USA - FL | Vero Beach",
+    "Kid City USA - IN | Beech Grove",
+    "Kid City USA - IN | Beech Grove 4520",
+    "Kid City USA - IN | Beech Grove 4521",
+    "Kid City USA - IN | Evansville",
+    "Kid City USA - IN | Fishers",
+    "Kid City USA - IN | Franklin Township",
+    "Kid City USA - IN | Jasper - Baden Strasse",
+    "Kid City USA - IN | Lebanon",
+    "Kid City USA - IN | McCordsville",
+    "Kid City USA - SC | Bluffton",
+    "Kid City USA - TX | Friendswood",
+    "Kid City USA - TX | Pilot Point",
+    "Kid City USA - TX | Terrell",
+    // Additional removals requested after Marie's green-X list.
+    "Kid City USA - FL | Leesburg",
+    "Kid City USA - FL | Palatka",
+    "Kid City USA - FL | Sanford",
+    "Kid City USA - TN | Soddy Daisy",
+    "Kid City USA - TX | Tyler",
+  ]) {
+    assert.equal(ids.has(id), false, `${id} must not return through the fallback`);
+    assert.equal(snippet.includes(`value="${id}"`), false, `${id} must not return through Avada`);
   }
 });

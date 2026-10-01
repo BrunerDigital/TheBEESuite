@@ -358,7 +358,7 @@ test("agency remittances are staged, independently reviewed, and posted serializ
   assert.match(route, /canReviewAgencyPosting\(\{ role: auth\.user\.role, reviewerId: auth\.user\.id, requestedById: batch\.enteredById \}\)/);
   assert.match(route, /const AGENCY_WRITE_TRANSACTION_OPTIONS = \{[\s\S]*isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable,[\s\S]*maxWait: 10_000,[\s\S]*timeout: 120_000/);
   assert.match(route, /\["P2002", "P2028", "P2034"\]/);
-  assert.equal((route.match(/}, AGENCY_WRITE_TRANSACTION_OPTIONS\);/g) ?? []).length, 26);
+  assert.equal((route.match(/}, AGENCY_WRITE_TRANSACTION_OPTIONS\);/g) ?? []).length, 27);
   assert.match(route, /REMITTANCE_METHODS/);
   assert.match(route, /entryAuthorizationNumber && entryAgencyName[\s\S]*entryAuthorizationNumber === authorizationNumber && entryAgencyName === agencyName/);
   assert.match(route, /already have a remittance batch with this payment reference/);

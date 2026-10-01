@@ -7,6 +7,7 @@ import { Readable } from "node:stream";
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { agencyClaimServiceStartMin } from "@/lib/agency-date-defaults";
+import { BULK_CLAIM_PREVIEW_LIMIT, BULK_CLAIM_WRITE_LIMIT, bulkClaimDate, bulkClaimInput, bulkClaimRequirements, prepareBulkClaim, type BulkClaimRow } from "@/lib/agency-bulk-claims";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
 import {
@@ -4218,6 +4219,85 @@ async function postHandler(request: NextRequest) {
       throw error;
     }
     return NextResponse.json({ ok: true, ...result });
+  }
+
+  if (action === "previewBulkClaims" || action === "createBulkClaims") {
+    const programId = clean(body.agencyProgramId);
+    const program = await prisma.agencyProgram.findFirst({ where: { id: programId, centerId } });
+    if (!program || program.status !== "active") return NextResponse.json({ ok: false, error: "Choose an active agency from this school." }, { status: 400 });
+    const entries = Array.isArray(body.entries) ? body.entries : [];
+    const limit = action === "createBulkClaims" ? BULK_CLAIM_WRITE_LIMIT : BULK_CLAIM_PREVIEW_LIMIT;
+    if (entries.length > limit || entries.some((entry) => !entry || typeof entry !== "object" || Array.isArray(entry))
+      || new Set(entries.map((entry) => clean(entry.authorizationId))).size !== entries.length
+      || entries.some((entry) => !clean(entry.authorizationId))) return NextResponse.json({ ok: false, error: `Choose distinct authorizations, at most ${limit} per request.` }, { status: 400 });
+    const include = {
+      agencyProgram: true, center: { select: { timezone: true } },
+      family: { select: { id: true, centerId: true } },
+      child: { select: { id: true, familyId: true, fullName: true, enrollmentStatus: true, classroomId: true } },
+      claims: { where: { status: { notIn: ["void", "denied"] } }, select: { number: true, servicePeriodStart: true, servicePeriodEnd: true, lines: { select: { serviceUnits: true } } } },
+    } satisfies Prisma.SubsidyAuthorizationInclude;
+    if (action === "previewBulkClaims") {
+      const input = bulkClaimInput(body);
+      const start = bulkClaimDate(input.servicePeriodStart);
+      const end = bulkClaimDate(input.servicePeriodEnd);
+      if (!start || !end || end < start || (input.dueDate && !bulkClaimDate(input.dueDate))) return NextResponse.json({ ok: false, error: "Choose valid service dates and an optional valid due date." }, { status: 400 });
+      const rows = await prisma.$transaction(async (tx) => {
+        const authorizations = await tx.subsidyAuthorization.findMany({
+          where: { centerId, agencyProgramId: programId, status: "active" }, include, orderBy: [{ childId: "asc" }, { id: "asc" }], take: BULK_CLAIM_PREVIEW_LIMIT + 1,
+        });
+        if (authorizations.length > BULK_CLAIM_PREVIEW_LIMIT) throw new AgencyWorkflowError(`More than ${BULK_CLAIM_PREVIEW_LIMIT} active authorizations found. Prepare smaller agency groups.`, 400);
+        if (entries.some((entry) => !authorizations.some((authorization) => authorization.id === clean(entry.authorizationId)))) throw new AgencyWorkflowError("An edited authorization is no longer active in this school and agency. Start a new preview.", 409);
+        const existingClaims = await tx.subsidyClaim.findMany({ where: { centerId, agencyProgramId: programId, status: { notIn: ["void", "denied"] }, servicePeriodStart: { lte: end }, servicePeriodEnd: { gte: start } }, select: { number: true, lines: { select: { childId: true } } } });
+        const prepared = authorizations.map((authorization) => {
+          const override = entries.find((entry) => clean(entry.authorizationId) === authorization.id);
+          const row = prepareBulkClaim(authorization, bulkClaimInput({ ...body, ...(override ? { serviceUnits: override.serviceUnits, attendanceDays: override.attendanceDays } : {}), authorizationId: authorization.id }), centerId, programId);
+          const overlap = existingClaims.find((claim) => claim.lines.some((line) => line.childId === authorization.childId));
+          return !row.error && overlap ? { ...row, fingerprint: "", error: `Claim ${overlap.number} already covers this child and period.` } : row;
+        });
+        const eligibleChildCounts = new Map<string, number>();
+        prepared.forEach((row, index) => { if (!row.error) { const childId = authorizations[index].childId; eligibleChildCounts.set(childId, (eligibleChildCounts.get(childId) ?? 0) + 1); } });
+        return prepared.map((row, index) => !row.error && (eligibleChildCounts.get(authorizations[index].childId) ?? 0) > 1
+          ? { ...row, fingerprint: "", error: "Multiple eligible authorizations cover this child. Use the individual form to choose the correct authorization." } : row);
+      }, AGENCY_READ_SNAPSHOT_OPTIONS).catch((error) => {
+        if (error instanceof AgencyWorkflowError) return error;
+        throw error;
+      });
+      if (rows instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: rows.message }, { status: rows.status });
+      return NextResponse.json({ ok: true, rows });
+    }
+    if (!entries.length || entries.some((entry) => !clean(entry.fingerprint))) return NextResponse.json({ ok: false, error: "Preview and select eligible drafts before creating them." }, { status: 400 });
+    const results: Array<{ authorizationId: string; status: "created" | "exception"; number?: string; error?: string }> = [];
+    for (const entry of entries) {
+      const input = bulkClaimInput(entry);
+      try {
+        const created = await prisma.$transaction(async (tx) => {
+          const authorization = await tx.subsidyAuthorization.findUnique({ where: { id: input.authorizationId }, include });
+          if (!authorization) throw new AgencyWorkflowError("Authorization is no longer available. Refresh the preview.", 409);
+          const row: BulkClaimRow = prepareBulkClaim(authorization, input, centerId, programId);
+          if (row.error) throw new AgencyWorkflowError(row.error, 409);
+          if (row.fingerprint !== clean(entry.fingerprint)) throw new AgencyWorkflowError("Authorization details or claim amounts changed. Refresh the preview before creating this draft.", 409);
+          const overlap = await tx.subsidyClaim.findFirst({ where: { centerId, agencyProgramId: programId, status: { notIn: ["void", "denied"] }, servicePeriodStart: { lte: bulkClaimDate(input.servicePeriodEnd)! }, servicePeriodEnd: { gte: bulkClaimDate(input.servicePeriodStart)! }, lines: { some: { childId: authorization.childId } } }, select: { number: true } });
+          if (overlap) throw new AgencyWorkflowError(`Claim ${overlap.number} already covers this child and period.`, 409);
+          const claim = await tx.subsidyClaim.create({ data: {
+            centerId, agencyProgramId: programId, authorizationId: authorization.id, status: "draft",
+            number: subsidyClaimNumber({ stateCode: authorization.agencyProgram.stateCode, centerId, suffix: randomUUID() }),
+            servicePeriodStart: bulkClaimDate(input.servicePeriodStart)!, servicePeriodEnd: bulkClaimDate(input.servicePeriodEnd)!, dueDate: bulkClaimDate(input.dueDate),
+            claimedCents: row.claimedCents, createdById: auth.user.id,
+            lines: { create: [{ childId: authorization.childId, description: `${authorization.child.fullName} subsidy care`, serviceUnits: input.serviceUnits, unitType: authorization.unitType, rateCents: row.rateCents, amountCents: row.claimedCents, attendanceDays: input.attendanceDays }] },
+            documents: { create: bulkClaimRequirements(authorization).map((requirement) => ({ name: requirement.label, type: requirement.type })) },
+          } });
+          await writeAuditLog(auth.user, { centerId, action: "billing.subsidy_claim.created", resource: "SubsidyClaim", resourceId: claim.id,
+            metadata: { authorizationId: authorization.id, claimedCents: row.claimedCents, servicePeriodStart: input.servicePeriodStart, servicePeriodEnd: input.servicePeriodEnd, bulk: true } }, tx);
+          return claim;
+        }, AGENCY_WRITE_TRANSACTION_OPTIONS);
+        results.push({ authorizationId: input.authorizationId, status: "created", number: created.number });
+      } catch (error) {
+        if (error instanceof AgencyWorkflowError) results.push({ authorizationId: input.authorizationId, status: "exception", error: error.message });
+        else if (prismaConflict(error)) results.push({ authorizationId: input.authorizationId, status: "exception", error: "A claim changed during creation. Refresh the preview before retrying." });
+        else throw error;
+      }
+    }
+    return NextResponse.json({ ok: true, results });
   }
 
   if (action === "createClaim") {

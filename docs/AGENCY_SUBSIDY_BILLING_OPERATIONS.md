@@ -1,6 +1,6 @@
 # Agency Payment And Reconciliation SOP - The BEE Suite
 
-Last updated: September 9, 2026
+Last updated: October 1, 2026
 
 Audience: school directors, assistant directors, billing administrators, accounting users, and launch support.
 
@@ -36,6 +36,16 @@ A Stripe payout or bank deposit alone is not agency-remittance proof. It does no
 4. Record a decision only from current agency evidence. Payment may be allocated only to an `approved` or `partially paid` claim and may not exceed the remaining approved amount.
 
 Never manufacture a submission or approval to fit an old deposit. Send incomplete historical records to accounting for reconstruction or controlled exception handling.
+
+### Create Drafts For Multiple Children
+
+1. In one school workspace, open `Create agency drafts in bulk` and choose the agency (for example, ELC).
+2. Enter the service start/end, default units per child, and optional due date. Select `Preview drafts`.
+3. Review each child's authorization, unit type, authorized rate, and draft amount. One weekly unit is one week; one daily unit is one day. Adjust individual units and attendance days as needed, then select `Refresh preview`. Attendance is optional and is never guessed.
+4. Select the eligible children to include and review the selected count and total. Existing overlapping claims, expired coverage, withdrawn children, exhausted units, and ambiguous authorizations appear as exceptions. Resolve those separately; the individual claim form remains available.
+5. Select `Create selected drafts`. The screen processes the children in small groups and reports each created claim or exception. The server rechecks current authorization details, authorized units, and overlapping claims before saving each draft and its audit record together.
+6. If the connection fails, refresh the preview and check the claim queue before retrying. Already-created overlapping drafts are blocked from being created again.
+7. Review required documents and complete the existing external submission and decision steps for each draft. Bulk draft creation does not submit to the agency, approve claims, record payments, or change family balances.
 
 ## 3. Prepare One Deposit Batch
 

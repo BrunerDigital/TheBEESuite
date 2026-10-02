@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { isAchPaymentProcessing } from "./ach-payment-lifecycle";
 
 export const accountsReceivableFamilySelect = {
   id: true,
@@ -8,6 +9,10 @@ export const accountsReceivableFamilySelect = {
     select: {
       id: true,
       balanceCents: true,
+      payments: {
+        where: { status: "DRAFT", provider: "stripe" },
+        select: { amountCents: true, status: true, provider: true, customFields: true },
+      },
       invoices: {
         where: { status: "OPEN" },
         select: {
@@ -35,9 +40,13 @@ export const accountsReceivableSummaryFamilySelect = {
   },
 } satisfies Prisma.FamilySelect;
 
-export type AccountsReceivableFamilyRow = Prisma.FamilyGetPayload<{
+type QueriedAccountsReceivableFamilyRow = Prisma.FamilyGetPayload<{
   select: typeof accountsReceivableFamilySelect;
 }>;
+type QueriedAccount = NonNullable<QueriedAccountsReceivableFamilyRow["billingAccount"]>;
+export type AccountsReceivableFamilyRow = Omit<QueriedAccountsReceivableFamilyRow, "billingAccount"> & {
+  billingAccount: (Omit<QueriedAccount, "payments"> & { payments?: QueriedAccount["payments"] }) | null;
+};
 
 export type AccountsReceivableSummaryFamilyRow = Prisma.FamilyGetPayload<{
   select: typeof accountsReceivableSummaryFamilySelect;
@@ -55,6 +64,8 @@ export type SchoolAccountBalance = {
   hasBillingAccount: boolean;
   openInvoiceCount: number;
   overdueInvoiceCount: number;
+  processingPaymentCount: number;
+  processingPaymentCents: number;
   oldestOpenDueDate: string | null;
   status: SchoolAccountBalanceStatus;
 };
@@ -392,6 +403,7 @@ export function buildAccountsReceivableSnapshot(
     const balanceCents = family.billingAccount?.balanceCents ?? 0;
     const openInvoices = family.billingAccount?.invoices ?? [];
     const overdueInvoices = openInvoices.filter((invoice) => isOverdue(invoice.dueDate, asOf));
+    const processingPayments = (family.billingAccount?.payments ?? []).filter(isAchPaymentProcessing);
     const oldestOpenDueDate = openInvoices.reduce<Date | null>(
       (oldest, invoice) => !oldest || invoice.dueDate < oldest ? invoice.dueDate : oldest,
       null,
@@ -407,6 +419,8 @@ export function buildAccountsReceivableSnapshot(
       hasBillingAccount: Boolean(family.billingAccount),
       openInvoiceCount: openInvoices.length,
       overdueInvoiceCount: overdueInvoices.length,
+      processingPaymentCount: processingPayments.length,
+      processingPaymentCents: processingPayments.reduce((total, payment) => total + Math.max(0, payment.amountCents), 0),
       oldestOpenDueDate: oldestOpenDueDate?.toISOString() ?? null,
       status: accountStatus(balanceCents),
     };

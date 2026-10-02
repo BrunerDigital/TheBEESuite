@@ -54,6 +54,8 @@ test("active public school candidates require active status and a valid CRM loca
     name: "Kid City USA - Sarasota",
   }), false);
   for (const crmLocationId of [
+    "Kid City USA - FL | Deland - Amelia",
+    "Kid City USA - FL | Deland - Orange",
     "Kid City USA - FL | Leesburg",
     "Kid City USA - FL | Palatka",
     "Kid City USA - FL | Sanford",

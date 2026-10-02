@@ -1,6 +1,16 @@
 {
   "locations": [
     {
+      "crmLocationId": "Kid City USA - CO | Colorado Springs - Cordera",
+      "locationId": "Kid City USA - CO | Colorado Springs - Cordera",
+      "name": "Kid City USA - Cordera (Colorado Springs)",
+      "address": "10085 Pearl Pass View",
+      "city": "Colorado Springs",
+      "state": "CO",
+      "postalCode": "80924",
+      "phone": "719-301-0049"
+    },
+    {
       "crmLocationId": "Kid City USA - CO | Highlands Ranch",
       "locationId": "Kid City USA - CO | Highlands Ranch",
       "name": "Kid City USA - Highlands Ranch",
@@ -171,6 +181,16 @@
       "phone": "941-210-4482"
     },
     {
+      "crmLocationId": "Kid City USA - FL | Vero Beach",
+      "locationId": "Kid City USA - FL | Vero Beach",
+      "name": "Kid City USA - Vero Beach",
+      "address": "760 20th Avenue",
+      "city": "Vero Beach",
+      "state": "FL",
+      "postalCode": "32962",
+      "phone": "772-778-2262"
+    },
+    {
       "crmLocationId": "Kid City USA - FL | Winter Park",
       "locationId": "Kid City USA - FL | Winter Park",
       "name": "Kid City USA - Winter Park",
@@ -219,6 +239,16 @@
       "state": "IN",
       "postalCode": "46143",
       "phone": "317-300-0108"
+    },
+    {
+      "crmLocationId": "Kid City USA - IN | Jasper - Baden Strasse",
+      "locationId": "Kid City USA - IN | Jasper - Baden Strasse",
+      "name": "Kid City USA - Jasper - Baden Strasse",
+      "address": "4312 Baden Strasse Rd.",
+      "city": "Jasper",
+      "state": "IN",
+      "postalCode": "47546",
+      "phone": "812-481-8230"
     },
     {
       "crmLocationId": "Kid City USA - IN | Jasper - Truman",

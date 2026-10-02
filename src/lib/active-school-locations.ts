@@ -35,9 +35,6 @@ const clean = cleanLocationIdentifier;
 // offboarding batch. Keep them out of the live feed while their center records
 // are being closed.
 const retiredPublicLocationIds = new Set([
-  "Kid City USA - FL | Altamonte - Douglas",
-  "Kid City USA - FL | Daytona Beach East",
-  "Kid City USA - FL | Longwood - Wekiva",
   "Kid City USA - FL | Jacksonville - Fruit Cove",
   "Kid City USA - FL | Glen Saint Mary",
   "Kid City USA - FL | Hampton",
@@ -46,13 +43,8 @@ const retiredPublicLocationIds = new Set([
   "Kid City USA - FL | Jacksonville - Jacksonville Heights",
   "Kid City USA - FL | Port Orange",
   "Kid City USA - FL | South Daytona",
-  "Kid City USA - FL | Vero Beach",
   "Kid City USA - IN | Evansville",
-  "Kid City USA - IN | Jasper",
-  "Kid City USA - IN | Jasper - Truman",
-  "Kid City USA - IN | Jasper - Baden Strasse",
   "Kid City USA - IN | Fishers",
-  "Kid City USA - IN | Whitestown",
   "Kid City USA - TX | Friendswood",
   "Kid City USA - TX | Pilot Point",
   "Kid City USA - FL | Deland - Amelia",

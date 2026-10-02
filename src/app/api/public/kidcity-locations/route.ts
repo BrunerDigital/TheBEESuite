@@ -3,6 +3,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import {
   comparePublicKidCityLocations,
+  filterPublicKidCityLocations,
   isActivePublicSchoolCandidate,
   mergePublicKidCityLocations,
   toPublicKidCityLocation,
@@ -95,7 +96,7 @@ async function GETHandler() {
   }
 
   const fallback = await loadStaticLocations();
-  return NextResponse.json(fallback, { headers: responseHeaders });
+  return NextResponse.json({ locations: filterPublicKidCityLocations(fallback.locations) }, { headers: responseHeaders });
 }
 
 function OPTIONSHandler() {

@@ -154,9 +154,9 @@ test("live Kid City location API results keep static locations missing from the 
       phone: "941-210-4482",
     },
     {
-      crmLocationId: "FL | Vero Beach",
-      locationId: "FL | Vero Beach",
-      name: "Kid City USA - Vero Beach",
+      crmLocationId: "FL | Lake City",
+      locationId: "FL | Lake City",
+      name: "Kid City USA - Lake City",
       address: "760 20th Avenue",
       city: "Vero Beach",
       state: "FL",
@@ -168,8 +168,8 @@ test("live Kid City location API results keep static locations missing from the 
   const merged = mergePublicKidCityLocations(liveLocations, staticLocations);
 
   assert.deepEqual(merged.map((location) => location.crmLocationId), [
+    "Kid City USA - FL | Lake City",
     "Kid City USA - FL | Sarasota",
-    "Kid City USA - FL | Vero Beach",
   ]);
   assert.equal(
     merged.find((location) => location.crmLocationId === "Kid City USA - FL | Sarasota")?.name,

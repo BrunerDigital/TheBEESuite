@@ -16,7 +16,7 @@ import {
   claimIntegrationDeliveryForRetry,
   computeIntegrationDeliveryState,
 } from "@/lib/integration-deliveries";
-import { selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
+import { isEligiblePublicInquiryCenter, selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
@@ -317,11 +317,17 @@ async function getIntakeCenter({
   strictLocationRouting: boolean;
   brandName?: string;
 }): Promise<IntakeCenter> {
+  function eligible(center: IntakeCenterRecord | IntakeCenter) {
+    if (!isEligiblePublicInquiryCenter(center, strictLocationRouting)) {
+      throw new InquiryRoutingError("The selected school is not accepting public inquiries. Please choose another location or contact corporate.", "ineligible_public_location");
+    }
+    return "organization" in center ? toIntakeCenter(center) : center;
+  }
   const requestedCenterId = clean(centerId);
   if (requestedCenterId) {
     const center = await findCenterById(requestedCenterId);
 
-    if (center && (!strictLocationRouting || center.status === "active")) return center;
+    if (center) return eligible(center);
   }
 
   const locationIds = uniqueValues([locationId, publicLocationId ?? ""]);
@@ -341,7 +347,7 @@ async function getIntakeCenter({
     });
     const routedCenter = selectPreferredInquiryCenter(routedCenters, locationIds);
 
-    if (routedCenter) return toIntakeCenter(routedCenter);
+    if (routedCenter) return eligible(routedCenter);
 
     const brandText = `${brandName ?? ""} ${locationIds.join(" ")}`;
     const tenantSlug = strictLocationRouting || /kid city usa/i.test(brandText)
@@ -358,7 +364,7 @@ async function getIntakeCenter({
       select: intakeCenterSelect,
     });
     const aliasCenter = selectPreferredInquiryCenter(aliasCandidates, locationIds);
-    if (aliasCenter) return toIntakeCenter(aliasCenter);
+    if (aliasCenter) return eligible(aliasCenter);
 
     if (strictLocationRouting) {
       throw new InquiryRoutingError(

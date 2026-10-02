@@ -34,6 +34,7 @@ export type NotificationExternalDeliveryInput = {
   type: string;
   title: string;
   body: string;
+  emailBody?: string;
   recipients: NotificationDeliveryRecipient[];
   preferences: NotificationPreferenceRecord[];
   emailRequested?: boolean;
@@ -163,6 +164,7 @@ export async function deliverNotificationExternalChannels({
   type,
   title,
   body,
+  emailBody = body,
   recipients,
   preferences,
   emailRequested = true,
@@ -218,8 +220,8 @@ export async function deliverNotificationExternalChannels({
     const email = await providers.sendEmail({
       to: emailRecipients,
       subject: title,
-      text: body,
-      html: buildBeeSuiteEmailHtml({ title, body, category: emailCategory || type, brandKind: emailBrandKind }),
+      text: emailBody,
+      html: buildBeeSuiteEmailHtml({ title, body: emailBody, category: emailCategory || type, brandKind: emailBrandKind }),
       replyTo,
       fromName,
       categories: [emailPurpose, type],
@@ -247,7 +249,7 @@ export async function deliverNotificationExternalChannels({
       purpose: emailPurpose,
       to: emailRecipients,
       subject: title,
-      text: body,
+      text: emailBody,
       replyTo,
       fromName,
       result: email,

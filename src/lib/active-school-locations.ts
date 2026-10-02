@@ -35,6 +35,26 @@ const clean = cleanLocationIdentifier;
 // offboarding batch. Keep them out of the live feed while their center records
 // are being closed.
 const retiredPublicLocationIds = new Set([
+  "Kid City USA - FL | Altamonte - Douglas",
+  "Kid City USA - FL | Daytona Beach East",
+  "Kid City USA - FL | Longwood - Wekiva",
+  "Kid City USA - FL | Jacksonville - Fruit Cove",
+  "Kid City USA - FL | Glen Saint Mary",
+  "Kid City USA - FL | Hampton",
+  "Kid City USA - FL | Macclenny",
+  "Kid City USA - FL | Starke",
+  "Kid City USA - FL | Jacksonville - Jacksonville Heights",
+  "Kid City USA - FL | Port Orange",
+  "Kid City USA - FL | South Daytona",
+  "Kid City USA - FL | Vero Beach",
+  "Kid City USA - IN | Evansville",
+  "Kid City USA - IN | Jasper",
+  "Kid City USA - IN | Jasper - Truman",
+  "Kid City USA - IN | Jasper - Baden Strasse",
+  "Kid City USA - IN | Fishers",
+  "Kid City USA - IN | Whitestown",
+  "Kid City USA - TX | Friendswood",
+  "Kid City USA - TX | Pilot Point",
   "Kid City USA - FL | Deland - Amelia",
   "Kid City USA - FL | Deland - Orange",
   "Kid City USA - FL | Leesburg",
@@ -42,7 +62,17 @@ const retiredPublicLocationIds = new Set([
   "Kid City USA - FL | Sanford",
   "Kid City USA - TN | Soddy Daisy",
   "Kid City USA - TX | Tyler",
-]);
+].map((id) => id.toLowerCase()));
+
+export function isRetiredPublicKidCityLocation(value: string | null | undefined) {
+  const canonical = canonicalKidCityLocationId(value);
+  return Boolean(canonical && retiredPublicLocationIds.has(normalizeCrmLocationId(canonical).toLowerCase()));
+}
+
+export function filterPublicKidCityLocations(locations: PublicKidCityLocation[]) {
+  return locations.filter((location) => !isRetiredPublicKidCityLocation(location.crmLocationId)
+    && !isRetiredPublicKidCityLocation(location.locationId));
+}
 
 function canonicalKidCityLocationId(value: string | null | undefined) {
   return canonicalSchoolLocationId({
@@ -80,7 +110,7 @@ export function defaultCenterNameFromCrmLocationId(value: string | null | undefi
 export function isActivePublicSchoolCandidate(center: CenterPublicLocationInput) {
   return center.status === "active"
     && isValidCrmLocationId(center.crmLocationId)
-    && !retiredPublicLocationIds.has(normalizeCrmLocationId(center.crmLocationId));
+    && !isRetiredPublicKidCityLocation(center.crmLocationId);
 }
 
 export function toPublicKidCityLocation(center: CenterPublicLocationInput): PublicKidCityLocation {
@@ -146,5 +176,5 @@ export function mergePublicKidCityLocations(
     if (key) locationsByCrmId.set(key, location);
   }
 
-  return Array.from(locationsByCrmId.values()).sort(comparePublicKidCityLocations);
+  return filterPublicKidCityLocations(Array.from(locationsByCrmId.values())).sort(comparePublicKidCityLocations);
 }

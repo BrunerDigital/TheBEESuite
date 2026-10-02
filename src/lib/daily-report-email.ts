@@ -3,6 +3,7 @@ import { externalProviderEmails, sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { resolveDailyReportEmailRecipients, type DailyReportEmailRecipient } from "@/lib/daily-report-email-settings";
 import { dailyReportTimedCareEvents } from "@/lib/daily-report-ordering";
+import { aggregateDailyReportEntries } from "@/lib/daily-report-aggregation";
 
 type DailyReportEmailMeal = {
   mealType: string;
@@ -208,12 +209,14 @@ export async function sendCheckoutDailyReportEmail({
   checkedOutAt: Date;
   timeZone: string;
 }): Promise<DailyReportEmailSummary> {
-  const report = await prisma.dailyReport.findFirst({
+  const reports = await prisma.dailyReport.findMany({
     where: {
       childId,
       date: { gte: serviceDayStart, lt: serviceDayEnd },
+      child: { classroom: { ...(centerId ? { centerId } : {}), center: { organization: { tenantId } } }, ...(centerId ? { family: { centerId } } : {}) },
+      ...(centerId ? { OR: [{ classroomId: null }, { classroom: { centerId, center: { organization: { tenantId } } } }] } : {}),
     },
-    orderBy: [{ sentAt: "desc" }, { date: "desc" }, { id: "desc" }],
+    orderBy: [{ date: "asc" }, { id: "asc" }],
     include: {
       child: {
         select: {
@@ -238,7 +241,7 @@ export async function sendCheckoutDailyReportEmail({
       activities: { orderBy: { id: "asc" } },
     },
   });
-
+  const report = aggregateDailyReportEntries(reports);
   if (!report) return emailSummaryForSkipped("no_report", null);
 
   const recipients = resolveDailyReportEmailRecipients({
@@ -247,9 +250,9 @@ export async function sendCheckoutDailyReportEmail({
   });
   if (!recipients.length) return emailSummaryForSkipped("no_recipients", report.id, recipients);
 
-  if (!report.sentAt) {
-    await prisma.dailyReport.update({
-      where: { id: report.id },
+  if (reports.some(row => !row.sentAt)) {
+    await prisma.dailyReport.updateMany({
+      where: { id: { in: reports.map(row => row.id) }, childId, sentAt: null },
       data: { sentAt: checkedOutAt },
     });
   }
@@ -292,6 +295,7 @@ export async function sendCheckoutDailyReportEmail({
       result: email,
       metadata: {
         dailyReportId: report.id,
+        dailyReportIds: reports.map(row => row.id),
         childId,
         familyId: report.child.family.id,
         guardianIds: recipients.map((recipient) => recipient.guardianId),

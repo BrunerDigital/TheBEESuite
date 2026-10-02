@@ -1,4 +1,5 @@
 import { locationAliasesFromCustomFields } from "@/lib/school-location-identifiers";
+import { isRetiredPublicKidCityLocation } from "@/lib/active-school-locations";
 
 export type IntakeCenterMatchCandidate = {
   crmLocationId: string | null;
@@ -10,6 +11,12 @@ export type IntakeCenterMatchCandidate = {
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
+}
+
+export function isEligiblePublicInquiryCenter(center: IntakeCenterMatchCandidate, strictLocationRouting: boolean) {
+  return (!strictLocationRouting || center.status === "active")
+    && !isRetiredPublicKidCityLocation(center.crmLocationId)
+    && !isRetiredPublicKidCityLocation(center.locationId);
 }
 
 function matchRank(center: IntakeCenterMatchCandidate, keys: Set<string>) {

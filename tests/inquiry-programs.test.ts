@@ -20,7 +20,7 @@ test("Kid City strict routing excludes archived and closed schools", async () =>
   assert.equal(activeOnlyFilters.length, 2);
   assert.match(
     source,
-    /if \(center && \(!strictLocationRouting \|\| center\.status === "active"\)\) return center;/,
+    /if \(center\) return eligible\(center\);/,
   );
 });
 

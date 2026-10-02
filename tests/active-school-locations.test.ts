@@ -154,9 +154,9 @@ test("live Kid City location API results keep static locations missing from the 
       phone: "941-210-4482",
     },
     {
-      crmLocationId: "FL | Vero Beach",
-      locationId: "FL | Vero Beach",
-      name: "Kid City USA - Vero Beach",
+      crmLocationId: "FL | Lake City",
+      locationId: "FL | Lake City",
+      name: "Kid City USA - Lake City",
       address: "760 20th Avenue",
       city: "Vero Beach",
       state: "FL",
@@ -168,8 +168,8 @@ test("live Kid City location API results keep static locations missing from the 
   const merged = mergePublicKidCityLocations(liveLocations, staticLocations);
 
   assert.deepEqual(merged.map((location) => location.crmLocationId), [
+    "Kid City USA - FL | Lake City",
     "Kid City USA - FL | Sarasota",
-    "Kid City USA - FL | Vero Beach",
   ]);
   assert.equal(
     merged.find((location) => location.crmLocationId === "Kid City USA - FL | Sarasota")?.name,
@@ -202,7 +202,6 @@ test("green-X school removals cannot return through fallback or Avada options", 
   const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
   const ids = new Set(file.locations.map((item) => item.crmLocationId));
   for (const id of [
-    "Kid City USA - CO | Colorado Springs - Cordera",
     "Kid City USA - CO | Grand Junction",
     "Kid City USA - CO | Longmont",
     "Kid City USA - FL | Altamonte - Fruitland",
@@ -235,14 +234,12 @@ test("green-X school removals cannot return through fallback or Avada options", 
     "Kid City USA - FL | Riverview",
     "Kid City USA - FL | South Daytona",
     "Kid City USA - FL | Starke",
-    "Kid City USA - FL | Vero Beach",
     "Kid City USA - IN | Beech Grove",
     "Kid City USA - IN | Beech Grove 4520",
     "Kid City USA - IN | Beech Grove 4521",
     "Kid City USA - IN | Evansville",
     "Kid City USA - IN | Fishers",
     "Kid City USA - IN | Franklin Township",
-    "Kid City USA - IN | Jasper - Baden Strasse",
     "Kid City USA - IN | Lebanon",
     "Kid City USA - IN | McCordsville",
     "Kid City USA - SC | Bluffton",
@@ -260,5 +257,14 @@ test("green-X school removals cannot return through fallback or Avada options", 
   ]) {
     assert.equal(ids.has(id), false, `${id} must not return through the fallback`);
     assert.equal(snippet.includes(`value="${id}"`), false, `${id} must not return through Avada`);
+  }
+});
+
+test("retained Cordera, Vero Beach and both Jasper schools remain in fallback and Avada", () => {
+  const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
+  const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
+  for (const id of ["Kid City USA - CO | Colorado Springs - Cordera", "Kid City USA - FL | Vero Beach", "Kid City USA - IN | Jasper - Truman", "Kid City USA - IN | Jasper - Baden Strasse"]) {
+    assert.equal(file.locations.some((item) => item.crmLocationId === id), true, id);
+    assert.equal(snippet.includes(`value="${id}"`), true, id);
   }
 });

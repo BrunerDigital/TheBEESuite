@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterFamilyLedgerEntries, filterLedgerEntriesByDateRange, standardCustomerStatementEntries } from "../src/lib/family-ledger";
+import { filterFamilyLedgerEntries, filterLedgerEntriesByDateRange, reconciledFamilyLedgerEntries, standardCustomerStatementEntries } from "../src/lib/family-ledger";
 import { readFileSync } from "node:fs";
 
 const entries = [
@@ -8,6 +8,37 @@ const entries = [
   { id: "davis-1", billingAccount: { family: { id: "davis" } } },
   { id: "harris-2", billingAccount: { family: { id: "harris" } } },
 ];
+
+test("backdated payments display effective-date carryforward without changing posting snapshots", () => {
+  const history = [
+    { id: "next", amountCents: 5120, balanceAfterCents: 10240, effectiveAt: "2026-09-17" },
+    { id: "cash", amountCents: -5200, balanceAfterCents: 5040, effectiveAt: "2026-09-16" },
+    { id: "prior", amountCents: 5120, balanceAfterCents: 5120, effectiveAt: "2026-09-10" },
+  ];
+  const displayed = reconciledFamilyLedgerEntries(history, 5040);
+  assert.deepEqual(displayed.map(entry => entry.balanceAfterCents), [5040, -80, 5120]);
+  assert.equal(history[1].balanceAfterCents, 5040);
+  assert.deepEqual(displayed.map(entry => entry.id), history.map(entry => entry.id));
+});
+
+test("partial ledgers and unknown imported opening balances retain original snapshots", () => {
+  const history = [{ id: "payment", amountCents: -100, balanceAfterCents: 900, effectiveAt: "2026-09-10" }];
+  assert.deepEqual(reconciledFamilyLedgerEntries(history, 900), history);
+  assert.deepEqual(reconciledFamilyLedgerEntries(history, null), history);
+});
+
+test("same-time entries use posting time and ID to resolve ordering", () => {
+  const history = [
+    { id: "b", amountCents: -100, balanceAfterCents: null, effectiveAt: "2026-09-10", createdAt: "2026-09-11" },
+    { id: "a", amountCents: 200, balanceAfterCents: null, effectiveAt: "2026-09-10", createdAt: "2026-09-10" },
+  ];
+  assert.deepEqual(reconciledFamilyLedgerEntries(history, 100).map(entry => entry.balanceAfterCents), [100, 200]);
+});
+
+test("invalid dates and amounts fail closed to original snapshots", () => {
+  const history = [{ id: "bad", amountCents: 100, balanceAfterCents: 100, effectiveAt: "invalid" }];
+  assert.deepEqual(reconciledFamilyLedgerEntries(history, 100), history);
+});
 
 test("family ledger shows entries for only the selected family", () => {
   assert.deepEqual(

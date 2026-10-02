@@ -9,6 +9,7 @@ import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { messageAttachmentKind, type StoredMessageAttachment } from "@/lib/message-attachments";
+import { messageEmailBodyWithAttachments } from "@/lib/message-attachment-notice";
 import {
   messageNotificationPreferenceRoles,
   shouldNotifyLeadershipOfFamilyMessage,
@@ -831,6 +832,7 @@ async function POSTHandler(request: NextRequest) {
         type: "messages",
         title: `Message from ${user.name}: ${renderedSubject}`,
         body: appendInAppMessageReplyInstructions(renderedMessage, parentReplyUrl),
+        emailBody: messageEmailBodyWithAttachments(appendInAppMessageReplyInstructions(renderedMessage, parentReplyUrl), broadcastAttachments, parentReplyUrl),
         recipients: await messageRecipientsAllowed(prisma, center?.organization.tenant.id ?? user.tenantId, user.id, familyNotificationDeliveryRecipients(targetFamily)),
         preferences: centerNotificationPreferences,
         emailRequested: sendEmailCopy,
@@ -1299,6 +1301,7 @@ async function POSTHandler(request: NextRequest) {
         type: "messages",
         title: emailSubject,
         body: emailReplyUrl ? appendInAppMessageReplyInstructions(message, emailReplyUrl) : message,
+        emailBody: messageEmailBodyWithAttachments(emailReplyUrl ? appendInAppMessageReplyInstructions(message, emailReplyUrl) : message, attachments, emailReplyUrl),
         recipients: deliveryRecipients,
         preferences: notificationPreferenceRows,
         emailRequested: sendEmailCopy,

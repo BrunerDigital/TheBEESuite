@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
-import { filterFamilyLedgerEntries, filterLedgerEntriesByDateRange, standardCustomerStatementEntries } from "@/lib/family-ledger";
+import { filterFamilyLedgerEntries, filterLedgerEntriesByDateRange, reconciledFamilyLedgerEntries, standardCustomerStatementEntries } from "@/lib/family-ledger";
 import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 
 export type FamilyLedgerEntry = {
@@ -30,6 +30,7 @@ export type FamilyLedgerEntry = {
   amountCents: number;
   balanceAfterCents: number | null;
   effectiveAt: Date | string;
+  createdAt?: Date | string;
   invoiceId?: string | null;
   paymentId?: string | null;
   billingAccount: {
@@ -93,8 +94,11 @@ export function FamilyLedgerCard({
   const selectedFamily = families.find((family) => family.id === familyId) ?? null;
   const selectedAccount = accounts.find((account) => account.familyId === familyId) ?? null;
   const visibleEntries = useMemo(
-    () => filterFamilyLedgerEntries(entries, familyId),
-    [entries, familyId],
+    () => reconciledFamilyLedgerEntries(
+      filterFamilyLedgerEntries(entries, familyId),
+      selectedAccount?.balanceCents ?? null,
+    ),
+    [entries, familyId, selectedAccount?.balanceCents],
   );
   const selectedCenterId = selectedAccount?.centerId
     ?? visibleEntries[0]?.billingAccount.family.centerId

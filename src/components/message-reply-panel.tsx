@@ -623,10 +623,10 @@ export function MessageReplyPanel({
                 <SegmentChecklist title="Tags" options={segmentOptions.tags} values={segmentTags} onToggle={(value) => toggleSelection(value, segmentTags, setSegmentTags)} />
               </div>
             ) : null}
-            <div className="space-y-1">
+            {!replyToMessageId ? <div className="space-y-1">
               <Label htmlFor={fieldId("subject")}>Subject</Label>
               <Input id={fieldId("subject")} name="message-subject" autoComplete="off" className="h-11" value={subject} onChange={(event) => setSubject(event.target.value)} />
-            </div>
+            </div> : null}
             <div className="space-y-1">
               <Label htmlFor={fieldId("message")}>Message</Label>
               <Textarea id={fieldId("message")} name="message-body" autoComplete="off" value={message} onChange={(event) => setMessage(event.target.value)} className="min-h-28" />

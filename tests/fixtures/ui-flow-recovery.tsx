@@ -132,7 +132,7 @@ function Fixture() {
         : <OperationsActionHub title="Create or Edit Announcement" defaultEntity="announcement" centers={centers} compact />}
     </AppShell>;
   }
-  if (view === "invoice-receivables") return <AccountsReceivablePanel snapshot={{ schools: [], totalAccountCount: 1, owingAccountCount: 1, currentAccountCount: 0, creditAccountCount: 0, overdueAccountCount: 0, totalOwedCents: 10000, totalCreditCents: 0, netBalanceCents: 10000, asOf: "2026-09-13T12:00:00Z", accounts: [{ id: "fake-account", familyId: "a", familyName: "Fake Family A", centerId: "a", centerName: "Fake School A", balanceCents: 10000, hasBillingAccount: true, openInvoiceCount: 1, overdueInvoiceCount: 0, oldestOpenDueDate: invoiceDate ?? "2026-09-14", status: "owes" }] }} />;
+  if (view === "invoice-receivables") return <AccountsReceivablePanel snapshot={{ schools: [], totalAccountCount: 1, owingAccountCount: 1, currentAccountCount: 0, creditAccountCount: 0, overdueAccountCount: 0, totalOwedCents: 10000, totalCreditCents: 0, netBalanceCents: 10000, asOf: "2026-09-13T12:00:00Z", accounts: [{ id: "fake-account", familyId: "a", familyName: "Fake Family A", centerId: "a", centerName: "Fake School A", balanceCents: 10000, hasBillingAccount: true, openInvoiceCount: 1, overdueInvoiceCount: 0, processingPaymentCount: 0, processingPaymentCents: 0, oldestOpenDueDate: invoiceDate ?? "2026-09-14", status: "owes" }] }} />;
   if (view === "shortcuts") return <>
     <nav aria-label="Fake task shortcuts"><a href="#fake-task-a">First fake task</a><a href="#fake-task-b">Next fake task</a></nav>
     <CollapsibleCard id="fake-task-a" title="First fake task" defaultCollapsed><input aria-label="First fake input" /></CollapsibleCard>

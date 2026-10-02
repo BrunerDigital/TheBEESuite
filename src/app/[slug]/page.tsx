@@ -4,6 +4,7 @@ import { readAuditHistoryPage } from "@/lib/audit-history-query";
 import { AuditHistoryUnavailable } from "@/components/audit-history-page";
 import { helpNavigationCardsFor } from "@/lib/help-navigation";
 import { notFound, redirect } from "next/navigation";
+import { tuitionPlanIsArchived } from "@/lib/tuition-plan-archive";
 import type { Metadata } from "next";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
@@ -4598,7 +4599,7 @@ async function renderLivePage(
             products: billingProducts,
             tuitionPlans: tuitionPlans.filter(
               (plan): plan is typeof plan & { centerId: string } => Boolean(plan.centerId),
-            ),
+            ).map(plan => ({ ...plan, archived: tuitionPlanIsArchived(centers.find(center => center.id === plan.centerId)?.customFields, plan.id) })),
           },
           canProcessAutopay: canManageBilling(user),
           needsEnrollmentSetup: needsEnrollmentSetupFamilies.map((family) => ({

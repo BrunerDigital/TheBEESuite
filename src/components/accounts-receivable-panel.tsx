@@ -15,11 +15,13 @@ import { ReportPrintAction } from "@/components/printable-report";
 import { cn } from "@/lib/utils";
 import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 
-type AccountFilter = "all" | SchoolAccountBalanceStatus;
+type AccountFilter = "all" | "overdue" | "processing" | SchoolAccountBalanceStatus;
 
 const accountFilters: Array<{ id: AccountFilter; label: string }> = [
   { id: "all", label: "All" },
   { id: "owes", label: "Owes" },
+  { id: "overdue", label: "Overdue" },
+  { id: "processing", label: "Processing" },
   { id: "credit", label: "Credits" },
   { id: "current", label: "Current" },
 ];
@@ -60,7 +62,9 @@ export function AccountsReceivablePanel({
   const showCenterNames = new Set(snapshot.accounts.map((account) => account.centerId).filter(Boolean)).size > 1;
   const visibleAccounts = useMemo(
     () => snapshot.accounts.filter((account) => {
-      if (filter !== "all" && account.status !== filter) return false;
+      if (filter === "overdue" && !(account.balanceCents > 0 && account.overdueInvoiceCount > 0)) return false;
+      if (filter === "processing" && account.processingPaymentCount === 0) return false;
+      if (filter !== "all" && filter !== "overdue" && filter !== "processing" && account.status !== filter) return false;
       if (!normalizedQuery) return true;
       return `${account.familyName} ${account.centerName}`.toLocaleLowerCase().includes(normalizedQuery);
     }),
@@ -167,6 +171,7 @@ export function AccountsReceivablePanel({
                     <th scope="col">Balance</th>
                     <th scope="col">Open invoices</th>
                     <th scope="col">Overdue</th>
+                    <th scope="col">Bank payments processing</th>
                     <th scope="col">Oldest open due date</th>
                   </tr>
                 </thead>
@@ -179,6 +184,7 @@ export function AccountsReceivablePanel({
                       <td>{money(account.balanceCents)}</td>
                       <td>{account.openInvoiceCount.toLocaleString("en-US")}</td>
                       <td>{account.overdueInvoiceCount.toLocaleString("en-US")}</td>
+                      <td>{money(account.processingPaymentCents)} ({account.processingPaymentCount})</td>
                       <td>{formatInvoiceDueDate(account.oldestOpenDueDate, { fallback: "No due date" })}</td>
                     </tr>
                   ))}
@@ -187,17 +193,18 @@ export function AccountsReceivablePanel({
                   <tr>
                     <th scope="row" colSpan={printCenterNames ? 3 : 2}>Net balance</th>
                     <th>{money(snapshot.netBalanceCents)}</th>
-                    <td colSpan={3}>{snapshot.totalAccountCount.toLocaleString("en-US")} current-family accounts</td>
+                    <td colSpan={4}>{snapshot.totalAccountCount.toLocaleString("en-US")} current-family accounts</td>
                   </tr>
                   <tr>
                     <th scope="row" colSpan={printCenterNames ? 3 : 2}>Total owed</th>
                     <th>{money(snapshot.totalOwedCents)}</th>
-                    <td colSpan={3}>{snapshot.owingAccountCount.toLocaleString("en-US")} families owing</td>
+                    <td colSpan={4}>{snapshot.owingAccountCount.toLocaleString("en-US")} families owing</td>
                   </tr>
                 </tfoot>
               </table>
             </section>
             <p>This report includes currently enrolled families only. Positive balances are owed, negative balances are family credits, and zero balances are current.</p>
+            <p>Processing bank payments are unsettled and do not reduce these ledger balances. Review the payment before applying a late fee or collecting again. Agency claims and remittances are reported separately in Agency Claim Queue.</p>
           </ReportPrintAction>
         </div>
       </div>
@@ -228,6 +235,9 @@ export function AccountsReceivablePanel({
                       {account.overdueInvoiceCount} overdue
                     </Badge>
                   ) : null}
+                  {account.processingPaymentCount > 0 ? <Badge variant="outline" className="border-sky-500/40">
+                    {money(account.processingPaymentCents)} bank payment processing
+                  </Badge> : null}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {showCenterNames ? `${account.centerName} · ` : ""}
@@ -273,6 +283,7 @@ export function AccountsReceivablePanel({
 
       <p className="text-xs text-muted-foreground">
         This view includes currently enrolled families only. Positive balances are owed, negative balances are family credits, and zero balances are current.
+        {" "}Processing bank payments remain unsettled; review before adding a late fee or collecting again. Agency claims and remittances stay separate from family balances.
       </p>
     </div>
   );

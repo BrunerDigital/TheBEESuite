@@ -14,6 +14,7 @@ import {
 } from "@/lib/billing-workflows";
 import { productInvoiceFieldsForProduct, productPurchaseTotals } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
+import { tuitionPlanIsArchived } from "@/lib/tuition-plan-archive";
 import { issueFamilyRefund, validateFamilyRefundAvailability } from "@/lib/family-refunds";
 import { refundSubmissionMode } from "@/lib/refund-approval";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
@@ -146,6 +147,11 @@ async function resolveCharge(body: Record<string, unknown>, centerId: string): P
     if (!tuitionPlanId) return { ok: false, status: 400, error: "Tuition plan is required." };
     const plan = await prisma.tuitionPlan.findFirst({ where: { id: tuitionPlanId, centerId } });
     if (!plan) return { ok: false, status: 404, error: "Tuition plan not found." };
+    const planCenter = await prisma.center.findUnique({ where: { id: centerId }, select: { customFields: true } });
+    if (tuitionPlanIsArchived(planCenter?.customFields, plan.id)) {
+      const assignedChild = clean(body.childId) ? await prisma.child.findFirst({ where: { id: clean(body.childId), family: { centerId }, customFields: { path: ["tuitionPlanId"], equals: plan.id } }, select: { id: true } }) : null;
+      if (!assignedChild) return { ok: false, status: 409, error: "This rate is archived. Restore it or choose an active tuition rate." };
+    }
     if (isVoucherFundedTuitionAmount(plan.amountCents)) {
       return { ok: false, status: 400, error: "$0 CCDF or voucher tuition is saved for tracking and cannot create a family charge." };
     }

@@ -13,3 +13,8 @@ Public location lists filter explicitly removed locations after combining databa
 ## Acceptance
 
 Focused payment, setup, communications, and inquiry checks passed. The production gate passed lint, typecheck, all 2583 tests, and the optimized Next.js build. No live test email, charge, identity repair, or invite was submitted. Deployment evidence and authenticated acceptance are recorded separately in the private completion tracker.
+# Family ledger and tuition rate handling
+
+When the complete family ledger sums to the current account balance, the family ledger and its printed views calculate running balances in effective-date order. Posting snapshots remain stored unchanged. Partial or unreconciled ledgers retain their stored snapshots pending investigation.
+
+Authorized billing staff can select a tuition rate under Tuition rate setup and choose Archive rate. Archived rates stay visible in the rate editor and can be restored. New child assignments omit archived rates; an existing child assignment keeps its plan and recurring billing. Invoices, plan amounts, saved assignments and audit history are retained. Archive and restore changes are scoped to the school and tenant and recorded atomically in the audit log. No schema migration is required.

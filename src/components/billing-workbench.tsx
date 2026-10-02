@@ -165,6 +165,7 @@ export type BillingWorkbenchTuitionPlan = {
   ageGroup: string;
   cadence: string;
   amountCents: number;
+  archived?: boolean;
 };
 
 type BillingFamilyListMode = BillingFamilyAccountCategory;
@@ -1726,6 +1727,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function saveTuitionPlan() {
+    if (planBeingEdited?.archived) return setErrorMessage("Restore this archived rate before editing it.");
     if (!planName.trim() || !planAmountDollars.trim()) {
       return setErrorMessage("Tuition plan name and amount are required.");
     }
@@ -1785,6 +1787,23 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setAssignmentDescription(planName.trim());
       }
       setBillingAction("recurring");
+      router.refresh();
+    });
+  }
+
+  function changeTuitionPlanArchive() {
+    if (!planBeingEdited) return;
+    const plan = planBeingEdited;
+    runBillingTransition(async () => {
+      setErrorMessage("");
+      setStatusMessage("");
+      const response = await fetch("/api/billing/tuition-plans/archive", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centerId, planId: plan.id, archived: !plan.archived }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) return setErrorMessage(json?.error || "Tuition rate could not be archived or restored.");
+      setStatusMessage(plan.archived ? "Tuition rate restored for new assignments." : "Tuition rate archived. Existing child assignments, invoices and history are unchanged.");
       router.refresh();
     });
   }
@@ -2283,7 +2302,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   <SelectItem value="new">New tuition rate</SelectItem>
                   {locationTuitionPlans.map((plan) => (
                     <SelectItem key={plan.id} value={plan.id}>
-                      {plan.name} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
+                      {plan.name}{plan.archived ? " · Archived" : ""} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -2342,11 +2361,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               {planCadence === "biweekly" ? <p className="text-xs text-muted-foreground">Enter the weekly rate. Each biweekly invoice will contain two weekly rates.</p> : null}
             </div>
             <div className="flex items-end">
-              <Button disabled={isPending} onClick={saveTuitionPlan} className="w-full">
+              <Button disabled={isPending || Boolean(planBeingEdited?.archived)} onClick={saveTuitionPlan} className="w-full">
                 Save Rate
               </Button>
             </div>
           </div>
+          {planBeingEdited ? <div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="outline" disabled={isPending} onClick={changeTuitionPlanArchive}>{planBeingEdited.archived ? "Restore rate" : "Archive rate"}</Button><p className="text-xs text-muted-foreground">Archiving removes a rate from new choices and preserves existing assignments and history.</p></div> : null}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 p-4">
@@ -2785,7 +2805,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <Select value={effectiveAssignmentPlanId} onValueChange={handleAssignmentPlanChange}>
                   <SelectTrigger id="billing-assignment-plan"><SelectValue placeholder="Choose plan" /></SelectTrigger>
                   <SelectContent>
-                    {locationTuitionPlans.map((plan) => (
+                    {locationTuitionPlans.filter(plan => !plan.archived || plan.id === selectedAssignmentChild?.tuitionAssignment?.tuitionPlanId).map((plan) => (
                       <SelectItem key={plan.id} value={plan.id}>
                         {plan.name} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
                       </SelectItem>
@@ -3274,7 +3294,7 @@ function ChargeFields({
           <Select value={tuitionPlanId} onValueChange={(value) => value && setTuitionPlanId(value)}>
             <SelectTrigger id={`${idPrefix}-tuition-plan`}><SelectValue placeholder="Choose plan" /></SelectTrigger>
             <SelectContent>
-              {tuitionPlans.map((plan) => (
+              {tuitionPlans.filter(plan => !plan.archived || plan.id === tuitionPlanId).map((plan) => (
                 <SelectItem key={plan.id} value={plan.id}>
                   {plan.name} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
                 </SelectItem>

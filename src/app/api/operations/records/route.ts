@@ -14,6 +14,7 @@ import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard } from "@/lib/operations-guardrails";
 import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
+import { tuitionPlanIsArchived } from "@/lib/tuition-plan-archive";
 import { parseCalendarDateOrTimestamp } from "@/lib/date-guardrails";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
 import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, readStaffCompensation, staffCompensationCustomFields } from "@/lib/staff-compensation";
@@ -2299,6 +2300,9 @@ async function POSTHandler(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
       }
       existingTuitionPlan = existing;
+      const rateCenter = await prisma.center.findFirst({ where: { id: requestedCenterId, organization: { tenantId: user.tenantId } }, select: { customFields: true } });
+      if (!rateCenter) return NextResponse.json({ ok: false, error: "School not found for this tenant." }, { status: 404 });
+      if (tuitionPlanIsArchived(rateCenter.customFields, id)) return NextResponse.json({ ok: false, error: "Restore this archived rate before editing it." }, { status: 409 });
     }
     centerId = requestedCenterId;
     const requestedTuitionCadence = clean(body.cadence);

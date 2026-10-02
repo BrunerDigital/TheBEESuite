@@ -13,6 +13,7 @@ import {
   WEEKLY_TUITION_AUTOBILL_DAY,
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
+import { archivedTuitionAssignmentAllowed } from "@/lib/tuition-plan-archive";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents } from "@/lib/tuition-credits";
 import { childTuitionEligibilityError } from "@/lib/prospective-family-billing";
 
@@ -123,6 +124,10 @@ async function POSTHandler(request: NextRequest) {
   if (!plan) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
   if (plan.centerId !== access.centerId) {
     return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
+  }
+  const planCenter = await prisma.center.findFirst({ where: { id: access.centerId, organization: { tenantId: user.tenantId } }, select: { customFields: true } });
+  if (!planCenter || !archivedTuitionAssignmentAllowed(planCenter.customFields, plan.id, existingFields.tuitionPlanId)) {
+    return NextResponse.json({ ok: false, error: "This tuition rate is archived. Restore it or choose an active rate for a new assignment." }, { status: 409 });
   }
   const planCadence = normalizeBillingCadence(plan.cadence);
   const requestedCadence = clean(body.billingCadence)

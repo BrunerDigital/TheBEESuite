@@ -248,6 +248,8 @@ test("green-X school removals cannot return through fallback or Avada options", 
     "Kid City USA - TX | Pilot Point",
     "Kid City USA - TX | Terrell",
     // Additional removals requested after Marie's green-X list.
+    "Kid City USA - FL | Deland - Amelia",
+    "Kid City USA - FL | Deland - Orange",
     "Kid City USA - FL | Leesburg",
     "Kid City USA - FL | Palatka",
     "Kid City USA - FL | Sanford",

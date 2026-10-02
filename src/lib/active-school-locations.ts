@@ -35,6 +35,8 @@ const clean = cleanLocationIdentifier;
 // offboarding batch. Keep them out of the live feed while their center records
 // are being closed.
 const retiredPublicLocationIds = new Set([
+  "Kid City USA - FL | Deland - Amelia",
+  "Kid City USA - FL | Deland - Orange",
   "Kid City USA - FL | Leesburg",
   "Kid City USA - FL | Palatka",
   "Kid City USA - FL | Sanford",

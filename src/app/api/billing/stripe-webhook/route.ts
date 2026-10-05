@@ -2717,9 +2717,11 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
       if (!paymentCandidate || !await lockStripeWebhookPayment(tx, paymentCandidate.id)) return;
       const payment = await tx.payment.findUnique({
         where: { id: paymentCandidate.id },
-        include: { billingAccount: true },
+        include: { billingAccount: { include: { family: { select: { center: { select: { organization: { select: { tenantId: true } } } } } } } } },
       });
       if (!payment) return;
+      const paymentTenantId = payment.billingAccount.family.center?.organization.tenantId;
+      if (!paymentTenantId || (matchedTenantId && paymentTenantId !== matchedTenantId)) return;
       const refundFields = jsonObject(payment.customFields);
       if (!supportedFamilyRefundProvider(payment.provider)
         || clean(refundFields.stripeConnectedAccountId) !== clean(event.account)
@@ -2729,7 +2731,7 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
 
       const invoiceId = await invoiceIdForPayment(tx, payment.id, metadata);
       const cumulativeRefundedCents = await retrieveStripeSucceededRefundTotal({
-        paymentIntentId: clean(charge.payment_intent), connectedAccountId: event.account, tenantId: matchedTenantId,
+        paymentIntentId: clean(charge.payment_intent), connectedAccountId: event.account, tenantId: paymentTenantId,
       });
       await applyFamilyPaymentRefund(tx, {
         paymentId: payment.id, chargeId: charge.id, paymentIntentId: clean(charge.payment_intent) || null,

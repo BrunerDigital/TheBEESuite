@@ -2,11 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { retrieveStripeSucceededRefundTotal } from '../src/lib/integrations';
 import { isStripeWebhookPaymentEvent } from '../src/lib/stripe-webhook-event-types';
 test('real refund workflow excludes unsuccessful outcomes and reconciles stale plans', () => {
   const result = spawnSync(process.execPath, ['--experimental-test-module-mocks','--import','tsx','--test', fileURLToPath(new URL('./helpers/family-refund-lifecycle-mocks.mjs',import.meta.url))],{cwd:process.cwd(),encoding:'utf8'});
   assert.equal(result.status,0,result.stdout+result.stderr);
+});
+test('refund webhook processor reads use the verified payment tenant and account', () => {
+  const route=readFileSync('src/app/api/billing/stripe-webhook/route.ts','utf8');
+  const refund=route.slice(route.indexOf('async function handleChargeRefunded'),route.indexOf('async function handleDisputeLifecycle'));
+  assert.match(refund,/paymentTenantId = payment\.billingAccount\.family\.center\?\.organization\.tenantId/);
+  assert.match(refund,/matchedTenantId && paymentTenantId !== matchedTenantId/);
+  assert.match(refund,/connectedAccountId: event\.account, tenantId: paymentTenantId/);
 });
 test('processor refund snapshots paginate and count only succeeded refunds with exact payment scope', async () => {
   const original=globalThis.fetch; const requests:string[]=[];

@@ -905,8 +905,8 @@ function ParentPortalWorkspaceView({
   const [tuitionCadenceDrafts, setTuitionCadenceDrafts] = useState<
     Record<string, string>
   >({});
-  const [advancePayment, setAdvancePayment] = useState(false);
-  useEffect(() => { setAdvancePayment(false); }, [family?.id, paymentContinuityAccess]);
+  const [advancePaymentSelected, setAdvancePayment] = useState(false);
+  const advancePayment = advancePaymentSelected && !paymentContinuityAccess;
   const [accountPaymentAmountDollars, setAccountPaymentAmountDollars] =
     useState("");
   const [paymentCheckoutError, setPaymentCheckoutError] = useState("");

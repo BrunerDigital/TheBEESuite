@@ -16,8 +16,8 @@ mock.module('@/lib/integrations', { namedExports: {
   createStripeRefund: async () => { counter++; if(status==='succeeded') processorTotal+=6000; return {ok:true,configured:true,refund:{id:`re_${counter}`,amountCents:6000,status}}; },
   retrieveStripeSucceededRefundTotal: async () => {totalReads++;return processorTotal;},
 } });
-const module = await import('@/lib/family-refunds');
-const { issueFamilyRefund } = module.default ?? module;
+const refundModule = await import('@/lib/family-refunds');
+const { issueFamilyRefund } = refundModule.default ?? refundModule;
 const user={id:'director',tenantId:'tenant'};
 const input={familyId:'family',amountCents:6000,reason:'Fake test',operationId:'operation'};
 test('pending, failed, canceled and action-required refunds are never reported or posted as completed',async()=>{

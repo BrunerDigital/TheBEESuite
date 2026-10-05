@@ -166,7 +166,7 @@ test("refunding a balance payment reopens its settled invoice while preserving u
     ]);
     return structuredClone(f.state.invoices.filter(invoice => invoice.customFields.paidByAccountCredit === true
       || (invoice.customFields.paidByBalancePayment === true && invoice.customFields.paymentId === "payment")));
-  }) as typeof f.tx.invoice.findMany;
+  }) as unknown as typeof f.tx.invoice.findMany;
   const refund = { paymentId: "payment", chargeId: "ch_balance", paymentIntentId: "pi_balance", eventId: "evt_refund", cumulativeRefundedCents: 6000, invoiceId: null };
   await applyFamilyPaymentRefund(f.tx, refund);
   assert.equal(f.state.account.balanceCents, 6000);

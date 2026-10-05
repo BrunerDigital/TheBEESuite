@@ -441,3 +441,13 @@ test("wallet checkout persists neutral funding classification and resumes the sa
   assert.equal(resumed.ok, true);
   assert.equal(f.checkoutCalls.length, 1);
 });
+
+
+test("credit appearing after preflight stops gross checkout under the serialized account lock", async () => {
+  const f = fixture(); f.state.account.balanceCents = 5000;
+  const result = await startInvoiceCheckout({ ...f.base, rejectHouseholdCredit: true });
+  assert.equal(result.ok, false);
+  assert.ok(f.events.includes("account-lock"));
+  assert.equal(f.state.payments.length, 0);
+  assert.equal(f.customerCalls.length, 0); assert.equal(f.checkoutCalls.length, 0);
+});

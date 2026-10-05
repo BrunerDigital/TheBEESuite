@@ -383,6 +383,7 @@ async function POSTHandler(request: NextRequest) {
   );
   const cancelPath = appendQuery(appendQuery(formPath, "payment", "cancelled"), "invoice", invoice.id);
   const result = await startInvoiceCheckout({
+    rejectHouseholdCredit: true,
     topology: { tenantId: payload.tenantId, familyId: family.id, centerId: center.id, connectedAccountId },
     billingAccountId: billingAccount.id, invoiceId: invoice.id, invoiceTotalCents: invoice.totalCents,
     keyPrefix: "payment-request-checkout",

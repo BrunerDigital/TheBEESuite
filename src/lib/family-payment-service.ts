@@ -63,6 +63,7 @@ export async function startFamilyPayment(input: Input): Promise<FamilyPaymentRes
   const claim = async (paymentId: string | null, claimedPrincipal = principal) => {
     if (!await authorizeRequest()) return { created: false as const, blockingPaymentId: paymentId };
     return createStripePaymentClaim({ database, billingAccountId: topology.billingAccountId, scope: "family_balance", existingPaymentId: paymentId,
+      allowAdvancePayment: request.metadata.advancePayment === "true" && fields.advancePayment === "true",
       expectedTopology: topology, authorize, paymentData: { provider: "stripe", amountCents: claimedPrincipal, status: PaymentStatus.DRAFT,
         externalIdPlaceholder: kind === "checkout" ? "checkout_session_pending" : "payment_intent_pending",
         customFields: asJson({ ...fields, paymentScope: "family_balance", stripeConnectedAccountId: topology.connectedAccountId,

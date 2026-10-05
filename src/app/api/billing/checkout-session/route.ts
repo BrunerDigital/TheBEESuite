@@ -419,6 +419,7 @@ async function POSTHandler(request: NextRequest) {
   const productCheckoutMetadata = invoiceProductStripeMetadata(invoice.customFields);
   const paymentDescription = productCheckoutBranding?.paymentDescription;
   const result = await startInvoiceCheckout({
+    rejectHouseholdCredit: !productCheckoutBranding,
     topology: { tenantId, familyId: invoice.billingAccount.familyId, centerId, connectedAccountId },
     billingAccountId: invoice.billingAccountId, invoiceId: invoice.id, invoiceTotalCents: invoice.totalCents,
     keyPrefix: "checkout",

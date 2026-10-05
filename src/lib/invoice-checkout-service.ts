@@ -1,4 +1,5 @@
 import { linkCheckoutIsUnsafe } from "./link-checkout-policy";
+import { availableAccountCreditCents } from "./account-credit-autopay";
 import { createHash } from "node:crypto";
 import { INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/parent-payment-errors";
 import { PaymentStatus, Prisma, type PrismaClient } from "@prisma/client";
@@ -29,6 +30,7 @@ export async function startInvoiceCheckout(input: {
   keyPrefix: InvoiceCheckoutAttempt["keyPrefix"]; fields: Record<string, unknown>;
   authorize: (tx: Prisma.TransactionClient) => Promise<boolean>;
   authorizeRequest?: () => Promise<boolean>;
+  rejectHouseholdCredit?: boolean;
   audit: (tx: Prisma.TransactionClient, paymentId: string, session: IntegrationSendResult) => Promise<void>;
   database?: Database;
   submitCheckout?: typeof createStripeCheckoutSession;
@@ -72,6 +74,10 @@ export async function startInvoiceCheckout(input: {
           select: { type: true, sourceSystem: true, amountCents: true, invoiceId: true, externalId: true, metadata: true } },
       } } } });
     if (!invoice) return false;
+    if (input.rejectHouseholdCredit) {
+      const open = await tx.invoice.aggregate({ where: { billingAccountId, status: PaymentStatus.OPEN, totalCents: { gt: 0 } }, _sum: { totalCents: true } });
+      if (availableAccountCreditCents({ balanceCents: invoice.billingAccount.balanceCents, openInvoiceTotalCents: open._sum.totalCents ?? 0 }) > 0) return false;
+    }
     return invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents, ...invoice.billingAccount.family.children)
       || !paymentCollectionResponsibilityHoldRequired({ accountBalanceCents: invoice.billingAccount.balanceCents,
         agencyLedgerEntries: invoice.billingAccount.ledgerEntries, invoiceId, enforceCollectionHold: true,

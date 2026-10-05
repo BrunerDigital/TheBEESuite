@@ -12,7 +12,8 @@ test('real refund workflow excludes unsuccessful outcomes and reconciles stale p
 test('refund webhook processor reads use the verified payment tenant and account', () => {
   const route=readFileSync('src/app/api/billing/stripe-webhook/route.ts','utf8');
   const refund=route.slice(route.indexOf('async function handleChargeRefunded'),route.indexOf('async function handleDisputeLifecycle'));
-  assert.match(refund,/paymentTenantId = payment\.billingAccount\.family\.center\?\.organization\.tenantId/);
+  assert.match(refund,/paymentCenterId = payment\.billingAccount\.family\.centerId/);
+  assert.match(refund,/paymentTenantId = paymentCenter\?\.organization\.tenantId/);
   assert.match(refund,/matchedTenantId && paymentTenantId !== matchedTenantId/);
   assert.match(refund,/connectedAccountId: event\.account, tenantId: paymentTenantId/);
 });

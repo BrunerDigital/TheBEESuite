@@ -2717,10 +2717,12 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
       if (!paymentCandidate || !await lockStripeWebhookPayment(tx, paymentCandidate.id)) return;
       const payment = await tx.payment.findUnique({
         where: { id: paymentCandidate.id },
-        include: { billingAccount: { include: { family: { select: { center: { select: { organization: { select: { tenantId: true } } } } } } } } },
+        include: { billingAccount: { include: { family: { select: { centerId: true } } } } },
       });
       if (!payment) return;
-      const paymentTenantId = payment.billingAccount.family.center?.organization.tenantId;
+      const paymentCenterId = payment.billingAccount.family.centerId;
+      const paymentCenter = paymentCenterId ? await tx.center.findUnique({ where: { id: paymentCenterId }, select: { organization: { select: { tenantId: true } } } }) : null;
+      const paymentTenantId = paymentCenter?.organization.tenantId;
       if (!paymentTenantId || (matchedTenantId && paymentTenantId !== matchedTenantId)) return;
       const refundFields = jsonObject(payment.customFields);
       if (!supportedFamilyRefundProvider(payment.provider)

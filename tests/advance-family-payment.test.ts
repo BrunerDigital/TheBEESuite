@@ -157,18 +157,18 @@ test("historical account search is scoped before loading a bounded family list",
 test("refunding a balance payment reopens its settled invoice while preserving unrelated paid invoices", async () => {
   const f = fixture(0); f.state.payment.status = PaymentStatus.PAID;
   f.state.invoices.push(
-    { id: "settled", billingAccountId: "account", status: PaymentStatus.PAID, totalCents: 24000, customFields: { paidByBalancePayment: true, paymentId: "payment" } },
-    { id: "unrelated", billingAccountId: "account", status: PaymentStatus.PAID, totalCents: 24000, customFields: { paidByBalancePayment: true, paymentId: "other-payment" } },
+    { id: "settled", billingAccountId: "account", status: PaymentStatus.PAID, totalCents: 24000, customFields: { paidByBalancePayment: true, paymentId: "later-payment" } },
+    { id: "unrelated", billingAccountId: "account", status: PaymentStatus.PAID, totalCents: 24000, customFields: { paidByInvoicePayment: true, paymentId: "other-payment" } },
   );
   const originalFindMany = f.tx.invoice.findMany;
   f.tx.invoice.findMany = (async (args: { where: { OR?: unknown[] } }) => {
     if (!args.where.OR) return originalFindMany(args as never);
     assert.deepEqual(args.where.OR, [
       { customFields: { path: ["paidByAccountCredit"], equals: true } },
-      { AND: [{ customFields: { path: ["paidByBalancePayment"], equals: true } }, { customFields: { path: ["paymentId"], equals: "payment" } }] },
+      { customFields: { path: ["paidByBalancePayment"], equals: true } },
     ]);
     return structuredClone(f.state.invoices.filter(invoice => invoice.customFields.paidByAccountCredit === true
-      || (invoice.customFields.paidByBalancePayment === true && invoice.customFields.paymentId === "payment")));
+      || invoice.customFields.paidByBalancePayment === true));
   }) as unknown as typeof f.tx.invoice.findMany;
   const refund = { paymentId: "payment", chargeId: "ch_balance", paymentIntentId: "pi_balance", eventId: "evt_refund", cumulativeRefundedCents: 6000, invoiceId: null };
   await applyFamilyPaymentRefund(f.tx, refund);

@@ -45,7 +45,9 @@ export async function applyFamilyPaymentRefund(tx: Prisma.TransactionClient, inp
   if (invoiceId) await tx.invoice.updateMany({ where: { id: invoiceId,
     billingAccountId: payment.billingAccountId, status: PaymentStatus.PAID }, data: { status: PaymentStatus.OPEN } });
   // A refunded advance payment may already have settled future invoices with credit.
-  // Reopen only enough invoices settled by this payment or credit to represent the restored debt.
+  // Household balance payments share a credit pool. An earlier partial payment can
+  // contribute to an invoice whose final settlement marker names a later payment.
+  // Reopen only enough pool-settled invoices to represent the restored debt.
   if (!invoiceId && account.balanceCents > 0) {
     const open = await tx.invoice.aggregate({ where: { billingAccountId: payment.billingAccountId, status: PaymentStatus.OPEN }, _sum: { totalCents: true } });
     let representedCents = open._sum.totalCents ?? 0;
@@ -53,10 +55,7 @@ export async function applyFamilyPaymentRefund(tx: Prisma.TransactionClient, inp
       const creditInvoices = await tx.invoice.findMany({ where: { billingAccountId: payment.billingAccountId,
         status: PaymentStatus.PAID, OR: [
           { customFields: { path: ["paidByAccountCredit"], equals: true } },
-          { AND: [
-            { customFields: { path: ["paidByBalancePayment"], equals: true } },
-            { customFields: { path: ["paymentId"], equals: payment.id } },
-          ] },
+          { customFields: { path: ["paidByBalancePayment"], equals: true } },
         ] }, orderBy: [{ dueDate: "desc" }, { id: "desc" }] });
       for (const invoice of creditInvoices) {
         if (representedCents >= account.balanceCents) break;

@@ -3,6 +3,7 @@ import { canAccessCenter, type CurrentUser } from "@/lib/auth";
 import { planFamilyRefundAllocations } from "@/lib/billing-workflows";
 import { createStripeRefund, retrieveStripeSucceededRefundTotal } from "@/lib/integrations";
 import { applyFamilyPaymentRefund } from "@/lib/family-payment-refund";
+import { reserveFamilyRefundClaim, recordFamilyRefundClaim } from "@/lib/family-refund-claim";
 import { prisma } from "@/lib/prisma";
 
 type RefundAllocation = {
@@ -153,18 +154,26 @@ export async function issueFamilyRefund(
   for (const planned of refundPlan.allocations) {
     const payment = planned.payment;
     const connectedAccountId = clean(payment.fields.stripeConnectedAccountId) || null;
-    const refund = await createStripeRefund({
+    const claim = await prisma.$transaction(tx => reserveFamilyRefundClaim(tx, {
+      paymentId: payment.id, amountCents: planned.amountCents, reason: input.reason, operationId: input.operationId, requestedByUserId: user.id,
+      paymentIntentId: payment.paymentIntentId, connectedAccountId,
+    }));
+    if (!claim.ok) {
+      if (!allocations.length) return { ok: false, status: 409, error: claim.error };
+      stoppedReason = claim.error; break;
+    }
+    const refund = claim.knownRefund ? { ok: true, configured: true, refund: claim.knownRefund, error: undefined } : await createStripeRefund({
       paymentIntentId: payment.paymentIntentId,
       amountCents: planned.amountCents,
       reason: input.reason,
       connectedAccountId,
-      idempotencyKey: `billing-family-refund:${input.operationId}:${payment.id}`,
+      idempotencyKey: claim.idempotencyKey,
       tenantId: input.tenantId ?? user.tenantId,
       metadata: {
         paymentId: payment.id,
         familyId: input.familyId,
-        requestedByUserId: user.id,
-        operationId: input.operationId,
+        requestedByUserId: claim.requestedByUserId,
+        operationId: claim.operationId,
       },
     });
     if (!refund.ok || !refund.refund?.id) {
@@ -179,6 +188,8 @@ export async function issueFamilyRefund(
     }
 
     const refundRecord = refund.refund;
+    await prisma.$transaction(tx => recordFamilyRefundClaim(tx, { paymentId: payment.id,
+      idempotencyKey: claim.idempotencyKey, refundId: refundRecord.id, status: refundRecord.status }));
     if (refundRecord.status !== "succeeded") {
       stoppedReason = `Processor refund ${refundRecord.id} is ${refundRecord.status || "unconfirmed"}; it has not been recorded as completed. Check its processor status before retrying.`;
       if (!allocations.length) return { ok: false, status: 409, error: stoppedReason };
@@ -195,6 +206,8 @@ export async function issueFamilyRefund(
         paymentIntentId: payment.paymentIntentId, eventId: `director-refund:${refundRecord.id}`,
         cumulativeRefundedCents: totalRefundedCents, invoiceId, refundId: refundRecord.id,
       });
+      await recordFamilyRefundClaim(tx, { paymentId: payment.id, idempotencyKey: claim.idempotencyKey,
+        refundId: refundRecord.id, status: refundRecord.status, reconciled: true });
     });
     allocations.push({
       paymentId: payment.id,

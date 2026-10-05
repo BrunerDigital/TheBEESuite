@@ -1,4 +1,5 @@
 import { applyFamilyPaymentRefund, supportedFamilyRefundProvider } from "@/lib/family-payment-refund";
+import { recordFamilyRefundClaim } from "@/lib/family-refund-claim";
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { achFailurePresentation, isAchPaymentProcessing, isAchReturnReason, isReturnedStripePayment } from "@/lib/ach-payment-lifecycle";
@@ -2739,6 +2740,14 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
         paymentId: payment.id, chargeId: charge.id, paymentIntentId: clean(charge.payment_intent) || null,
         eventId: event.id, cumulativeRefundedCents, invoiceId,
       });
+      if (event.type.startsWith("refund.")) {
+        const refund = event.data.object as { id: string; status?: string; metadata?: StripeMetadata & { operationId?: string } };
+        const claim = jsonObject(refundFields.pendingFamilyRefund);
+        if (typeof claim.idempotencyKey === "string" && (claim.refundId === refund.id || (claim.operationId && claim.operationId === refund.metadata?.operationId))) {
+          await recordFamilyRefundClaim(tx, { paymentId: payment.id, idempotencyKey: claim.idempotencyKey,
+            refundId: refund.id, status: refund.status || null, reconciled: refund.status === "succeeded" });
+        }
+      }
     });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {

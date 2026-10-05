@@ -4412,6 +4412,7 @@ async function renderLivePage(
     const recurringScheduler = billingFamilies.reduce(
       (summary, family) => {
         for (const child of family.children) {
+          if (!isCurrentlyEnrolledChildRecord(child)) continue;
           const assignment = tuitionAssignmentFromCustomFields(child.customFields);
           if (!assignment.enabled) continue;
           const cadence = normalizeBillingCadence(assignment.cadence);

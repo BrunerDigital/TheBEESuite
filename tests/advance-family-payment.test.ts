@@ -20,6 +20,9 @@ test("withdrawn families remain selectable at zero balance within their authoriz
   assert.equal(billingFamilyAccountCategory(family.children), "past");
   assert.ok(childTuitionEligibilityError(family.children[0]));
   assert.deepEqual(visibleBillingFamilyWhere(["school-a"]), { centerId: visibleCenterIdFilter(["school-a"]) });
+  const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const scheduler = page.slice(page.indexOf("const recurringScheduler ="), page.indexOf("const recurringScheduler =") + 5000);
+  assert.match(scheduler, /for \(const child of family.children\) \{\s*if \(!isCurrentlyEnrolledChildRecord\(child\)\) continue;/);
 });
 
 test("an established erroneous post-withdrawal unpaid invoice is reversed, never cleared with a payment", () => {

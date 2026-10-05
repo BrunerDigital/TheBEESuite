@@ -126,7 +126,7 @@ export async function createBillingInvoiceForFamily(
   // only links that credit to the invoice; its zero-dollar ledger marker must not
   // reduce the balance a second time. Partial coverage remains in the net balance
   // and is consumed by the existing credit-first checkout/autopay allocation.
-  if (updatedAccount.balanceCents <= 0 && !invoiceResponsibilitySeparation(input.customFields)) {
+  if (input.customFields.chargeSource === "tuitionPlan" && updatedAccount.balanceCents <= 0 && !invoiceResponsibilitySeparation(input.customFields)) {
     const agencyActivity = await tx.ledgerEntry.findFirst({
       where: { billingAccountId: billingAccount.id, OR: [
         { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } }, { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },

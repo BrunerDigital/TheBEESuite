@@ -8,7 +8,7 @@ import { billingFamilyAccountCategory, childTuitionEligibilityError } from "../s
 import { matchesPrismaWhere } from "./helpers/matches-prisma-where";
 import { invoiceVoidBlocker, invoiceLedgerBalanceCents } from "../src/lib/invoice-void";
 import { applySucceededStripeFamilyBalancePayment, applyAccountCreditToInvoice } from "../src/lib/stripe-payment-application";
-import { applyFamilyPaymentRefund, familyRefundDelta } from "../src/lib/family-payment-refund";
+import { applyFamilyPaymentRefund, familyRefundDelta, supportedFamilyRefundProvider } from "../src/lib/family-payment-refund";
 import { createBillingInvoiceForFamily } from "../src/lib/billing-invoices";
 import { allocateAccountCreditToInvoice, availableAccountCreditCents } from "../src/lib/account-credit-autopay";
 
@@ -162,7 +162,7 @@ test("director refund keys remain distinct for equal amounts on separate payment
 });
 
 test("confirmed family-only future tuition consumes credit despite unrelated historical agency activity", async () => {
-  for (const funding of ["family", "agency"]) {
+  for (const [funding, chargeSource] of [["family", "tuitionPlan"], ["agency", "tuitionPlan"], ["family", "product"]]) {
     const f = fixture(-24000);
     const delegates = f.tx as unknown as { billingAccount: Record<string, unknown>; invoice: Record<string, unknown>; ledgerEntry: Record<string, unknown>; center: Record<string, unknown>; child: Record<string, unknown> };
     delegates.billingAccount.upsert = async () => ({ ...f.state.account, family: { centerId: "school-a", children: [{ id: "child", customFields: { tuitionFundingType: funding, tuitionBillingEnabled: true, tuitionPlanId: "plan", tuitionPlanAmountCents: 16000 } }] } });
@@ -173,9 +173,29 @@ test("confirmed family-only future tuition consumes credit despite unrelated his
     };
     delegates.ledgerEntry.findFirst = async ({ where }: { where: { OR?: unknown } }) => where.OR ? { id: "old-agency-entry" } : null;
     delegates.center = { update: async () => ({}) };
-    await createBillingInvoiceForFamily(f.tx, { familyId: "family", dueDate: new Date("2026-10-05"), items: [{ description: "Tuition", amountCents: 16000 }], description: "Tuition", customFields: { chargeSource: "tuitionPlan", sourceId: "plan", childId: "child", invoiceWeekCount: 1 } });
+    await createBillingInvoiceForFamily(f.tx, { familyId: "family", dueDate: new Date("2026-10-05"), items: [{ description: "Tuition", amountCents: 16000 }], description: "Tuition", customFields: { chargeSource, sourceId: "plan", childId: "child", invoiceWeekCount: 1 } });
     assert.equal(f.state.account.balanceCents, -8000);
-    assert.equal(f.state.invoices[0].status, funding === "family" ? PaymentStatus.PAID : PaymentStatus.OPEN);
-    assert.equal(f.state.ledger.filter(entry => entry.type === "account_credit_application").length, funding === "family" ? 1 : 0);
+    assert.equal(f.state.invoices[0].status, funding === "family" && chargeSource === "tuitionPlan" ? PaymentStatus.PAID : PaymentStatus.OPEN);
+    assert.equal(f.state.ledger.filter(entry => entry.type === "account_credit_application").length, funding === "family" && chargeSource === "tuitionPlan" ? 1 : 0);
   }
+});
+
+
+test("credit-aware family payment preserves the director's non-oldest selected invoice", async () => {
+  const f = fixture(20000); f.state.payment.amountCents = 10000;
+  f.state.invoices.push({ id: "oldest", billingAccountId: "account", status: PaymentStatus.OPEN, totalCents: 10000, customFields: {} },
+    { id: "selected", billingAccountId: "account", status: PaymentStatus.OPEN, totalCents: 20000, customFields: {} });
+  const result = await applySucceededStripeFamilyBalancePayment(f.tx, { paymentId: "payment", externalId: "pi_selected", stripePaymentIntentId: "pi_selected", stripeAmountTotalCents: 10000, metadata: { preferredInvoiceId: "selected" } });
+  assert.equal(result.applied, true); assert.deepEqual(result.appliedInvoiceIds, ["selected"]);
+  assert.equal(f.state.invoices[0].status, PaymentStatus.OPEN); assert.equal(f.state.invoices[1].status, PaymentStatus.PAID);
+  assert.equal(f.state.account.balanceCents, 10000);
+});
+
+test("Terminal refunds reconcile once while non-Stripe providers stay excluded", async () => {
+  assert.equal(supportedFamilyRefundProvider("stripe_terminal"), true); assert.equal(supportedFamilyRefundProvider("stripe"), true);
+  assert.equal(supportedFamilyRefundProvider("manual_cash"), false);
+  const f = fixture(-24000); f.state.payment.status = PaymentStatus.PAID;
+  const refund = { paymentId: "payment", chargeId: "ch_terminal", paymentIntentId: "pi_terminal", eventId: "evt_terminal", cumulativeRefundedCents: 24000, invoiceId: null };
+  await applyFamilyPaymentRefund(f.tx, refund); await applyFamilyPaymentRefund(f.tx, { ...refund, eventId: "evt_terminal_retry" });
+  assert.equal(f.state.account.balanceCents, 0); assert.equal(f.state.ledger.length, 1);
 });

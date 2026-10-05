@@ -823,7 +823,7 @@ export async function applySucceededStripeFamilyBalancePayment(
     stripeEventId: input.stripeEventId || null,
     stripePaymentIntentId: input.stripePaymentIntentId,
     stripeCheckoutSessionId: null,
-    preferredInvoiceId: clean(metadata.invoiceId) || null,
+    preferredInvoiceId: clean(metadata.preferredInvoiceId || metadata.invoiceId) || null,
   });
   if (appliedInvoiceIds.length) {
     await tx.payment.update({

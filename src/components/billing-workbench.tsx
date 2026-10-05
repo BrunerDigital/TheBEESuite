@@ -968,6 +968,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           billingAccountId: selectedBillingAccount.id,
           familyId: selectedFamily.id,
           amountCents: directorPaymentAmountCents,
+          ...(invoiceId ? { preferredInvoiceId: invoiceId } : {}),
           advancePayment: effectivePaymentTarget === "custom" && advancePayment,
           method,
           description: paymentDescription,

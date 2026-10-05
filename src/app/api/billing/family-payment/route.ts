@@ -93,10 +93,12 @@ async function POSTHandler(request: NextRequest) {
   const method = clean(body.method) as FamilyPaymentMethod;
   const requestedAmountCents = parseAmountCents(body);
   const advancePayment = body.advancePayment === true;
+  const preferredInvoiceId = parentCheckout ? "" : clean(body.preferredInvoiceId);
   if (!["saved_method", "card_checkout", "instant_bank_checkout", "ach_checkout"].includes(method) || requestedAmountCents === null
     || [body.billingAccountId, body.familyId].some(id => id !== undefined && typeof id !== "string")
     || body.amountCents !== undefined && body.amountDollars !== undefined || (!billingAccountId && !familyId)
-    || [billingAccountId, familyId].some(id => id && !/^[A-Za-z0-9_-]{1,191}$/.test(id))) {
+    || (!parentCheckout && body.preferredInvoiceId !== undefined && typeof body.preferredInvoiceId !== "string")
+    || [billingAccountId, familyId, preferredInvoiceId].some(id => id && !/^[A-Za-z0-9_-]{1,191}$/.test(id))) {
     return NextResponse.json({ ok: false, error: "Select a payment method and enter a valid payment amount." }, { status: 400 });
   }
   if (parentCheckout && method === "saved_method") return NextResponse.json({ ok: false, error: "Parents must confirm payment through secure checkout." }, { status: 400 });
@@ -112,6 +114,9 @@ async function POSTHandler(request: NextRequest) {
   if (!initial) return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
   const { target, billingAccount, center, responsibilityReviewRequired, collectableCents } = initial;
   const centerId = target.centerId;
+  if (preferredInvoiceId && !billingAccount.invoices.some(invoice => invoice.id === preferredInvoiceId)) {
+    return NextResponse.json({ ok: false, error: "The selected invoice is no longer open on this household." }, { status: 409 });
+  }
   if (responsibilityReviewRequired) return NextResponse.json({ ok: false, code: "parent_account_payment_responsibility_review_required",
     error: "The school must separate family and agency responsibility before an account payment can be made." }, { status: 409 });
   const amountCents = requestedAmountCents ?? collectableCents;
@@ -274,6 +279,7 @@ async function POSTHandler(request: NextRequest) {
     feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION, requiresProcessingRecoveryAcceptance: true }, { status: 400 });
   const paymentLabel = `${billingAccount.family.name} family payment`;
   const metadata = {
+    ...(preferredInvoiceId ? { preferredInvoiceId } : {}),
     tenantId: user.tenantId,
     paymentScope: "family_balance",
     advancePayment: String(advancePayment),
@@ -335,6 +341,7 @@ async function POSTHandler(request: NextRequest) {
       if (!await authorizeBillingActorForTarget(tx, user, target)) return false;
       const fresh = await readFamilyPaymentSnapshot(tx, target);
       if (!fresh || fresh.responsibilityReviewRequired || (!advancePayment && amountCents > fresh.collectableCents)
+        || (preferredInvoiceId && !fresh.billingAccount.invoices.some(invoice => invoice.id === preferredInvoiceId))
         || readStripeConnectedAccountId(fresh.center.customFields) !== connectedAccountId
         || fresh.billingAccount.family.billingEmail !== billingAccount.family.billingEmail || fresh.billingAccount.family.name !== billingAccount.family.name
         || fresh.center.name !== center.name || JSON.stringify(fresh.center.organization) !== JSON.stringify(center.organization)) return false;

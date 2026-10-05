@@ -1,6 +1,10 @@
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { jsonRecord } from "./billing-guardrails";
 
+export function supportedFamilyRefundProvider(provider: string | null) {
+  return provider === "stripe" || provider === "stripe_terminal";
+}
+
 export function familyRefundDelta(input: { principalCents: number; previouslyRefundedCents: number; providerRefundedCents: number }) {
   const previous = Math.max(0, Math.round(input.previouslyRefundedCents));
   const cumulative = Math.max(previous, Math.max(0, Math.round(input.providerRefundedCents)));

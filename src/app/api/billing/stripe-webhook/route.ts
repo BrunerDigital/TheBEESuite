@@ -1,4 +1,4 @@
-import { applyFamilyPaymentRefund } from "@/lib/family-payment-refund";
+import { applyFamilyPaymentRefund, supportedFamilyRefundProvider } from "@/lib/family-payment-refund";
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { achFailurePresentation, isAchPaymentProcessing, isAchReturnReason, isReturnedStripePayment } from "@/lib/ach-payment-lifecycle";
@@ -594,7 +594,7 @@ async function findPaymentForStripeObject(
   if (paymentIntentId) {
     const payment = await tx.payment.findFirst({
       where: {
-        provider: "stripe",
+        provider: { in: ["stripe", "stripe_terminal"] },
         customFields: {
           path: ["stripePaymentIntentId"],
           equals: paymentIntentId,
@@ -613,7 +613,7 @@ async function findPaymentForStripeObject(
   if (chargeId) {
     return tx.payment.findFirst({
       where: {
-        provider: "stripe",
+        provider: { in: ["stripe", "stripe_terminal"] },
         customFields: {
           path: ["stripeChargeId"],
           equals: chargeId,
@@ -912,7 +912,7 @@ async function handleFamilyBalancePaymentSucceeded(
         stripeEventId: event.id,
         stripePaymentIntentId,
         stripeCheckoutSessionId: event.type.startsWith("checkout.session.") ? input.externalId : null,
-        preferredInvoiceId: clean(input.metadata.invoiceId) || null,
+        preferredInvoiceId: clean(input.metadata.preferredInvoiceId || input.metadata.invoiceId) || null,
       });
       if (appliedInvoiceIds.length) {
         await tx.payment.update({
@@ -2718,7 +2718,7 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
       });
       if (!payment) return;
       const refundFields = jsonObject(payment.customFields);
-      if (payment.provider !== "stripe"
+      if (!supportedFamilyRefundProvider(payment.provider)
         || clean(refundFields.stripeConnectedAccountId) !== clean(event.account)
         || (clean(refundFields.stripePaymentIntentId) && clean(refundFields.stripePaymentIntentId) !== clean(charge.payment_intent))
         || (clean(refundFields.stripeChargeId) && clean(refundFields.stripeChargeId) !== charge.id)) return;

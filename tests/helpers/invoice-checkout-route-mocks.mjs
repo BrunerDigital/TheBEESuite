@@ -10,8 +10,10 @@ const { APP_REVIEW_PARENT_CONTACT } = targetingModule;
 
 let user, center, family, invoice, details, providers, captured, currentActor, currentDevice, guardianLinked;
 let persistedActor, persistedDevice, authorityQueries;
+let selectedFamilyInvoices = [];
 let familyDrafts = [], familyClaims = [], familyResolutions = [], familyInputs = [], captureFamily = false, agencyRows = [];
 function reset() {
+  selectedFamilyInvoices = [];
   familyDrafts = []; familyClaims = []; familyResolutions = []; familyInputs = []; captureFamily = false; agencyRows = [];
   const now = new Date().toISOString();
   user = { id: "fake-director", tenantId: "fake-tenant", email: "fake-director@example.test", role: "CENTER_DIRECTOR", centerIds: ["fake-school"],
@@ -51,7 +53,7 @@ const prisma = {
   user: { async findFirst({ where }) { authorityQueries.push({ model: "user", where }); return currentActor && matchesPrismaWhere(persistedActor, where) ? { id: persistedActor.id } : null; } },
   deviceSession: { async findFirst({ where }) { authorityQueries.push({ model: "deviceSession", where }); return currentDevice && matchesPrismaWhere(persistedDevice, where) ? { id: persistedDevice.id } : null; } },
   billingAccount: { async upsert() { throw new Error("No synthetic account creation expected"); },
-    async findFirst({ where, include }) { const account = { ...family.billingAccount, family: { ...family, _count: { children: 0 } }, invoices: [], autopayPlaceholder: false };
+    async findFirst({ where, include }) { const account = { ...family.billingAccount, family: { ...family, _count: { children: 0 } }, invoices: selectedFamilyInvoices, autopayPlaceholder: false };
       if (include) details++; return matchesPrismaWhere(account, where) ? structuredClone(account) : null; },
     async findUnique() { return family.billingAccount; } },
   payment: { async findMany({ where }) { return familyDrafts.filter(row => matchesPrismaWhere(row, where)); } },
@@ -357,4 +359,18 @@ test("parent and director routes accept explicit advance amounts at zero balance
     assert.equal((await familyPayment.POST(request({ ...familyBody(), amountCents: 24000 }))).status, 409);
     assert.equal(familyInputs.length, 0);
   }
+});
+
+
+test("director invoice preference is bound to the household before checkout and rechecked in the claim", async () => {
+  reset(); captureFamily = true;
+  assert.equal((await familyPayment.POST(request({ ...familyBody(), preferredInvoiceId: "foreign-invoice" }))).status, 409);
+  assert.equal(familyInputs.length, 0); assert.equal(providers.length, 0);
+  selectedFamilyInvoices = [{ id: "selected", status: "OPEN", totalCents: 10000, customFields: {}, items: [] }];
+  const response = await familyPayment.POST(request({ ...familyBody(), preferredInvoiceId: "selected" }));
+  assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+  assert.equal(familyInputs[0].request.metadata.preferredInvoiceId, "selected");
+  assert.equal(await familyInputs[0].authorize(prisma), true);
+  selectedFamilyInvoices = [];
+  assert.equal(await familyInputs[0].authorize(prisma), false);
 });

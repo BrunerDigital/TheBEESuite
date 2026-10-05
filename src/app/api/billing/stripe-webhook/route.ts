@@ -2715,6 +2715,22 @@ async function handlePaymentIntentSucceeded(
 async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeChargeObject, matchedTenantId: string | null) {
   const metadata = metadataOf(charge);
   let affectedBillingAccountId: string | null = null;
+  // Verify scope before the provider read, then recheck it under the payment lock.
+  // Cumulative totals may arrive out of order; application uses a monotonic high-water mark.
+  const processorPayment = await findPaymentForStripeObject(prisma, charge);
+  if (!processorPayment) return NextResponse.json({ ok: true, ignored: true });
+  const processorFields = jsonObject(processorPayment.customFields);
+  const processorAccount = await prisma.billingAccount.findUnique({ where: { id: processorPayment.billingAccountId }, select: { family: { select: { centerId: true } } } });
+  const processorCenter = processorAccount?.family.centerId ? await prisma.center.findUnique({ where: { id: processorAccount.family.centerId }, select: { organization: { select: { tenantId: true } } } }) : null;
+  const processorTenantId = processorCenter?.organization.tenantId;
+  if (!processorTenantId || (matchedTenantId && processorTenantId !== matchedTenantId)
+    || !supportedFamilyRefundProvider(processorPayment.provider)
+    || clean(processorFields.stripeConnectedAccountId) !== clean(event.account)
+    || (clean(processorFields.stripePaymentIntentId) && clean(processorFields.stripePaymentIntentId) !== clean(charge.payment_intent))
+    || (clean(processorFields.stripeChargeId) && clean(processorFields.stripeChargeId) !== charge.id)) return NextResponse.json({ ok: true, ignored: true });
+  const cumulativeRefundedCents = await retrieveStripeSucceededRefundTotal({
+    paymentIntentId: clean(charge.payment_intent), connectedAccountId: event.account, tenantId: processorTenantId,
+  });
 
   try {
     await runStripeWebhookTransaction(async (tx) => {
@@ -2729,7 +2745,7 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
       const paymentCenterId = payment.billingAccount.family.centerId;
       const paymentCenter = paymentCenterId ? await tx.center.findUnique({ where: { id: paymentCenterId }, select: { organization: { select: { tenantId: true } } } }) : null;
       const paymentTenantId = paymentCenter?.organization.tenantId;
-      if (!paymentTenantId || (matchedTenantId && paymentTenantId !== matchedTenantId)) return;
+      if (!paymentTenantId || paymentTenantId !== processorTenantId || (matchedTenantId && paymentTenantId !== matchedTenantId)) return;
       const refundFields = jsonObject(payment.customFields);
       if (!supportedFamilyRefundProvider(payment.provider)
         || clean(refundFields.stripeConnectedAccountId) !== clean(event.account)
@@ -2738,9 +2754,6 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
       affectedBillingAccountId = payment.billingAccountId;
 
       const invoiceId = await invoiceIdForPayment(tx, payment.id, metadata);
-      const cumulativeRefundedCents = await retrieveStripeSucceededRefundTotal({
-        paymentIntentId: clean(charge.payment_intent), connectedAccountId: event.account, tenantId: paymentTenantId,
-      });
       await applyFamilyPaymentRefund(tx, {
         paymentId: payment.id, chargeId: charge.id, paymentIntentId: clean(charge.payment_intent) || null,
         eventId: event.id, cumulativeRefundedCents, invoiceId,

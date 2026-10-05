@@ -3,7 +3,7 @@ import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import { retrieveStripeSucceededRefundTotal } from '../src/lib/integrations';
+import { retrieveStripeSucceededRefundTotal, retrieveStripeRefund } from '../src/lib/integrations';
 import { isStripeWebhookPaymentEvent } from '../src/lib/stripe-webhook-event-types';
 test('real refund workflow excludes unsuccessful outcomes and reconciles stale plans', () => {
   const result = spawnSync(process.execPath, ['--experimental-test-module-mocks','--import','tsx','--test', fileURLToPath(new URL('./helpers/family-refund-lifecycle-mocks.mjs',import.meta.url))],{cwd:process.cwd(),encoding:'utf8'});
@@ -15,7 +15,20 @@ test('refund webhook processor reads use the verified payment tenant and account
   assert.match(refund,/paymentCenterId = payment\.billingAccount\.family\.centerId/);
   assert.match(refund,/paymentTenantId = paymentCenter\?\.organization\.tenantId/);
   assert.match(refund,/matchedTenantId && paymentTenantId !== matchedTenantId/);
-  assert.match(refund,/connectedAccountId: event\.account, tenantId: paymentTenantId/);
+  assert.match(refund,/paymentTenantId !== processorTenantId/);
+  assert.match(refund,/connectedAccountId: event\.account, tenantId: processorTenantId/);
+  assert.ok(refund.indexOf('await retrieveStripeSucceededRefundTotal') < refund.indexOf('await runStripeWebhookTransaction'));
+});
+test('known refund refresh is a scoped GET and returns the current processor status', async () => {
+  const original=globalThis.fetch;
+  globalThis.fetch=(async (url,init) => {
+    assert.equal(String(url),'https://api.stripe.com/v1/refunds/re_fake');
+    assert.equal(new Headers(init?.headers).get('Stripe-Account'),'acct_fake');
+    assert.ok(!init?.method || init.method === 'GET');
+    return new Response(JSON.stringify({id:'re_fake',amount:6000,status:'succeeded'}));
+  }) as typeof fetch;
+  try {assert.equal((await retrieveStripeRefund({refundId:'re_fake',connectedAccountId:'acct_fake',credentials:{STRIPE_SECRET_KEY:'sk_test_fake'}})).refund?.status,'succeeded');}
+  finally {globalThis.fetch=original;}
 });
 test('processor refund snapshots paginate and count only succeeded refunds with exact payment scope', async () => {
   const original=globalThis.fetch; const requests:string[]=[];

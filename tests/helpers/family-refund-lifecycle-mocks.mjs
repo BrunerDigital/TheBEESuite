@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-let status, processorTotal, counter, state, totalReads, failTotalOnce, processorClaims, failCreateResponseOnce;
+let status, processorTotal, counter, state, totalReads, failTotalOnce, processorClaims, failCreateResponseOnce, txDepth;
 const account = { id: 'account', family: { centerId: 'school', name: 'Fake household' }, payments: [{ id: 'payment', amountCents: 24000, status: 'PAID', externalIdPlaceholder: 'pi_fake', customFields: { stripeConnectedAccountId: 'acct_fake', stripePaymentIntentId: 'pi_fake' }, ledgerEntries: [] }] };
-function reset() { status='succeeded'; processorTotal=0; counter=0; totalReads=0; failTotalOnce=false;failCreateResponseOnce=false;processorClaims=new Map(); state={ payment:{ id:'payment',billingAccountId:'account',amountCents:24000,status:'PAID',customFields:{} },balance:0,ledger:[] }; }
+function reset() { status='succeeded'; processorTotal=0; counter=0; totalReads=0; failTotalOnce=false;failCreateResponseOnce=false;txDepth=0;processorClaims=new Map(); state={ payment:{ id:'payment',billingAccountId:'account',amountCents:24000,status:'PAID',customFields:{} },balance:0,ledger:[] }; }
 const prisma = {
-  $queryRaw: async () => [], $transaction: async fn => fn(prisma),
+  $queryRaw: async () => [], $transaction: async fn => {txDepth++;try{return await fn(prisma);}finally{txDepth--;}},
   billingAccount: { findUnique: async () => structuredClone(account), update: async ({data}) => { state.balance += data.balanceCents.increment; return {balanceCents:state.balance}; } },
   payment: { findUniqueOrThrow: async () => structuredClone(state.payment), update: async ({data}) => Object.assign(state.payment,data) },
   invoice: { aggregate: async () => ({_sum:{totalCents:0}}),findMany:async()=>[] },
@@ -14,6 +14,7 @@ mock.module('@/lib/auth', { namedExports: { canAccessCenter: (_user,id)=>id==='s
 mock.module('@/lib/prisma', { namedExports: {prisma} });
 mock.module('@/lib/integrations', { namedExports: {
   createStripeRefund: async input => {
+    assert.equal(txDepth,0);
     const existing=processorClaims.get(input.idempotencyKey);
     if(existing) {assert.deepEqual(input,existing.input);return existing.response;}
     counter++; if(status==='succeeded') processorTotal+=6000;
@@ -22,7 +23,8 @@ mock.module('@/lib/integrations', { namedExports: {
     if(failCreateResponseOnce){failCreateResponseOnce=false;return {ok:false,configured:true,error:'Fake lost response'};}
     return response;
   },
-  retrieveStripeSucceededRefundTotal: async () => {totalReads++;if(failTotalOnce){failTotalOnce=false;throw new Error('Fake totals failure');}return processorTotal;},
+  retrieveStripeRefund: async input => {assert.equal(txDepth,0);return {ok:true,configured:true,refund:{id:input.refundId,amountCents:6000,status}};},
+  retrieveStripeSucceededRefundTotal: async () => {assert.equal(txDepth,0);totalReads++;if(failTotalOnce){failTotalOnce=false;throw new Error('Fake totals failure');}return processorTotal;},
 } });
 const refundModule = await import('@/lib/family-refunds');
 const { issueFamilyRefund } = refundModule.default ?? refundModule;
@@ -35,7 +37,7 @@ test('pending, failed, canceled and action-required refunds are never reported o
     assert.equal(state.balance,0);assert.equal(state.ledger.length,0);assert.equal(totalReads,0);
   }
 });
-test('overlapping stale refund plans use the authoritative succeeded total under the payment lock',async()=>{
+test('overlapping stale refund plans apply the authoritative succeeded total under the payment lock',async()=>{
   reset(); await issueFamilyRefund(user,input);await issueFamilyRefund(user,{...input,operationId:'second'});
   assert.equal(state.balance,12000);assert.equal(state.ledger.length,2);assert.equal(totalReads,2);
   assert.equal(state.payment.customFields.stripeAmountRefundedCents,12000);
@@ -69,4 +71,16 @@ test('an unresolved refund beyond the safe retry window is held without another 
   reset();failCreateResponseOnce=true;await issueFamilyRefund(user,input);
   state.payment.customFields.pendingFamilyRefund.createdAt=new Date(Date.now()-24*60*60*1000).toISOString();
   assert.equal((await issueFamilyRefund(user,{...input,operationId:'late'})).ok,false);assert.equal(counter,1);
+});
+test('a cached pending refund refreshes to succeeded without another refund POST',async()=>{
+  reset();status='pending';await issueFamilyRefund(user,input);
+  status='succeeded';processorTotal=6000;
+  const response=await issueFamilyRefund(user,{...input,operationId:'retry'});
+  assert.equal(response.ok,true);assert.equal(counter,1);assert.equal(state.balance,6000);
+  assert.equal(state.payment.customFields.pendingFamilyRefund,null);
+});
+test('a cached pending refund refreshes to failed and releases its claim without changing the balance',async()=>{
+  reset();status='pending';await issueFamilyRefund(user,input);status='failed';
+  assert.equal((await issueFamilyRefund(user,{...input,operationId:'retry'})).ok,false);
+  assert.equal(counter,1);assert.equal(state.balance,0);assert.equal(state.payment.customFields.pendingFamilyRefund,null);
 });

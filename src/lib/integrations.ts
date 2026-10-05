@@ -1841,6 +1841,20 @@ export async function retrieveStripeSucceededRefundTotal(input: {
   throw new Error("Processor refund history exceeds the reconciliation limit.");
 }
 
+export async function retrieveStripeRefund(input: {
+  refundId: string; connectedAccountId?: string | null; tenantId?: string | null; credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { refund?: { id: string; amountCents: number; status: string | null } }> {
+  if (!/^re_[A-Za-z0-9_]+$/.test(input.refundId)) return { ok: false, configured: true, provider: "stripe", error: "A valid refund is required." };
+  const apiKey = await getStripeSecretKey(input);
+  if (!apiKey) return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  const response = await fetch(`https://api.stripe.com/v1/refunds/${encodeURIComponent(input.refundId)}`, {
+    headers: connectedStripeHeaders(apiKey, "form", input.connectedAccountId), signal: AbortSignal.timeout(10_000),
+  });
+  const data = await response.json().catch(() => null) as { id?: string; amount?: number; status?: string } | null;
+  if (!response.ok || data?.id !== input.refundId || !Number.isSafeInteger(data.amount) || Number(data.amount) <= 0) return { ok: false, configured: true, provider: "stripe", error: "The processor refund status could not be verified." };
+  return { ok: true, configured: true, provider: "stripe", refund: { id: data.id, amountCents: Number(data.amount), status: clean(data.status) || null } };
+}
+
 export async function createStripeRefund({
   paymentIntentId,
   amountCents,

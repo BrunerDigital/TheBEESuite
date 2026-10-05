@@ -1,7 +1,7 @@
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { canAccessCenter, type CurrentUser } from "@/lib/auth";
 import { planFamilyRefundAllocations } from "@/lib/billing-workflows";
-import { createStripeRefund, retrieveStripeSucceededRefundTotal } from "@/lib/integrations";
+import { createStripeRefund, retrieveStripeRefund, retrieveStripeSucceededRefundTotal } from "@/lib/integrations";
 import { applyFamilyPaymentRefund } from "@/lib/family-payment-refund";
 import { reserveFamilyRefundClaim, recordFamilyRefundClaim } from "@/lib/family-refund-claim";
 import { prisma } from "@/lib/prisma";
@@ -162,7 +162,9 @@ export async function issueFamilyRefund(
       if (!allocations.length) return { ok: false, status: 409, error: claim.error };
       stoppedReason = claim.error; break;
     }
-    const refund = claim.knownRefund ? { ok: true, configured: true, refund: claim.knownRefund, error: undefined } : await createStripeRefund({
+    const refund = claim.knownRefund ? (claim.knownRefund.status === "succeeded"
+      ? { ok: true, configured: true, refund: claim.knownRefund, error: undefined }
+      : await retrieveStripeRefund({ refundId: claim.knownRefund.id, connectedAccountId, tenantId: input.tenantId ?? user.tenantId })) : await createStripeRefund({
       paymentIntentId: payment.paymentIntentId,
       amountCents: planned.amountCents,
       reason: input.reason,
@@ -197,10 +199,10 @@ export async function issueFamilyRefund(
     }
     const refundedAmountCents = refundRecord.amountCents;
     const invoiceId = payment.ledgerEntries[0]?.invoiceId ?? null;
+    const totalRefundedCents = await retrieveStripeSucceededRefundTotal({ paymentIntentId: payment.paymentIntentId,
+      connectedAccountId, tenantId: input.tenantId ?? user.tenantId });
     await prisma.$transaction(async (tx) => {
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Payment" WHERE "id" = ${payment.id} FOR UPDATE`);
-      const totalRefundedCents = await retrieveStripeSucceededRefundTotal({ paymentIntentId: payment.paymentIntentId,
-        connectedAccountId, tenantId: input.tenantId ?? user.tenantId });
       await applyFamilyPaymentRefund(tx, {
         paymentId: payment.id, chargeId: clean(payment.fields.stripeChargeId),
         paymentIntentId: payment.paymentIntentId, eventId: `director-refund:${refundRecord.id}`,

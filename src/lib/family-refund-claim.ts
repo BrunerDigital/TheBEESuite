@@ -21,13 +21,24 @@ export async function reserveFamilyRefundClaim(tx: Prisma.TransactionClient, inp
     }
     return { ok: true as const, idempotencyKey: previous.idempotencyKey, operationId: previous.operationId, requestedByUserId: previous.requestedByUserId, knownRefund };
   }
+  const history = jsonRecord(fields.familyRefundClaimsByOperation);
+  const priorAttempt = jsonRecord(history[`refund:${input.operationId}`]);
+  if (priorAttempt.reconciled === true && priorAttempt.status === 'succeeded' && typeof priorAttempt.refundId === 'string'
+    && typeof priorAttempt.idempotencyKey === 'string' && typeof priorAttempt.requestedByUserId === 'string') {
+    if (priorAttempt.amountCents !== input.amountCents || priorAttempt.reason !== input.reason) return { ok: false as const, error: 'The completed refund request cannot change during replay.' };
+    return { ok: true as const, idempotencyKey: priorAttempt.idempotencyKey, operationId: input.operationId,
+      requestedByUserId: priorAttempt.requestedByUserId, knownRefund: { id: priorAttempt.refundId, amountCents: input.amountCents, status: 'succeeded' } };
+  }
+  if (typeof priorAttempt.idempotencyKey === 'string' && priorAttempt.status !== 'failed' && priorAttempt.status !== 'canceled') return { ok: false as const, error: 'The recorded refund attempt needs reconciliation before issuing another attempt.' };
   if (input.amountCents > payment.amountCents - (Number(fields.stripeAmountRefundedCents) || 0)) {
     return { ok: false as const, error: 'The refundable amount changed. Refresh the account before issuing a refund.' };
   }
-  const idempotencyKey = `billing-family-refund:${input.operationId}:${payment.id}`;
+  const attempt = typeof priorAttempt.idempotencyKey === 'string' ? Math.max(1, Number(priorAttempt.attempt) || 1) + 1 : 1;
+  if (!Number.isSafeInteger(attempt) || attempt > 1000) return { ok: false as const, error: 'The refund attempt history needs review before continuing.' };
+  const idempotencyKey = `billing-family-refund:${input.operationId}:${payment.id}:attempt-${attempt}`;
   await tx.payment.update({ where: { id: payment.id }, data: { customFields: { ...fields,
     pendingFamilyRefund: { amountCents: input.amountCents, reason: input.reason, idempotencyKey, status: 'submitting', operationId: input.operationId, requestedByUserId: input.requestedByUserId, createdAt: new Date().toISOString(), paymentIntentId: input.paymentIntentId, connectedAccountId: input.connectedAccountId,
-      requestedTotalCents: input.requestedTotalCents, requestPlan: input.requestPlan, preferredPaymentIds: input.preferredPaymentIds },
+      requestedTotalCents: input.requestedTotalCents, requestPlan: input.requestPlan, preferredPaymentIds: input.preferredPaymentIds, attempt },
   } as Prisma.InputJsonObject } });
   return { ok: true as const, idempotencyKey, operationId: input.operationId, requestedByUserId: input.requestedByUserId, knownRefund: null };
 }
@@ -42,9 +53,11 @@ export async function recordFamilyRefundClaim(tx: Prisma.TransactionClient, inpu
   const completed = input.reconciled || input.status === 'failed' || input.status === 'canceled';
   const recorded = { ...claim, refundId: input.refundId, status: input.status, reconciled: input.reconciled === true || claim.reconciled === true };
   const history = jsonRecord(fields.familyRefundClaimsByOperation);
+  const attempts = jsonRecord(fields.familyRefundAttempts);
   await tx.payment.update({ where: { id: payment.id }, data: { customFields: { ...fields,
     pendingFamilyRefund: completed ? null : recorded,
     lastFamilyRefundClaim: recorded,
     familyRefundClaimsByOperation: { ...history, [`refund:${String(claim.operationId)}`]: recorded },
+    familyRefundAttempts: { ...attempts, [input.idempotencyKey]: recorded },
   } as Prisma.InputJsonObject } });
 }

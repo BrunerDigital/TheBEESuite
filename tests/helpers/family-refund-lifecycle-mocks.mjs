@@ -109,3 +109,13 @@ test('an exact completed request replay is not replaced by a later pending reque
   assert.equal(response.ok,true);assert.equal(response.totalCents,6000);assert.equal(counter,2);
   assert.equal(state.balance,6000);assert.equal(state.payment.customFields.pendingFamilyRefund.operationId,'later-request');
 });
+test('confirmed failed and canceled outcomes retain request identity while using a new processor attempt',async()=>{
+  for(const terminal of ['failed','canceled']) {
+    reset();status=terminal;assert.equal((await issueFamilyRefund(user,input)).ok,false);
+    assert.equal(counter,1);assert.equal(state.balance,0);
+    status='succeeded';const response=await issueFamilyRefund(user,input);
+    assert.equal(response.ok,true);assert.equal(counter,2);assert.equal(state.balance,6000);assert.equal(state.ledger.length,1);
+    const keys=[...processorClaims.keys()];assert.notEqual(keys[0],keys[1]);assert.match(keys[1],/attempt-2$/);
+    assert.equal(Object.keys(state.payment.customFields.familyRefundAttempts).length,2);
+  }
+});

@@ -1,3 +1,5 @@
+import { applyFamilyPaymentRefund, supportedFamilyRefundProvider } from "@/lib/family-payment-refund";
+import { recordFamilyRefundClaim } from "@/lib/family-refund-claim";
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { achFailurePresentation, isAchPaymentProcessing, isAchReturnReason, isReturnedStripePayment } from "@/lib/ach-payment-lifecycle";
@@ -7,6 +9,7 @@ import {
   ensureStripeSoftwareRecurringPrice,
   readStripeConnectedAccountId,
   retrieveStripePaymentIntent,
+  retrieveStripeSucceededRefundTotal,
   retrieveStripeConnectedAccount,
   retrieveStripePaymentMethod,
   retrieveStripeSetupIntent,
@@ -73,6 +76,7 @@ type StripeCheckoutSessionCompleted = {
     billingAccountId?: string;
     paymentScope?: string;
     invoiceId?: string;
+    preferredInvoiceId?: string;
     paymentId?: string;
     familyId?: string;
     centerId?: string;
@@ -118,6 +122,7 @@ type StripeMetadata = {
   billingAccountId?: string;
   paymentScope?: string;
   invoiceId?: string;
+    preferredInvoiceId?: string;
   paymentId?: string;
   familyId?: string;
   centerId?: string;
@@ -593,7 +598,7 @@ async function findPaymentForStripeObject(
   if (paymentIntentId) {
     const payment = await tx.payment.findFirst({
       where: {
-        provider: "stripe",
+        provider: { in: ["stripe", "stripe_terminal"] },
         customFields: {
           path: ["stripePaymentIntentId"],
           equals: paymentIntentId,
@@ -612,7 +617,7 @@ async function findPaymentForStripeObject(
   if (chargeId) {
     return tx.payment.findFirst({
       where: {
-        provider: "stripe",
+        provider: { in: ["stripe", "stripe_terminal"] },
         customFields: {
           path: ["stripeChargeId"],
           equals: chargeId,
@@ -911,7 +916,7 @@ async function handleFamilyBalancePaymentSucceeded(
         stripeEventId: event.id,
         stripePaymentIntentId,
         stripeCheckoutSessionId: event.type.startsWith("checkout.session.") ? input.externalId : null,
-        preferredInvoiceId: clean(input.metadata.invoiceId) || null,
+        preferredInvoiceId: clean(input.metadata.preferredInvoiceId || input.metadata.invoiceId) || null,
       });
       if (appliedInvoiceIds.length) {
         await tx.payment.update({
@@ -976,6 +981,9 @@ async function applyRegistrationPaymentCompletion(
         status: "paid",
         paidAt,
         paymentId: input.paymentId,
+        paidByAccountCredit: false,
+        paidByBalancePayment: false,
+        paidWithAccountCredit: false,
       },
     },
   });
@@ -2552,6 +2560,8 @@ async function handlePaymentIntentSucceeded(
             paidAt: paidAt.toISOString(),
             paymentId,
             paidWithAccountCredit: accountCreditAppliedCents > 0,
+            paidByAccountCredit: false,
+            paidByBalancePayment: false,
             accountCreditAppliedCents,
             stripeChargePrincipalCents: currentPayment.amountCents,
           } as Prisma.InputJsonObject,
@@ -2702,9 +2712,25 @@ async function handlePaymentIntentSucceeded(
   return NextResponse.json({ ok: true });
 }
 
-async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeChargeObject) {
+async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeChargeObject, matchedTenantId: string | null) {
   const metadata = metadataOf(charge);
   let affectedBillingAccountId: string | null = null;
+  // Verify scope before the provider read, then recheck it under the payment lock.
+  // Cumulative totals may arrive out of order; application uses a monotonic high-water mark.
+  const processorPayment = await findPaymentForStripeObject(prisma, charge);
+  if (!processorPayment) return NextResponse.json({ ok: true, ignored: true });
+  const processorFields = jsonObject(processorPayment.customFields);
+  const processorAccount = await prisma.billingAccount.findUnique({ where: { id: processorPayment.billingAccountId }, select: { family: { select: { centerId: true } } } });
+  const processorCenter = processorAccount?.family.centerId ? await prisma.center.findUnique({ where: { id: processorAccount.family.centerId }, select: { organization: { select: { tenantId: true } } } }) : null;
+  const processorTenantId = processorCenter?.organization.tenantId;
+  if (!processorTenantId || (matchedTenantId && processorTenantId !== matchedTenantId)
+    || !supportedFamilyRefundProvider(processorPayment.provider)
+    || clean(processorFields.stripeConnectedAccountId) !== clean(event.account)
+    || (clean(processorFields.stripePaymentIntentId) && clean(processorFields.stripePaymentIntentId) !== clean(charge.payment_intent))
+    || (clean(processorFields.stripeChargeId) && clean(processorFields.stripeChargeId) !== charge.id)) return NextResponse.json({ ok: true, ignored: true });
+  const cumulativeRefundedCents = await retrieveStripeSucceededRefundTotal({
+    paymentIntentId: clean(charge.payment_intent), connectedAccountId: event.account, tenantId: processorTenantId,
+  });
 
   try {
     await runStripeWebhookTransaction(async (tx) => {
@@ -2713,62 +2739,32 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
       if (!paymentCandidate || !await lockStripeWebhookPayment(tx, paymentCandidate.id)) return;
       const payment = await tx.payment.findUnique({
         where: { id: paymentCandidate.id },
-        include: { billingAccount: true },
+        include: { billingAccount: { include: { family: { select: { centerId: true } } } } },
       });
       if (!payment) return;
+      const paymentCenterId = payment.billingAccount.family.centerId;
+      const paymentCenter = paymentCenterId ? await tx.center.findUnique({ where: { id: paymentCenterId }, select: { organization: { select: { tenantId: true } } } }) : null;
+      const paymentTenantId = paymentCenter?.organization.tenantId;
+      if (!paymentTenantId || paymentTenantId !== processorTenantId || (matchedTenantId && paymentTenantId !== matchedTenantId)) return;
+      const refundFields = jsonObject(payment.customFields);
+      if (!supportedFamilyRefundProvider(payment.provider)
+        || clean(refundFields.stripeConnectedAccountId) !== clean(event.account)
+        || (clean(refundFields.stripePaymentIntentId) && clean(refundFields.stripePaymentIntentId) !== clean(charge.payment_intent))
+        || (clean(refundFields.stripeChargeId) && clean(refundFields.stripeChargeId) !== charge.id)) return;
       affectedBillingAccountId = payment.billingAccountId;
 
-      const currentFields = jsonObject(payment.customFields);
-      const previousRefundedCents = numeric(currentFields.stripeAmountRefundedCents);
-      const refundedCents = numeric(charge.amount_refunded);
-      const refundDeltaCents = Math.max(0, refundedCents - previousRefundedCents);
       const invoiceId = await invoiceIdForPayment(tx, payment.id, metadata);
-
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: charge.refunded ? PaymentStatus.REFUNDED : payment.status,
-          customFields: {
-            ...currentFields,
-            stripeChargeId: charge.id,
-            stripePaymentIntentId: clean(charge.payment_intent) || currentFields.stripePaymentIntentId || null,
-            stripeEventId: event.id,
-            stripeAmountRefundedCents: refundedCents,
-            stripeFullyRefunded: charge.refunded === true,
-            status: charge.refunded ? "refunded" : "partially_refunded",
-          },
-        },
+      await applyFamilyPaymentRefund(tx, {
+        paymentId: payment.id, chargeId: charge.id, paymentIntentId: clean(charge.payment_intent) || null,
+        eventId: event.id, cumulativeRefundedCents, invoiceId,
       });
-
-      if (refundDeltaCents > 0 && invoiceId) {
-        const updatedAccount = await tx.billingAccount.update({
-          where: { id: payment.billingAccountId },
-          data: { balanceCents: { increment: refundDeltaCents } },
-        });
-        await tx.invoice.update({
-          where: { id: invoiceId },
-          data: { status: PaymentStatus.OPEN },
-        });
-        await tx.ledgerEntry.create({
-          data: {
-            billingAccountId: payment.billingAccountId,
-            invoiceId,
-            paymentId: payment.id,
-            type: "refund",
-            description: charge.refunded ? "Payment refunded" : "Payment partially refunded",
-            amountCents: refundDeltaCents,
-            balanceAfterCents: updatedAccount.balanceCents,
-            sourceSystem: "stripe",
-            externalId: `stripe-refund:${charge.id}:${refundedCents}`,
-            metadata: {
-              stripeEventId: event.id,
-              stripeChargeId: charge.id,
-              stripePaymentIntentId: clean(charge.payment_intent) || null,
-              refundedCents,
-              refundDeltaCents,
-            },
-          },
-        });
+      if (event.type.startsWith("refund.")) {
+        const refund = event.data.object as { id: string; status?: string; metadata?: StripeMetadata & { operationId?: string } };
+        const claim = jsonObject(refundFields.pendingFamilyRefund);
+        if (typeof claim.idempotencyKey === "string" && (claim.refundId === refund.id || (claim.operationId && claim.operationId === refund.metadata?.operationId))) {
+          await recordFamilyRefundClaim(tx, { paymentId: payment.id, idempotencyKey: claim.idempotencyKey,
+            refundId: refund.id, status: refund.status || null, reconciled: refund.status === "succeeded" });
+        }
       }
     });
   } catch (error) {
@@ -3084,7 +3080,12 @@ async function dispatchAuthenticatedEvent(
   }
 
   if (event.type === "charge.refunded") {
-    return handleChargeRefunded(event, event.data.object as StripeChargeObject);
+    return handleChargeRefunded(event, event.data.object as StripeChargeObject, matchedTenantId);
+  }
+  if (event.type === "refund.updated" || event.type === "refund.failed" || event.type === "refund.created") {
+    const refund = event.data.object as { charge?: string; payment_intent?: string; metadata?: StripeMetadata };
+    if (!clean(refund.charge) || !clean(refund.payment_intent)) return NextResponse.json({ ok: true, ignored: true });
+    return handleChargeRefunded(event, { id: clean(refund.charge), object: "charge", payment_intent: clean(refund.payment_intent), metadata: refund.metadata }, matchedTenantId);
   }
 
   if (event.type.startsWith("charge.dispute.")) {
@@ -3276,7 +3277,10 @@ async function dispatchAuthenticatedEvent(
 
       const invoiceClaim = await tx.invoice.updateMany({
         where: { id: invoiceId, status: PaymentStatus.OPEN },
-        data: { status: PaymentStatus.PAID },
+        data: { status: PaymentStatus.PAID, customFields: {
+          ...jsonObject(invoice.customFields), paidByAccountCredit: false, paidByBalancePayment: false,
+          paidWithAccountCredit: false, paymentId, status: "paid",
+        } as Prisma.InputJsonObject },
       });
       if (invoiceClaim.count !== 1) {
         ignoredReason = "invoice_already_paid";

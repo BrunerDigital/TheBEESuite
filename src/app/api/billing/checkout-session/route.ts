@@ -3,6 +3,7 @@ import { PaymentStatus } from "@prisma/client";
 import { canAccessAllCenters, canManageBilling, getCurrentUser, isParentGuardian, type CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
+import { availableAccountCreditCents } from "@/lib/account-credit-autopay";
 import { jsonRecord } from "@/lib/billing-guardrails";
 import { authorizeBillingActorForTarget } from "@/lib/billing-actor-authorization";
 import {
@@ -214,6 +215,12 @@ async function POSTHandler(request: NextRequest) {
   if (invoice.status !== PaymentStatus.OPEN) {
     return NextResponse.json({ ok: false, error: "This invoice is no longer open for payment." }, { status: 409 });
   }
+  if (!productCheckoutBranding) {
+    const openInvoices = await prisma.invoice.aggregate({ where: { billingAccountId: invoice.billingAccountId, status: PaymentStatus.OPEN }, _sum: { totalCents: true } });
+    if (availableAccountCreditCents({ balanceCents: invoice.billingAccount.balanceCents, openInvoiceTotalCents: openInvoices._sum.totalCents ?? 0 }) > 0) {
+      return NextResponse.json({ ok: false, error: "Household credit reduces this invoice. Collect the family balance to apply credit before charging." }, { status: 409 });
+    }
+  }
   if (invoice.totalCents <= 0) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });
   }
@@ -412,6 +419,7 @@ async function POSTHandler(request: NextRequest) {
   const productCheckoutMetadata = invoiceProductStripeMetadata(invoice.customFields);
   const paymentDescription = productCheckoutBranding?.paymentDescription;
   const result = await startInvoiceCheckout({
+    rejectHouseholdCredit: !productCheckoutBranding,
     topology: { tenantId, familyId: invoice.billingAccount.familyId, centerId, connectedAccountId },
     billingAccountId: invoice.billingAccountId, invoiceId: invoice.id, invoiceTotalCents: invoice.totalCents,
     keyPrefix: "checkout",

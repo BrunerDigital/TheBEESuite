@@ -114,6 +114,9 @@ async function applyRegistrationPaymentCompletion(
         status: "paid",
         paidAt,
         paymentId: input.paymentId,
+        paidByAccountCredit: false,
+        paidByBalancePayment: false,
+        paidWithAccountCredit: false,
       }),
     },
   });
@@ -550,6 +553,8 @@ export async function applySucceededStripeInvoicePayment(
         paidAt: paidAt.toISOString(),
         paymentId: input.paymentId,
         paidWithAccountCredit: accountCreditAppliedCents > 0,
+        paidByAccountCredit: false,
+        paidByBalancePayment: false,
         accountCreditAppliedCents,
         stripeChargePrincipalCents: currentPayment.amountCents,
       }),
@@ -823,7 +828,7 @@ export async function applySucceededStripeFamilyBalancePayment(
     stripeEventId: input.stripeEventId || null,
     stripePaymentIntentId: input.stripePaymentIntentId,
     stripeCheckoutSessionId: null,
-    preferredInvoiceId: clean(metadata.invoiceId) || null,
+    preferredInvoiceId: clean(metadata.preferredInvoiceId || metadata.invoiceId) || null,
   });
   if (appliedInvoiceIds.length) {
     await tx.payment.update({

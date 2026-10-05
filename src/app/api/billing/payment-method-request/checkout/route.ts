@@ -4,6 +4,7 @@ import {
   appReviewFamilyContainsReservedIdentity,
   appReviewReservedIdentityKind,
 } from "@/lib/app-review-targeting";
+import { availableAccountCreditCents } from "@/lib/account-credit-autopay";
 import { jsonRecord } from "@/lib/billing-guardrails";
 import {
   getStripeCheckoutAmounts,
@@ -202,6 +203,10 @@ async function POSTHandler(request: NextRequest) {
   if (invoice.status !== PaymentStatus.OPEN) {
     return NextResponse.json({ ok: false, error: "This invoice is no longer open for payment." }, { status: 409 });
   }
+  const openInvoices = await prisma.invoice.aggregate({ where: { billingAccountId: billingAccount.id, status: PaymentStatus.OPEN }, _sum: { totalCents: true } });
+  if (availableAccountCreditCents({ balanceCents: billingAccount.balanceCents, openInvoiceTotalCents: openInvoices._sum.totalCents ?? 0 }) > 0) {
+    return NextResponse.json({ ok: false, error: "Household credit reduces this invoice. Sign in to the parent portal to pay the remaining family balance." }, { status: 409 });
+  }
   if (invoice.totalCents <= 0) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });
   }
@@ -378,6 +383,7 @@ async function POSTHandler(request: NextRequest) {
   );
   const cancelPath = appendQuery(appendQuery(formPath, "payment", "cancelled"), "invoice", invoice.id);
   const result = await startInvoiceCheckout({
+    rejectHouseholdCredit: true,
     topology: { tenantId: payload.tenantId, familyId: family.id, centerId: center.id, connectedAccountId },
     billingAccountId: billingAccount.id, invoiceId: invoice.id, invoiceTotalCents: invoice.totalCents,
     keyPrefix: "payment-request-checkout",

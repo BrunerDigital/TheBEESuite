@@ -338,3 +338,22 @@ test("wallet checkout persists neutral funding classification and resumes the sa
   assert.equal(resumed.ok, true);
   assert.equal(f.checkoutCalls.length, 1);
 });
+
+
+test("explicit advance payment survives the real serialized claim at zero and credit balances", async () => {
+  for (const balanceCents of [0, -2500]) {
+    const ordinary = fixture(); ordinary.state.account.balanceCents = balanceCents; ordinary.state.invoices = [];
+    assert.equal((await startFamilyPayment(ordinary.base)).ok, false);
+    assert.equal(ordinary.checkoutCalls.length, 0); assert.equal(ordinary.state.payments.length, 0);
+    const advance = fixture(); advance.state.account.balanceCents = balanceCents; advance.state.invoices = [];
+    advance.base.request.metadata.advancePayment = "true"; advance.base.fields.advancePayment = "true";
+    const result = await startFamilyPayment(advance.base);
+    assert.equal(result.ok, true); assert.equal(advance.checkoutCalls.length, 1);
+    assert.equal(advance.state.payments[0].amountCents, 10000);
+    assert.equal(advance.checkoutCalls[0].metadata.advancePayment, "true");
+    assert.equal(advance.state.account.balanceCents, balanceCents);
+    const duplicate = await startFamilyPayment(advance.base);
+    assert.equal(duplicate.ok, true); assert.equal(advance.checkoutCalls.length, 1);
+    assert.equal(advance.state.payments.length, 1);
+  }
+});

@@ -10,7 +10,7 @@ export async function readFamilyPaymentSnapshot(tx: Prisma.TransactionClient, ta
   const billingAccount = await tx.billingAccount.findFirst({ where: { id: target.billingAccountId, familyId: target.familyId,
     family: { centerId: target.centerId } }, include: {
     invoices: { where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.PAID, PaymentStatus.VOID] } },
-      select: { status: true, totalCents: true, customFields: true, items: { select: { description: true } } } },
+      select: { id: true, status: true, totalCents: true, customFields: true, items: { select: { description: true } } } },
     family: { select: { id: true, name: true, billingEmail: true, centerId: true, customFields: true,
       children: { select: { id: true, customFields: true } }, _count: { select: { children: { where: currentlyEnrolledChildWhere() } } } } },
   } });

@@ -72,11 +72,11 @@ test("a positive family balance remains payable when no open invoice exists", ()
 
   assert.match(
     workspace,
-    /const showFamilyPaymentPanel\s*=\s*parentBalanceReviewRequired[\s\S]*balanceCents > 0 && openInvoices\.length === 0/,
+    /const showFamilyPaymentPanel\s*=\s*Boolean\(billingAccount\) && \(!paymentContinuityAccess \|\| balanceCents > 0\)/,
   );
   assert.match(
     workspace,
-    /if \(!nextOpenInvoice && balanceCents <= 0 && !parentBalanceReviewRequired\)/,
+    /if \(!nextOpenInvoice && balanceCents <= 0 && !advancePayment && !parentBalanceReviewRequired\)/,
   );
   assert.match(workspace, /available for\s+secure account payment/);
 });

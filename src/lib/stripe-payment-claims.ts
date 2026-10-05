@@ -26,6 +26,7 @@ export async function createStripePaymentClaim({
   expectedInvoiceTotalCents,
   expectedAccountCreditAppliedCents,
   accountCreditPolicy = "apply",
+  allowAdvancePayment = false,
   expectedTopology,
   authorize,
   database = prisma,
@@ -38,6 +39,7 @@ export async function createStripePaymentClaim({
   expectedInvoiceTotalCents?: number | null;
   expectedAccountCreditAppliedCents?: number | null;
   accountCreditPolicy?: "apply" | "preserve";
+  allowAdvancePayment?: boolean;
   expectedTopology?: { tenantId: string; familyId: string; centerId: string; connectedAccountId: string | null };
   authorize?: (tx: Prisma.TransactionClient) => Promise<boolean>;
   database?: Pick<PrismaClient, "$transaction">;
@@ -148,7 +150,7 @@ export async function createStripePaymentClaim({
       ) {
         return { created: false as const, reason: "invoice_amount_changed" as const, blockingPaymentId: null };
       }
-    } else if (requestedAmountCents <= 0 || requestedAmountCents > lockedAccounts[0].balanceCents) {
+    } else if (requestedAmountCents <= 0 || (!allowAdvancePayment && requestedAmountCents > lockedAccounts[0].balanceCents)) {
       return { created: false as const, reason: "family_balance_changed" as const, blockingPaymentId: null };
     }
 

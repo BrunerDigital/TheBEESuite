@@ -34,7 +34,7 @@ test("withdrawn to enrolled with a valid classroom becomes billing-visible after
 });
 
 test("past families with outstanding billing remain payment-visible while current totals stay enrollment-scoped", () => {
-  assert.match(billingPage, /workbenchFamilyWhere[\s\S]*currentOrOutstandingFamilyWhere\(\)/);
+  assert.match(billingPage, /workbenchFamilyWhere = visibleBillingFamilyWhere\(visibleCenterIds\)/);
   assert.match(billingPage, /currentBillingAccountWhere = visibleCurrentBillingAccountWhere\(visibleCenterIds\)/);
   assert.match(billingPage, /ledgerEntry\.findMany\([\s\S]*billingAccount: currentBillingAccountWhere/);
   assert.match(billingPage, /enrollmentStatus: \{ in: currentlyEnrolledStatusValues\(\) \}[\s\S]*classroomId: null/);

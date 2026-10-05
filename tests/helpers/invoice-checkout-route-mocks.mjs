@@ -10,8 +10,10 @@ const { APP_REVIEW_PARENT_CONTACT } = targetingModule;
 
 let user, center, family, invoice, details, providers, captured, currentActor, currentDevice, guardianLinked;
 let persistedActor, persistedDevice, authorityQueries;
+let selectedFamilyInvoices = [];
 let familyDrafts = [], familyClaims = [], familyResolutions = [], familyInputs = [], captureFamily = false, agencyRows = [];
 function reset() {
+  selectedFamilyInvoices = [];
   familyDrafts = []; familyClaims = []; familyResolutions = []; familyInputs = []; captureFamily = false; agencyRows = [];
   const now = new Date().toISOString();
   user = { id: "fake-director", tenantId: "fake-tenant", email: "fake-director@example.test", role: "CENTER_DIRECTOR", centerIds: ["fake-school"],
@@ -39,6 +41,7 @@ reset();
 const prisma = {
   async $transaction(run, options) { assert.equal(options.isolationLevel, "RepeatableRead"); return run(prisma); },
   invoice: {
+    async aggregate() { return { _sum: { totalCents: invoice.totalCents } }; },
     async findUnique({ select }) { assert.ok(select); assert.equal(select.billingAccount.select.family.select.centerId, true);
       return { billingAccountId: "fake-account", billingAccount: { familyId: "fake-family", family: { centerId: "fake-school" } } }; },
     async findFirst({ where }) { details++; assert.equal(where.billingAccountId, "fake-account"); return invoice; },
@@ -50,7 +53,7 @@ const prisma = {
   user: { async findFirst({ where }) { authorityQueries.push({ model: "user", where }); return currentActor && matchesPrismaWhere(persistedActor, where) ? { id: persistedActor.id } : null; } },
   deviceSession: { async findFirst({ where }) { authorityQueries.push({ model: "deviceSession", where }); return currentDevice && matchesPrismaWhere(persistedDevice, where) ? { id: persistedDevice.id } : null; } },
   billingAccount: { async upsert() { throw new Error("No synthetic account creation expected"); },
-    async findFirst({ where, include }) { const account = { ...family.billingAccount, family: { ...family, _count: { children: 0 } }, invoices: [], autopayPlaceholder: false };
+    async findFirst({ where, include }) { const account = { ...family.billingAccount, family: { ...family, _count: { children: 0 } }, invoices: selectedFamilyInvoices, autopayPlaceholder: false };
       if (include) details++; return matchesPrismaWhere(account, where) ? structuredClone(account) : null; },
     async findUnique() { return family.billingAccount; } },
   payment: { async findMany({ where }) { return familyDrafts.filter(row => matchesPrismaWhere(row, where)); } },
@@ -329,4 +332,52 @@ test("all wallet entry points prove direct Stripe fees and persist neutral walle
     if (previous === undefined) delete process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT;
     else process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT = previous;
   }
+});
+
+
+test("existing household credit blocks gross invoice checkout before processor calls", async () => {
+  reset(); invoice.billingAccount.balanceCents = 4000; family.billingAccount.balanceCents = 4000;
+  assert.equal((await direct.POST(request({ invoiceId: "fake-invoice" }))).status, 409);
+  assert.equal((await signed.POST(request({ token: token(), invoiceId: "fake-invoice" }))).status, 409);
+  assert.equal(providers.length, 0); assert.equal(captured.length, 0);
+});
+
+
+test("parent and director routes accept explicit advance amounts at zero balance without changing consent", async () => {
+  for (const actor of ["parent", "director"]) {
+    reset(); if (actor === "parent") parentFamily(); captureFamily = true;
+    family.billingAccount.balanceCents = 0;
+    const response = await familyPayment.POST(request({ ...familyBody(), amountCents: 24000, advancePayment: true }));
+    assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+    const input = familyInputs[0];
+    assert.equal(input.request.metadata.advancePayment, "true");
+    assert.equal(input.request.invoiceAmountCents, 24000);
+    assert.equal(await input.authorize(prisma), true);
+    assert.equal(input.acceptProcessingRecovery, undefined);
+    assert.equal(family.billingAccount.balanceCents, 0);
+    reset(); if (actor === "parent") parentFamily(); captureFamily = true; family.billingAccount.balanceCents = 0;
+    assert.equal((await familyPayment.POST(request({ ...familyBody(), amountCents: 24000 }))).status, 409);
+    assert.equal(familyInputs.length, 0);
+  }
+});
+
+
+test("director invoice preference is bound to the household before checkout and rechecked in the claim", async () => {
+  reset(); captureFamily = true;
+  assert.equal((await familyPayment.POST(request({ ...familyBody(), preferredInvoiceId: "foreign-invoice" }))).status, 409);
+  assert.equal(familyInputs.length, 0); assert.equal(providers.length, 0);
+  selectedFamilyInvoices = [{ id: "selected", status: "OPEN", totalCents: 10000, customFields: {}, items: [] }];
+  const response = await familyPayment.POST(request({ ...familyBody(), preferredInvoiceId: "selected" }));
+  assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+  assert.equal(familyInputs[0].request.metadata.preferredInvoiceId, "selected");
+  assert.equal(await familyInputs[0].authorize(prisma), true);
+  for (const status of ["PAID", "VOID"]) {
+    selectedFamilyInvoices[0].status = status;
+    assert.equal(await familyInputs[0].authorize(prisma), false);
+    const inputCount = familyInputs.length;
+    assert.equal((await familyPayment.POST(request({ ...familyBody(), preferredInvoiceId: "selected" }))).status, 409);
+    assert.equal(familyInputs.length, inputCount);
+  }
+  selectedFamilyInvoices = [];
+  assert.equal(await familyInputs[0].authorize(prisma), false);
 });

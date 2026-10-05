@@ -1025,7 +1025,7 @@ function ParentPortalWorkspaceView({
   const accountPaymentAmountInvalid =
     accountPaymentAmountEntered && accountPaymentAmountCents <= 0;
   const accountPaymentAmountExceedsBalance =
-    !advancePayment && !parentBalanceReviewRequired && accountPaymentAmountCents > balanceCents;
+    accountPaymentAmountEntered && !advancePayment && !parentBalanceReviewRequired && accountPaymentAmountCents > Math.max(0, balanceCents);
   const accountPaymentRequestCents = accountPaymentAmountEntered
     ? accountPaymentAmountCents
     : balanceCents;
@@ -3512,6 +3512,8 @@ function ParentPortalWorkspaceView({
                         <>Your balance stays unchanged while you complete the required no-charge update.</>
                       ) : parentBalanceReviewRequired ? (
                         "Choose the amount you want credited to your family account."
+                      ) : balanceCents < 0 ? (
+                        <>Household credit {money(Math.abs(balanceCents))} · choose advance payment to add more credit.</>
                       ) : nextOpenInvoice ? (
                         <>
                           Family balance {money(balanceCents)} ·{" "}
@@ -3573,7 +3575,7 @@ function ParentPortalWorkspaceView({
                         </p>
                       ) : accountPaymentAmountExceedsBalance ? (
                         <p className="text-xs text-destructive">
-                          Amount cannot exceed {money(balanceCents)}.
+                          Amount cannot exceed {money(Math.max(0, balanceCents))}.
                         </p>
                       ) : null}
                     </div>

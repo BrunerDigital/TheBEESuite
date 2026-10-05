@@ -74,6 +74,7 @@ type StripeCheckoutSessionCompleted = {
     billingAccountId?: string;
     paymentScope?: string;
     invoiceId?: string;
+    preferredInvoiceId?: string;
     paymentId?: string;
     familyId?: string;
     centerId?: string;
@@ -119,6 +120,7 @@ type StripeMetadata = {
   billingAccountId?: string;
   paymentScope?: string;
   invoiceId?: string;
+    preferredInvoiceId?: string;
   paymentId?: string;
   familyId?: string;
   centerId?: string;

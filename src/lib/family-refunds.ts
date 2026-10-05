@@ -46,6 +46,8 @@ async function loadFamilyRefundPlan(
     familyId: string;
     amountCents: number;
     preferredPaymentIds?: string[];
+    operationId?: string;
+    reason?: string;
   },
 ) {
   const account = await prisma.billingAccount.findUnique({
@@ -97,9 +99,35 @@ async function loadFamilyRefundPlan(
         paymentIntentId,
       };
     })
-    .filter((payment) => payment.refundableCents > 0 && payment.paymentIntentId);
+    .filter((payment) => payment.paymentIntentId);
+  // Resume the original allocation plan before newly reduced refundable totals
+  // can reject a multi-payment request whose earlier allocations already succeeded.
+  const matchingPending = candidates.map(payment => jsonObject(payment.fields.pendingFamilyRefund)).find(claim =>
+    claim.requestedTotalCents === input.amountCents && claim.reason === input.reason && typeof claim.operationId === "string");
+  const operationId = clean(matchingPending?.operationId) || clean(input.operationId);
+  const savedClaims = candidates.map(payment => jsonObject(jsonObject(payment.fields.familyRefundClaimsByOperation)[`refund:${operationId}`]));
+  if (!matchingPending && savedClaims.some(claim => claim.operationId === operationId
+    && (claim.requestedTotalCents !== input.amountCents || claim.reason !== input.reason))) return { ok: false as const, status: 409, error: "A refund request identity cannot be reused for a different amount or reason." };
+  const savedRequest = matchingPending || savedClaims.find(claim => claim.operationId === operationId && claim.requestedTotalCents === input.amountCents && claim.reason === input.reason);
+  if (savedRequest && Array.isArray(savedRequest.requestPlan)) {
+    if (JSON.stringify(savedRequest.preferredPaymentIds) !== JSON.stringify(input.preferredPaymentIds ?? [])) return { ok: false as const, status: 409, error: "The pending refund's payment selection changed. Resume its original request." };
+    const allocations: Array<{ payment: typeof candidates[number]; amountCents: number }> = [];
+    const completedAllocations: RefundAllocation[] = [];
+    const requestPlan: Array<{ paymentId: string; amountCents: number }> = [];
+    for (const value of savedRequest.requestPlan) {
+      const row = jsonObject(value), payment = candidates.find(candidate => candidate.id === row.paymentId);
+      if (!payment || !Number.isSafeInteger(row.amountCents) || Number(row.amountCents) <= 0 || requestPlan.some(item => item.paymentId === payment.id)) return { ok: false as const, status: 409, error: "The saved refund allocation needs review before retrying." };
+      const amountCents = Number(row.amountCents);
+      requestPlan.push({ paymentId: payment.id, amountCents });
+      const previous = jsonObject(jsonObject(payment.fields.familyRefundClaimsByOperation)[`refund:${operationId}`]);
+      if (previous.reconciled === true && previous.status === "succeeded" && typeof previous.refundId === "string") completedAllocations.push({ paymentId: payment.id, stripeRefundId: previous.refundId, amountCents });
+      else allocations.push({ payment, amountCents });
+    }
+    if (requestPlan.reduce((total, row) => total + row.amountCents, 0) !== input.amountCents) return { ok: false as const, status: 409, error: "The saved refund total changed. Review the original request." };
+    return { ok: true as const, account, refundPlan: { availableCents: input.amountCents, allocations }, requestPlan, completedAllocations, operationId };
+  }
   const refundPlan = planFamilyRefundAllocations(
-    candidates,
+    candidates.filter(payment => payment.refundableCents > 0),
     input.amountCents,
     input.preferredPaymentIds ?? [],
   );
@@ -113,7 +141,8 @@ async function loadFamilyRefundPlan(
     };
   }
 
-  return { ok: true as const, account, refundPlan };
+  return { ok: true as const, account, refundPlan, completedAllocations: [] as RefundAllocation[], operationId: clean(input.operationId),
+    requestPlan: refundPlan.allocations.map(row => ({ paymentId: row.payment.id, amountCents: row.amountCents })) };
 }
 
 export async function validateFamilyRefundAvailability(
@@ -122,6 +151,8 @@ export async function validateFamilyRefundAvailability(
     familyId: string;
     amountCents: number;
     preferredPaymentIds?: string[];
+    operationId?: string;
+    reason?: string;
   },
 ) {
   const result = await loadFamilyRefundPlan(user, input);
@@ -149,14 +180,15 @@ export async function issueFamilyRefund(
   if (!prepared.ok) return prepared;
 
   const { account, refundPlan } = prepared;
-  const allocations: RefundAllocation[] = [];
+  const allocations: RefundAllocation[] = [...prepared.completedAllocations];
   let stoppedReason: string | null = null;
   for (const planned of refundPlan.allocations) {
     const payment = planned.payment;
     const connectedAccountId = clean(payment.fields.stripeConnectedAccountId) || null;
     const claim = await prisma.$transaction(tx => reserveFamilyRefundClaim(tx, {
-      paymentId: payment.id, amountCents: planned.amountCents, reason: input.reason, operationId: input.operationId, requestedByUserId: user.id,
+      paymentId: payment.id, amountCents: planned.amountCents, reason: input.reason, operationId: prepared.operationId || input.operationId, requestedByUserId: user.id,
       paymentIntentId: payment.paymentIntentId, connectedAccountId,
+      requestedTotalCents: input.amountCents, requestPlan: prepared.requestPlan, preferredPaymentIds: input.preferredPaymentIds ?? [],
     }));
     if (!claim.ok) {
       if (!allocations.length) return { ok: false, status: 409, error: claim.error };

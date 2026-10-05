@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-let status, processorTotal, counter, state, totalReads, failTotalOnce, processorClaims, failCreateResponseOnce, txDepth;
+let status, processorTotal, counter, state, totalReads, failTotalOnce, processorClaims, failCreateResponseOnce, txDepth, stalePlan, failTotalOnRead, processorTotals;
 const account = { id: 'account', family: { centerId: 'school', name: 'Fake household' }, payments: [{ id: 'payment', amountCents: 24000, status: 'PAID', externalIdPlaceholder: 'pi_fake', customFields: { stripeConnectedAccountId: 'acct_fake', stripePaymentIntentId: 'pi_fake' }, ledgerEntries: [] }] };
-function reset() { status='succeeded'; processorTotal=0; counter=0; totalReads=0; failTotalOnce=false;failCreateResponseOnce=false;txDepth=0;processorClaims=new Map(); state={ payment:{ id:'payment',billingAccountId:'account',amountCents:24000,status:'PAID',customFields:{} },balance:0,ledger:[] }; }
+const originalPayments=structuredClone(account.payments);
+function reset() { status='succeeded'; processorTotal=0; counter=0; totalReads=0; failTotalOnce=false;failCreateResponseOnce=false;txDepth=0;stalePlan=false;failTotalOnRead=0;processorTotals=new Map();processorClaims=new Map();account.payments=structuredClone(originalPayments); state={ payment:{ id:'payment',billingAccountId:'account',amountCents:24000,status:'PAID',customFields:{} },balance:0,ledger:[] };state.payments={payment:state.payment}; }
 const prisma = {
   $queryRaw: async () => [], $transaction: async fn => {txDepth++;try{return await fn(prisma);}finally{txDepth--;}},
-  billingAccount: { findUnique: async () => structuredClone(account), update: async ({data}) => { state.balance += data.balanceCents.increment; return {balanceCents:state.balance}; } },
-  payment: { findUniqueOrThrow: async () => structuredClone(state.payment), update: async ({data}) => Object.assign(state.payment,data) },
+  billingAccount: { findUnique: async () => structuredClone({...account,payments:account.payments.map(payment=>stalePlan?payment:{...payment,...state.payments[payment.id],customFields:{...payment.customFields,...state.payments[payment.id].customFields}})}), update: async ({data}) => { state.balance += data.balanceCents.increment; return {balanceCents:state.balance}; } },
+  payment: { findUniqueOrThrow: async ({where}) => structuredClone(state.payments[where.id]), update: async ({where,data}) => Object.assign(state.payments[where.id],data) },
   invoice: { aggregate: async () => ({_sum:{totalCents:0}}),findMany:async()=>[] },
   ledgerEntry: {create:async({data})=>state.ledger.push(data)}, auditLog:{create:async()=>({})},center:{update:async()=>({})},
 };
@@ -17,17 +18,17 @@ mock.module('@/lib/integrations', { namedExports: {
     assert.equal(txDepth,0);
     const existing=processorClaims.get(input.idempotencyKey);
     if(existing) {assert.deepEqual(input,existing.input);return existing.response;}
-    counter++; if(status==='succeeded') processorTotal+=6000;
-    const response={ok:true,configured:true,refund:{id:`re_${counter}`,amountCents:6000,status}};
+    counter++; if(status==='succeeded') {processorTotal+=input.amountCents;processorTotals.set(input.paymentIntentId,(processorTotals.get(input.paymentIntentId)||0)+input.amountCents);}
+    const response={ok:true,configured:true,refund:{id:`re_${counter}`,amountCents:input.amountCents,status}};
     processorClaims.set(input.idempotencyKey,{input:structuredClone(input),response});
     if(failCreateResponseOnce){failCreateResponseOnce=false;return {ok:false,configured:true,error:'Fake lost response'};}
     return response;
   },
   retrieveStripeRefund: async input => {assert.equal(txDepth,0);return {ok:true,configured:true,refund:{id:input.refundId,amountCents:6000,status}};},
-  retrieveStripeSucceededRefundTotal: async () => {assert.equal(txDepth,0);totalReads++;if(failTotalOnce){failTotalOnce=false;throw new Error('Fake totals failure');}return processorTotal;},
+  retrieveStripeSucceededRefundTotal: async input => {assert.equal(txDepth,0);totalReads++;if(failTotalOnce || totalReads===failTotalOnRead){failTotalOnce=false;throw new Error('Fake totals failure');}return input.paymentIntentId==='pi_fake'?processorTotal:(processorTotals.get(input.paymentIntentId)||0);},
 } });
 const refundModule = await import('@/lib/family-refunds');
-const { issueFamilyRefund } = refundModule.default ?? refundModule;
+const { issueFamilyRefund, validateFamilyRefundAvailability } = refundModule.default ?? refundModule;
 const user={id:'director',tenantId:'tenant'};
 const input={familyId:'family',amountCents:6000,reason:'Fake test',operationId:'operation'};
 test('pending, failed, canceled and action-required refunds are never reported or posted as completed',async()=>{
@@ -38,7 +39,7 @@ test('pending, failed, canceled and action-required refunds are never reported o
   }
 });
 test('overlapping stale refund plans apply the authoritative succeeded total under the payment lock',async()=>{
-  reset(); await issueFamilyRefund(user,input);await issueFamilyRefund(user,{...input,operationId:'second'});
+  reset();stalePlan=true; await issueFamilyRefund(user,input);await issueFamilyRefund(user,{...input,operationId:'second'});
   assert.equal(state.balance,12000);assert.equal(state.ledger.length,2);assert.equal(totalReads,2);
   assert.equal(state.payment.customFields.stripeAmountRefundedCents,12000);
 });
@@ -83,4 +84,22 @@ test('a cached pending refund refreshes to failed and releases its claim without
   reset();status='pending';await issueFamilyRefund(user,input);status='failed';
   assert.equal((await issueFamilyRefund(user,{...input,operationId:'retry'})).ok,false);
   assert.equal(counter,1);assert.equal(state.balance,0);assert.equal(state.payment.customFields.pendingFamilyRefund,null);
+});
+test('a multi-payment request resumes its original total after a later succeeded refund needs reconciliation',async()=>{
+  reset();account.payments=[
+    {...originalPayments[0],id:'one',amountCents:6000,externalIdPlaceholder:'pi_one',customFields:{stripeConnectedAccountId:'acct_fake',stripePaymentIntentId:'pi_one'}},
+    {...originalPayments[0],id:'two',amountCents:6000,externalIdPlaceholder:'pi_two',customFields:{stripeConnectedAccountId:'acct_fake',stripePaymentIntentId:'pi_two'}},
+  ];state.payments=Object.fromEntries(account.payments.map(payment=>[payment.id,{...payment,billingAccountId:'account'}]));
+  failTotalOnRead=2;
+  const request={...input,amountCents:12000,preferredPaymentIds:['one','two']};
+  await assert.rejects(issueFamilyRefund(user,request),/Fake totals failure/);
+  assert.equal(counter,2);assert.equal(state.balance,6000);assert.equal(state.ledger.length,1);
+  assert.equal((await validateFamilyRefundAvailability(user,{...request,operationId:'new-http-operation'})).ok,true);
+  const response=await issueFamilyRefund(user,{...request,operationId:'new-http-operation'});
+  assert.equal(response.ok,true);assert.equal(response.totalCents,12000);
+  assert.equal(counter,2);assert.equal(state.balance,12000);assert.equal(state.ledger.length,2);
+});
+test('replaying a completed request identity returns its result without another refund',async()=>{
+  reset();await issueFamilyRefund(user,input);await issueFamilyRefund(user,input);
+  assert.equal(counter,1);assert.equal(state.balance,6000);assert.equal(state.ledger.length,1);
 });

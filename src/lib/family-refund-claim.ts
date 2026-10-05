@@ -4,6 +4,7 @@ import { jsonRecord } from './billing-guardrails';
 export async function reserveFamilyRefundClaim(tx: Prisma.TransactionClient, input: {
   paymentId: string; amountCents: number; reason: string; operationId: string; requestedByUserId: string;
   paymentIntentId: string; connectedAccountId: string | null;
+  requestedTotalCents: number; requestPlan: Array<{ paymentId: string; amountCents: number }>; preferredPaymentIds: string[];
 }) {
   await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Payment" WHERE "id" = ${input.paymentId} FOR UPDATE`);
   const payment = await tx.payment.findUniqueOrThrow({ where: { id: input.paymentId } });
@@ -25,7 +26,8 @@ export async function reserveFamilyRefundClaim(tx: Prisma.TransactionClient, inp
   }
   const idempotencyKey = `billing-family-refund:${input.operationId}:${payment.id}`;
   await tx.payment.update({ where: { id: payment.id }, data: { customFields: { ...fields,
-    pendingFamilyRefund: { amountCents: input.amountCents, reason: input.reason, idempotencyKey, status: 'submitting', operationId: input.operationId, requestedByUserId: input.requestedByUserId, createdAt: new Date().toISOString(), paymentIntentId: input.paymentIntentId, connectedAccountId: input.connectedAccountId },
+    pendingFamilyRefund: { amountCents: input.amountCents, reason: input.reason, idempotencyKey, status: 'submitting', operationId: input.operationId, requestedByUserId: input.requestedByUserId, createdAt: new Date().toISOString(), paymentIntentId: input.paymentIntentId, connectedAccountId: input.connectedAccountId,
+      requestedTotalCents: input.requestedTotalCents, requestPlan: input.requestPlan, preferredPaymentIds: input.preferredPaymentIds },
   } as Prisma.InputJsonObject } });
   return { ok: true as const, idempotencyKey, operationId: input.operationId, requestedByUserId: input.requestedByUserId, knownRefund: null };
 }
@@ -38,9 +40,11 @@ export async function recordFamilyRefundClaim(tx: Prisma.TransactionClient, inpu
   const fields = jsonRecord(payment.customFields), claim = jsonRecord(fields.pendingFamilyRefund);
   if (claim.idempotencyKey !== input.idempotencyKey) return;
   const completed = input.reconciled || input.status === 'failed' || input.status === 'canceled';
-  const recorded = { ...claim, refundId: input.refundId, status: input.status };
+  const recorded = { ...claim, refundId: input.refundId, status: input.status, reconciled: input.reconciled === true || claim.reconciled === true };
+  const history = jsonRecord(fields.familyRefundClaimsByOperation);
   await tx.payment.update({ where: { id: payment.id }, data: { customFields: { ...fields,
     pendingFamilyRefund: completed ? null : recorded,
     lastFamilyRefundClaim: recorded,
+    familyRefundClaimsByOperation: { ...history, [`refund:${String(claim.operationId)}`]: recorded },
   } as Prisma.InputJsonObject } });
 }

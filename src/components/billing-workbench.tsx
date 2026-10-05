@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, ChevronDown, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, PlusCircle, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
@@ -447,6 +447,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [refundPaymentIds, setRefundPaymentIds] = useState<string[]>([]);
   const [refundAmountDollars, setRefundAmountDollars] = useState("");
   const [refundReason, setRefundReason] = useState("");
+  const refundOperation = useRef<{ fingerprint: string; id: string; paymentIds: string[] } | null>(null);
   const [paymentTarget, setPaymentTarget] = useState("balance");
   const [paymentAmountDollars, setPaymentAmountDollars] = useState("");
   const [advancePayment, setAdvancePayment] = useState(false);
@@ -1185,6 +1186,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         appliedInvoiceIds?: string[];
         warning?: string | null;
         pendingApproval?: boolean;
+        partial?: boolean;
         adjustmentDescription?: string;
         balanceAfterCents?: number;
       } | null;
@@ -1232,9 +1234,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             ? `${total} refund request submitted to executives for approval. No funds have been moved.`
             : json?.warning || `${total} family refund issued across the eligible original payment method(s).`,
         );
-        setRefundAmountDollars("");
-        setRefundReason("");
-        setRefundPaymentIds([]);
+        if (!json?.partial) {
+          setRefundAmountDollars(""); setRefundReason(""); setRefundPaymentIds([]); refundOperation.current = null;
+        }
         router.refresh();
         return;
       }
@@ -1482,10 +1484,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (!refundReason.trim()) return setErrorMessage("Enter a reason for the refund.");
     const action = canApproveRefunds ? "issue" : "request executive approval for";
     if (!confirmBillingAction(`${action} a ${money(refundCents)} refund to ${selectedFamily.name}`)) return;
+    const fingerprint = JSON.stringify({ familyId: selectedFamily.id, amountCents: refundCents, reason: refundReason.trim(), paymentIds: refundPaymentIds });
+    if (refundOperation.current?.fingerprint !== fingerprint) refundOperation.current = { fingerprint, id: crypto.randomUUID(), paymentIds: [...selectedRefundPaymentIds] };
     submit({
       mode: "refundPayment",
       familyId: selectedFamily.id,
-      paymentIds: selectedRefundPaymentIds,
+      paymentIds: refundOperation.current.paymentIds,
+      operationId: refundOperation.current.id,
       amountDollars: refundAmountDollars,
       reason: refundReason.trim(),
     });

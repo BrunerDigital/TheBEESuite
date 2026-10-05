@@ -939,10 +939,15 @@ async function refundStripePayment(user: CurrentBillingUser, body: Record<string
   const preferredIds = Array.isArray(body.paymentIds)
     ? body.paymentIds.map((value) => clean(value)).filter(Boolean)
     : clean(body.paymentId) ? [clean(body.paymentId)] : [];
+  const requestedOperationId = clean(body.operationId);
+  if ((body.operationId !== undefined && typeof body.operationId !== "string") || (requestedOperationId && !/^[A-Za-z0-9_-]{1,191}$/.test(requestedOperationId))) return NextResponse.json({ ok: false, error: "A valid refund request identity is required." }, { status: 400 });
+  const operationId = requestedOperationId || randomUUID();
   const validation = await validateFamilyRefundAvailability(user, {
     familyId,
     amountCents,
     preferredPaymentIds: preferredIds,
+    operationId,
+    reason,
   });
   if (!validation.ok) {
     return NextResponse.json(
@@ -1016,7 +1021,7 @@ async function refundStripePayment(user: CurrentBillingUser, body: Record<string
     amountCents,
     reason,
     preferredPaymentIds: preferredIds,
-    operationId: randomUUID(),
+    operationId,
   });
   if (!result.ok) {
     return NextResponse.json(

@@ -371,6 +371,13 @@ test("director invoice preference is bound to the household before checkout and 
   assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
   assert.equal(familyInputs[0].request.metadata.preferredInvoiceId, "selected");
   assert.equal(await familyInputs[0].authorize(prisma), true);
+  for (const status of ["PAID", "VOID"]) {
+    selectedFamilyInvoices[0].status = status;
+    assert.equal(await familyInputs[0].authorize(prisma), false);
+    const inputCount = familyInputs.length;
+    assert.equal((await familyPayment.POST(request({ ...familyBody(), preferredInvoiceId: "selected" }))).status, 409);
+    assert.equal(familyInputs.length, inputCount);
+  }
   selectedFamilyInvoices = [];
   assert.equal(await familyInputs[0].authorize(prisma), false);
 });

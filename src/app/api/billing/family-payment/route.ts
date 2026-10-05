@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { PaymentStatus, Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
@@ -114,7 +114,7 @@ async function POSTHandler(request: NextRequest) {
   if (!initial) return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
   const { target, billingAccount, center, responsibilityReviewRequired, collectableCents } = initial;
   const centerId = target.centerId;
-  if (preferredInvoiceId && !billingAccount.invoices.some(invoice => invoice.id === preferredInvoiceId)) {
+  if (preferredInvoiceId && !billingAccount.invoices.some(invoice => invoice.id === preferredInvoiceId && invoice.status === PaymentStatus.OPEN)) {
     return NextResponse.json({ ok: false, error: "The selected invoice is no longer open on this household." }, { status: 409 });
   }
   if (responsibilityReviewRequired) return NextResponse.json({ ok: false, code: "parent_account_payment_responsibility_review_required",
@@ -341,7 +341,7 @@ async function POSTHandler(request: NextRequest) {
       if (!await authorizeBillingActorForTarget(tx, user, target)) return false;
       const fresh = await readFamilyPaymentSnapshot(tx, target);
       if (!fresh || fresh.responsibilityReviewRequired || (!advancePayment && amountCents > fresh.collectableCents)
-        || (preferredInvoiceId && !fresh.billingAccount.invoices.some(invoice => invoice.id === preferredInvoiceId))
+        || (preferredInvoiceId && !fresh.billingAccount.invoices.some(invoice => invoice.id === preferredInvoiceId && invoice.status === PaymentStatus.OPEN))
         || readStripeConnectedAccountId(fresh.center.customFields) !== connectedAccountId
         || fresh.billingAccount.family.billingEmail !== billingAccount.family.billingEmail || fresh.billingAccount.family.name !== billingAccount.family.name
         || fresh.center.name !== center.name || JSON.stringify(fresh.center.organization) !== JSON.stringify(center.organization)) return false;

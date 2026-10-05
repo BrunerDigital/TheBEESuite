@@ -151,6 +151,31 @@ test("historical account search is scoped before loading a bounded family list",
   assert.match(page, /where: visibleBillingFamilySearchWhere\(visibleCenterIds, requestedBillingSearch\),[\s\S]*?take: 1000/);
 });
 
+test("refunding a balance payment reopens its settled invoice while preserving unrelated paid invoices", async () => {
+  const f = fixture(0); f.state.payment.status = PaymentStatus.PAID;
+  f.state.invoices.push(
+    { id: "settled", billingAccountId: "account", status: PaymentStatus.PAID, totalCents: 24000, customFields: { paidByBalancePayment: true, paymentId: "payment" } },
+    { id: "unrelated", billingAccountId: "account", status: PaymentStatus.PAID, totalCents: 24000, customFields: { paidByBalancePayment: true, paymentId: "other-payment" } },
+  );
+  const originalFindMany = f.tx.invoice.findMany;
+  f.tx.invoice.findMany = (async (args: { where: { OR?: unknown[] } }) => {
+    if (!args.where.OR) return originalFindMany(args as never);
+    assert.deepEqual(args.where.OR, [
+      { customFields: { path: ["paidByAccountCredit"], equals: true } },
+      { AND: [{ customFields: { path: ["paidByBalancePayment"], equals: true } }, { customFields: { path: ["paymentId"], equals: "payment" } }] },
+    ]);
+    return structuredClone(f.state.invoices.filter(invoice => invoice.customFields.paidByAccountCredit === true
+      || (invoice.customFields.paidByBalancePayment === true && invoice.customFields.paymentId === "payment")));
+  }) as typeof f.tx.invoice.findMany;
+  const refund = { paymentId: "payment", chargeId: "ch_balance", paymentIntentId: "pi_balance", eventId: "evt_refund", cumulativeRefundedCents: 6000, invoiceId: null };
+  await applyFamilyPaymentRefund(f.tx, refund);
+  assert.equal(f.state.account.balanceCents, 6000);
+  assert.equal(f.state.invoices[0].status, PaymentStatus.OPEN);
+  assert.equal(f.state.invoices[1].status, PaymentStatus.PAID);
+  await applyFamilyPaymentRefund(f.tx, refund);
+  assert.equal(f.state.account.balanceCents, 6000); assert.equal(f.state.ledger.length, 1);
+});
+
 test("director refund keys remain distinct for equal amounts on separate payments without stored charge IDs", async () => {
   const keys = [];
   for (const refundId of ["re_one", "re_two"]) {

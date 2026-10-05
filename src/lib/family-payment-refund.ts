@@ -45,13 +45,19 @@ export async function applyFamilyPaymentRefund(tx: Prisma.TransactionClient, inp
   if (invoiceId) await tx.invoice.updateMany({ where: { id: invoiceId,
     billingAccountId: payment.billingAccountId, status: PaymentStatus.PAID }, data: { status: PaymentStatus.OPEN } });
   // A refunded advance payment may already have settled future invoices with credit.
-  // Reopen only enough credit-settled invoices to represent the restored debt.
+  // Reopen only enough invoices settled by this payment or credit to represent the restored debt.
   if (!invoiceId && account.balanceCents > 0) {
     const open = await tx.invoice.aggregate({ where: { billingAccountId: payment.billingAccountId, status: PaymentStatus.OPEN }, _sum: { totalCents: true } });
     let representedCents = open._sum.totalCents ?? 0;
     if (representedCents < account.balanceCents) {
       const creditInvoices = await tx.invoice.findMany({ where: { billingAccountId: payment.billingAccountId,
-        status: PaymentStatus.PAID, customFields: { path: ["paidByAccountCredit"], equals: true } }, orderBy: [{ dueDate: "desc" }, { id: "desc" }] });
+        status: PaymentStatus.PAID, OR: [
+          { customFields: { path: ["paidByAccountCredit"], equals: true } },
+          { AND: [
+            { customFields: { path: ["paidByBalancePayment"], equals: true } },
+            { customFields: { path: ["paymentId"], equals: payment.id } },
+          ] },
+        ] }, orderBy: [{ dueDate: "desc" }, { id: "desc" }] });
       for (const invoice of creditInvoices) {
         if (representedCents >= account.balanceCents) break;
         const reopened = await tx.invoice.updateMany({ where: { id: invoice.id, billingAccountId: payment.billingAccountId, status: PaymentStatus.PAID }, data: { status: PaymentStatus.OPEN } });

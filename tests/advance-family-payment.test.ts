@@ -164,8 +164,9 @@ test("director refund keys remain distinct for equal amounts on separate payment
 test("confirmed family-only future tuition consumes credit despite unrelated historical agency activity", async () => {
   for (const funding of ["family", "agency"]) {
     const f = fixture(-24000);
-    const delegates = f.tx as unknown as { billingAccount: Record<string, unknown>; invoice: Record<string, unknown>; ledgerEntry: Record<string, unknown>; center: Record<string, unknown> };
+    const delegates = f.tx as unknown as { billingAccount: Record<string, unknown>; invoice: Record<string, unknown>; ledgerEntry: Record<string, unknown>; center: Record<string, unknown>; child: Record<string, unknown> };
     delegates.billingAccount.upsert = async () => ({ ...f.state.account, family: { centerId: "school-a", children: [{ id: "child", customFields: { tuitionFundingType: funding, tuitionBillingEnabled: true, tuitionPlanId: "plan", tuitionPlanAmountCents: 16000 } }] } });
+    delegates.child = { findMany: async () => [{ id: "child", customFields: { tuitionFundingType: funding, tuitionBillingEnabled: true, tuitionPlanId: "plan", tuitionPlanAmountCents: 16000 } }] };
     delegates.invoice.create = async ({ data }: { data: { customFields: Record<string, unknown>; totalCents: number } }) => {
       const invoice = { ...data, id: "future", billingAccountId: "account", status: PaymentStatus.OPEN };
       f.state.invoices.push(invoice); return invoice;

@@ -42,7 +42,7 @@ export async function createBillingInvoiceForFamily(
     where: { familyId: input.familyId },
     update: {},
     create: { familyId: input.familyId, balanceCents: 0 },
-    include: { family: { select: { centerId: true, children: { select: { id: true, customFields: true } } } } },
+    include: { family: { select: { centerId: true } } },
   });
 
   const dedupeKey = clean(input.customFields.dedupeKey);
@@ -132,7 +132,12 @@ export async function createBillingInvoiceForFamily(
         { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } }, { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
       ] }, select: { id: true },
     });
-    if (!agencyActivity || invoiceResponsibilityReviewExempt(input.customFields, totalCents, ...(billingAccount.family.children ?? []))) {
+    let familyOnly = invoiceResponsibilityReviewExempt(input.customFields, totalCents);
+    if (agencyActivity && !familyOnly) {
+      const assignmentEvidence = await tx.child.findMany({ where: { familyId: input.familyId }, select: { id: true, customFields: true } });
+      familyOnly = invoiceResponsibilityReviewExempt(input.customFields, totalCents, ...assignmentEvidence);
+    }
+    if (!agencyActivity || familyOnly) {
       await applyAccountCreditToInvoice(tx, { invoiceId: invoice.id });
     }
   }

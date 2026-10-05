@@ -56,6 +56,7 @@ export async function applyFamilyPaymentRefund(tx: Prisma.TransactionClient, inp
         status: PaymentStatus.PAID, OR: [
           { customFields: { path: ["paidByAccountCredit"], equals: true } },
           { customFields: { path: ["paidByBalancePayment"], equals: true } },
+          { customFields: { path: ["paidWithAccountCredit"], equals: true } },
         ] }, orderBy: [{ dueDate: "desc" }, { id: "desc" }] });
       for (const invoice of creditInvoices) {
         if (representedCents >= account.balanceCents) break;

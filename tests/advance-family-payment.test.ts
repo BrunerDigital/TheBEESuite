@@ -7,7 +7,7 @@ import { visibleBillingFamilyWhere, visibleBillingFamilySearchWhere, visibleCent
 import { billingFamilyAccountCategory, childTuitionEligibilityError } from "../src/lib/prospective-family-billing";
 import { matchesPrismaWhere } from "./helpers/matches-prisma-where";
 import { invoiceVoidBlocker, invoiceLedgerBalanceCents } from "../src/lib/invoice-void";
-import { applySucceededStripeFamilyBalancePayment, applyAccountCreditToInvoice } from "../src/lib/stripe-payment-application";
+import { applySucceededStripeFamilyBalancePayment, applyAccountCreditToInvoice, applySucceededStripeInvoicePayment } from "../src/lib/stripe-payment-application";
 import { applyFamilyPaymentRefund, familyRefundDelta, supportedFamilyRefundProvider } from "../src/lib/family-payment-refund";
 import { createBillingInvoiceForFamily } from "../src/lib/billing-invoices";
 import { allocateAccountCreditToInvoice, availableAccountCreditCents } from "../src/lib/account-credit-autopay";
@@ -75,8 +75,8 @@ function fixture(balanceCents = 0) {
       findUnique: async ({ where }: { where: { id: string } }) => structuredClone(state.invoices.find(i => i.id === where.id)),
       findMany: async ({ where }: { where?: { status?: PaymentStatus } } = {}) => structuredClone(state.invoices.filter(i => i.status === (where?.status ?? PaymentStatus.OPEN))),
       aggregate: async () => ({ _sum: { totalCents: state.invoices.filter(i => i.status === PaymentStatus.OPEN).reduce((s,i) => s + i.totalCents, 0) } }),
-      updateMany: async ({ where, data }: { where: { id: string; status: PaymentStatus; billingAccountId?: string }; data: object }) => {
-        const invoice = state.invoices.find(i => i.id === where.id && i.status === where.status && (!where.billingAccountId || i.billingAccountId === where.billingAccountId));
+      updateMany: async ({ where, data }: { where: { id: string; status: PaymentStatus | { not: PaymentStatus }; billingAccountId?: string }; data: object }) => {
+        const invoice = state.invoices.find(i => i.id === where.id && (typeof where.status === "string" ? i.status === where.status : i.status !== where.status.not) && (!where.billingAccountId || i.billingAccountId === where.billingAccountId));
         if (!invoice) return { count: 0 }; Object.assign(invoice, data); return { count: 1 };
       },
     },
@@ -166,9 +166,10 @@ test("refunding a balance payment reopens its settled invoice while preserving u
     assert.deepEqual(args.where.OR, [
       { customFields: { path: ["paidByAccountCredit"], equals: true } },
       { customFields: { path: ["paidByBalancePayment"], equals: true } },
+      { customFields: { path: ["paidWithAccountCredit"], equals: true } },
     ]);
     return structuredClone(f.state.invoices.filter(invoice => invoice.customFields.paidByAccountCredit === true
-      || invoice.customFields.paidByBalancePayment === true));
+      || invoice.customFields.paidByBalancePayment === true || invoice.customFields.paidWithAccountCredit === true));
   }) as unknown as typeof f.tx.invoice.findMany;
   const refund = { paymentId: "payment", chargeId: "ch_balance", paymentIntentId: "pi_balance", eventId: "evt_refund", cumulativeRefundedCents: 6000, invoiceId: null };
   await applyFamilyPaymentRefund(f.tx, refund);
@@ -226,4 +227,23 @@ test("Terminal refunds reconcile once while non-Stripe providers stay excluded",
   const refund = { paymentId: "payment", chargeId: "ch_terminal", paymentIntentId: "pi_terminal", eventId: "evt_terminal", cumulativeRefundedCents: 24000, invoiceId: null };
   await applyFamilyPaymentRefund(f.tx, refund); await applyFamilyPaymentRefund(f.tx, { ...refund, eventId: "evt_terminal_retry" });
   assert.equal(f.state.account.balanceCents, 0); assert.equal(f.state.ledger.length, 1);
+});
+
+test("direct repayment replaces old pool settlement markers before a later credit refund", async () => {
+  const f = fixture(24000);
+  f.state.invoices.push({ id: "repaid", billingAccountId: "account", status: PaymentStatus.OPEN, totalCents: 24000,
+    customFields: { paidByAccountCredit: true, paidByBalancePayment: true, paidWithAccountCredit: true } });
+  const payment = await applySucceededStripeInvoicePayment(f.tx, { invoiceId: "repaid", paymentId: "payment", externalId: "pi_repaid", stripePaymentIntentId: "pi_repaid", stripeAmountTotalCents: 24000 });
+  assert.equal(payment.applied, true); assert.equal(f.state.account.balanceCents, 0);
+  for (const field of ["paidByAccountCredit", "paidByBalancePayment", "paidWithAccountCredit"]) assert.equal(f.state.invoices[0].customFields[field], false);
+  f.state.invoices.push({ id: "credit-funded", billingAccountId: "account", status: PaymentStatus.PAID, totalCents: 6000, customFields: { paidWithAccountCredit: true } });
+  const originalFindMany = f.tx.invoice.findMany;
+  f.tx.invoice.findMany = (async (args: { where: { OR?: unknown[] } }) => args.where.OR
+    ? structuredClone(f.state.invoices.filter(invoice => ["paidByAccountCredit", "paidByBalancePayment", "paidWithAccountCredit"].some(field => invoice.customFields[field] === true)))
+    : originalFindMany(args as never)) as unknown as typeof f.tx.invoice.findMany;
+  f.state.payment.id = "earlier-credit"; f.state.payment.amountCents = 6000; f.state.payment.customFields = {};
+  await applyFamilyPaymentRefund(f.tx, { paymentId: "earlier-credit", chargeId: "ch_credit", paymentIntentId: "pi_credit", eventId: "evt_credit_refund", cumulativeRefundedCents: 6000, invoiceId: null });
+  assert.equal(f.state.invoices[0].status, PaymentStatus.PAID);
+  assert.equal(f.state.invoices[1].status, PaymentStatus.OPEN);
+  assert.equal(f.state.account.balanceCents, 6000);
 });

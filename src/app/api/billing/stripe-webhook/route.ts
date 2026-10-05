@@ -981,6 +981,9 @@ async function applyRegistrationPaymentCompletion(
         status: "paid",
         paidAt,
         paymentId: input.paymentId,
+        paidByAccountCredit: false,
+        paidByBalancePayment: false,
+        paidWithAccountCredit: false,
       },
     },
   });
@@ -2557,6 +2560,8 @@ async function handlePaymentIntentSucceeded(
             paidAt: paidAt.toISOString(),
             paymentId,
             paidWithAccountCredit: accountCreditAppliedCents > 0,
+            paidByAccountCredit: false,
+            paidByBalancePayment: false,
             accountCreditAppliedCents,
             stripeChargePrincipalCents: currentPayment.amountCents,
           } as Prisma.InputJsonObject,
@@ -3259,7 +3264,10 @@ async function dispatchAuthenticatedEvent(
 
       const invoiceClaim = await tx.invoice.updateMany({
         where: { id: invoiceId, status: PaymentStatus.OPEN },
-        data: { status: PaymentStatus.PAID },
+        data: { status: PaymentStatus.PAID, customFields: {
+          ...jsonObject(invoice.customFields), paidByAccountCredit: false, paidByBalancePayment: false,
+          paidWithAccountCredit: false, paymentId, status: "paid",
+        } as Prisma.InputJsonObject },
       });
       if (invoiceClaim.count !== 1) {
         ignoredReason = "invoice_already_paid";

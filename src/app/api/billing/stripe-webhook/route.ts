@@ -8,6 +8,7 @@ import {
   ensureStripeSoftwareRecurringPrice,
   readStripeConnectedAccountId,
   retrieveStripePaymentIntent,
+  retrieveStripeSucceededRefundTotal,
   retrieveStripeConnectedAccount,
   retrieveStripePaymentMethod,
   retrieveStripeSetupIntent,
@@ -2705,7 +2706,7 @@ async function handlePaymentIntentSucceeded(
   return NextResponse.json({ ok: true });
 }
 
-async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeChargeObject) {
+async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeChargeObject, matchedTenantId: string | null) {
   const metadata = metadataOf(charge);
   let affectedBillingAccountId: string | null = null;
 
@@ -2727,9 +2728,12 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
       affectedBillingAccountId = payment.billingAccountId;
 
       const invoiceId = await invoiceIdForPayment(tx, payment.id, metadata);
+      const cumulativeRefundedCents = await retrieveStripeSucceededRefundTotal({
+        paymentIntentId: clean(charge.payment_intent), connectedAccountId: event.account, tenantId: matchedTenantId,
+      });
       await applyFamilyPaymentRefund(tx, {
         paymentId: payment.id, chargeId: charge.id, paymentIntentId: clean(charge.payment_intent) || null,
-        eventId: event.id, cumulativeRefundedCents: numeric(charge.amount_refunded), invoiceId,
+        eventId: event.id, cumulativeRefundedCents, invoiceId,
       });
     });
   } catch (error) {
@@ -3045,7 +3049,12 @@ async function dispatchAuthenticatedEvent(
   }
 
   if (event.type === "charge.refunded") {
-    return handleChargeRefunded(event, event.data.object as StripeChargeObject);
+    return handleChargeRefunded(event, event.data.object as StripeChargeObject, matchedTenantId);
+  }
+  if (event.type === "refund.updated" || event.type === "refund.failed" || event.type === "refund.created") {
+    const refund = event.data.object as { charge?: string; payment_intent?: string; metadata?: StripeMetadata };
+    if (!clean(refund.charge) || !clean(refund.payment_intent)) return NextResponse.json({ ok: true, ignored: true });
+    return handleChargeRefunded(event, { id: clean(refund.charge), object: "charge", payment_intent: clean(refund.payment_intent), metadata: refund.metadata }, matchedTenantId);
   }
 
   if (event.type.startsWith("charge.dispute.")) {

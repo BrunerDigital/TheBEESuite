@@ -906,6 +906,7 @@ function ParentPortalWorkspaceView({
     Record<string, string>
   >({});
   const [advancePayment, setAdvancePayment] = useState(false);
+  useEffect(() => { setAdvancePayment(false); }, [family?.id, paymentContinuityAccess]);
   const [accountPaymentAmountDollars, setAccountPaymentAmountDollars] =
     useState("");
   const [paymentCheckoutError, setPaymentCheckoutError] = useState("");
@@ -1037,7 +1038,7 @@ function ParentPortalWorkspaceView({
     accountPaymentAmountInvalid ||
     accountPaymentAmountExceedsBalance;
   const showFamilyPaymentPanel =
-    Boolean(billingAccount);
+    Boolean(billingAccount) && (!paymentContinuityAccess || balanceCents > 0);
   const latestAccountLedgerEntry =
     latestLedgerEntry ?? ledgerEntries[0] ?? null;
   const parentVisiblePayments = payments.filter(isParentVisiblePayment);
@@ -3530,11 +3531,11 @@ function ParentPortalWorkspaceView({
                   </div>
                   {paymentMethodReauthorizationRequired && canReplaceSavedPaymentMethod ? null : (
                     <div className="w-full space-y-1 sm:w-56">
-                      <label className="flex items-start gap-2 text-sm">
+                      {!paymentContinuityAccess ? <><label className="flex items-start gap-2 text-sm">
                         <input type="checkbox" checked={advancePayment} onChange={(event) => setAdvancePayment(event.target.checked)} />
                         Advance payment for future tuition
                       </label>
-                      <p className="text-xs text-muted-foreground">Confirm a custom amount in secure checkout. Any amount above your balance becomes household credit and reduces future tuition. Autopay consent stays unchanged.</p>
+                      <p className="text-xs text-muted-foreground">Confirm a custom amount in secure checkout. Any amount above your balance becomes household credit and reduces future tuition. Autopay consent stays unchanged.</p></> : null}
                       <Label htmlFor="account-payment-amount">
                         Amount to pay
                         {parentBalanceReviewRequired ? "" : " (optional)"}

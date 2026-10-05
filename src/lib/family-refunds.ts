@@ -1,7 +1,7 @@
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { canAccessCenter, type CurrentUser } from "@/lib/auth";
 import { planFamilyRefundAllocations } from "@/lib/billing-workflows";
-import { createStripeRefund } from "@/lib/integrations";
+import { createStripeRefund, retrieveStripeSucceededRefundTotal } from "@/lib/integrations";
 import { applyFamilyPaymentRefund } from "@/lib/family-payment-refund";
 import { prisma } from "@/lib/prisma";
 
@@ -149,6 +149,7 @@ export async function issueFamilyRefund(
 
   const { account, refundPlan } = prepared;
   const allocations: RefundAllocation[] = [];
+  let stoppedReason: string | null = null;
   for (const planned of refundPlan.allocations) {
     const payment = planned.payment;
     const connectedAccountId = clean(payment.fields.stripeConnectedAccountId) || null;
@@ -178,11 +179,17 @@ export async function issueFamilyRefund(
     }
 
     const refundRecord = refund.refund;
+    if (refundRecord.status !== "succeeded") {
+      stoppedReason = `Processor refund ${refundRecord.id} is ${refundRecord.status || "unconfirmed"}; it has not been recorded as completed. Check its processor status before retrying.`;
+      if (!allocations.length) return { ok: false, status: 409, error: stoppedReason };
+      break;
+    }
     const refundedAmountCents = refundRecord.amountCents;
-    const totalRefundedCents = payment.refundedCents + refundedAmountCents;
     const invoiceId = payment.ledgerEntries[0]?.invoiceId ?? null;
-    if (refundRecord.status === "succeeded") await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Payment" WHERE "id" = ${payment.id} FOR UPDATE`);
+      const totalRefundedCents = await retrieveStripeSucceededRefundTotal({ paymentIntentId: payment.paymentIntentId,
+        connectedAccountId, tenantId: input.tenantId ?? user.tenantId });
       await applyFamilyPaymentRefund(tx, {
         paymentId: payment.id, chargeId: clean(payment.fields.stripeChargeId),
         paymentIntentId: payment.paymentIntentId, eventId: `director-refund:${refundRecord.id}`,
@@ -227,7 +234,7 @@ export async function issueFamilyRefund(
     allocations,
     partial: totalCents < input.amountCents,
     warning: totalCents < input.amountCents
-      ? `${moneyLabel(totalCents)} was sent before the payment processor stopped the remaining allocation.`
+      ? `${moneyLabel(totalCents)} was sent. ${stoppedReason || "The payment processor stopped the remaining allocation."}`
       : null,
   };
 }

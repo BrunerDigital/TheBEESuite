@@ -72,7 +72,7 @@ test("a positive family balance remains payable when no open invoice exists", ()
 
   assert.match(
     workspace,
-    /const showFamilyPaymentPanel\s*=\s*Boolean\(billingAccount\)/,
+    /const showFamilyPaymentPanel\s*=\s*Boolean\(billingAccount\) && \(!paymentContinuityAccess \|\| balanceCents > 0\)/,
   );
   assert.match(
     workspace,

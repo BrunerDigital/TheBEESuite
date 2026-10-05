@@ -1,7 +1,8 @@
-import { PaymentStatus, type Prisma } from "@prisma/client";
+import { PaymentStatus, Prisma } from "@prisma/client";
 import { canAccessCenter, type CurrentUser } from "@/lib/auth";
 import { planFamilyRefundAllocations } from "@/lib/billing-workflows";
 import { createStripeRefund } from "@/lib/integrations";
+import { applyFamilyPaymentRefund } from "@/lib/family-payment-refund";
 import { prisma } from "@/lib/prisma";
 
 type RefundAllocation = {
@@ -180,53 +181,12 @@ export async function issueFamilyRefund(
     const refundedAmountCents = refundRecord.amountCents;
     const totalRefundedCents = payment.refundedCents + refundedAmountCents;
     const invoiceId = payment.ledgerEntries[0]?.invoiceId ?? null;
-    await prisma.$transaction(async (tx) => {
-      const updatedAccount = await tx.billingAccount.update({
-        where: { id: account.id },
-        data: { balanceCents: { increment: refundedAmountCents } },
-      });
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: totalRefundedCents >= payment.amountCents ? PaymentStatus.REFUNDED : PaymentStatus.PAID,
-          customFields: {
-            ...payment.fields,
-            stripeAmountRefundedCents: totalRefundedCents,
-            stripeFullyRefunded: totalRefundedCents >= payment.amountCents,
-            latestStripeRefundId: refundRecord.id,
-            latestRefundReason: input.reason,
-            latestRefundedBy: user.email,
-            latestFamilyRefundOperationId: input.operationId,
-            status: totalRefundedCents >= payment.amountCents ? "refunded" : "partially_refunded",
-          } satisfies Prisma.InputJsonObject,
-        },
-      });
-      if (invoiceId) {
-        await tx.invoice.update({
-          where: { id: invoiceId },
-          data: { status: PaymentStatus.OPEN },
-        });
-      }
-      await tx.ledgerEntry.create({
-        data: {
-          billingAccountId: account.id,
-          invoiceId,
-          paymentId: payment.id,
-          type: "refund",
-          description: `Refund: ${input.reason}`,
-          amountCents: refundedAmountCents,
-          balanceAfterCents: updatedAccount.balanceCents,
-          sourceSystem: "stripe",
-          externalId: `stripe-refund:${refundRecord.id}`,
-          metadata: {
-            stripeRefundId: refundRecord.id,
-            stripePaymentIntentId: payment.paymentIntentId,
-            refundReason: input.reason,
-            refundedBy: user.email,
-            totalRefundedCents,
-            familyRefundOperationId: input.operationId,
-          },
-        },
+    if (refundRecord.status === "succeeded") await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Payment" WHERE "id" = ${payment.id} FOR UPDATE`);
+      await applyFamilyPaymentRefund(tx, {
+        paymentId: payment.id, chargeId: clean(payment.fields.stripeChargeId),
+        paymentIntentId: payment.paymentIntentId, eventId: `director-refund:${refundRecord.id}`,
+        cumulativeRefundedCents: totalRefundedCents, invoiceId, refundId: refundRecord.id,
       });
     });
     allocations.push({

@@ -29,6 +29,11 @@ export function visibleCurrentFamilyWhere(centerIds: readonly string[]): Prisma.
   };
 }
 
+/** Historical billing access is independent of active enrollment and current balance. */
+export function visibleBillingFamilyWhere(centerIds: readonly string[]): Prisma.FamilyWhereInput {
+  return visibleFamilyWhere(centerIds);
+}
+
 export function currentOrOutstandingFamilyWhere(): Prisma.FamilyWhereInput {
   return {
     OR: [

@@ -39,8 +39,8 @@ test("billing workbench includes pipeline families without widening receivable t
   const page = readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
   const workbench = readFileSync(new URL("../src/components/billing-workbench.tsx", import.meta.url), "utf8");
 
-  assert.match(page, /workbenchFamilyWhere[\s\S]*prospectiveEnrollmentChildWhere\(\)/);
-  assert.match(page, /children: \{[\s\S]*currentlyEnrolledChildWhere\(\)[\s\S]*prospectiveEnrollmentChildWhere\(\)/);
+  assert.match(page, /workbenchFamilyWhere = visibleBillingFamilyWhere\(visibleCenterIds\)/);
+  assert.match(page, /billingWorkbenchFamilySelect[\s\S]*enrollmentStatus: true/);
   assert.match(page, /currentBillingAccountWhere = visibleCurrentBillingAccountWhere\(visibleCenterIds\)/);
   assert.match(page, /billingFamilyAccountCategory\(family\.children\)/);
   assert.match(workbench, /Prospective family billing/);

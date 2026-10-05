@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentStatus } from "@prisma/client";
+import { PaymentStatus, Prisma } from "@prisma/client";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import {
   billingDedupeKey,
@@ -171,6 +171,15 @@ async function GETHandler(request: NextRequest) {
         const grossTuitionCents = (amountCents + tuitionAdditionalChargesTotalCents) * invoiceWeekCount;
 
         const invoice = await prisma.$transaction(async (tx) => {
+          // Serialize against enrollment closeout; the preflight candidate may
+          // have been withdrawn or its assignment disabled while the cron ran.
+          await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Child" WHERE "id" = ${entry.child.id} FOR UPDATE`);
+          const freshChild = await tx.child.findFirst({ where: {
+            id: entry.child.id, familyId: entry.child.familyId, ...currentlyEnrolledChildWhere(),
+            customFields: { path: ["tuitionBillingEnabled"], equals: true },
+          }, select: { customFields: true } });
+          if (!freshChild || clean(jsonObject(freshChild.customFields).tuitionPlanId) !== entry.planId
+            || JSON.stringify(freshChild.customFields) !== JSON.stringify(entry.child.customFields)) return null;
           const candidateInvoices = await tx.invoice.findMany({
             where: {
               status: { not: PaymentStatus.VOID },
@@ -258,14 +267,14 @@ async function GETHandler(request: NextRequest) {
         );
 
         return {
-          created: invoice.created ? 1 : 0,
-          skipped: invoice.created ? 0 : 1,
-          totalCents: invoice.totalCents,
-          invoice: {
+          created: invoice?.created ? 1 : 0,
+          skipped: invoice?.created ? 0 : 1,
+          totalCents: invoice?.totalCents ?? 0,
+          invoice: invoice ? {
             ...invoice.invoice,
             childId: entry.child.id,
             familyId: entry.child.familyId,
-          },
+          } : null,
         };
       }));
 
@@ -274,7 +283,7 @@ async function GETHandler(request: NextRequest) {
           created += result.value.created;
           skipped += result.value.skipped;
           totalCents += result.value.totalCents;
-          invoices.push(result.value.invoice);
+          if (result.value.invoice) invoices.push(result.value.invoice);
           continue;
         }
 

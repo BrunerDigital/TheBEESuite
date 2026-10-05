@@ -39,6 +39,7 @@ reset();
 const prisma = {
   async $transaction(run, options) { assert.equal(options.isolationLevel, "RepeatableRead"); return run(prisma); },
   invoice: {
+    async aggregate() { return { _sum: { totalCents: invoice.totalCents } }; },
     async findUnique({ select }) { assert.ok(select); assert.equal(select.billingAccount.select.family.select.centerId, true);
       return { billingAccountId: "fake-account", billingAccount: { familyId: "fake-family", family: { centerId: "fake-school" } } }; },
     async findFirst({ where }) { details++; assert.equal(where.billingAccountId, "fake-account"); return invoice; },
@@ -328,5 +329,32 @@ test("all wallet entry points prove direct Stripe fees and persist neutral walle
   } finally {
     if (previous === undefined) delete process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT;
     else process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT = previous;
+  }
+});
+
+
+test("existing household credit blocks gross invoice checkout before processor calls", async () => {
+  reset(); invoice.billingAccount.balanceCents = 4000; family.billingAccount.balanceCents = 4000;
+  assert.equal((await direct.POST(request({ invoiceId: "fake-invoice" }))).status, 409);
+  assert.equal((await signed.POST(request({ token: token(), invoiceId: "fake-invoice" }))).status, 409);
+  assert.equal(providers.length, 0); assert.equal(captured.length, 0);
+});
+
+
+test("parent and director routes accept explicit advance amounts at zero balance without changing consent", async () => {
+  for (const actor of ["parent", "director"]) {
+    reset(); if (actor === "parent") parentFamily(); captureFamily = true;
+    family.billingAccount.balanceCents = 0;
+    const response = await familyPayment.POST(request({ ...familyBody(), amountCents: 24000, advancePayment: true }));
+    assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+    const input = familyInputs[0];
+    assert.equal(input.request.metadata.advancePayment, "true");
+    assert.equal(input.request.invoiceAmountCents, 24000);
+    assert.equal(await input.authorize(prisma), true);
+    assert.equal(input.acceptProcessingRecovery, undefined);
+    assert.equal(family.billingAccount.balanceCents, 0);
+    reset(); if (actor === "parent") parentFamily(); captureFamily = true; family.billingAccount.balanceCents = 0;
+    assert.equal((await familyPayment.POST(request({ ...familyBody(), amountCents: 24000 }))).status, 409);
+    assert.equal(familyInputs.length, 0);
   }
 });

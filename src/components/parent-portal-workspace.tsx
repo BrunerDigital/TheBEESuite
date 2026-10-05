@@ -905,6 +905,7 @@ function ParentPortalWorkspaceView({
   const [tuitionCadenceDrafts, setTuitionCadenceDrafts] = useState<
     Record<string, string>
   >({});
+  const [advancePayment, setAdvancePayment] = useState(false);
   const [accountPaymentAmountDollars, setAccountPaymentAmountDollars] =
     useState("");
   const [paymentCheckoutError, setPaymentCheckoutError] = useState("");
@@ -1024,21 +1025,19 @@ function ParentPortalWorkspaceView({
   const accountPaymentAmountInvalid =
     accountPaymentAmountEntered && accountPaymentAmountCents <= 0;
   const accountPaymentAmountExceedsBalance =
-    !parentBalanceReviewRequired && accountPaymentAmountCents > balanceCents;
+    !advancePayment && !parentBalanceReviewRequired && accountPaymentAmountCents > balanceCents;
   const accountPaymentRequestCents = accountPaymentAmountEntered
     ? accountPaymentAmountCents
     : balanceCents;
   const accountPaymentAmountRequired =
-    parentBalanceReviewRequired && !accountPaymentAmountEntered;
+    (parentBalanceReviewRequired || advancePayment || balanceCents <= 0) && !accountPaymentAmountEntered;
   const accountPaymentDisabled =
     Boolean(accountPaymentBlocker) ||
     accountPaymentAmountRequired ||
     accountPaymentAmountInvalid ||
     accountPaymentAmountExceedsBalance;
   const showFamilyPaymentPanel =
-    parentBalanceReviewRequired ||
-    Boolean(nextOpenInvoice) ||
-    (balanceCents > 0 && openInvoices.length === 0);
+    Boolean(billingAccount);
   const latestAccountLedgerEntry =
     latestLedgerEntry ?? ledgerEntries[0] ?? null;
   const parentVisiblePayments = payments.filter(isParentVisiblePayment);
@@ -1433,7 +1432,7 @@ function ParentPortalWorkspaceView({
     if (!billingAccount) {
       return showError("Your family billing account is not available yet.");
     }
-    if (balanceCents <= 0 && !parentBalanceReviewRequired) {
+    if (balanceCents <= 0 && !advancePayment && !parentBalanceReviewRequired) {
       return showError("There is no family balance to pay.");
     }
     if (accountPaymentAmountRequired) {
@@ -1469,6 +1468,7 @@ function ParentPortalWorkspaceView({
           method,
           returnPath: workspaceHref("family", { familyId: family.id, section: "billing" }),
           amountCents: accountPaymentRequestCents,
+          advancePayment,
         }),
       });
       const json = (await response.json().catch(() => null)) as {
@@ -1495,7 +1495,7 @@ function ParentPortalWorkspaceView({
   }
 
   function payBalance(paymentMethodCategory: "ach" | "card" | "link_bank") {
-    if (!nextOpenInvoice && balanceCents <= 0 && !parentBalanceReviewRequired) {
+    if (!nextOpenInvoice && balanceCents <= 0 && !advancePayment && !parentBalanceReviewRequired) {
       return showError("There is no family balance to pay.");
     }
     payFamilyBalance(paymentMethodCategory);
@@ -3145,7 +3145,7 @@ function ParentPortalWorkspaceView({
                   </div>
                 ) : (
                   <p className="sr-only">
-                    {balanceCents < 0 ? "This credit is held on your family account; it is not an amount you owe." : parentBalanceVisibilityConfirmed
+                    {balanceCents < 0 ? "This credit is held on your family account and automatically reduces future invoices; it is not an amount you owe." : parentBalanceVisibilityConfirmed
                       ? "This reviewed family balance is visible while automatic collection remains blocked."
                       : "This is the amount currently due from your family."}
                   </p>
@@ -3528,6 +3528,11 @@ function ParentPortalWorkspaceView({
                   </div>
                   {paymentMethodReauthorizationRequired && canReplaceSavedPaymentMethod ? null : (
                     <div className="w-full space-y-1 sm:w-56">
+                      <label className="flex items-start gap-2 text-sm">
+                        <input type="checkbox" checked={advancePayment} onChange={(event) => setAdvancePayment(event.target.checked)} />
+                        Advance payment for future tuition
+                      </label>
+                      <p className="text-xs text-muted-foreground">Confirm a custom amount in secure checkout. Any amount above your balance becomes household credit and reduces future tuition. Autopay consent stays unchanged.</p>
                       <Label htmlFor="account-payment-amount">
                         Amount to pay
                         {parentBalanceReviewRequired ? "" : " (optional)"}
@@ -3538,9 +3543,9 @@ function ParentPortalWorkspaceView({
                         inputMode="decimal"
                         min="0.01"
                         max={
-                          parentBalanceReviewRequired
+                          parentBalanceReviewRequired || advancePayment
                             ? undefined
-                            : (balanceCents / 100).toFixed(2)
+                            : (Math.max(0, balanceCents) / 100).toFixed(2)
                         }
                         step="0.01"
                         placeholder={
@@ -3560,7 +3565,7 @@ function ParentPortalWorkspaceView({
                       <p className="text-xs text-muted-foreground">
                         {parentBalanceReviewRequired
                           ? "Enter the family portion you want to pay."
-                          : "Enter a custom amount to split the balance across payment methods, or leave blank to pay the full balance."}
+                          : advancePayment ? "Enter the amount to pay ahead. Excess is held as household credit." : "Enter a custom amount to split the balance across payment methods, or leave blank to pay the full balance."}
                       </p>
                       {accountPaymentAmountInvalid ? (
                         <p className="text-xs text-destructive">

@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { PaymentStatus, Prisma } from "@prisma/client";
+import { applyAccountCreditToInvoice } from "./stripe-payment-application";
+import { AGENCY_LEDGER_ENTRY_TYPES, AGENCY_LEDGER_SOURCE_SYSTEM } from "./parent-billing-visibility";
+import { invoiceResponsibilitySeparation } from "./invoice-responsibility-separation";
 
 export type BillingInvoiceLineItem = {
   description: string;
@@ -117,6 +120,19 @@ export async function createBillingInvoiceForFamily(
         metadata: metadataJson(input.customFields),
       },
     });
+  }
+
+  // A successful advance payment already reduced the account balance. Settlement
+  // only links that credit to the invoice; its zero-dollar ledger marker must not
+  // reduce the balance a second time. Partial coverage remains in the net balance
+  // and is consumed by the existing credit-first checkout/autopay allocation.
+  if (updatedAccount.balanceCents <= 0 && !invoiceResponsibilitySeparation(input.customFields)) {
+    const agencyActivity = await tx.ledgerEntry.findFirst({
+      where: { billingAccountId: billingAccount.id, OR: [
+        { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } }, { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
+      ] }, select: { id: true },
+    });
+    if (!agencyActivity) await applyAccountCreditToInvoice(tx, { invoiceId: invoice.id });
   }
 
   if (billingAccount.family.centerId) {

@@ -105,7 +105,6 @@ import {
   closedEnrollmentChildWhere,
   currentlyEnrolledChildWhere,
   currentlyEnrolledStatusValues,
-  prospectiveEnrollmentChildWhere,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
   summarizeEnrollmentLifecycleCounts,
@@ -157,6 +156,7 @@ import {
   currentOrOutstandingFamilyWhere,
   visibleAttendanceWhere,
   visibleBillingAccountWhere,
+  visibleBillingFamilyWhere,
   visibleCenterIdFilter,
   visibleCheckLogWhere,
   visibleChildWhere,
@@ -4082,17 +4082,7 @@ async function renderLivePage(
     const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
     const invoiceStatus = normalizeDirectorInvoiceStatus(firstSearchParam(searchParams.invoiceStatus));
     const invoicePaymentStatus = paymentStatusForDirectorInvoiceStatus(invoiceStatus);
-    const workbenchFamilyWhere: Prisma.FamilyWhereInput = {
-      AND: [
-        { centerId: scopedCenterIds },
-        {
-          OR: [
-            currentOrOutstandingFamilyWhere(),
-            { children: { some: prospectiveEnrollmentChildWhere() } },
-          ],
-        },
-      ],
-    };
+    const workbenchFamilyWhere = visibleBillingFamilyWhere(visibleCenterIds);
     const billingWorkbenchFamilySelect = {
           id: true,
           centerId: true,
@@ -4160,12 +4150,6 @@ async function renderLivePage(
             },
           },
           children: {
-            where: {
-              OR: [
-                currentlyEnrolledChildWhere(),
-                prospectiveEnrollmentChildWhere(),
-              ],
-            },
             orderBy: { fullName: "asc" },
             select: {
               id: true,
@@ -4294,7 +4278,6 @@ async function renderLivePage(
       prisma.family.findMany({
         where: workbenchFamilyWhere,
         orderBy: [{ name: "asc" }, { id: "asc" }],
-        take: 1000,
         select: billingWorkbenchFamilySelect,
       }),
       requestedBillingFamilyId ? prisma.family.findFirst({

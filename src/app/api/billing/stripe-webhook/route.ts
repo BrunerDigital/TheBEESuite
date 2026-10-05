@@ -1,3 +1,4 @@
+import { applyFamilyPaymentRefund } from "@/lib/family-payment-refund";
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { achFailurePresentation, isAchPaymentProcessing, isAchReturnReason, isReturnedStripePayment } from "@/lib/ach-payment-lifecycle";
@@ -2716,60 +2717,18 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
         include: { billingAccount: true },
       });
       if (!payment) return;
+      const refundFields = jsonObject(payment.customFields);
+      if (payment.provider !== "stripe"
+        || clean(refundFields.stripeConnectedAccountId) !== clean(event.account)
+        || (clean(refundFields.stripePaymentIntentId) && clean(refundFields.stripePaymentIntentId) !== clean(charge.payment_intent))
+        || (clean(refundFields.stripeChargeId) && clean(refundFields.stripeChargeId) !== charge.id)) return;
       affectedBillingAccountId = payment.billingAccountId;
 
-      const currentFields = jsonObject(payment.customFields);
-      const previousRefundedCents = numeric(currentFields.stripeAmountRefundedCents);
-      const refundedCents = numeric(charge.amount_refunded);
-      const refundDeltaCents = Math.max(0, refundedCents - previousRefundedCents);
       const invoiceId = await invoiceIdForPayment(tx, payment.id, metadata);
-
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: charge.refunded ? PaymentStatus.REFUNDED : payment.status,
-          customFields: {
-            ...currentFields,
-            stripeChargeId: charge.id,
-            stripePaymentIntentId: clean(charge.payment_intent) || currentFields.stripePaymentIntentId || null,
-            stripeEventId: event.id,
-            stripeAmountRefundedCents: refundedCents,
-            stripeFullyRefunded: charge.refunded === true,
-            status: charge.refunded ? "refunded" : "partially_refunded",
-          },
-        },
+      await applyFamilyPaymentRefund(tx, {
+        paymentId: payment.id, chargeId: charge.id, paymentIntentId: clean(charge.payment_intent) || null,
+        eventId: event.id, cumulativeRefundedCents: numeric(charge.amount_refunded), invoiceId,
       });
-
-      if (refundDeltaCents > 0 && invoiceId) {
-        const updatedAccount = await tx.billingAccount.update({
-          where: { id: payment.billingAccountId },
-          data: { balanceCents: { increment: refundDeltaCents } },
-        });
-        await tx.invoice.update({
-          where: { id: invoiceId },
-          data: { status: PaymentStatus.OPEN },
-        });
-        await tx.ledgerEntry.create({
-          data: {
-            billingAccountId: payment.billingAccountId,
-            invoiceId,
-            paymentId: payment.id,
-            type: "refund",
-            description: charge.refunded ? "Payment refunded" : "Payment partially refunded",
-            amountCents: refundDeltaCents,
-            balanceAfterCents: updatedAccount.balanceCents,
-            sourceSystem: "stripe",
-            externalId: `stripe-refund:${charge.id}:${refundedCents}`,
-            metadata: {
-              stripeEventId: event.id,
-              stripeChargeId: charge.id,
-              stripePaymentIntentId: clean(charge.payment_intent) || null,
-              refundedCents,
-              refundDeltaCents,
-            },
-          },
-        });
-      }
     });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {

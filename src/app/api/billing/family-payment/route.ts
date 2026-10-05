@@ -7,6 +7,7 @@ import { jsonRecord } from "@/lib/billing-guardrails";
 import { authorizeBillingActorForTarget } from "@/lib/billing-actor-authorization";
 import { readAuthorizedFamilyPaymentTarget } from "@/lib/family-payment-preflight";
 import { readFamilyPaymentSnapshot } from "@/lib/family-payment-snapshot";
+import { familyPaymentAmountError } from "@/lib/family-payment-amount";
 import { startFamilyPayment, FAMILY_PAYMENT_ID_TOKEN } from "@/lib/family-payment-service";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 import { getStripeCheckoutAmounts, getStripePaymentMethodConfigurationId, getStripeSecretKey, getStripeWebhookSecret,
@@ -91,6 +92,7 @@ async function POSTHandler(request: NextRequest) {
   const body = parsed as Record<string, unknown>, billingAccountId = clean(body.billingAccountId), familyId = clean(body.familyId);
   const method = clean(body.method) as FamilyPaymentMethod;
   const requestedAmountCents = parseAmountCents(body);
+  const advancePayment = body.advancePayment === true;
   if (!["saved_method", "card_checkout", "instant_bank_checkout", "ach_checkout"].includes(method) || requestedAmountCents === null
     || [body.billingAccountId, body.familyId].some(id => id !== undefined && typeof id !== "string")
     || body.amountCents !== undefined && body.amountDollars !== undefined || (!billingAccountId && !familyId)
@@ -113,8 +115,8 @@ async function POSTHandler(request: NextRequest) {
   if (responsibilityReviewRequired) return NextResponse.json({ ok: false, code: "parent_account_payment_responsibility_review_required",
     error: "The school must separate family and agency responsibility before an account payment can be made." }, { status: 409 });
   const amountCents = requestedAmountCents ?? collectableCents;
-  if (amountCents <= 0 || amountCents > collectableCents) return NextResponse.json({ ok: false,
-    error: "The amount exceeds the current family balance. Refresh and review the balance before paying." }, { status: 409 });
+  const amountError = familyPaymentAmountError({ amountCents, collectableCents, advancePayment, explicitAmount: requestedAmountCents !== undefined });
+  if (amountError) return NextResponse.json({ ok: false, error: amountError }, { status: 409 });
   const returnPath = safeReturnPath(body.returnPath, parentCheckout ? "/parent-portal" : "/billing-invoices");
   const description = parentCheckout ? "Family balance payment" : clean(body.description).slice(0, 200) || "Tuition payment";
   const source = parentCheckout ? "parent_portal" : clean(body.source).slice(0, 80) || "director_dashboard";
@@ -274,6 +276,7 @@ async function POSTHandler(request: NextRequest) {
   const metadata = {
     tenantId: user.tenantId,
     paymentScope: "family_balance",
+    advancePayment: String(advancePayment),
     billingAccountId: billingAccount.id,
     familyId: billingAccount.familyId,
     centerId: center.id,
@@ -331,7 +334,7 @@ async function POSTHandler(request: NextRequest) {
     authorize: async (tx: Prisma.TransactionClient) => {
       if (!await authorizeBillingActorForTarget(tx, user, target)) return false;
       const fresh = await readFamilyPaymentSnapshot(tx, target);
-      if (!fresh || fresh.responsibilityReviewRequired || amountCents > fresh.collectableCents
+      if (!fresh || fresh.responsibilityReviewRequired || (!advancePayment && amountCents > fresh.collectableCents)
         || readStripeConnectedAccountId(fresh.center.customFields) !== connectedAccountId
         || fresh.billingAccount.family.billingEmail !== billingAccount.family.billingEmail || fresh.billingAccount.family.name !== billingAccount.family.name
         || fresh.center.name !== center.name || JSON.stringify(fresh.center.organization) !== JSON.stringify(center.organization)) return false;
@@ -350,7 +353,7 @@ async function POSTHandler(request: NextRequest) {
     audit: async (tx: Prisma.TransactionClient, paymentId: string, event: string, providerId: string | null) => {
       await writeAuditLog(user, { centerId, action: `billing.family_payment.${event}`, resource: "BillingAccount", resourceId: billingAccount.id,
         metadata: { paymentId, providerId, amountCents, checkoutTotalCents: amounts.checkoutTotalCents, requestedPaymentMethodCategory,
-          paymentMethodCategory: amounts.paymentMethodCategory, collectionMode } }, tx);
+          paymentMethodCategory: amounts.paymentMethodCategory, collectionMode, advancePayment } }, tx);
     },
   };
   const successPath = appendRawQuery(appendQuery(appendQuery(returnPath, "payment", "success"), "familyPayment", FAMILY_PAYMENT_ID_TOKEN), "session_id", "{CHECKOUT_SESSION_ID}");

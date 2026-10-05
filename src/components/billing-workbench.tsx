@@ -449,6 +449,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [refundReason, setRefundReason] = useState("");
   const [paymentTarget, setPaymentTarget] = useState("balance");
   const [paymentAmountDollars, setPaymentAmountDollars] = useState("");
+  const [advancePayment, setAdvancePayment] = useState(false);
   const [paymentDescription, setPaymentDescription] = useState("Tuition payment");
   const [invoiceEditorId, setInvoiceEditorId] = useState("");
   const [invoiceEditDraft, setInvoiceEditDraft] = useState<InvoiceEditDraft | null>(null);
@@ -645,6 +646,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const projectedAdjustmentBalanceCents = familyBalanceCents
     + (selectedAdjustmentOption.adjustmentType === "credit" ? -adjustmentAmountCents : adjustmentAmountCents);
   const openInvoices = selectedBillingAccount?.openInvoices ?? [];
+  const hasHouseholdCreditAgainstInvoices = openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0) > Math.max(0, familyBalanceCents);
   const refundablePayments = (selectedBillingAccount?.recentPayments ?? []).filter((payment) => payment.refundableCents > 0 && payment.stripePaymentIntentId);
   const canApproveRefunds = ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER"].includes(currentRole);
   const selectedRefundPaymentIds = refundPaymentIds.filter((id) => refundablePayments.some((payment) => payment.id === id));
@@ -672,7 +674,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const directorPaymentAmountCents = effectivePaymentTarget === "custom"
     ? dollarsToCents(paymentAmountDollars)
     : effectivePaymentTarget.startsWith("invoice:")
-      ? selectedPaymentInvoice?.totalCents ?? 0
+      ? Math.min(selectedPaymentInvoice?.totalCents ?? 0, hasHouseholdCreditAgainstInvoices ? Math.max(0, familyBalanceCents) : Number.MAX_SAFE_INTEGER)
       : familyBalanceCents;
   const directorPaymentTargetLabel = effectivePaymentTarget === "custom"
     ? "custom amount"
@@ -938,7 +940,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
 
-      if (invoiceId) {
+      if (invoiceId && !hasHouseholdCreditAgainstInvoices) {
         const response = await fetch("/api/billing/checkout-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -966,6 +968,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           billingAccountId: selectedBillingAccount.id,
           familyId: selectedFamily.id,
           amountCents: directorPaymentAmountCents,
+          advancePayment: effectivePaymentTarget === "custom" && advancePayment,
           method,
           description: paymentDescription,
           collectionMode: method === "card_checkout" ? "director_card_terminal" : method === "instant_bank_checkout" ? "director_instant_bank_checkout" : "director_ach_checkout",
@@ -1087,7 +1090,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setCashAmountDollars(""); setCashReference(""); setCashNotes(""); setCashPaidAt(dates.localNow);
     setPayrollAmountDollars(""); setPayrollReference(""); setPayrollNotes(""); setPayrollPaidAt(dates.localNow);
     setRefundPaymentIds([]); setRefundAmountDollars(""); setRefundReason("");
-    setPaymentTarget("balance"); setPaymentAmountDollars(""); setPaymentDescription("Tuition payment");
+    setPaymentTarget("balance"); setPaymentAmountDollars(""); setAdvancePayment(false); setPaymentDescription("Tuition payment");
     setInvoiceEditorId(""); setInvoiceEditDraft(null); setInvoiceVoidReason("");
     setWeeklyRecoveryPeriod(dates.week); setWeeklyRecoveryPreview(null);
     setManualPaymentEmailCopies([]); setPaymentReviewMethod(null);
@@ -1962,7 +1965,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           <div className="billing-summary-grid grid gap-3">
             <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} />
             <SummaryMetric label="Last updated" value={formatShortDate(selectedFamily?.updatedAt)} detail="Family billing information" />
-            <SummaryMetric label="Balance" value={money(familyBalanceCents)} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
+            <SummaryMetric label={familyBalanceCents < 0 ? "Household credit" : "Balance"} value={money(Math.abs(familyBalanceCents))} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
             <SummaryMetric label="Payment contacts" value={`${selectedPaymentRequestEmailOptions.length} contact${selectedPaymentRequestEmailOptions.length === 1 ? "" : "s"}`} detail={selectedFamily?.billingEmail ?? "No billing email"} />
             <SummaryMetric label="Children" value={selectedChildSummary} detail={selectedChildren.map((child) => child.fullName).slice(0, 2).join(", ") || "No child records"} />
             <SummaryMetric
@@ -2033,7 +2036,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
                   }}
                 >
-                  {mode === "current" ? "Current" : mode === "past" ? "Past balances" : "Pending"} ({familyCounts[mode]})
+                  {mode === "current" ? "Current" : mode === "past" ? "Past accounts" : "Pending"} ({familyCounts[mode]})
                 </Button>
               ))}
             </div>
@@ -2128,6 +2131,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
               <Badge variant="outline">{money(directorPaymentAmountCents)}</Badge>
             </div>
+            <p className="mb-3 text-xs text-muted-foreground">Choose Custom amount and Advance payment to collect tuition early, including at a $0 balance. Excess remains household credit for future invoices. Review the amount in secure checkout; autopay consent stays unchanged.</p>
             <div className="grid gap-3 md:grid-cols-6">
               <div className="space-y-1 md:col-span-2">
                 <Label htmlFor="billing-payment-target">Apply payment to</Label>
@@ -2146,6 +2150,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
               <div className="space-y-1">
                 <Label htmlFor="billing-payment-custom-amount">Custom amount</Label>
+                {effectivePaymentTarget === "custom" ? <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={advancePayment} onChange={(event) => setAdvancePayment(event.target.checked)} />Advance payment for future tuition</label> : null}
                 <Input
                   id="billing-payment-custom-amount"
                   disabled={effectivePaymentTarget !== "custom"}

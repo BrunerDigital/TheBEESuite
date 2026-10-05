@@ -103,3 +103,9 @@ test('replaying a completed request identity returns its result without another 
   reset();await issueFamilyRefund(user,input);await issueFamilyRefund(user,input);
   assert.equal(counter,1);assert.equal(state.balance,6000);assert.equal(state.ledger.length,1);
 });
+test('an exact completed request replay is not replaced by a later pending request with the same amount and reason',async()=>{
+  reset();await issueFamilyRefund(user,input);status='pending';await issueFamilyRefund(user,{...input,operationId:'later-request'});
+  const response=await issueFamilyRefund(user,input);
+  assert.equal(response.ok,true);assert.equal(response.totalCents,6000);assert.equal(counter,2);
+  assert.equal(state.balance,6000);assert.equal(state.payment.customFields.pendingFamilyRefund.operationId,'later-request');
+});

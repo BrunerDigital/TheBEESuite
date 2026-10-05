@@ -102,8 +102,13 @@ async function loadFamilyRefundPlan(
     .filter((payment) => payment.paymentIntentId);
   // Resume the original allocation plan before newly reduced refundable totals
   // can reject a multi-payment request whose earlier allocations already succeeded.
-  const matchingPending = candidates.map(payment => jsonObject(payment.fields.pendingFamilyRefund)).find(claim =>
-    claim.requestedTotalCents === input.amountCents && claim.reason === input.reason && typeof claim.operationId === "string");
+  const requestedOperationId = clean(input.operationId);
+  const hasExactRequest = Boolean(requestedOperationId) && candidates.some(payment =>
+    jsonObject(jsonObject(payment.fields.familyRefundClaimsByOperation)[`refund:${requestedOperationId}`]).operationId === requestedOperationId);
+  const pendingClaims = candidates.map(payment => jsonObject(payment.fields.pendingFamilyRefund));
+  const matchingPending = pendingClaims.find(claim => requestedOperationId && claim.operationId === requestedOperationId)
+    || (!hasExactRequest ? pendingClaims.find(claim => claim.requestedTotalCents === input.amountCents && claim.reason === input.reason && typeof claim.operationId === "string") : undefined);
+  if (matchingPending && (matchingPending.requestedTotalCents !== input.amountCents || matchingPending.reason !== input.reason)) return { ok: false as const, status: 409, error: "The original refund amount and reason must remain unchanged during recovery." };
   const operationId = clean(matchingPending?.operationId) || clean(input.operationId);
   const savedClaims = candidates.map(payment => jsonObject(jsonObject(payment.fields.familyRefundClaimsByOperation)[`refund:${operationId}`]));
   if (!matchingPending && savedClaims.some(claim => claim.operationId === operationId

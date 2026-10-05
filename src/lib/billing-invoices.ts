@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { applyAccountCreditToInvoice } from "./stripe-payment-application";
 import { AGENCY_LEDGER_ENTRY_TYPES, AGENCY_LEDGER_SOURCE_SYSTEM } from "./parent-billing-visibility";
-import { invoiceResponsibilitySeparation } from "./invoice-responsibility-separation";
+import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "./invoice-responsibility-separation";
 
 export type BillingInvoiceLineItem = {
   description: string;
@@ -42,7 +42,7 @@ export async function createBillingInvoiceForFamily(
     where: { familyId: input.familyId },
     update: {},
     create: { familyId: input.familyId, balanceCents: 0 },
-    include: { family: { select: { centerId: true } } },
+    include: { family: { select: { centerId: true, children: { select: { id: true, customFields: true } } } } },
   });
 
   const dedupeKey = clean(input.customFields.dedupeKey);
@@ -132,7 +132,9 @@ export async function createBillingInvoiceForFamily(
         { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } }, { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
       ] }, select: { id: true },
     });
-    if (!agencyActivity) await applyAccountCreditToInvoice(tx, { invoiceId: invoice.id });
+    if (!agencyActivity || invoiceResponsibilityReviewExempt(input.customFields, totalCents, ...(billingAccount.family.children ?? []))) {
+      await applyAccountCreditToInvoice(tx, { invoiceId: invoice.id });
+    }
   }
 
   if (billingAccount.family.centerId) {

@@ -3,12 +3,13 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { PaymentStatus, type Prisma } from "@prisma/client";
 import { familyPaymentAmountError } from "../src/lib/family-payment-amount";
-import { visibleBillingFamilyWhere, visibleCenterIdFilter } from "../src/lib/corporate-view-scope";
+import { visibleBillingFamilyWhere, visibleBillingFamilySearchWhere, visibleCenterIdFilter } from "../src/lib/corporate-view-scope";
 import { billingFamilyAccountCategory, childTuitionEligibilityError } from "../src/lib/prospective-family-billing";
 import { matchesPrismaWhere } from "./helpers/matches-prisma-where";
 import { invoiceVoidBlocker, invoiceLedgerBalanceCents } from "../src/lib/invoice-void";
 import { applySucceededStripeFamilyBalancePayment, applyAccountCreditToInvoice } from "../src/lib/stripe-payment-application";
 import { applyFamilyPaymentRefund, familyRefundDelta } from "../src/lib/family-payment-refund";
+import { createBillingInvoiceForFamily } from "../src/lib/billing-invoices";
 import { allocateAccountCreditToInvoice, availableAccountCreditCents } from "../src/lib/account-credit-autopay";
 
 test("withdrawn families remain selectable at zero balance within their authorized school", () => {
@@ -137,4 +138,43 @@ test("refunding consumed advance credit reopens a future invoice without a secon
   await applyFamilyPaymentRefund(f.tx, { paymentId: "payment", chargeId: "ch_fake", paymentIntentId: "pi_fake", eventId: "retry", cumulativeRefundedCents: 48000, invoiceId: null, refundId: "re_fake" });
   assert.equal(f.state.account.balanceCents, 16000);
   assert.equal(f.state.ledger.length, 1);
+});
+
+
+test("historical account search is scoped before loading a bounded family list", () => {
+  const where = visibleBillingFamilySearchWhere(["school-a"], "  HERNANDEZ  ");
+  assert.deepEqual(where.AND && (where.AND as object[])[0], visibleBillingFamilyWhere(["school-a"]));
+  assert.match(JSON.stringify(where), /"contains":"HERNANDEZ","mode":"insensitive"/);
+  assert.match(JSON.stringify(where), /"children"/); assert.match(JSON.stringify(where), /"guardians"/);
+  assert.deepEqual(visibleBillingFamilySearchWhere([], " "), visibleBillingFamilyWhere([]));
+  const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  assert.match(page, /where: visibleBillingFamilySearchWhere\(visibleCenterIds, requestedBillingSearch\),[\s\S]*?take: 1000/);
+});
+
+test("director refund keys remain distinct for equal amounts on separate payments without stored charge IDs", async () => {
+  const keys = [];
+  for (const refundId of ["re_one", "re_two"]) {
+    const f = fixture(-24000); f.state.payment.status = PaymentStatus.PAID;
+    await applyFamilyPaymentRefund(f.tx, { paymentId: "payment", chargeId: "", paymentIntentId: "pi_fake", eventId: refundId, cumulativeRefundedCents: 24000, invoiceId: null, refundId });
+    keys.push(f.state.ledger[0].externalId);
+  }
+  assert.deepEqual(keys, ["stripe-refund:re_one", "stripe-refund:re_two"]);
+});
+
+test("confirmed family-only future tuition consumes credit despite unrelated historical agency activity", async () => {
+  for (const funding of ["family", "agency"]) {
+    const f = fixture(-24000);
+    const delegates = f.tx as unknown as { billingAccount: Record<string, unknown>; invoice: Record<string, unknown>; ledgerEntry: Record<string, unknown>; center: Record<string, unknown> };
+    delegates.billingAccount.upsert = async () => ({ ...f.state.account, family: { centerId: "school-a", children: [{ id: "child", customFields: { tuitionFundingType: funding, tuitionBillingEnabled: true, tuitionPlanId: "plan", tuitionPlanAmountCents: 16000 } }] } });
+    delegates.invoice.create = async ({ data }: { data: { customFields: Record<string, unknown>; totalCents: number } }) => {
+      const invoice = { ...data, id: "future", billingAccountId: "account", status: PaymentStatus.OPEN };
+      f.state.invoices.push(invoice); return invoice;
+    };
+    delegates.ledgerEntry.findFirst = async ({ where }: { where: { OR?: unknown } }) => where.OR ? { id: "old-agency-entry" } : null;
+    delegates.center = { update: async () => ({}) };
+    await createBillingInvoiceForFamily(f.tx, { familyId: "family", dueDate: new Date("2026-10-05"), items: [{ description: "Tuition", amountCents: 16000 }], description: "Tuition", customFields: { chargeSource: "tuitionPlan", sourceId: "plan", childId: "child", invoiceWeekCount: 1 } });
+    assert.equal(f.state.account.balanceCents, -8000);
+    assert.equal(f.state.invoices[0].status, funding === "family" ? PaymentStatus.PAID : PaymentStatus.OPEN);
+    assert.equal(f.state.ledger.filter(entry => entry.type === "account_credit_application").length, funding === "family" ? 1 : 0);
+  }
 });

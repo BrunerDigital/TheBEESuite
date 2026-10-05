@@ -157,6 +157,7 @@ import {
   visibleAttendanceWhere,
   visibleBillingAccountWhere,
   visibleBillingFamilyWhere,
+  visibleBillingFamilySearchWhere,
   visibleCenterIdFilter,
   visibleCheckLogWhere,
   visibleChildWhere,
@@ -4076,6 +4077,7 @@ async function renderLivePage(
   if (slug === "billing-invoices") {
     const requestedBillingFamilyId = firstSearchParam(searchParams.familyId) || "";
     const requestedBillingCenterId = firstSearchParam(searchParams.centerId) || "";
+    const requestedBillingSearch = (firstSearchParam(searchParams.q) || "").trim().slice(0, 120);
     const billingAccountWhere = visibleBillingAccountWhere(visibleCenterIds);
     const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
@@ -4276,8 +4278,9 @@ async function renderLivePage(
         },
       }),
       prisma.family.findMany({
-        where: workbenchFamilyWhere,
+        where: visibleBillingFamilySearchWhere(visibleCenterIds, requestedBillingSearch),
         orderBy: [{ name: "asc" }, { id: "asc" }],
+        take: 1000,
         select: billingWorkbenchFamilySelect,
       }),
       requestedBillingFamilyId ? prisma.family.findFirst({
@@ -4445,7 +4448,6 @@ async function renderLivePage(
       },
     );
     const requestedBillingChildId = firstSearchParam(searchParams.childId) || "";
-    const requestedBillingSearch = firstSearchParam(searchParams.q) || "";
     const requestedBillingWorkspace = firstSearchParam(searchParams.workspace) === "terminal" ? "terminal" as const : undefined;
     const billingCentersById = new Map(centers.map((center) => [center.id, center]));
     const billingPaymentMethodSummary = (input: {

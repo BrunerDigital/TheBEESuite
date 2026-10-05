@@ -59,7 +59,7 @@ export async function applyFamilyPaymentRefund(tx: Prisma.TransactionClient, inp
     billingAccountId: payment.billingAccountId, invoiceId, paymentId: payment.id,
     type: "refund", description: "Payment refunded", amountCents: delta.principalDeltaCents,
     balanceAfterCents: account.balanceCents, sourceSystem: "stripe",
-    externalId: `stripe-refund:${input.chargeId}:${delta.cumulativeRefundedCents}`,
+    externalId: input.refundId ? `stripe-refund:${input.refundId}` : `stripe-refund:${input.chargeId}:${delta.cumulativeRefundedCents}`,
     metadata: { stripeEventId: input.eventId, stripeChargeId: input.chargeId,
       stripePaymentIntentId: input.paymentIntentId, refundedCents: delta.cumulativeRefundedCents,
       refundDeltaCents: delta.principalDeltaCents },

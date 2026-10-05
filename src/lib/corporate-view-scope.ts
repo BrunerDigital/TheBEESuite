@@ -34,6 +34,19 @@ export function visibleBillingFamilyWhere(centerIds: readonly string[]): Prisma.
   return visibleFamilyWhere(centerIds);
 }
 
+/** Search runs before the bounded list is loaded, so settled history stays findable. */
+export function visibleBillingFamilySearchWhere(centerIds: readonly string[], query: string): Prisma.FamilyWhereInput {
+  const scope = visibleBillingFamilyWhere(centerIds);
+  const contains = query.trim().slice(0, 120);
+  if (!contains) return scope;
+  const text = { contains, mode: "insensitive" as const };
+  return { AND: [scope, { OR: [
+    { name: text }, { billingEmail: text },
+    { children: { some: { fullName: text } } },
+    { guardians: { some: { OR: [{ fullName: text }, { email: text }] } } },
+  ] }] };
+}
+
 export function currentOrOutstandingFamilyWhere(): Prisma.FamilyWhereInput {
   return {
     OR: [

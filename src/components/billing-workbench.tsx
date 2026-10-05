@@ -2004,6 +2004,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </Alert>
         ) : null}
 
+        <form action="/billing-invoices" method="get" className="flex flex-wrap items-end gap-2">
+          <div className="min-w-48 flex-1 space-y-1">
+            <Label htmlFor="billing-family-search">Find a billing family</Label>
+            <Input id="billing-family-search" name="q" defaultValue={searchQuery ?? ""} maxLength={120} placeholder="Family, child, guardian, or email" />
+            <p className="text-xs text-muted-foreground">Up to 1,000 matching households are loaded. Search includes current and withdrawn families.</p>
+          </div>
+          <Button type="submit" variant="outline"><Search data-icon="inline-start" />Search accounts</Button>
+        </form>
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div className="space-y-1">
             <Label htmlFor="billing-workbench-school">School</Label>

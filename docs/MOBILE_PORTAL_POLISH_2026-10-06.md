@@ -45,3 +45,10 @@ coverage passed. No account or credential was changed to bypass that gap.
 
 These checks exercise web components in browser engines. A signed native iPhone
 binary and physical-device keyboard behavior require separate device testing.
+
+## Release dependency gate
+
+Cloud validation detected GHSA-wq5f-xc86-pv6w in the existing Sharp 0.35.4
+dependency. The scoped update to Sharp 0.35.5 and its platform binaries clears
+the production audit. A local PNG resize/WebP conversion smoke check passed.
+The complete gate is repeated for this dependency update before release.

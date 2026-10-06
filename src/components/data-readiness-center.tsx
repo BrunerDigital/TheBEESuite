@@ -269,7 +269,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
             <p className="mt-4 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
               {allowBulkImport
                 ? "Review every authorized school's migration exceptions in one spreadsheet-style workspace. Corrections are retained as school-scoped proposals and never change operational records until the exact reviewed import package is separately confirmed."
-                : "Upload the school's previous-system reports, review parsed families and children, confirm balances and weekly tuition, resolve exceptions, and create the final BEE Suite migration package."}
+                : "Upload the school's previous-system reports, review parsed families and children, confirm balances and actual tuition frequency, resolve exceptions, and create the final BEE Suite migration package."}
             </p>
             <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">{data.summary.sourceRows.toLocaleString()} retained source rows</Badge>
@@ -292,7 +292,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
           <span className="block h-full rounded-full bg-primary" style={{ width: `${data.summary.completionPercent}%` }} />
         </div>
         <div className="mt-2 flex items-center justify-between gap-4 text-xs text-muted-foreground">
-          <span>{data.summary.completionPercent}% readiness evidence complete</span>
+          <span>{data.summary.total ? `${data.summary.completionPercent}% readiness evidence complete` : "No migration evidence evaluated yet"}</span>
           <span>{data.summary.actionable} actionable</span>
         </div>
       </section>

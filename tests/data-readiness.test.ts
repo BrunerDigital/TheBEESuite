@@ -95,6 +95,13 @@ test("batch reconciliation and exports expose source provenance", () => {
   assert.match(csv, /procare\.zip/);
 });
 
+test("empty migration evidence cannot show complete readiness", () => {
+  const summary = summarizeDataReadiness([]);
+  assert.equal(summary.completionPercent, 0);
+  assert.equal(summary.total, 0);
+  assert.equal(summary.lastUpdated, null);
+});
+
 test("readiness API is tenant-scoped, evidence-only, and keeps sensitive gates separate", () => {
   const route = readFileSync(new URL("../src/app/api/data-readiness/route.ts", import.meta.url), "utf8");
   const server = readFileSync(new URL("../src/lib/data-readiness-server.ts", import.meta.url), "utf8");

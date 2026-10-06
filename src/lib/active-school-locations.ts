@@ -55,7 +55,6 @@ const retiredPublicLocationIds = new Set([
   "Kid City USA - FL | Leesburg",
   "Kid City USA - FL | Palatka",
   "Kid City USA - FL | Sanford",
-  "Kid City USA - TN | Soddy Daisy",
   "Kid City USA - TX | Tyler",
 ].map((id) => id.toLowerCase()));
 

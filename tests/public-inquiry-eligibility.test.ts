@@ -47,3 +47,15 @@ test("Cordera public retirement rejects branded and legacy stale options without
     assert.equal(center.status, "active");
   }
 });
+
+test("approved Soddy Daisy reinstatement accepts canonical and legacy IDs while closed records stay blocked", () => {
+  for (const id of ["TN | Soddy Daisy", "Kid City USA - TN | Soddy Daisy"]) {
+    const center = { status: "active", crmLocationId: id, locationId: id, name: id };
+    assert.equal(isActivePublicSchoolCandidate(center), true, id);
+    assert.equal(isEligiblePublicInquiryCenter(center, true), true, id);
+    assert.equal(isEligiblePublicInquiryCenter(center, false), true, id);
+    const location = toPublicKidCityLocation(center);
+    assert.deepEqual(mergePublicKidCityLocations([location], [location]), [location]);
+    assert.equal(isEligiblePublicInquiryCenter({ ...center, status: "closed" }, true), false);
+  }
+});

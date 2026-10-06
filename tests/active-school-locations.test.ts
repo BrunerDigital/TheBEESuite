@@ -59,7 +59,6 @@ test("active public school candidates require active status and a valid CRM loca
     "Kid City USA - FL | Leesburg",
     "Kid City USA - FL | Palatka",
     "Kid City USA - FL | Sanford",
-    "Kid City USA - TN | Soddy Daisy",
     "Kid City USA - TX | Tyler",
   ]) {
     assert.equal(isActivePublicSchoolCandidate({
@@ -253,7 +252,6 @@ test("green-X school removals cannot return through fallback or Avada options", 
     "Kid City USA - FL | Leesburg",
     "Kid City USA - FL | Palatka",
     "Kid City USA - FL | Sanford",
-    "Kid City USA - TN | Soddy Daisy",
     "Kid City USA - TX | Tyler",
   ]) {
     assert.equal(ids.has(id), false, `${id} must not return through the fallback`);
@@ -276,4 +274,14 @@ test("Cordera cannot return through public fallback or Avada options", () => {
   const id = "Kid City USA - CO | Colorado Springs - Cordera";
   assert.equal(file.locations.some((item) => item.crmLocationId === id), false);
   assert.equal(snippet.includes(`value="${id}"`), false);
+});
+
+test("approved Soddy Daisy reinstatement is available in fallback and Avada", () => {
+  const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
+  const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
+  const id = "Kid City USA - TN | Soddy Daisy";
+  const location = file.locations.find((item) => item.crmLocationId === id);
+  assert.equal(location?.address, "9834 Dayton Pike");
+  assert.equal(location?.postalCode, "37379");
+  assert.equal(snippet.includes(`value="${id}"`), true);
 });

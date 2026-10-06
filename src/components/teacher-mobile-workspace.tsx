@@ -1,4 +1,6 @@
 "use client";
+
+import { scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
 import { ClientAuthForm } from "@/components/client-auth-form";
 
 import Link from "next/link";
@@ -953,6 +955,7 @@ export function TeacherMobileWorkspace({
     <fieldset
       disabled={isPending}
       className="teacher-mobile-workspace mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-3 sm:gap-4 [&_button]:min-h-11 [&_button]:min-w-11"
+      onFocusCapture={event => scheduleFocusedPortalControlReveal(event.target)}
       aria-busy={isPending}
     >
       {(selectedChildId && !selectedChild) || selectedDailyReportChildIds.some((id) => !roster.some((child) => child.id === id)) ? <Alert variant="destructive"><AlertTitle>Review selected children</AlertTitle><AlertDescription>A selected child is no longer in this roster. Your drafts are retained; choose current recipients before continuing. Nothing will be reassigned automatically.</AlertDescription></Alert> : null}

@@ -52,3 +52,28 @@ Cloud validation detected GHSA-wq5f-xc86-pv6w in the existing Sharp 0.35.4
 dependency. The scoped update to Sharp 0.35.5 and its platform binaries clears
 the production audit. A local PNG resize/WebP conversion smoke check passed.
 The complete gate is repeated for this dependency update before release.
+
+## Short viewport follow-up
+
+The next audit reproduced inaccessible controls at 390x320 with 200% text:
+the fixed-height shell left too little content space, and recipient options
+could be clipped. Parent and teacher shells now use document scrolling below
+441px viewport height. Taller phone screens retain their existing shell layout.
+Both workspaces schedule the existing active-focus-only reveal helper; fields
+that fall outside the usable area are centered without refocusing or changing
+drafts. The shared select now supplies the Base UI List container and makes
+that list scroll inside a bounded flex popup.
+
+The feature audit now checks focused-field hit testing, popup vertical bounds,
+and keyboard access to the last overflowing option. It also opens document
+panels revealed by pagination. Final Chromium 320px portrait and WebKit 390x320
+dark matrices passed all 44 screen/text-size cases with zero API requests,
+product writes, or client exceptions. Teacher picker fixture checks passed 42
+cases (four intercepted synthetic writes, zero product writes); task navigation
+passed four cases. A focused unit test protects short-screen centering and the
+rule that a later interaction must never have its focus stolen.
+
+Existing unsigned parent and teacher iOS simulator verification passed in
+Actions run 37486178642. It covers cold launch and relaunch to sign-in, not
+authenticated portal forms or a physical iPhone keyboard. Authenticated parent
+QA remains unavailable with the existing credentials; no identity was changed.

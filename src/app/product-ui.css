@@ -670,6 +670,21 @@
   }
 
   /* Billing task names are separate actions, not equal-width navigation icons. */
+  @media (max-width: 1023px) and (max-height: 440px) {
+    /* Landscape and reduced-height viewports need the whole document to scroll.
+       A fixed-height shell can otherwise leave only a sliver for form fields. */
+    .bee-app-frame:has(.app-bottom-navigation):is([data-role="PARENT_GUARDIAN"], [data-role="TEACHER"]) {
+      height: auto;
+      min-height: 100dvh;
+      overflow: visible;
+    }
+
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="TEACHER"]):has(.app-bottom-navigation) #workspace-main {
+      flex: none;
+      overflow: visible;
+    }
+  }
+
   #billing-action-tabs {
     width: 100%;
     height: auto;

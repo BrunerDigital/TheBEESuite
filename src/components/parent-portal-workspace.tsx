@@ -20,7 +20,7 @@ import { remainingParentIncidentCount } from "@/lib/parent-attention";
 import { canCompactParentAccount } from "@/lib/parent-home-account";
 import { parentActivePaymentSummary, parentPaymentStatusMessage, parentPaymentStatusTitle, type ParentAccountPaymentBlocker, type ParentPendingPayment } from "@/lib/parent-payment-status";
 import { activeItemScrollDelta } from "@/lib/horizontal-active-item";
-import { revealFocusedPortalControl } from "@/lib/focused-portal-control";
+import { revealFocusedPortalControl, scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
 import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
 import { InvoicePrintButton, PaymentReceiptPrintButton } from "@/components/billing-print-actions";
 import { formatZonedDateTime, zonedDateKey, zonedDateInputToUtc } from "@/lib/zoned-date-time";
@@ -2029,6 +2029,7 @@ function ParentPortalWorkspaceView({
     <div
       className="parent-portal-workspace mx-auto flex w-full max-w-[88rem] flex-col gap-6 [&_button]:min-h-10"
       data-parent-portal-view={activeView}
+      onFocusCapture={event => scheduleFocusedPortalControlReveal(event.target)}
       aria-busy={isPending}
     >
       <header

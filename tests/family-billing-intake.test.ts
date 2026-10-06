@@ -100,7 +100,7 @@ test("matching source account IDs at different schools remain separate in a bulk
 });
 
 test("different source labels resolving to one school cannot bypass sibling balance review", () => {
-  const first = buildProcareMigrationReviewRow({ "account id": "account", "child id": "child-a", "child status": "Enrolled", balance: "100", school: "Central School" }, 2, "resolved-school")!;
-  const second = buildProcareMigrationReviewRow({ "account id": "account", "child id": "child-b", "child status": "Enrolled", balance: "200", school: "school-central" }, 3, "resolved-school")!;
+  const first = buildProcareMigrationReviewRow({ "account id": "account", "child id": "child-a", "child status": "Enrolled", classroom: "Room 1", balance: "100", school: "Central School" }, 2, "resolved-school")!;
+  const second = buildProcareMigrationReviewRow({ "account id": "account", "child id": "child-b", "child status": "Enrolled", classroom: "Room 1", balance: "200", school: "school-central" }, 3, "resolved-school")!;
   assert.ok(finalizeProcareMigrationReview([first, second]).every(record => record.blockers.some(blocker => blocker.includes("conflicting opening balances"))));
 });

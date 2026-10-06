@@ -88,3 +88,13 @@ test("conflicting sibling balances are held instead of selecting the last amount
   assert.ok(reviewed.every(record => record.blockers.some(blocker => blocker.includes("conflicting opening balances"))));
   assert.equal(summarizeProcareMigrationReview(reviewed).includedCurrentBalanceCents, 0);
 });
+
+test("matching source account IDs at different schools remain separate in a bulk review", () => {
+  const reviewed = finalizeProcareMigrationReview([
+    row({ school: "School A", balance: "100", "source cadence": "weekly", "weekly tuition cents": "10000" }),
+    row({ school: "School B", balance: "200", "source cadence": "weekly", "weekly tuition cents": "10000" }),
+  ]);
+  assert.ok(reviewed.every(record => record.openingBalanceIncluded));
+  assert.equal(summarizeProcareMigrationReview(reviewed).currentFamilyAccounts, 2);
+  assert.equal(summarizeProcareMigrationReview(reviewed).includedCurrentBalanceCents, 30000);
+});

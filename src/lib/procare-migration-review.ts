@@ -5,6 +5,7 @@ import { normalizeProcareEnrollmentStatusWithEndDate } from "@/lib/procare-impor
 export type ProcareMigrationReviewRow = {
   rowNumber: number;
   accountId: string;
+  sourceSchool?: string;
   childId: string;
   familyName: string;
   childName: string;
@@ -138,6 +139,7 @@ export function buildProcareMigrationReviewRow(record: Record<string, string>, r
   return {
     rowNumber,
     accountId,
+    sourceSchool: first(record, ["mappedCenterId", "location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site"]),
     childId,
     familyName: first(record, ["family name", "account name", "household"]),
     childName,
@@ -161,18 +163,22 @@ export function buildProcareMigrationReviewRow(record: Record<string, string>, r
   };
 }
 
+function accountScope(row: ProcareMigrationReviewRow) {
+  return row.accountId ? JSON.stringify([row.sourceSchool || "", row.accountId]) : "";
+}
+
 export function finalizeProcareMigrationReview(rows: ProcareMigrationReviewRow[]) {
-  const currentAccountIds = new Set(rows.filter((row) => row.childScope === "current").map((row) => row.accountId).filter(Boolean));
+  const currentAccountIds = new Set(rows.filter((row) => row.childScope === "current").map(accountScope).filter(Boolean));
   const balances = new Map<string, Set<number>>();
   for (const row of rows) {
-    if (!row.accountId || row.openingBalanceCents === null || !currentAccountIds.has(row.accountId)) continue;
-    const values = balances.get(row.accountId) ?? new Set<number>();
+    if (!row.accountId || row.openingBalanceCents === null || !currentAccountIds.has(accountScope(row))) continue;
+    const values = balances.get(accountScope(row)) ?? new Set<number>();
     values.add(row.openingBalanceCents);
-    balances.set(row.accountId, values);
+    balances.set(accountScope(row), values);
   }
   return rows.map((row): ProcareMigrationReviewRow => {
-    if (!row.accountId || !currentAccountIds.has(row.accountId)) return row;
-    if ((balances.get(row.accountId)?.size ?? 0) > 1) return {
+    if (!row.accountId || !currentAccountIds.has(accountScope(row))) return row;
+    if ((balances.get(accountScope(row))?.size ?? 0) > 1) return {
       ...row, familyScope: "current", openingBalanceIncluded: false, openingBalanceStatus: "needs_review",
       blockers: [...row.blockers, "This family has conflicting opening balances. Confirm one account balance at the agreed date before transfer."],
     };
@@ -187,14 +193,14 @@ export function finalizeProcareMigrationReview(rows: ProcareMigrationReviewRow[]
 }
 
 export function summarizeProcareMigrationReview(rows: ProcareMigrationReviewRow[]) {
-  const currentAccounts = new Set(rows.filter((row) => row.familyScope === "current").map((row) => row.accountId).filter(Boolean));
-  const historicalAccounts = new Set(rows.filter((row) => row.familyScope === "historical").map((row) => row.accountId).filter(Boolean));
+  const currentAccounts = new Set(rows.filter((row) => row.familyScope === "current").map(accountScope).filter(Boolean));
+  const historicalAccounts = new Set(rows.filter((row) => row.familyScope === "historical").map(accountScope).filter(Boolean));
   const includedBalances = new Map<string, number>();
   const excludedBalances = new Map<string, number>();
   for (const row of rows) {
     if (!row.accountId || row.openingBalanceCents === null) continue;
-    if (row.openingBalanceIncluded) includedBalances.set(row.accountId, row.openingBalanceCents);
-    else if (row.openingBalanceStatus === "excluded_historical") excludedBalances.set(row.accountId, row.openingBalanceCents);
+    if (row.openingBalanceIncluded) includedBalances.set(accountScope(row), row.openingBalanceCents);
+    else if (row.openingBalanceStatus === "excluded_historical") excludedBalances.set(accountScope(row), row.openingBalanceCents);
   }
   return {
     currentFamilyAccounts: currentAccounts.size,

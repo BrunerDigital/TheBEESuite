@@ -7,6 +7,10 @@ test("tuition cron isolates invoice transactions and reports per-child failures"
 
   assert.match(route, /TUITION_INVOICE_TRANSACTION_CONCURRENCY = 5/);
   assert.match(route, /\.\.\.currentlyEnrolledChildWhere\(\)/);
+  assert.match(route, /schoolTuitionBillingAllowed\(center\.customFields\)/);
+  assert.match(route, /schoolTuitionBillingAllowed\(currentCenter\.customFields\)/);
+  assert.match(route, /if \(\(cadence === "biweekly" \|\| cadence === "four_week"\) && !savedStartsPeriod\)/);
+  assert.doesNotMatch(route, /tuitionBillingStartsPeriod\) \|\| billingPeriod/);
   assert.match(route, /Promise\.allSettled\(batch\.map\(async \(entry\) =>/);
   assert.match(route, /prisma\.\$transaction\(async \(tx\) =>/);
   assert.match(route, /status: \{ not: PaymentStatus\.VOID \}/);

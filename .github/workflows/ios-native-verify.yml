@@ -13,6 +13,9 @@ on:
       - 'scripts/*capacitor*'
       - 'scripts/*ios*'
       - 'scripts/mobile-store-readiness-check.mjs'
+      - 'scripts/ios-keyboard/**'
+      - 'tests/ios-keyboard-verification.test.ts'
+      - 'src/**'
       - 'tests/ios-native-verification.test.ts'
       - 'tests/ios-privacy-manifest.test.ts'
       - 'tests/mobile-store-readiness.test.ts'
@@ -28,6 +31,9 @@ on:
       - 'scripts/*capacitor*'
       - 'scripts/*ios*'
       - 'scripts/mobile-store-readiness-check.mjs'
+      - 'scripts/ios-keyboard/**'
+      - 'tests/ios-keyboard-verification.test.ts'
+      - 'src/**'
       - 'tests/ios-native-verification.test.ts'
       - 'tests/ios-privacy-manifest.test.ts'
       - 'tests/mobile-store-readiness.test.ts'
@@ -60,7 +66,9 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Compile and launch without signing or Apple credentials
+      - name: Install simulator UI test project generator
+        run: command -v xcodegen || brew install xcodegen
+      - name: Compile, launch and test the keyboard without signing or credentials
         run: node scripts/verify-ios-native.mjs "${{ matrix.role }}"
       - name: Retain public launch and build evidence only
         if: always()

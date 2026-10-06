@@ -8,7 +8,7 @@ test("parent mobile actions stay labeled and use a zoom-responsive two-column mi
   const parent = read("src/components/parent-portal-workspace.tsx");
   assert.match(parent, /min-h-14[\s\S]*\{mobileLabel\}/);
   for (const label of ["School Check-In", "Message School", "Photos & Reports", "View Payments"]) assert.ok(parent.includes(`"${label}"`));
-  assert.match(read("src/app/parent-mobile-home.css"), /repeat\(auto-fit, minmax\(min\(100%, 7\.5rem\), 1fr\)\)/);
+  assert.match(read("src/app/parent-mobile-home.css"), /repeat\(auto-fit, minmax\(min\(100%, 8\.5rem\), 1fr\)\)/);
   assert.match(parent, /flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5/);
   assert.match(parent, /child\.today\?\.label \|\| "Not marked today"/);
   assert.match(parent, /Daily report ready/);

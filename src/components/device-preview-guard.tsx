@@ -39,6 +39,7 @@ function isAllowedPreviewRequest(method: string, url: URL) {
  */
 export function DevicePreviewGuard({ children, rewriteWorkspaceLinks = false }: { children: ReactNode; rewriteWorkspaceLinks?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!rewriteWorkspaceLinks || !containerRef.current) return;
@@ -73,6 +74,9 @@ export function DevicePreviewGuard({ children, rewriteWorkspaceLinks = false }: 
       }
       return originalFetch(input, init);
     };
+    // Native accessibility tests cannot read the DOM hydration flag. Announce
+    // readiness only after the preview safety guard is installed.
+    if (statusRef.current) statusRef.current.textContent = "UI preview ready. Network actions, form submissions, and navigation to live workspaces are disabled.";
 
     return () => {
       delete document.documentElement.dataset.devicePreviewHydrated;
@@ -110,7 +114,7 @@ export function DevicePreviewGuard({ children, rewriteWorkspaceLinks = false }: 
 
   return (
     <div ref={containerRef} data-device-preview-guard="true" onSubmitCapture={preventSubmit} onClickCapture={trapNavigation}>
-      <div className="sr-only" role="status">
+      <div ref={statusRef} className="sr-only" role="status">
         UI review preview. Network actions, form submissions, and navigation to live workspaces are disabled.
       </div>
       {children}

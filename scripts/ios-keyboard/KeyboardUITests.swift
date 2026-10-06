@@ -35,13 +35,32 @@ final class KeyboardUITests: XCTestCase {
         add(screenshot)
     }
 
+    private func unobscured(_ element: XCUIElement) -> Bool {
+        let frame = element.frame
+        // WebKit can report a hit point even underneath fixed app navigation.
+        return element.isHittable && frame.minY >= app.frame.height * 0.2
+            && frame.maxY <= app.frame.height * 0.85
+    }
+
     private func reveal(_ element: XCUIElement) {
         XCTAssertTrue(element.waitForExistence(timeout: 60))
         for _ in 0..<16 {
-            if element.isHittable { return }
-            app.swipeUp()
+            if unobscured(element) { return }
+            #if !TEACHER
+            // Scroll the document from outside the independently scrolling history.
+            let anchors = [app.staticTexts["Send to"].firstMatch,
+                           app.staticTexts["Blocked senders"].firstMatch,
+                           app.staticTexts["Sunshine Academy"].firstMatch]
+            if let anchor = anchors.first(where: { $0.exists && $0.frame.midY > app.frame.height * 0.23 && $0.frame.midY < app.frame.height * 0.88 }) {
+                anchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                    .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.17)))
+            } else { app.swipeUp() }
+            #else
+            if element.frame.minY < app.frame.height * 0.2 { app.swipeDown() }
+            else { app.swipeUp() }
+            #endif
         }
-        XCTAssertTrue(element.isHittable, "Field can be reached by scrolling")
+        XCTAssertTrue(unobscured(element), "Editor or action is fully clear of fixed navigation: \(element.frame)")
     }
 
     func testKeyboardDraftAndRotation() {
@@ -56,18 +75,10 @@ final class KeyboardUITests: XCTestCase {
         let field = app.textViews["Message"]
         let action = app.buttons["Send message"]
         #endif
-        #if !TEACHER
-        // History intentionally scrolls independently. Start the document scroll
-        // on its school header, outside the history, just as a user would.
-        let heading = app.staticTexts["Sunshine Academy"].firstMatch
-        XCTAssertTrue(heading.waitForExistence(timeout: 60))
-        if !field.isHittable {
-            heading.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-                .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.17)))
-        }
-        #endif
         reveal(field)
-        field.tap()
+        evidence("editor-before-focus")
+        print("EDITOR FRAME \(field.frame)")
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 15), "Real iOS software keyboard is visible")
         let draft = "Synthetic keyboard draft. Never sent."
         field.typeText(draft)

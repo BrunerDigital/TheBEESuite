@@ -92,7 +92,12 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
     if (url.pathname === "/_next/hmr" || url.pathname === "/_next/webpack-hmr") {
       response.writeHead(204).end(); return;
     }
-    const destination = url.pathname === "/" ? keyboardPreviewPath(role) : `${url.pathname}${url.search}`;
+    // Preserve the fixture URL in WebKit as well as on the server; client-side
+    // navigation and hydration must see the same pathname and query.
+    if (url.pathname === "/") {
+      response.writeHead(302, { Location: keyboardPreviewPath(role), "Cache-Control": "no-store" }).end(); return;
+    }
+    const destination = `${url.pathname}${url.search}`;
     // Host and port are fixed transport options, never derived from a request URL.
     const upstream = requestLoopback({ hostname: "127.0.0.1", port: previewPort, path: destination, method: "GET" }, (local) => {
       response.writeHead(local.statusCode ?? 502, { "Content-Type": local.headers["content-type"] ?? "application/octet-stream", "Cache-Control": "no-store" });

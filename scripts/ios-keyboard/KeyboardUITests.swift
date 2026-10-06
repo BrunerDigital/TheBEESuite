@@ -39,8 +39,17 @@ final class KeyboardUITests: XCTestCase {
     private func unobscured(_ element: XCUIElement) -> Bool {
         let frame = element.frame
         // WebKit can report a hit point even underneath fixed app navigation.
+        #if TEACHER
+        let bottom = app.frame.height * 0.85
+        #else
+        // The composer rests near the footer; a percentage excludes a visible
+        // editor on tall iPhones. Use the actual navigation boundary instead.
+        let navigation = app.otherElements["Family portal navigation, navigation"]
+        guard navigation.exists else { return false }
+        let bottom = navigation.frame.minY - 8
+        #endif
         return element.isHittable && frame.minY >= app.frame.height * 0.2
-            && frame.maxY <= app.frame.height * 0.85
+            && frame.maxY <= bottom
     }
 
     private func reveal(_ element: XCUIElement) {

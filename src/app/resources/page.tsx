@@ -542,10 +542,16 @@ function GuideSection({ guide }: { guide: ResourceGuide }) {
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-300">{guide.summary}</p>
           {guide.id === "director-data-clean-start" ? (
+            <div className="flex flex-wrap gap-2">
+            <Button className="mt-4" nativeButton={false} render={<Link href="/resources/family-billing-transfer" />}>
+              Family and billing transfer guide
+              <ArrowRight data-icon="inline-end" />
+            </Button>
             <Button className="mt-4" nativeButton={false} render={<Link href="/resources/director-data-clean-start" />}>
               Open the shareable director guide
               <ArrowRight data-icon="inline-end" />
             </Button>
+            </div>
           ) : null}
           {guide.id === "agency-payment-reconciliation" ? (
             <Button className="mt-4" nativeButton={false} render={<Link href="/resources/agency-payment-reconciliation" />}>

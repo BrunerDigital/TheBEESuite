@@ -1,5 +1,6 @@
 import type { ReconciliationMeasure } from "@/lib/procare-migration-controls";
 import { normalizeProcareEnrollmentStatusWithEndDate } from "@/lib/procare-import-fields";
+import { buildProcareMigrationReviewRow } from "@/lib/procare-migration-review";
 
 type SourceRecord = Record<string, string>;
 
@@ -88,9 +89,10 @@ const DOMAIN_DEFINITIONS = [
     required: true,
     applicableTo: "enrolled_child",
     groups: [
-      ["weekly rate", "tuition rate", "contract amount", "charge amount"],
-      ["frequency", "cadence", "billing period", "charge frequency"],
-      ["effective date", "effective week", "billing start period", "contract start date"],
+      ["weekly rate", "weekly tuition cents", "monthly rate", "monthly tuition cents", "tuition amount", "tuition amount cents", "tuition rate", "contract amount", "charge amount"],
+      ["frequency", "cadence", "source cadence", "billing period", "charge frequency"],
+      ["effective date", "source effective date", "effective week", "billing start period", "contract start date"],
+      ["source description", "tuition description", "tuition plan", "description"],
     ],
   },
   {
@@ -193,9 +195,14 @@ export function assessProcareFleetSourceCoverage(
       .map((matches, index) => matches.length ? "" : definition.groups[index].join(" or "))
       .filter(Boolean);
     const applicable = applicableGroups(normalizedRecords, definition.applicableTo);
-    const incomplete = applicable.filter((recordsForEntity) => definition.groups.some((group) => (
-      !recordsForEntity.some((record) => populated(record, group))
-    )));
+    const incomplete = applicable.filter((recordsForEntity) => {
+      if (definition.groups.some((group) => !recordsForEntity.some((record) => populated(record, group)))) return true;
+      if (definition.key !== "tuition") return false;
+      const combined: Record<string, string> = {};
+      for (const record of recordsForEntity) for (const [key, value] of record) if (value && !combined[key]) combined[key] = value;
+      const review = buildProcareMigrationReviewRow(combined, 1);
+      return !review || review.childScope !== "current" || !review.tuitionReady;
+    });
     if (incomplete.length) {
       const recordLabel = definition.applicableTo === "enrolled_child" ? "enrolled child" : definition.applicableTo;
       missingEvidence.push(`${incomplete.length} of ${applicable.length} applicable ${recordLabel} record(s) lack complete evidence`);

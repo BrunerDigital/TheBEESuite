@@ -1,6 +1,15 @@
 export type ProcareImportRecord = Record<string, string>;
 
 export const PROCARE_FIELD_OPTIONS = [
+  { key: "tuition amount", label: "Tuition amount per billing period", aliases: ["tuition rate", "contract amount", "charge amount"] },
+  { key: "tuition amount cents", label: "Tuition amount in cents", aliases: ["confirmed tuition amount cents", "source tuition amount cents"] },
+  { key: "monthly rate", label: "Monthly tuition amount", aliases: ["monthly tuition", "monthly tuition rate"] },
+  { key: "monthly tuition cents", label: "Monthly tuition in cents", aliases: [] },
+  { key: "weekly rate", label: "Weekly tuition amount", aliases: ["weekly tuition", "weekly tuition rate"] },
+  { key: "weekly tuition cents", label: "Weekly tuition in cents", aliases: ["confirmed weekly tuition cents", "source weekly tuition cents"] },
+  { key: "source cadence", label: "Tuition billing frequency", aliases: ["confirmed tuition cadence", "cadence", "billing period", "frequency", "charge frequency"] },
+  { key: "source description", label: "Tuition plan or description", aliases: ["tuition description", "tuition plan"] },
+  { key: "source effective date", label: "Tuition effective date or week", aliases: ["effective date", "effective week", "tuition effective week", "contract start date", "billing start period"] },
   { key: "account id", label: "Family / account ID", aliases: ["account key", "account number", "account no", "account #", "family id", "family key", "family number", "household id", "procare account id"] },
   { key: "family name", label: "Family / household name", aliases: ["account name", "account", "family", "payer family", "household"] },
   { key: "child id", label: "Child ID", aliases: ["child key", "child number", "child no", "child #", "student id", "student key", "student number", "student no", "student #", "procare child id"] },

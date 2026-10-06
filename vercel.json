@@ -5,6 +5,10 @@
   "buildCommand": "npm run vercel-build",
   "crons": [
     {
+      "path": "/api/cron/school-import-cleanup",
+      "schedule": "0 8 * * *"
+    },
+    {
       "path": "/api/cron/web-push",
       "schedule": "* * * * *"
     },

@@ -1,9 +1,11 @@
+import { supportedImportTuitionCadence, validImportTuitionEffectiveDate } from "@/lib/family-billing-intake";
 import { isCurrentlyEnrolledChildRecord } from "@/lib/enrollment-status";
 import { normalizeProcareEnrollmentStatusWithEndDate } from "@/lib/procare-import-fields";
 
 export type ProcareMigrationReviewRow = {
   rowNumber: number;
   accountId: string;
+  sourceSchool?: string;
   childId: string;
   familyName: string;
   childName: string;
@@ -18,6 +20,9 @@ export type ProcareMigrationReviewRow = {
   openingBalanceCents: number | null;
   openingBalanceIncluded: boolean;
   openingBalanceStatus: "included_current_outstanding" | "excluded_historical" | "needs_review";
+  tuitionAmountCents: number | null;
+  tuitionCadence: string | null;
+  tuitionReady: boolean;
   weeklyTuitionCents: number | null;
   weeklyTuitionReady: boolean;
   blockers: string[];
@@ -81,7 +86,7 @@ function relationshipCount(record: Record<string, string>) {
   ].filter(Boolean).length;
 }
 
-export function buildProcareMigrationReviewRow(record: Record<string, string>, rowNumber: number): ProcareMigrationReviewRow | null {
+export function buildProcareMigrationReviewRow(record: Record<string, string>, rowNumber: number, resolvedSchoolId?: string): ProcareMigrationReviewRow | null {
   const accountId = first(record, ["account id", "account key", "account number", "family id", "procare account id"]);
   const childId = first(record, ["child id", "child key", "student id", "procare child id"]);
   const childName = first(record, ["child name", "child full name", "student name"]);
@@ -106,10 +111,17 @@ export function buildProcareMigrationReviewRow(record: Record<string, string>, r
       : "needs_review";
 
   const tuition = moneyFromRecord(record, ["weekly tuition cents", "confirmed weekly tuition cents", "source weekly tuition cents"], ["weekly rate", "tuition rate", "charge amount"]);
-  const cadence = first(record, ["source cadence", "confirmed tuition cadence", "cadence", "billing period", "frequency"]);
+  const cadence = first(record, ["source cadence", "confirmed tuition cadence", "cadence", "billing period", "frequency", "charge frequency"]);
   const description = first(record, ["source description", "tuition description", "source tuition evidence", "tuition plan", "description"]);
-  const effectiveDate = first(record, ["source effective date", "tuition effective week", "effective week", "effective date", "status start date"]);
-  const weeklyTuitionReady = !current || Boolean(tuition.valid && (tuition.cents ?? 0) > 0 && /^weekly$/i.test(cadence) && description && effectiveDate);
+  const effectiveDate = first(record, ["source effective date", "tuition effective week", "effective week", "effective date", "status start date", "billing start period", "contract start date"]);
+  const tuitionCadence = supportedImportTuitionCadence(cadence);
+  const recurringTuition = moneyFromRecord(record,
+    ["tuition amount cents", "confirmed tuition amount cents", "source tuition amount cents", ...(tuitionCadence === "monthly" ? ["monthly tuition cents"] : [])],
+    ["tuition amount", "contract amount", "tuition rate", "charge amount", ...(tuitionCadence === "monthly" ? ["monthly rate"] : [])]);
+  const reviewedTuition = recurringTuition.present ? recurringTuition : tuitionCadence === "weekly" ? tuition : { present: false, valid: false, cents: null };
+  const effectiveDateValid = validImportTuitionEffectiveDate(effectiveDate, tuitionCadence);
+  const tuitionReady = !current || Boolean(reviewedTuition.valid && (reviewedTuition.cents ?? 0) > 0 && tuitionCadence && description && effectiveDateValid);
+  const weeklyTuitionReady = !current || Boolean(tuitionReady && tuitionCadence === "weekly");
   const blockers: string[] = [];
   if (!accountId) blockers.push("Add the stable family Account ID.");
   if (!childId) blockers.push("Add the stable Child ID.");
@@ -118,15 +130,16 @@ export function buildProcareMigrationReviewRow(record: Record<string, string>, r
   if (current && hidden) blockers.push("The source marks this current family hidden; correct the lifecycle or hidden status before import.");
   if (current && !balance.present) blockers.push("Provide and confirm the signed opening balance, including an explicit zero.");
   else if (current && !balance.valid) blockers.push("Correct the opening balance to a valid signed currency amount.");
-  if (current && !tuition.valid) blockers.push("Provide one positive child-level weekly tuition amount.");
-  if (current && !/^weekly$/i.test(cadence)) blockers.push("Confirm weekly tuition cadence.");
+  if (current && (!reviewedTuition.valid || (reviewedTuition.cents ?? 0) <= 0)) blockers.push("Provide one positive child-level tuition amount for the actual billing frequency.");
+  if (current && !tuitionCadence) blockers.push("Confirm weekly, biweekly, four-week, or monthly tuition frequency. Other frequencies need BEE setup review.");
   if (current && !description) blockers.push("Provide the tuition description or plan evidence.");
-  if (current && !effectiveDate) blockers.push("Provide the tuition effective date or ISO effective week.");
+  if (current && !effectiveDateValid) blockers.push("Provide a valid tuition effective date (YYYY-MM-DD), or a valid ISO effective week for week-based tuition.");
   if (familyScope === "needs_review") blockers.push("Confirm whether this child is current or historical before importing balances or tuition.");
 
   return {
     rowNumber,
     accountId,
+    sourceSchool: resolvedSchoolId ?? first(record, ["mappedCenterId", "location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site"]),
     childId,
     familyName: first(record, ["family name", "account name", "household"]),
     childName,
@@ -141,16 +154,34 @@ export function buildProcareMigrationReviewRow(record: Record<string, string>, r
     openingBalanceCents: balance.cents,
     openingBalanceIncluded,
     openingBalanceStatus,
-    weeklyTuitionCents: tuition.cents,
+    tuitionAmountCents: reviewedTuition.cents,
+    tuitionCadence,
+    tuitionReady,
+    weeklyTuitionCents: tuitionCadence === "weekly" ? reviewedTuition.cents : null,
     weeklyTuitionReady,
     blockers,
   };
 }
 
+function accountScope(row: ProcareMigrationReviewRow) {
+  return row.accountId ? JSON.stringify([row.sourceSchool || "", row.accountId]) : "";
+}
+
 export function finalizeProcareMigrationReview(rows: ProcareMigrationReviewRow[]) {
-  const currentAccountIds = new Set(rows.filter((row) => row.childScope === "current").map((row) => row.accountId).filter(Boolean));
+  const currentAccountIds = new Set(rows.filter((row) => row.childScope === "current").map(accountScope).filter(Boolean));
+  const balances = new Map<string, Set<number>>();
+  for (const row of rows) {
+    if (!row.accountId || row.openingBalanceCents === null || !currentAccountIds.has(accountScope(row))) continue;
+    const values = balances.get(accountScope(row)) ?? new Set<number>();
+    values.add(row.openingBalanceCents);
+    balances.set(accountScope(row), values);
+  }
   return rows.map((row): ProcareMigrationReviewRow => {
-    if (!row.accountId || !currentAccountIds.has(row.accountId)) return row;
+    if (!row.accountId || !currentAccountIds.has(accountScope(row))) return row;
+    if ((balances.get(accountScope(row))?.size ?? 0) > 1) return {
+      ...row, familyScope: "current", openingBalanceIncluded: false, openingBalanceStatus: "needs_review",
+      blockers: [...row.blockers, "This family has conflicting opening balances. Confirm one account balance at the agreed date before transfer."],
+    };
     const openingBalanceIncluded = !row.hidden && row.openingBalanceCents !== null;
     return {
       ...row,
@@ -162,19 +193,20 @@ export function finalizeProcareMigrationReview(rows: ProcareMigrationReviewRow[]
 }
 
 export function summarizeProcareMigrationReview(rows: ProcareMigrationReviewRow[]) {
-  const currentAccounts = new Set(rows.filter((row) => row.familyScope === "current").map((row) => row.accountId).filter(Boolean));
-  const historicalAccounts = new Set(rows.filter((row) => row.familyScope === "historical").map((row) => row.accountId).filter(Boolean));
+  const currentAccounts = new Set(rows.filter((row) => row.familyScope === "current").map(accountScope).filter(Boolean));
+  const historicalAccounts = new Set(rows.filter((row) => row.familyScope === "historical").map(accountScope).filter(Boolean));
   const includedBalances = new Map<string, number>();
   const excludedBalances = new Map<string, number>();
   for (const row of rows) {
     if (!row.accountId || row.openingBalanceCents === null) continue;
-    if (row.openingBalanceIncluded) includedBalances.set(row.accountId, row.openingBalanceCents);
-    else if (row.openingBalanceStatus === "excluded_historical") excludedBalances.set(row.accountId, row.openingBalanceCents);
+    if (row.openingBalanceIncluded) includedBalances.set(accountScope(row), row.openingBalanceCents);
+    else if (row.openingBalanceStatus === "excluded_historical") excludedBalances.set(accountScope(row), row.openingBalanceCents);
   }
   return {
     currentFamilyAccounts: currentAccounts.size,
     historicalFamilyAccounts: historicalAccounts.size,
     relationshipsReadyChildren: rows.filter((row) => row.childScope === "current" && row.relationshipsReady).length,
+    tuitionReadyChildren: rows.filter((row) => row.childScope === "current" && row.tuitionReady).length,
     weeklyTuitionReadyChildren: rows.filter((row) => row.childScope === "current" && row.weeklyTuitionReady).length,
     currentChildren: rows.filter((row) => row.childScope === "current").length,
     includedCurrentBalanceCents: [...includedBalances.values()].reduce((sum, value) => sum + value, 0),

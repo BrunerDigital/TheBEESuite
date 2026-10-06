@@ -20,6 +20,7 @@ const completeRecord = {
   "weekly rate": "250.00",
   cadence: "weekly",
   "effective date": "2026-08-24",
+  "source description": "Approved weekly contract",
 };
 
 test("fleet source coverage fails closed when a required school dataset is missing", () => {

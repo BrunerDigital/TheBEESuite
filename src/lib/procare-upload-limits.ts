@@ -5,6 +5,10 @@ export const MAX_PROCARE_SOURCE_BYTES = Math.floor(3.5 * 1024 * 1024);
 export const MAX_PROCARE_SOURCE_LABEL = "3.5 MB";
 export const MAX_PROCARE_MULTIPART_BYTES = 4 * 1024 * 1024;
 export const MAX_PROCARE_MULTIPART_LABEL = "4 MB";
+// Larger packages upload directly to private storage; only signed references pass through the function.
+export const MAX_PROCARE_STAGED_BYTES = 50 * 1024 * 1024;
+export const MAX_PROCARE_STAGED_FILE_BYTES = 20 * 1024 * 1024;
+export const MAX_PROCARE_EXPANDED_BYTES = 100 * 1024 * 1024;
 
 export function procareSourceSizeBytes(files: ArrayLike<{ size: number }>) {
   return Array.from(files).reduce((total, file) => total + file.size, 0);

@@ -18,12 +18,16 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   MAX_PROCARE_SOURCE_FILES,
   MAX_PROCARE_SOURCE_BYTES,
-  MAX_PROCARE_SOURCE_LABEL,
   MAX_PROCARE_MULTIPART_BYTES,
   MAX_PROCARE_MULTIPART_LABEL,
   procareMultipartSizeBytes,
   procareSourceSizeBytes,
 } from "@/lib/procare-upload-limits";
+
+import { FAMILY_BILLING_REPORT_CHECKLIST } from "@/lib/family-billing-intake";
+import { stageProcareSourceFiles } from "@/lib/procare-upload-client";
+import { usableProcareImportResponse } from "@/lib/procare-import-response";
+import { MAX_PROCARE_STAGED_BYTES, MAX_PROCARE_STAGED_FILE_BYTES } from "@/lib/procare-upload-limits";
 
 type CenterOption = {
   id: string;
@@ -201,6 +205,7 @@ type ImportPreview = {
     currentFamilyAccounts: number;
     historicalFamilyAccounts: number;
     relationshipsReadyChildren: number;
+    tuitionReadyChildren?: number;
     weeklyTuitionReadyChildren: number;
     currentChildren: number;
     includedCurrentBalanceCents: number;
@@ -214,6 +219,9 @@ type ImportPreview = {
       relationshipsReady: boolean;
       openingBalanceCents: number | null;
       openingBalanceStatus: "included_current_outstanding" | "excluded_historical" | "needs_review";
+      tuitionAmountCents?: number | null;
+      tuitionCadence?: string | null;
+      tuitionReady?: boolean;
       weeklyTuitionCents: number | null;
       weeklyTuitionReady: boolean;
       blockers: string[];
@@ -267,6 +275,8 @@ function setupReadinessLabel(status: SetupReadinessStatus) {
 
 export function ProcareImportPanel({ centers, allowBulkImport = false }: { centers: CenterOption[]; allowBulkImport?: boolean }) {
   const router = useRouter();
+  const stagedSourceRef = useRef<{ selection: string; receipt: string; expiresAt: number } | null>(null);
+  const resumeBatchRef = useRef("");
   const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
   const [csv, setCsv] = useState("");
   const [sourceAdapter, setSourceAdapter] = useState<SchoolImportSourceAdapter>("procare");
@@ -326,6 +336,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   }, [continuationCenterId, priorBatchesRefresh]);
 
   function clearPreview() {
+    stagedSourceRef.current = null;
+    resumeBatchRef.current = "";
     setPreview(null);
     setLastImportSummary(null);
     setPreviewDialogOpen(false);
@@ -395,8 +407,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       setError(`Choose no more than ${MAX_PROCARE_SOURCE_FILES.toLocaleString()} files in one reviewed school package.`);
       return;
     }
-    if (sourceBytes > MAX_PROCARE_SOURCE_BYTES) {
-      setError(`This source is larger than the ${MAX_PROCARE_SOURCE_LABEL} secure browser-source limit. Create one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
+    if (sourceBytes > (selectedFiles.length ? MAX_PROCARE_STAGED_BYTES : MAX_PROCARE_SOURCE_BYTES) || selectedFiles.some(file => file.size > MAX_PROCARE_STAGED_FILE_BYTES)) {
+      setError("Choose up to 50 MB per school package and 20 MB per file. For larger reports, request BEE setup help; keep every required report.");
       return;
     }
     if (!dryRun && (
@@ -432,10 +444,23 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           formData.set("reviewDuplicateWarningRowNumbers", (preview.duplicateReviewRowNumbers ?? []).join(","));
         }
         if (csv.trim()) formData.set("csv", csv);
-        for (const file of selectedFiles) formData.append("file", file);
+        if (selectedFiles.length && sourceBytes > MAX_PROCARE_SOURCE_BYTES) {
+          if (["auto", "all", "bulk"].includes(centerId)) throw new Error("Select one school before uploading a larger package.");
+          const selection = JSON.stringify([centerId, sourceAdapter, selectedFiles.map(selectedFileIdentity)]);
+          let staged = stagedSourceRef.current;
+          if (!staged || staged.selection !== selection || staged.expiresAt <= Date.now()) {
+            setProgressMessage("Securely uploading your school's reports…");
+            const upload = await stageProcareSourceFiles(centerId, selectedFiles, setProgressPercent);
+            staged = { selection, ...upload };
+            stagedSourceRef.current = staged;
+          }
+          formData.set("stagedSourceReceipt", staged.receipt);
+        } else {
+          for (const file of selectedFiles) formData.append("file", file);
+        }
         let response: Awaited<ReturnType<typeof uploadImport>>;
         let json: ImportResponse | null;
-        let resumeBatchId = "";
+        let resumeBatchId = dryRun ? "" : resumeBatchRef.current;
         let nextRow = 1;
         do {
           if (!dryRun) {
@@ -462,7 +487,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             }
           });
           json = response.json;
+          if (response.ok && !usableProcareImportResponse(json, dryRun)) throw new Error("The transfer response could not be verified. Keep the same selected files and retry.");
+          if (!dryRun && json?.batchId) resumeBatchRef.current = json.batchId;
           if (!response.ok || !json?.partial) break;
+          if ((json.nextRow ?? 0) <= nextRow) throw new Error("The transfer made no verified progress. Keep the selected files and retry.");
           resumeBatchId = json.batchId ?? resumeBatchId;
           nextRow = json.nextRow ?? nextRow;
           const totalRows = Math.max(json.totalRows ?? 1, 1);
@@ -535,6 +563,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         setProgressPercent(0);
         setError(error instanceof Error && error.message.includes("secure browser-request limit")
           ? error.message
+          : error instanceof Error && (error.message.includes("upload") || error.message.includes("Select one school"))
+            ? error.message
           : dryRun
             ? "Import review could not be prepared. Check the file and try again; the selected files remain attached."
             : "Data import could not be committed. Keep this page open and retry with the same selected files; they remain attached.");
@@ -590,7 +620,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const pastedCsvPresent = Boolean(csv.trim());
   const selectedFilesTotalBytes = procareSourceSizeBytes(selectedFiles);
   const pastedCsvTotalBytes = pastedCsvPresent ? new Blob([csv]).size : 0;
-  const selectedSourceTooLarge = (selectedFiles.length ? selectedFilesTotalBytes : pastedCsvTotalBytes) > MAX_PROCARE_SOURCE_BYTES;
+  const selectedSourceTooLarge = selectedFiles.length ? selectedFilesTotalBytes > MAX_PROCARE_STAGED_BYTES || selectedFiles.some(file => file.size > MAX_PROCARE_STAGED_FILE_BYTES) : pastedCsvTotalBytes > MAX_PROCARE_SOURCE_BYTES;
   const selectedFileCountTooLarge = selectedFiles.length > MAX_PROCARE_SOURCE_FILES;
   const hasMixedSources = pastedCsvPresent && selectedFiles.length > 0;
   const hasImportSource = pastedCsvPresent || selectedFiles.length > 0;
@@ -626,6 +656,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     ? Number(preview?.unresolved ?? lastImportSummary?.unresolved ?? 0)
     : 0;
   const importCommitted = batchPersisted && heldRowsAfterCommit === 0;
+  const billingEvidence = preview?.migrationReview ?? lastImportSummary?.migrationReview;
+  const billingEvidenceReady = Boolean(billingEvidence && billingEvidence.currentChildren > 0 && billingEvidence.blockedRows === 0);
   const selectedPriorBatch = priorImportBatches.find((batch) => batch.id === selectedPriorBatchId) ?? null;
   const needsSourceInventoryConfirmation = Boolean(preview);
   const sourceInventoryReady = !needsSourceInventoryConfirmation || sourceInventoryConfirmed || batchPersisted;
@@ -644,6 +676,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       ? "Confirm the detected source inventory before importing."
       : missingCorrelationSections.length
       ? `Confirm each correlation step in order before importing: ${missingCorrelationSections.map((section) => section.title).join(", ")}.`
+      : preview?.migrationReview?.rows.some(row => row.blockers.some(blocker => blocker.includes("conflicting opening balances")))
+      ? "Confirm one opening balance per family; sibling source rows currently show conflicting amounts."
       : "";
   const reviewRows = preview?.rowResults ?? [];
   const reviewRowsShown = reviewRows.length;
@@ -672,12 +706,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     {
       label: "Families and children",
       detail: "Confirm each household, child, guardian relationship, enrollment, and classroom.",
-      complete: (hasReviewedImport && !missingCorrelationSections.some((section) => /family|child|guardian|relationship|classroom/i.test(section.title))) || batchPersisted,
+      complete: hasReviewedImport && !missingCorrelationSections.some((section) => /family|child|guardian|relationship|classroom/i.test(section.title)) && (billingEvidence?.relationshipsReadyChildren ?? 0) === (billingEvidence?.currentChildren ?? -1),
     },
     {
       label: "Balances and tuition",
-      detail: "Confirm one opening family balance and the weekly rate for every enrolled child.",
-      complete: (hasReviewedImport && sourceInventoryReady && Boolean(preview?.migrationReview?.currentChildren) && !preview?.migrationReview?.blockedRows) || batchPersisted,
+      detail: "Confirm one opening family balance and tuition at its actual frequency for every enrolled child.",
+      complete: hasReviewedImport && sourceInventoryReady && billingEvidenceReady,
     },
     {
       label: "Exceptions",
@@ -779,6 +813,40 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-3 rounded-xl border bg-background p-4">
+          <div>
+            <h3 className="font-semibold">Bring your family and billing information</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Provide unchanged reports for this school. BEE checks the information; you review the families, balances, and tuition and answer the remaining questions.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {FAMILY_BILLING_REPORT_CHECKLIST.map(item => (
+              <div key={item.title} className="rounded-lg border p-3">
+                <div className="text-sm font-medium">{item.title}</div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Use one agreed balance date. Confirm the last billing period in your previous system and the first in BEE Suite before billing starts. Keep zero balances and credits; a sibling family&apos;s balance is counted once.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/resources/family-billing-transfer" />}>Family &amp; Billing Transfer Guide</Button>
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/billing-settings?view=setup" />}>Request BEE Setup Help</Button>
+          </div>
+          {preview ? <div className="space-y-2" role="status">
+            <div className="text-sm font-medium">What still needs information</div>
+            {fleetSourceDomains.filter(domain => domain.requiredForSchoolVerification && domain.status === "missing").length
+              ? fleetSourceDomains.filter(domain => domain.requiredForSchoolVerification && domain.status === "missing").map(domain => <p key={domain.key} className="text-xs text-muted-foreground"><strong>{domain.label}:</strong> provide the unchanged report or ask BEE to help match the source. {domain.incompleteRecordCount > 0 ? `${domain.incompleteRecordCount} records need information.` : ""}</p>)
+              : <p className="text-xs text-muted-foreground">Review the family and billing exceptions below. Detected reports still require reconciliation before the transfer is verified.</p>}
+          </div> : null}
+        </div>
+        {batchPersisted ? <Alert>
+          <CheckCircle2 />
+          <AlertTitle>Data saved; verification is next</AlertTitle>
+          <AlertDescription>
+            {heldRowsAfterCommit ? `${heldRowsAfterCommit} held rows still need an evidenced decision. ` : ""}
+            Open School Setup to run the whole-school check, reconcile the family and billing totals, and confirm the data. Saving this package does not activate billing or charges.
+            <Link className="ml-1 underline underline-offset-4" href="/billing-settings?view=setup">Open School Setup</Link>
+          </AlertDescription>
+        </Alert> : null}
         <Alert>
           <AlertCircle className="size-4" />
           <AlertTitle>Accuracy before launch</AlertTitle>
@@ -883,7 +951,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           </div>
         </div>
         <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
-          <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-[min(96vw,76rem)]">
+          <DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden bg-background p-0 sm:max-w-[min(96vw,76rem)]">
             <DialogHeader className="px-5 pt-5">
               <DialogTitle>BEE Suite Migration Review</DialogTitle>
               <DialogDescription>
@@ -891,7 +959,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </DialogDescription>
             </DialogHeader>
             {preview ? (
-              <div className="grid min-h-0 gap-4">
+              <div className="grid min-h-0 gap-4 overflow-y-auto overscroll-contain">
                 <div className="grid gap-2 px-5 sm:grid-cols-2 lg:grid-cols-6">
                   {[
                     ["Rows", preview.rows],
@@ -929,9 +997,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                       <div className="mt-1 text-xs text-muted-foreground">Stable Person ID evidence required.</div>
                     </div>
                     <div className="rounded-lg border bg-background/60 p-3">
-                      <div className="text-xs text-muted-foreground">Weekly tuition ready</div>
-                      <div className="mt-1 font-semibold">{preview.migrationReview.weeklyTuitionReadyChildren.toLocaleString()} / {preview.migrationReview.currentChildren.toLocaleString()} current children</div>
-                      <div className="mt-1 text-xs text-muted-foreground">Amount, weekly cadence, description, and effective date required.</div>
+                      <div className="text-xs text-muted-foreground">Tuition evidence ready</div>
+                      <div className="mt-1 font-semibold">{(preview.migrationReview.tuitionReadyChildren ?? preview.migrationReview.weeklyTuitionReadyChildren).toLocaleString()} / {preview.migrationReview.currentChildren.toLocaleString()} current children</div>
+                      <div className="mt-1 text-xs text-muted-foreground">Amount, actual billing frequency, description, and effective date required. No rates are converted.</div>
                     </div>
                   </div>
                 ) : null}
@@ -956,7 +1024,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                         <TableHead>Family scope</TableHead>
                         <TableHead>Relationships</TableHead>
                         <TableHead>Opening balance</TableHead>
-                        <TableHead>Weekly tuition</TableHead>
+                        <TableHead>Tuition per billing period</TableHead>
                         <TableHead>Correction needed</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -984,7 +1052,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                             {migrationRow ? <>{formatCents(migrationRow.openingBalanceCents)}<div className="text-xs text-muted-foreground">{migrationRow.openingBalanceStatus === "included_current_outstanding" ? "Included in current outstanding" : migrationRow.openingBalanceStatus === "excluded_historical" ? "Excluded from current outstanding" : "Needs review"}</div></> : ""}
                           </TableCell>
                           <TableCell className="max-w-44 whitespace-normal">
-                            {migrationRow ? <>{formatCents(migrationRow.weeklyTuitionCents)}<div className="text-xs text-muted-foreground">{migrationRow.weeklyTuitionReady ? "Evidence complete" : "Evidence incomplete"}</div></> : ""}
+                            {migrationRow ? <>{formatCents(migrationRow.tuitionAmountCents ?? migrationRow.weeklyTuitionCents)}<div className="text-xs text-muted-foreground">{migrationRow.tuitionCadence ?? "Frequency needs review"} · {(migrationRow.tuitionReady ?? migrationRow.weeklyTuitionReady) ? "Evidence complete" : "Evidence incomplete"}</div></> : ""}
                           </TableCell>
                           <TableCell className="max-w-80 whitespace-normal text-muted-foreground">{migrationRow?.blockers.join(" ") || row.message || "No correction required."}</TableCell>
                         </TableRow>
@@ -1042,7 +1110,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         {status ? (
           <Alert role="status" aria-live="polite">
             <CheckCircle2 className="size-4" />
-            <AlertTitle>Import complete</AlertTitle>
+            <AlertTitle>Data transfer saved</AlertTitle>
             <AlertDescription className="space-y-3">
               <p>{status}</p>
               {lastBatchId ? (
@@ -1267,7 +1335,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
               {sourceAdapter === "procare"
-                ? <>Choose one folder containing the supported reports, individual files, or one ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Browser review supports up to {MAX_PROCARE_SOURCE_FILES.toLocaleString()} files and {MAX_PROCARE_SOURCE_LABEL} of source data; ZIP larger source folders without changing their contents, or use the file-only preflight outside the browser.</>
+                ? <>Choose one folder containing the supported reports, individual files, or one ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Upload up to {MAX_PROCARE_SOURCE_FILES.toLocaleString()} files, 20 MB per file and 50 MB per school package. Larger packages upload securely without requiring you to remove reports or rework your files.</>
                 : <>Choose one reviewed canonical flat file or paste one canonical table below. The preview requires explicit column mapping, duplicate review, unchanged-source hashing, and stable source evidence before commit. A full migration file must include every applicable family, child, relationship, classroom, balance, safety, tuition, and staff domain; request setup help if the source exports need to be combined first.</>}
             </p>
             {selectedSourceTooLarge || selectedFileCountTooLarge ? (
@@ -1277,7 +1345,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 <AlertDescription>
                   {selectedFileCountTooLarge
                     ? `This selection contains more than ${MAX_PROCARE_SOURCE_FILES.toLocaleString()} files. Run the file-only preflight outside the browser and retain its review packet.`
-                    : `This selection is larger than ${MAX_PROCARE_SOURCE_LABEL}. Create one ZIP containing this school&apos;s unchanged reports, or run the file-only preflight outside the browser.`} Do not remove required reports to make the package fit.
+                    : `This selection exceeds the 50 MB package or 20 MB individual-file limit. Request BEE setup help with the complete reports.`} Do not remove required reports to make the package fit.
                 </AlertDescription>
               </Alert>
             ) : null}

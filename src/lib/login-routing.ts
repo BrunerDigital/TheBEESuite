@@ -1,6 +1,7 @@
 export const DEFAULT_LOGIN_NEXT_PATH = "/dashboard";
 export const PARENT_LOGIN_NEXT_PATH = "/parent-portal";
 export const TEACHER_LOGIN_NEXT_PATH = "/teacher-portal";
+export const TEACHER_OPERATIONS_NEXT_PATH = `${TEACHER_LOGIN_NEXT_PATH}#teacher-roster`;
 export const CLASSROOM_LOGIN_NEXT_PATH = "/classroom-dashboard";
 export const PARENT_LOGIN_ENTRY_PATH = "/parents";
 export const TEACHER_LOGIN_ENTRY_PATH = "/teachers";
@@ -83,13 +84,13 @@ function isParentPortalPath(nextPath: string) {
 
 export function defaultNextPathForLoginPortal(portal: LoginPortal) {
   if (portal === "parents") return PARENT_LOGIN_NEXT_PATH;
-  if (portal === "teachers") return TEACHER_LOGIN_NEXT_PATH;
+  if (portal === "teachers") return TEACHER_OPERATIONS_NEXT_PATH;
   return DEFAULT_LOGIN_NEXT_PATH;
 }
 
 export function homePathForRole(role?: string | null) {
   if (isParentLoginRole(role)) return PARENT_LOGIN_NEXT_PATH;
-  if (isTeacherLoginRole(role)) return TEACHER_LOGIN_NEXT_PATH;
+  if (isTeacherLoginRole(role)) return TEACHER_OPERATIONS_NEXT_PATH;
   return DEFAULT_LOGIN_NEXT_PATH;
 }
 
@@ -157,9 +158,14 @@ export function resolvePostLoginPath({
   }
   if (isTeacherLoginRole(role)) {
     if (isAllowedNextPath(nextPath, teacherAllowedNextPrefixes)) {
+      // A generic portal arrival opens classroom operations. Explicit task
+      // fragments and school/query context retain their original destination.
+      if (!nextPath.includes("#") && nextPath.split("?")[0] === TEACHER_LOGIN_NEXT_PATH) {
+        return `${nextPath}#teacher-roster`;
+      }
       return nextPath;
     }
-    return TEACHER_LOGIN_NEXT_PATH;
+    return TEACHER_OPERATIONS_NEXT_PATH;
   }
   if (isParentPortalPath(nextPath) && !(role && executiveLoginRoles.has(role))) {
     return homePathForRole(role);

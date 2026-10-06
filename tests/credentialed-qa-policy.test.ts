@@ -53,6 +53,8 @@ test("the real login payload omits inactive MFA fields and passes the strict QA 
 test("QA permits only the exact selected login and heartbeat payloads", () => {
   const login = { email: base.email, password: base.password, next: "/dashboard", loginPortal: "directors", appMode: "web", deviceLabel: "QA browser" };
   assert.equal(credentialedQaRequestAllowed({ ...base, body: JSON.stringify(login) }), true);
+  assert.equal(credentialedQaRequestAllowed({ ...base, body: JSON.stringify({ ...login, loginPortal: "teachers", next: "/teacher-portal#teacher-roster" }) }), true);
+  assert.equal(credentialedQaRequestAllowed({ ...base, body: JSON.stringify({ ...login, next: "/teacher-portal#unreviewed-task" }) }), false);
   for (const payload of [{ ...login, email: "real@example.com" }, { ...login, password: "other" }, { ...login, next: "https://evil.test" }, { ...login, role: "PLATFORM_OWNER" }, null, []]) {
     assert.equal(credentialedQaRequestAllowed({ ...base, body: JSON.stringify(payload) }), false);
   }

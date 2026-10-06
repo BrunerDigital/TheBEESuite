@@ -95,7 +95,7 @@ async function main() {
       const { context, page } = await open(long ? "&teacher-long-names=1" : "", false, width, zoom);
       try {
         const name = long ? "Fake Child 1 Alexandra Gabriella Montgomery-Santiago" : "Fake Child";
-        for (const task of tasks) {
+        for (const task of [{ card: "teacher-attendance", title: "Attendance", id: "attendance-child", label: "Child for attendance" }, ...tasks]) {
           await expand(page, task.title);
           const picker = page.getByRole("combobox", { name: task.label, exact: true }); await picker.waitFor(); await settle(page);
           const geometry = await picker.evaluate(el => {

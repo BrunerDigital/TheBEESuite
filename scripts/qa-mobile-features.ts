@@ -15,11 +15,13 @@ const base = assertNonProductionBaseUrl(argument("--base-url", "http://127.0.0.1
 const output = resolve(argument("--output-dir", "output/playwright/mobile-features"));
 const engine = argument("--browser", "chromium");
 const widthOption = argument("--width", "all");
+const heightOption = argument("--height", "auto");
 const theme = argument("--theme", "light");
 const screens = ["home", "updates", "messages", "payments", "children", "check-in", "documents", "billing", "profile", "notifications", "teacher"];
 const screenOption = argument("--screen", "all");
 assert.ok(["chromium", "webkit"].includes(engine), "Unsupported browser");
-assert.ok(["all", "320", "390", "768", "1024"].includes(widthOption), "Unsupported width");
+assert.ok(["all", "320", "360", "390", "412", "568", "768", "844", "1024"].includes(widthOption), "Unsupported width");
+assert.ok(heightOption === "auto" || /^\d+$/.test(heightOption) && Number(heightOption) >= 320, "Unsupported height");
 assert.ok(["light", "dark"].includes(theme), "Unsupported theme");
 assert.ok(screenOption === "all" || screens.includes(screenOption), "Unsupported screen");
 
@@ -49,6 +51,9 @@ async function layoutFindings(page: Page) {
       if (box.width <= 1 || box.height <= 1 || style.clip !== "auto" || style.visibility === "hidden") continue;
       // Native input text can scroll horizontally inside its own field.
       const clippedText = !["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName) && element.scrollWidth > element.clientWidth + 3;
+      if (innerWidth < 1024 && element.matches('input:not([type="checkbox"]):not([type="radio"]), textarea, select') && parseFloat(style.fontSize) < 16) {
+        issues.push({ smallPhoneInput: element.id, fontSize: style.fontSize });
+      }
       if (box.left < -1 || box.right > innerWidth + 1 || clippedText) issues.push({
         id: element.id, slot: element.dataset.slot,
         label: (element.getAttribute("aria-label") || element.textContent || "").trim().slice(0, 100),
@@ -118,15 +123,16 @@ async function main() {
   const results: Array<Record<string, unknown>> = [];
   await mkdir(output, { recursive: true });
   try {
-    for (const width of [320, 390, 768, 1024].filter((value) => widthOption === "all" || String(value) === widthOption)) {
+    const widths = widthOption === "all" ? [320, 390, 768, 1024] : [Number(widthOption)];
+    for (const width of widths) {
       for (const zoom of [1, 2]) for (const screen of screens.filter((value) => screenOption === "all" || value === screenOption)) {
-        const height = width === 320 ? 568 : width === 390 ? 844 : width === 768 ? 1024 : 768;
+        const height = heightOption === "auto" ? width === 320 ? 568 : width < 768 ? 844 : width === 768 ? 1024 : 768 : Number(heightOption);
         const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme as "light" | "dark", reducedMotion: "reduce", serviceWorkers: "block" });
         await context.addInitScript((value) => localStorage.setItem("bee-suite-theme", value), theme);
         const page = await context.newPage();
         page.setDefaultTimeout(15000);
         const unsafeRequests: string[] = [], pageErrors: string[] = [], findings: unknown[] = [];
-        const result: Record<string, unknown> = { screen, width, zoom, engine, theme, unsafeRequests, pageErrors, findings };
+        const result: Record<string, unknown> = { screen, width, height, zoom, engine, theme, unsafeRequests, pageErrors, findings };
         let stage = "load";
         page.on("pageerror", () => pageErrors.push("Uncaught client exception"));
         await context.route("**/*", (route) => {

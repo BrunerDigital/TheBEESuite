@@ -4,7 +4,7 @@ import { isEligiblePublicInquiryCenter } from "../src/lib/inquiry-routing";
 import { filterPublicKidCityLocations, isActivePublicSchoolCandidate, mergePublicKidCityLocations, toPublicKidCityLocation } from "../src/lib/active-school-locations";
 
 test("suspended schools cannot return through active records, legacy IDs, merged lists, or stale form routing", () => {
-  for (const id of ["FL | Jacksonville - Beach", "Kid City USA - FL | Jacksonville - Beach", "FL | Jacksonville - Fruit Cove", "FL | Deland - Amelia", "FL | Port Orange", "IN | Fishers", "IN | Evansville", "TX | Tyler"]) {
+  for (const id of ["FL | Jacksonville - Beach", "Kid City USA - FL | Jacksonville - Beach", "FL | Jacksonville - Beach Blvd", "Kid City USA - FL | Jacksonville - Beach Blvd", "FL | Jacksonville - Fruit Cove", "FL | Deland - Amelia", "FL | Port Orange", "IN | Fishers", "IN | Evansville", "TX | Tyler"]) {
     const center = { status: "active", crmLocationId: id, locationId: id, name: id };
     assert.equal(isActivePublicSchoolCandidate(center), false, id);
     assert.equal(isEligiblePublicInquiryCenter(center, true), false, id);

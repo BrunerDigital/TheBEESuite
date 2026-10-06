@@ -36,6 +36,7 @@ const clean = cleanLocationIdentifier;
 // are being closed.
 const retiredPublicLocationIds = new Set([
   "Kid City USA - FL | Jacksonville - Beach",
+  "Kid City USA - FL | Jacksonville - Beach Blvd",
   "Kid City USA - FL | Jacksonville - Fruit Cove",
   "Kid City USA - FL | Glen Saint Mary",
   "Kid City USA - FL | Hampton",

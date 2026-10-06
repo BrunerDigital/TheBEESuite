@@ -15,6 +15,14 @@ final class KeyboardUITests: XCTestCase {
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 60))
     }
 
+    override func tearDownWithError() throws {
+        evidence("final-screen")
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "accessibility-hierarchy"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+    }
+
     private func eventually(_ message: String, _ condition: @escaping () -> Bool) {
         let predicate = NSPredicate { _, _ in condition() }
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: 15), .completed, message)
@@ -38,14 +46,25 @@ final class KeyboardUITests: XCTestCase {
 
     func testKeyboardDraftAndRotation() {
         #if TEACHER
-        let shortcut = app.links["Daily report"]
+        let shortcut = app.links["Write daily report"]
         XCTAssertTrue(shortcut.waitForExistence(timeout: 60))
+        reveal(shortcut)
         shortcut.tap()
         let field = app.textViews["Teacher note for parents"]
         let action = app.buttons["Save daily report"]
         #else
         let field = app.textViews["Message"]
         let action = app.buttons["Send message"]
+        #endif
+        #if !TEACHER
+        // History intentionally scrolls independently. Start the document scroll
+        // on its school header, outside the history, just as a user would.
+        let heading = app.staticTexts["Sunshine Academy"].firstMatch
+        XCTAssertTrue(heading.waitForExistence(timeout: 60))
+        if !field.isHittable {
+            heading.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.17)))
+        }
         #endif
         reveal(field)
         field.tap()
@@ -55,6 +74,11 @@ final class KeyboardUITests: XCTestCase {
         eventually("Focused field remains above the keyboard") {
             field.isHittable && field.frame.midY < self.app.keyboards.firstMatch.frame.minY
         }
+        #if !TEACHER
+        eventually("Message action stays reachable above the open keyboard") {
+            action.isHittable && action.frame.midY < self.app.keyboards.firstMatch.frame.minY
+        }
+        #endif
         evidence("portrait-keyboard-focused")
         XCTAssertTrue((field.value as? String)?.contains(draft) == true)
 

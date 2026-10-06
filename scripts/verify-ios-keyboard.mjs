@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { createServer } from "node:http";
+import { createServer, request as requestLoopback } from "node:http";
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -63,20 +63,27 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
   let launchError;
   next.on("error", (error) => { launchError = error; });
   const blocked = [];
-  const proxy = createServer(async (request, response) => {
+  const proxy = createServer((request, response) => {
     const url = new URL(request.url, "http://localhost:3237");
     if (!keyboardRequestAllowed(request.method, url.pathname)) {
       blocked.push({ method: request.method, path: url.pathname });
       response.writeHead(403).end("Synthetic keyboard QA blocks this request"); return;
     }
-    try {
-      const destination = url.pathname === "/" ? keyboardPreviewPath(role) : `${url.pathname}${url.search}`;
-      const upstream = await fetch(`http://127.0.0.1:3236${destination}`);
-      response.writeHead(upstream.status, { "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream", "Cache-Control": "no-store" });
-      response.end(Buffer.from(await upstream.arrayBuffer()));
-    } catch { response.writeHead(502).end("Preview unavailable"); }
+    // The immutable fixture needs no development hot-reload connection.
+    if (url.pathname === "/_next/hmr" || url.pathname === "/_next/webpack-hmr") {
+      response.writeHead(204).end(); return;
+    }
+    const destination = url.pathname === "/" ? keyboardPreviewPath(role) : `${url.pathname}${url.search}`;
+    // Host and port are fixed transport options, never derived from a request URL.
+    const upstream = requestLoopback({ hostname: "127.0.0.1", port: 3236, path: destination, method: "GET" }, (local) => {
+      response.writeHead(local.statusCode ?? 502, { "Content-Type": local.headers["content-type"] ?? "application/octet-stream", "Cache-Control": "no-store" });
+      local.pipe(response);
+    });
+    upstream.on("error", () => { if (!response.headersSent) response.writeHead(502); response.end("Preview unavailable"); });
+    upstream.end();
   });
   try {
+    console.log(`Starting ${role} synthetic keyboard preview`);
     const startupDeadline = Date.now() + 3 * 60 * 1000;
     while (true) {
       if (launchError) throw launchError;
@@ -86,6 +93,7 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
       await delay(1000);
     }
     await new Promise((resolve, reject) => { proxy.once("error", reject); proxy.listen(3237, "127.0.0.1", resolve); });
+    console.log(`Running ${role} keyboard XCTest`);
     const log = openSync(path.join(evidencePath, "keyboard-xctest.log"), "w");
     try {
       // Async child keeps the loopback proxy responsive while XCTest drives UI.
@@ -95,9 +103,13 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
         test.once("error", (error) => { clearTimeout(timer); reject(error); });
         test.once("exit", (code) => { clearTimeout(timer); if (code === 0) resolve(); else reject(new Error(`Keyboard XCTest failed (${code}); see keyboard-xctest.log`)); });
       });
-    } finally { closeSync(log); }
+    } finally {
+      closeSync(log);
+      if (existsSync(path.join(evidencePath, "keyboard.xcresult"))) {
+        run("xcrun", ["xcresulttool", "export", "attachments", "--path", path.join(evidencePath, "keyboard.xcresult"), "--output-path", path.join(evidencePath, "keyboard-screenshots")]);
+      }
+    }
     assert.deepEqual(blocked, [], "No unexpected API, write, or navigation attempts");
-    run("xcrun", ["xcresulttool", "export", "attachments", "--path", path.join(evidencePath, "keyboard.xcresult"), "--output-path", path.join(evidencePath, "keyboard-screenshots")]);
     return { passed: true, synthetic: true, softwareKeyboard: true, authenticated: false, physicalDevice: false, blockedRequests: blocked.length };
   } finally {
     writeFileSync(path.join(evidencePath, "keyboard-network.json"), JSON.stringify({ blocked }, null, 2));

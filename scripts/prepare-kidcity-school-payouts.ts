@@ -1,7 +1,7 @@
 import "./load-env";
 import { pathToFileURL } from "node:url";
 import { Prisma } from "@prisma/client";
-import { isActivePublicSchoolCandidate } from "@/lib/active-school-locations";
+import { isActiveSchoolFinanceOperationsCandidate } from "@/lib/active-school-locations";
 import {
   createStripeAccountLink,
   createStripeConnectedAccount,
@@ -148,7 +148,7 @@ export async function prepareKidCitySchoolPayouts() {
     },
   });
 
-  let activeCenters = centers.filter(isActivePublicSchoolCandidate);
+  let activeCenters = centers.filter(isActiveSchoolFinanceOperationsCandidate);
   if (onlyMissingAccount) {
     activeCenters = activeCenters.filter((center) => !readStripeConnectedAccountId(center.customFields));
   }

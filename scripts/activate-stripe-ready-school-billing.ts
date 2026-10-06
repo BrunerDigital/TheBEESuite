@@ -2,7 +2,7 @@ import "./load-env";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { Prisma } from "@prisma/client";
-import { isActivePublicSchoolCandidate } from "@/lib/active-school-locations";
+import { isActiveSchoolFinanceOperationsCandidate } from "@/lib/active-school-locations";
 import {
   listStripeConnectedAccountPayoutBanks,
   readStripeConnectedAccountId,
@@ -73,7 +73,7 @@ async function readCenters() {
       },
     },
   });
-  return centers.filter((center) => isActivePublicSchoolCandidate(center));
+  return centers.filter((center) => isActiveSchoolFinanceOperationsCandidate(center));
 }
 
 async function inspectCenter(center: CenterRow) {
@@ -258,7 +258,7 @@ async function main() {
         _count: { select: { tuitionPlans: true } },
       },
     });
-    invariant(freshCenter && isActivePublicSchoolCandidate(freshCenter), `${planned.school} is no longer an active public school.`);
+    invariant(freshCenter && isActiveSchoolFinanceOperationsCandidate(freshCenter), `${planned.school} is no longer eligible for financial setup.`);
     const currentInspection = await inspectCenter(freshCenter);
     invariant(
       currentInspection.eligible &&

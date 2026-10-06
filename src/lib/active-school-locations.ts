@@ -55,7 +55,6 @@ const retiredPublicLocationIds = new Set([
   "Kid City USA - FL | Leesburg",
   "Kid City USA - FL | Palatka",
   "Kid City USA - FL | Sanford",
-  "Kid City USA - TN | Soddy Daisy",
   "Kid City USA - TX | Tyler",
 ].map((id) => id.toLowerCase()));
 
@@ -106,6 +105,15 @@ export function isActivePublicSchoolCandidate(center: CenterPublicLocationInput)
   return center.status === "active"
     && isValidCrmLocationId(center.crmLocationId)
     && !isRetiredPublicKidCityLocation(center.crmLocationId);
+}
+
+// Public reinstatement does not authorize Stripe setup, payouts or billing.
+// Preserve Soddy Daisy's prior exclusion from those operational selectors until
+// a separate financial activation is explicitly approved.
+export function isActiveSchoolFinanceOperationsCandidate(center: CenterPublicLocationInput) {
+  const canonical = canonicalKidCityLocationId(center.crmLocationId);
+  return isActivePublicSchoolCandidate(center)
+    && canonical?.toLowerCase() !== "kid city usa - tn | soddy daisy";
 }
 
 export function toPublicKidCityLocation(center: CenterPublicLocationInput): PublicKidCityLocation {

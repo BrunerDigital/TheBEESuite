@@ -17,6 +17,8 @@ const engine = argument("--browser", "chromium");
 const widthOption = argument("--width", "all");
 const heightOption = argument("--height", "auto");
 const theme = argument("--theme", "light");
+const touch = process.argv.includes("--touch");
+const rotate = process.argv.includes("--rotate");
 const screens = ["home", "updates", "messages", "payments", "children", "check-in", "documents", "billing", "profile", "notifications", "teacher"];
 const screenOption = argument("--screen", "all");
 assert.ok(["chromium", "webkit"].includes(engine), "Unsupported browser");
@@ -157,7 +159,7 @@ async function main() {
     for (const width of widths) {
       for (const zoom of [1, 2]) for (const screen of screens.filter((value) => screenOption === "all" || value === screenOption)) {
         const height = heightOption === "auto" ? width === 320 ? 568 : width < 768 ? 844 : width === 768 ? 1024 : 768 : Number(heightOption);
-        const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme as "light" | "dark", reducedMotion: "reduce", serviceWorkers: "block" });
+        const context = await browser.newContext({ viewport: { width, height }, isMobile: touch, hasTouch: touch, colorScheme: theme as "light" | "dark", reducedMotion: "reduce", serviceWorkers: "block" });
         await context.addInitScript((value) => localStorage.setItem("bee-suite-theme", value), theme);
         const page = await context.newPage();
         page.setDefaultTimeout(15000);
@@ -241,6 +243,21 @@ async function main() {
           result.selectorsChecked = await checkSelectors(page);
           stage = "help popovers";
           result.helpChecked = await checkHelp(page);
+          if (rotate) {
+            stage = "rotation and draft retention";
+            const drafts = () => page.locator("main input, main textarea, main select").evaluateAll(elements => elements.map(element => {
+              const field = element as HTMLInputElement;
+              return { id: field.id, value: field.value, checked: field.checked };
+            }));
+            const before = await drafts();
+            for (const viewport of [{ width: 844, height: 390 }, { width, height }]) {
+              await page.setViewportSize(viewport);
+              await settle(page);
+              findings.push(...await layoutFindings(page));
+              assert.deepEqual(await drafts(), before, "Rotation retains form and selection drafts");
+            }
+            result.rotations = 2;
+          }
           if (screen === "updates") assert.equal(await page.locator("#daily-reports").count(), 1, "Legacy report anchor stays unique");
           await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
           await page.screenshot({ path: resolve(output, `${engine}-${screen}-${width}-${zoom}-${theme}.png`), caret: "initial" });

@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { appModeFromPath } from "@/lib/device-sessions";
 import type { LoginMfaFactor } from "@/lib/mfa-login";
@@ -268,7 +269,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                   <Label htmlFor="password">Password</Label>
                   <Link
                     href={`/forgot-password?next=${encodeURIComponent(next)}`}
@@ -278,14 +279,13 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                     Forgot password?
                   </Link>
                 </div>
-                <Input
+                <PasswordInput
                   id="password"
                   name="password"
                   className="h-11"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder={copy.passwordPlaceholder}
-                  type="password"
                   autoComplete="current-password"
                   required
                 />

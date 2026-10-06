@@ -820,6 +820,20 @@
 
   @media (max-width: 639px) {
     /* Decorative gutters and icons stay compact while the user's text grows. */
+    .auth-halo-card :is([data-slot="card-header"], [data-slot="card-content"]) {
+      padding-inline: 16px;
+      min-width: 0;
+    }
+
+    .auth-halo-card :is(button[type="submit"], a[data-slot="button"], a.inline-flex) {
+      min-height: 44px;
+      height: auto;
+      max-width: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      padding-block: 10px;
+    }
+
     :is(.director-payment-terminal-workspace, .office-billing-workspace) :is([data-slot="card-header"], [data-slot="card-content"], [data-slot="tabs-content"]),
     #billing-family-overview > section {
       padding-inline: 12px;

@@ -73,7 +73,7 @@ import { readArchivedSourceFiles, readStagedSourceFiles } from "@/lib/procare-st
 import { verifyStagedSourceManifest, type StagedSourceManifest } from "@/lib/procare-staged-source";
 import { persistVerifiedImportSource, readVerifiedImportSource, removeConsumedImportStaging, stagedDescriptorsMatch, type VerifiedSourceCache, type RelationshipEvidence } from "@/lib/procare-source-cache";
 import { IMPORT_COUNTER_CHECKPOINT, importCounterDelta, recoveredImportCounters } from "@/lib/procare-import-counters";
-import { acquireProcareImportLease } from "@/lib/procare-import-lease";
+import { acquireProcareImportLeases } from "@/lib/procare-import-lease";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 import { MAX_PROCARE_STAGED_BYTES } from "@/lib/procare-upload-limits";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -1036,7 +1036,7 @@ async function previewImportRows({
     const previewEnrollmentStatusValue = value(rawData, ["child status", "status", "enrollment status", "student status"]);
     const previewEnrollmentEndDate = value(rawData, ["end date", "withdrawal date", "termination date"]);
     const previewEnrollmentStatus = normalizeProcareEnrollmentStatusWithEndDate(previewEnrollmentStatusValue, previewEnrollmentEndDate);
-    const migrationReviewRow = buildProcareMigrationReviewRow(rawData, rowNumber);
+    const migrationReviewRow = buildProcareMigrationReviewRow(rawData, rowNumber, targetCenter.id);
     if (migrationReviewRow) migrationReviewRows.push(migrationReviewRow);
     if (childName && previewEnrollmentStatusValue && previewEnrollmentStatus === "enrolled" && !classroomName) {
       const message = "An enrolled child is missing a classroom assignment.";
@@ -2321,8 +2321,8 @@ async function POSTHandler(request: NextRequest) {
   if (duplicateTargets.length) {
     return NextResponse.json({ ok: false, error: `Each source column must map to a different BEE Suite field. Duplicate mapping: ${[...new Set(duplicateTargets)].join(", ")}.` }, { status: 400 });
   }
+  const mappedImportTargets = new Map<string, ImportCenter>();
   if (autoMap) {
-    const mappedImportTargets = new Map<string, ImportCenter>();
     for (const row of rows.slice(1)) {
       const rawData = Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""]));
       const sourceCenterValue = value(rawData, [
@@ -2401,13 +2401,15 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const billingReview = cachedPartialSource ? [] : finalizeProcareMigrationReview(rows.slice(1).map((row, index) =>
-    buildProcareMigrationReviewRow(Object.fromEntries(headers.map((header, column) => [header, row[column] ?? ""])), index + 2),
-  ).filter((row): row is NonNullable<typeof row> => Boolean(row)));
+  const billingReview = cachedPartialSource ? [] : finalizeProcareMigrationReview(rows.slice(1).map((row, index) => {
+    const raw = Object.fromEntries(headers.map((header, column) => [header, row[column] ?? ""]));
+    const sourceCenter = autoMap ? resolveImportCenter(centerByAlias, value(raw, ["location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site"])) : center;
+    return buildProcareMigrationReviewRow(raw, index + 2, sourceCenter?.id);
+  }).filter((row): row is NonNullable<typeof row> => Boolean(row)));
   if (billingReview.some((row) => row.blockers.some((blocker) => blocker.includes("conflicting opening balances")))) {
     return NextResponse.json({ ok: false, error: "Conflicting balances were found for the same family. Confirm one opening account balance at the agreed date before importing." }, { status: 409 });
   }
-  const releaseLease = await acquireProcareImportLease(`school-import-commit:${center.id}`);
+  const releaseLease = await acquireProcareImportLeases([center.id, ...mappedImportTargets.keys()].map(id => `school-import-commit:${id}`));
   if (!releaseLease) return NextResponse.json({ ok: false, error: "This transfer is already processing. Keep the same files selected and retry shortly; saved rows will not be repeated." }, { status: 409 });
   try {
   const requestedBatch = requestedBatchId

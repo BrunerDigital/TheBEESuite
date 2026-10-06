@@ -104,5 +104,14 @@ test("school import lease excludes concurrent commits and stale owners cannot re
     await recovered();
     const retry = await acquire("school-a"); assert.equal(typeof retry, "function");
     await retry(); await other(); assert.equal(buckets.size, 0);
+    const held = await acquire("school-b");
+    assert.equal(await server.module.acquireProcareImportLeases(["school-a", "school-b"]), null);
+    const releasedPartial = await acquire("school-a");
+    assert.equal(typeof releasedPartial, "function", "A failed bulk reservation releases schools already acquired");
+    await releasedPartial(); await held();
+    const bulk = await server.module.acquireProcareImportLeases(["school-b", "school-a", "school-a"]);
+    assert.equal(typeof bulk, "function"); assert.equal(buckets.size, 2);
+    assert.equal(await acquire("school-a"), null); assert.equal(await acquire("school-b"), null);
+    await bulk(); assert.equal(buckets.size, 0);
   } finally { delete globals.__beeLeaseMock; await server.close(); }
 });

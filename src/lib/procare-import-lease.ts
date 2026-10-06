@@ -20,3 +20,18 @@ export async function acquireProcareImportLease(key: string) {
     await prisma.rateLimitBucket.deleteMany({ where: { key, count: nonce } });
   };
 }
+
+export async function acquireProcareImportLeases(keys: string[]) {
+  const releases: Array<() => Promise<void>> = [];
+  try {
+    for (const key of [...new Set(keys)].sort()) {
+      const release = await acquireProcareImportLease(key);
+      if (!release) { await Promise.all(releases.map(held => held())); return null; }
+      releases.push(release);
+    }
+    return async () => { await Promise.all(releases.map(release => release())); };
+  } catch (error) {
+    await Promise.allSettled(releases.map(release => release()));
+    throw error;
+  }
+}

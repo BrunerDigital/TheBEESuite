@@ -86,7 +86,7 @@ function relationshipCount(record: Record<string, string>) {
   ].filter(Boolean).length;
 }
 
-export function buildProcareMigrationReviewRow(record: Record<string, string>, rowNumber: number): ProcareMigrationReviewRow | null {
+export function buildProcareMigrationReviewRow(record: Record<string, string>, rowNumber: number, resolvedSchoolId?: string): ProcareMigrationReviewRow | null {
   const accountId = first(record, ["account id", "account key", "account number", "family id", "procare account id"]);
   const childId = first(record, ["child id", "child key", "student id", "procare child id"]);
   const childName = first(record, ["child name", "child full name", "student name"]);
@@ -139,7 +139,7 @@ export function buildProcareMigrationReviewRow(record: Record<string, string>, r
   return {
     rowNumber,
     accountId,
-    sourceSchool: first(record, ["mappedCenterId", "location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site"]),
+    sourceSchool: resolvedSchoolId ?? first(record, ["mappedCenterId", "location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site"]),
     childId,
     familyName: first(record, ["family name", "account name", "household"]),
     childName,

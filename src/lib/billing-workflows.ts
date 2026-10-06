@@ -7,6 +7,14 @@ export const BIWEEKLY_TUITION_AUTOBILL_CADENCE = "biweekly" as const;
 export const FOUR_WEEK_TUITION_AUTOBILL_CADENCE = "four_week" as const;
 export const WEEKLY_TUITION_AUTOBILL_DAY = 4;
 
+export function schoolTuitionBillingAllowed(customFields: unknown) {
+  if (!customFields || typeof customFields !== "object" || Array.isArray(customFields)) return false;
+  const fields = customFields as Record<string, unknown>;
+  return fields.tuitionBillingEnabled === true
+    && fields.tuitionBillingPaused !== true
+    && fields.billingPaused !== true;
+}
+
 export function parseCurrencyCents(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return Math.round(value * 100);
   const normalized = clean(value).replace(/[$,\s]/g, "");

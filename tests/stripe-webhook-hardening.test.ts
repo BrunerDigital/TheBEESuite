@@ -48,6 +48,21 @@ test("event identity, not object identity, is the dedupe key", () => {
   assert.notEqual(stripeWebhookDedupeKey("evt_checkout_completed"), stripeWebhookDedupeKey("evt_checkout_expired"));
 });
 
+test("family-balance webhook success clears an earlier processing intent status without replaying settlement", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  const settlement = route.slice(
+    route.indexOf("async function handleFamilyBalancePaymentSucceeded"),
+    route.indexOf("async function handleFamilyBalanceCheckoutEvent"),
+  );
+  assert.match(settlement, /stripePaymentIntentStatus: stripePaymentIntentId \? "succeeded" : null/);
+  assert.match(settlement, /if \(!claim\.ok\) \{[\s\S]*ignoredReason = claim\.reason;[\s\S]*return;/);
+  assert.equal(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "PAID",
+    storedStripePaymentIntentId: "pi_fixture",
+    succeededStripePaymentIntentId: "pi_fixture",
+  }).reason, "payment_already_applied");
+});
+
 test("a succeeded family payment recovers only the same previously failed PaymentIntent", () => {
   assert.deepEqual(succeededFamilyBalancePaymentClaim({
     paymentStatus: "DRAFT",

@@ -19,6 +19,7 @@ import {
   normalizeRecurringBillingDay,
   normalizeRecurringBillingPeriod,
   recurringDueDateForPeriod,
+  schoolTuitionBillingAllowed,
   parseCurrencyCents,
   shouldCreateRecurringTuitionInvoice,
   tuitionInvoiceWeekCount,
@@ -217,6 +218,32 @@ test("biweekly recurring tuition creates invoices only every two weeks from the 
   assert.equal(shouldCreateRecurringTuitionInvoice({ ...base, billingPeriod: "2026-W26" }), true);
   assert.equal(shouldCreateRecurringTuitionInvoice({ ...base, billingPeriod: "2026-W27" }), false);
   assert.equal(shouldCreateRecurringTuitionInvoice({ ...base, billingPeriod: "2026-W28" }), true);
+});
+
+test("school tuition holds are fail-closed without disabling a child's assignment", () => {
+  assert.equal(schoolTuitionBillingAllowed(null), false);
+  assert.equal(schoolTuitionBillingAllowed({}), false);
+  assert.equal(schoolTuitionBillingAllowed({ tuitionBillingEnabled: false }), false);
+  assert.equal(schoolTuitionBillingAllowed({ tuitionBillingEnabled: true, tuitionBillingPaused: true }), false);
+  assert.equal(schoolTuitionBillingAllowed({ tuitionBillingEnabled: true, billingPaused: true }), false);
+  assert.equal(schoolTuitionBillingAllowed({ tuitionBillingEnabled: true }), true);
+});
+
+test("multiweek tuition without a stored start week never becomes due", () => {
+  for (const cadence of ["biweekly", "four_week"]) {
+    for (const billingPeriod of ["2026-W40", "2026-W41"]) {
+      assert.equal(shouldCreateRecurringTuitionInvoice({
+        enabled: true,
+        planId: "plan_1",
+        amountCents: 20_250,
+        startsPeriod: null,
+        billingPeriod,
+        billingDay: 4,
+        currentDay: 4,
+        cadence,
+      }), false);
+    }
+  }
 });
 
 test("four-week tuition bills four weeks ahead only on its anchored cycle", () => {

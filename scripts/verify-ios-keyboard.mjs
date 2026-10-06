@@ -14,13 +14,15 @@ export function keyboardPreviewPath(role) {
 export function keyboardRequestAllowed(method, pathname) {
   return method === "GET" && (pathname === "/" || pathname === "/device-preview"
     || pathname.startsWith("/_next/") || pathname.startsWith("/brand/")
-    || pathname === "/favicon.ico" || pathname === "/manifest.webmanifest");
+    || /^\/__nextjs_font\/[a-zA-Z0-9._-]+\.woff2$/.test(pathname)
+    || pathname === "/sw.js" || pathname === "/favicon.ico" || pathname === "/manifest.webmanifest");
 }
 
-export function keyboardTestConfiguration(original, role) {
+export function keyboardTestConfiguration(original, role, proxyPort) {
   keyboardPreviewPath(role);
+  assert.ok(Number.isInteger(proxyPort) && proxyPort > 0 && proxyPort < 65536, "Valid local proxy port required");
   assert.equal(original.appId, `com.brunerdigital.thebeesuite.${role}`);
-  return { ...original, server: { url: "http://localhost:3237", cleartext: true },
+  return { ...original, server: { url: `http://localhost:${proxyPort}`, cleartext: true },
     ios: { ...original.ios, webContentsDebuggingEnabled: false } };
 }
 
@@ -38,6 +40,74 @@ async function unusedLoopbackPort() {
   return port;
 }
 
+
+export function createKeyboardPreviewProxy({ role, previewPort, blocked = [] }) {
+  keyboardPreviewPath(role);
+  assert.ok(Number.isInteger(previewPort) && previewPort > 0 && previewPort < 65536);
+  const proxy = createServer((request, response) => {
+    const url = new URL(request.url, "http://localhost");
+    if (!keyboardRequestAllowed(request.method, url.pathname)) {
+      blocked.push({ method: request.method, path: url.pathname });
+      response.writeHead(403).end("Synthetic keyboard QA blocks this request"); return;
+    }
+    if (url.pathname === "/sw.js") {
+      response.writeHead(200, { "Content-Type": "application/javascript", "Cache-Control": "no-store" })
+        .end("// Synthetic keyboard QA: no fetch handlers, caching or background work.\n"); return;
+    }
+    // Ordinary HTTP probes do not upgrade; WebSocket HMR is handled below.
+    if (url.pathname === "/_next/hmr" || url.pathname === "/_next/webpack-hmr") {
+      response.writeHead(204).end(); return;
+    }
+    // Preserve the fixture URL in WebKit as well as on the server; client-side
+    // navigation and hydration must see the same pathname and query.
+    if (url.pathname === "/") {
+      response.writeHead(302, { Location: keyboardPreviewPath(role), "Cache-Control": "no-store" }).end(); return;
+    }
+    const destination = `${url.pathname}${url.search}`;
+    // Host and port are fixed transport options, never derived from a request URL.
+    const upstream = requestLoopback({ hostname: "127.0.0.1", port: previewPort, path: destination, method: "GET" }, (local) => {
+      response.writeHead(local.statusCode ?? 502, { "Content-Type": local.headers["content-type"] ?? "application/octet-stream", "Cache-Control": "no-store" });
+      local.pipe(response);
+    });
+    upstream.on("error", () => { if (!response.headersSent) response.writeHead(502); response.end("Preview unavailable"); });
+    upstream.end();
+  });
+
+  const upgraded = new Set();
+  proxy.on("upgrade", (request, client, clientHead) => {
+    const url = new URL(request.url, "http://localhost");
+    if (request.method !== "GET" || !["/_next/hmr", "/_next/webpack-hmr"].includes(url.pathname)
+      || typeof request.headers["sec-websocket-key"] !== "string") {
+      blocked.push({ method: "UPGRADE", path: url.pathname });
+      client.destroy(); return;
+    }
+    // Turbopack waits for this local development connection before hydrating.
+    // Only the HMR protocol reaches the isolated, credential-free Next child.
+    const upstream = requestLoopback({ hostname: "127.0.0.1", port: previewPort,
+      path: `${url.pathname}${url.search}`, method: "GET", headers: {
+        Connection: "Upgrade", Upgrade: "websocket",
+        "Sec-WebSocket-Key": request.headers["sec-websocket-key"], "Sec-WebSocket-Version": "13",
+      } });
+    upstream.once("upgrade", (response, socket, head) => {
+      upgraded.add(client); upgraded.add(socket);
+      const headers = ["upgrade", "connection", "sec-websocket-accept", "sec-websocket-protocol"]
+        .filter(name => typeof response.headers[name] === "string")
+        .map(name => `${name}: ${response.headers[name]}`).join("\r\n");
+      client.write(`HTTP/1.1 101 Switching Protocols\r\n${headers}\r\n\r\n`);
+      if (head.length) client.write(head);
+      if (clientHead.length) socket.write(clientHead);
+      client.on("error", () => socket.destroy()); socket.on("error", () => client.destroy());
+      client.once("close", () => { upgraded.delete(client); socket.destroy(); });
+      socket.once("close", () => { upgraded.delete(socket); client.destroy(); });
+      client.pipe(socket); socket.pipe(client);
+    });
+    upstream.once("response", response => { response.resume(); client.destroy(); });
+    upstream.once("error", () => client.destroy());
+    upstream.end();
+  });
+  return { proxy, destroyUpgrades: () => { for (const socket of upgraded) socket.destroy(); } };
+}
+
 /** Isolated synthetic UI test against the built Capacitor binary, never a signed artifact. */
 export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRoot, evidencePath, run, deadline }) {
   assert.equal(process.platform, "darwin");
@@ -47,12 +117,13 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
   for (const file of [".env", ".env.local", ".env.development", ".env.development.local"]) {
     assert.ok(!existsSync(file), `Keyboard CI requires a secret-free checkout (${file} exists)`);
   }
+  const proxyPort = await unusedLoopbackPort();
   const root = path.join(buildRoot, "keyboard");
   mkdirSync(root);
   const copy = path.join(root, "App.app");
   cpSync(simulatorApp, copy, { recursive: true });
   const configPath = path.join(copy, "capacitor.config.json");
-  writeFileSync(configPath, JSON.stringify(keyboardTestConfiguration(JSON.parse(readFileSync(configPath, "utf8")), role)));
+  writeFileSync(configPath, JSON.stringify(keyboardTestConfiguration(JSON.parse(readFileSync(configPath, "utf8")), role, proxyPort)));
   // Only this disposable unsigned copy permits loopback HTTP. Production source
   // and both original SDK products retain their verified HTTPS configuration.
   run("/usr/libexec/PlistBuddy", ["-c", "Add :NSAppTransportSecurity dict", path.join(copy, "Info.plist")]);
@@ -82,30 +153,7 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
   let launchError;
   next.on("error", (error) => { launchError = error; });
   const blocked = [];
-  const proxy = createServer((request, response) => {
-    const url = new URL(request.url, "http://localhost:3237");
-    if (!keyboardRequestAllowed(request.method, url.pathname)) {
-      blocked.push({ method: request.method, path: url.pathname });
-      response.writeHead(403).end("Synthetic keyboard QA blocks this request"); return;
-    }
-    // The immutable fixture needs no development hot-reload connection.
-    if (url.pathname === "/_next/hmr" || url.pathname === "/_next/webpack-hmr") {
-      response.writeHead(204).end(); return;
-    }
-    // Preserve the fixture URL in WebKit as well as on the server; client-side
-    // navigation and hydration must see the same pathname and query.
-    if (url.pathname === "/") {
-      response.writeHead(302, { Location: keyboardPreviewPath(role), "Cache-Control": "no-store" }).end(); return;
-    }
-    const destination = `${url.pathname}${url.search}`;
-    // Host and port are fixed transport options, never derived from a request URL.
-    const upstream = requestLoopback({ hostname: "127.0.0.1", port: previewPort, path: destination, method: "GET" }, (local) => {
-      response.writeHead(local.statusCode ?? 502, { "Content-Type": local.headers["content-type"] ?? "application/octet-stream", "Cache-Control": "no-store" });
-      local.pipe(response);
-    });
-    upstream.on("error", () => { if (!response.headersSent) response.writeHead(502); response.end("Preview unavailable"); });
-    upstream.end();
-  });
+  const { proxy, destroyUpgrades } = createKeyboardPreviewProxy({ role, previewPort, blocked });
   try {
     console.log(`Starting ${role} synthetic keyboard preview`);
     const startupDeadline = Date.now() + keyboardPhaseTimeout(keyboardDeadline, 3 * 60 * 1000);
@@ -121,7 +169,7 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
       assert.ok(Date.now() < startupDeadline, "Local preview did not start within three minutes");
       await delay(1000);
     }
-    await new Promise((resolve, reject) => { proxy.once("error", reject); proxy.listen(3237, "127.0.0.1", resolve); });
+    await new Promise((resolve, reject) => { proxy.once("error", reject); proxy.listen(proxyPort, "127.0.0.1", resolve); });
     console.log(`Running ${role} keyboard XCTest`);
     const testTimeout = keyboardPhaseTimeout(keyboardDeadline, 15 * 60 * 1000);
     const log = openSync(path.join(evidencePath, "keyboard-xctest.log"), "w");
@@ -159,6 +207,7 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
     const restored = spawnSync("defaults", restore, { encoding: "utf8", timeout: 10000 });
     if (restored.status !== 0) console.error("Could not restore Simulator keyboard preference:", restored.stderr);
     writeFileSync(path.join(evidencePath, "keyboard-network.json"), JSON.stringify({ blocked }, null, 2));
+    destroyUpgrades();
     proxy.closeAllConnections();
     await new Promise(resolve => proxy.close(resolve));
     next.kill("SIGTERM");

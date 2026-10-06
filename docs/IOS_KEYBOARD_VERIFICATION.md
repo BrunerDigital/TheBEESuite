@@ -11,7 +11,9 @@ the existing native portrait lock, dismisses the keyboard, and checks that the
 form action remains reachable. It never taps Send or Save. XCTest screenshots and
 results are retained alongside build evidence in GitHub Actions artifacts.
 
-The loopback proxy allows only preview/assets GET requests. It blocks API routes,
+The loopback proxy allows preview/assets GET requests and the local development
+HMR connection required for hydration. Its service worker is inert, with no fetch
+handlers or caching. Both local ports are selected dynamically. It blocks API routes,
 real workspaces and all writes. Startup rejects local dotenv files, and the preview
 child receives only a minimal environment with an unusable local fixture database.
 No account passwords or production credentials are passed to the workflow.

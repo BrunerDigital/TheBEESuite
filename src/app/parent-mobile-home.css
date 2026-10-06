@@ -56,7 +56,7 @@
   }
 
   .bee-app-frame[data-role="PARENT_GUARDIAN"] [data-parent-home-actions="true"] > div {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
   }
 
   .bee-app-frame[data-role="PARENT_GUARDIAN"] #today > div:first-child {

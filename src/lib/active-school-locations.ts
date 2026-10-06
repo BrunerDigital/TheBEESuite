@@ -107,6 +107,15 @@ export function isActivePublicSchoolCandidate(center: CenterPublicLocationInput)
     && !isRetiredPublicKidCityLocation(center.crmLocationId);
 }
 
+// Public reinstatement does not authorize Stripe setup, payouts or billing.
+// Preserve Soddy Daisy's prior exclusion from those operational selectors until
+// a separate financial activation is explicitly approved.
+export function isActiveSchoolFinanceOperationsCandidate(center: CenterPublicLocationInput) {
+  const canonical = canonicalKidCityLocationId(center.crmLocationId);
+  return isActivePublicSchoolCandidate(center)
+    && canonical?.toLowerCase() !== "kid city usa - tn | soddy daisy";
+}
+
 export function toPublicKidCityLocation(center: CenterPublicLocationInput): PublicKidCityLocation {
   const parsed = parseCrmLocationId(center.crmLocationId);
   const crmLocationId = parsed

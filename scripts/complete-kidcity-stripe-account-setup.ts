@@ -1,7 +1,7 @@
 import "./load-env";
 import { pathToFileURL } from "node:url";
 import { Prisma } from "@prisma/client";
-import { isActivePublicSchoolCandidate } from "@/lib/active-school-locations";
+import { isActiveSchoolFinanceOperationsCandidate } from "@/lib/active-school-locations";
 import {
   completeStripeConnectedAccountBusinessProfile,
   readStripeConnectedAccountId,
@@ -72,7 +72,7 @@ export async function completeKidCityStripeAccountSetup() {
       customFields: true,
       organization: { select: { tenantId: true } },
     },
-  })).filter(isActivePublicSchoolCandidate);
+  })).filter(isActiveSchoolFinanceOperationsCandidate);
 
   const results: Array<Record<string, unknown>> = [];
   async function processCenter(center: typeof centers[number]): Promise<Record<string, unknown>> {

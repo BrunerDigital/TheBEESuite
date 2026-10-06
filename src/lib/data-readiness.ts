@@ -380,7 +380,7 @@ export function summarizeDataReadiness(tasks: DataReadinessTask[], sourceRows = 
     ...summary,
     actionable,
     total,
-    completionPercent: total ? Math.round((completed / total) * 100) : 100,
+    completionPercent: total ? Math.round((completed / total) * 100) : 0,
     sourceRows,
     lastUpdated: tasks.map((task) => task.updatedAt).sort().at(-1) ?? null,
   };

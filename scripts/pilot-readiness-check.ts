@@ -2,7 +2,8 @@ import "./load-env";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { isActivePublicSchoolCandidate } from "@/lib/active-school-locations";
+import { isRetiredPublicKidCityLocation, isValidCrmLocationId } from "@/lib/active-school-locations";
+import { inventoryReadinessSchools } from "@/lib/school-readiness-inventory";
 import {
   evaluateProcareInvitationBatchReadiness,
   procareSourceFingerprintCollisionCenterIds,
@@ -93,6 +94,7 @@ export type PilotReadinessArgs = {
 type PilotReadinessReport = {
   generatedAt: string;
   selection: {
+    inventory: { activeSchoolCount: number; excludedCenters: Array<{ centerId: string; label: string; reason: string }> } | null;
     requestedSchools: string[];
     selectedCenterCount: number;
     modules: RolloutModule[];
@@ -328,10 +330,14 @@ function printSection(title: string, checks: Check[]) {
   }
 }
 
-function printRolloutGaps(rows: CenterRolloutGap[], all: boolean) {
+export function printRolloutGaps(rows: CenterRolloutGap[], all: boolean) {
   const rowsWithGaps = rows.filter((row) => row.gaps.length);
   const limit = all ? rowsWithGaps.length : 20;
   console.log("\nPer-School Rollout Gaps");
+  if (!rows.length) {
+    console.log("- NOT EVALUATED: No schools were evaluated; school readiness is not proven.");
+    return;
+  }
   if (!rowsWithGaps.length) {
     console.log("- PASS: Every active center has the core classroom, staff, family, parent-login, PIN, and director-access setup signals.");
     return;
@@ -356,6 +362,7 @@ export function buildReport(input: {
   rolloutGapRows: CenterRolloutGap[];
   childClassroomMismatches: ChildClassroomMismatch[];
   args: PilotReadinessArgs;
+  inventory?: PilotReadinessReport["selection"]["inventory"];
 }): PilotReadinessReport {
   const allChecks = [...input.configChecks, ...input.databaseChecks, ...input.dataChecks];
   const failures = allChecks.filter((item) => item.status === "fail").length;
@@ -379,6 +386,7 @@ export function buildReport(input: {
   return {
     generatedAt: new Date().toISOString(),
     selection: {
+      inventory: input.inventory ?? null,
       requestedSchools: input.args.schools,
       selectedCenterCount: input.rolloutGapRows.length,
       modules: input.args.modules,
@@ -498,10 +506,21 @@ async function main() {
     where: { organization: { tenant: liveTenantWhere } },
     select: { id: true, name: true, crmLocationId: true, locationId: true, status: true },
   });
-  const activeLiveCenters = liveCenters.filter(isActivePublicSchoolCandidate);
+  const schoolInventory = inventoryReadinessSchools(liveCenters);
+  const activeLiveCenters = schoolInventory.included;
+  const inventory = { activeSchoolCount: activeLiveCenters.length, excludedCenters: schoolInventory.excluded };
   const activeLiveCenterIds = selectSchoolIds(activeLiveCenters, args.schools);
   const liveCenterIds = activeLiveCenterIds;
   const activeSchoolCenterCount = activeLiveCenterIds.length;
+  if (!activeSchoolCenterCount) {
+    const report = buildReport({ configChecks, databaseChecks,
+      dataChecks: [check("fail", "School coverage", "No active schools were evaluated. Population checks are not evaluated.")],
+      rolloutGapRows: [], childClassroomMismatches: [], args, inventory });
+    printReport(report, args);
+    if (args.outputPath) writeReport(report, args.outputPath);
+    process.exitCode = 1;
+    return;
+  }
 
   const [
     tenantCount,
@@ -743,6 +762,8 @@ async function main() {
       setupGaps.push("school business profile is awaiting explicit confirmation");
     }
     if (!center.locationId && !center.crmLocationId) setupGaps.push("missing school/CRM location ID");
+    if (!isValidCrmLocationId(center.crmLocationId)) setupGaps.push("school CRM identifier needs review; school remains included in this inventory");
+    if (isRetiredPublicKidCityLocation(center.crmLocationId)) setupGaps.push("school is excluded from the public location feed; confirm operational rollout scope");
     if (!center.ownerGroupId) setupGaps.push("missing owner group");
     if (!readSchoolEin(center.customFields)) setupGaps.push("school EIN/tax receipt details are not configured");
     if (classroomCount === 0) setupGaps.push("no classrooms");
@@ -861,6 +882,7 @@ async function main() {
     rolloutGapRows,
     childClassroomMismatches,
     args,
+    inventory,
   });
   printReport(report, args);
   if (args.outputPath) {

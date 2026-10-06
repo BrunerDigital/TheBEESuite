@@ -93,7 +93,7 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
         const test = spawn("xcodebuild", ["-project", path.join(root, "KeyboardQA.xcodeproj"), "-scheme", "KeyboardQA", "-destination", `platform=iOS Simulator,id=${simulator}`, "-derivedDataPath", path.join(root, "DerivedData"), "-resultBundlePath", path.join(evidencePath, "keyboard.xcresult"), "-parallel-testing-enabled", "NO", "CODE_SIGNING_ALLOWED=NO", "test"], { stdio: ["ignore", log, log] });
         const timer = setTimeout(() => { test.kill("SIGTERM"); reject(new Error("Keyboard XCTest exceeded 15 minutes")); }, 15 * 60 * 1000);
         test.once("error", (error) => { clearTimeout(timer); reject(error); });
-        test.once("exit", (code) => { clearTimeout(timer); code === 0 ? resolve() : reject(new Error(`Keyboard XCTest failed (${code}); see keyboard-xctest.log`)); });
+        test.once("exit", (code) => { clearTimeout(timer); if (code === 0) resolve(); else reject(new Error(`Keyboard XCTest failed (${code}); see keyboard-xctest.log`)); });
       });
     } finally { closeSync(log); }
     assert.deepEqual(blocked, [], "No unexpected API, write, or navigation attempts");

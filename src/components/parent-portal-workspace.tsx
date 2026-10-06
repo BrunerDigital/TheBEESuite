@@ -2316,7 +2316,7 @@ function ParentPortalWorkspaceView({
                         <Plus className="size-4 shrink-0 group-open:hidden" aria-hidden="true" />
                         <Minus className="hidden size-4 shrink-0 group-open:block" aria-hidden="true" />
                       </summary>
-                      <dl className="grid gap-3 border-t py-3 sm:grid-cols-2">
+                      <dl className="portal-compact-summary grid gap-3 border-t py-3 sm:grid-cols-2">
                         <div>
                           <dt className="text-xs font-medium text-muted-foreground">
                             Schedule
@@ -2627,7 +2627,7 @@ function ParentPortalWorkspaceView({
                     ) : null}
                     {(report.meals?.length || timedCareEvents.length || report.activities?.length) ? <details className="mt-3 rounded-xl border bg-background">
                     <summary className="min-h-11 cursor-pointer px-3 py-2.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Meals, naps, care &amp; activities</summary>
-                    <dl className="grid gap-2 px-3 pb-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                    <dl className="portal-compact-summary grid gap-2 px-3 pb-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                       {report.meals?.map((meal) => (
                         <div key={meal.id} className="rounded-xl border bg-background p-3">
                           <dt className="text-xs text-muted-foreground">{displayTokenLabel(meal.mealType)}</dt>
@@ -2658,7 +2658,7 @@ function ParentPortalWorkspaceView({
               );
             })}
 
-            {canLoadUpdateHistory && updateHistory.page?.nextReportCursor ? <div className="py-3"><Button type="button" variant="outline" className="min-h-11 h-auto w-full whitespace-normal aria-disabled:opacity-50"
+            {canLoadUpdateHistory && updateHistory.page?.nextReportCursor ? <div className="py-3"><Button type="button" variant="outline" className="min-h-11 h-auto w-fit max-w-full whitespace-normal aria-disabled:opacity-50"
               aria-disabled={Boolean(updateHistory.loading)} onClick={event => void updateHistory.loadMore("reports", event.currentTarget)}>{updateHistory.loading === "reports" ? "Loading reports…" : "Load more reports for this date"}</Button></div> : null}
             {(selectedUpdateDay?.media ?? []).map((item, index) => {
               const imageSrc = renderableImageSrc(item.url);
@@ -2709,7 +2709,7 @@ function ParentPortalWorkspaceView({
                 </article>
               );
             })}
-            {canLoadUpdateHistory && updateHistory.page?.nextPhotoCursor ? <div className="py-3"><Button type="button" variant="outline" className="min-h-11 h-auto w-full whitespace-normal aria-disabled:opacity-50"
+            {canLoadUpdateHistory && updateHistory.page?.nextPhotoCursor ? <div className="py-3"><Button type="button" variant="outline" className="min-h-11 h-auto w-fit max-w-full whitespace-normal aria-disabled:opacity-50"
               aria-disabled={Boolean(updateHistory.loading)} onClick={event => void updateHistory.loadMore("photos", event.currentTarget)}>{updateHistory.loading === "photos" ? "Loading photos…" : "Load more photos for this date"}</Button></div> : null}
 
             {selectedUpdateDay && !selectedUpdateDay.totalItems ? (
@@ -4671,7 +4671,7 @@ function ParentPortalWorkspaceView({
                   Request a Correction
                 </ParentPortalDocumentLink>
               </div>
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+              <dl className="portal-compact-summary mt-4 grid gap-3 text-sm sm:grid-cols-3">
                 <div>
                   <dt className="text-xs text-muted-foreground">
                     Relationship

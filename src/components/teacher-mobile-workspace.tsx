@@ -1078,7 +1078,7 @@ export function TeacherMobileWorkspace({
                   Staff PIN
                 </Badge>
               </div>
-              <div className="grid gap-2 text-sm sm:grid-cols-3">
+              <div className="portal-compact-stats grid gap-2 text-sm sm:grid-cols-3">
                 <div className="rounded-lg border bg-background/40 px-3 py-2">
                   <div className="text-xs text-muted-foreground">Hours recorded</div>
                   <div className="font-medium">{formatHours(kioskAccess.timeClockSummary.totalMinutes)}</div>
@@ -1467,7 +1467,7 @@ export function TeacherMobileWorkspace({
               </div>
             </section>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="portal-compact-summary grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="daily-report-date">Report date</Label>
                 <Input id="daily-report-date" type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} />
@@ -1505,7 +1505,7 @@ export function TeacherMobileWorkspace({
                           Remove
                         </Button>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="portal-compact-fields grid gap-2 sm:grid-cols-2">
                         <Select value={row.mealType} onValueChange={(value) => updateMeal(row.id, { mealType: value ?? row.mealType })}>
                           <SelectTrigger className="w-full" aria-label={`Meal ${index + 1} type`}><SelectValue /></SelectTrigger>
                           <SelectContent>
@@ -1562,7 +1562,7 @@ export function TeacherMobileWorkspace({
                           Remove
                         </Button>
                       </div>
-                      <div className="grid gap-2">
+                      <div className="portal-compact-fields grid gap-2">
                         <div className="space-y-1">
                           <Label htmlFor={`nap-${index + 1}-start`}>Start time</Label>
                           <Input
@@ -1817,7 +1817,7 @@ export function TeacherMobileWorkspace({
               </div>
             </div>
 
-            <Button type="submit" className="h-11 w-full sm:w-fit" disabled={isPending || !teacherProfile?.centerId}>
+            <Button type="submit" className="h-11 w-fit max-w-full" disabled={isPending || !teacherProfile?.centerId}>
               <Save data-icon="inline-start" />
               Save profile
             </Button>

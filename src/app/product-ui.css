@@ -870,6 +870,22 @@
     min-width: 0;
   }
 
+  /* Short values share available space; rem-based minimums restore a single
+     column for enlarged text. Keep long free-text and date-time fields wide. */
+  @media (max-width: 639px) {
+    :is(.parent-portal-workspace, .teacher-mobile-workspace) .portal-compact-summary {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+    }
+
+    .teacher-mobile-workspace .portal-compact-fields {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+    }
+
+    .teacher-mobile-workspace .portal-compact-stats {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+    }
+  }
+
   @media (max-width: 1023px) {
     /* Keep phone editing readable without shrinking enlarged text or causing
        the keyboard's focused field to use smaller type than the viewport. */

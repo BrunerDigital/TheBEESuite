@@ -1,4 +1,5 @@
 import yauzl from "yauzl";
+import { MAX_PROCARE_EXPANDED_BYTES } from "@/lib/procare-upload-limits";
 
 type CsvRow = Record<string, string>;
 
@@ -502,9 +503,16 @@ function isZipArchive(buffer: Buffer) {
 
 export async function expandProcareSourceEntries(entries: Map<string, Buffer>) {
   const expanded = new Map<string, Buffer>();
+  let expandedBytes = 0;
+  const retain = (name: string, bytes: Buffer) => {
+    expandedBytes += bytes.length;
+    if (expandedBytes > MAX_PROCARE_EXPANDED_BYTES) throw new Error("The complete report package expands beyond 100 MB. Request BEE setup help.");
+    if (expanded.size >= 500) throw new Error("The selected sources contain more than 500 files. Request BEE setup help.");
+    expanded.set(name, bytes);
+  };
   for (const [sourceName, buffer] of entries) {
     if (!isZipArchive(buffer)) {
-      expanded.set(sourceName, buffer);
+      retain(sourceName, buffer);
       continue;
     }
     const archivedEntries = await zipEntries(buffer);
@@ -514,7 +522,7 @@ export async function expandProcareSourceEntries(entries: Map<string, Buffer>) {
       }
       const expandedName = `${sourceName}/${archivedName}`;
       if (expanded.has(expandedName)) throw new Error(`More than one uploaded source resolves to ${expandedName}.`);
-      expanded.set(expandedName, archivedBuffer);
+      retain(expandedName, archivedBuffer);
     }
   }
   if (expanded.size > 500) throw new Error("The selected sources contain more than 500 files. Split the handoff into reviewed batches.");

@@ -97,6 +97,6 @@ test("current hidden accounts and incomplete tuition produce exact correction st
   assert.equal(row.openingBalanceIncluded, false);
   assert.match(row.blockers.join(" "), /current family hidden/);
   assert.match(row.blockers.join(" "), /source-backed guardian relationship/);
-  assert.match(row.blockers.join(" "), /positive child-level weekly tuition/);
+  assert.match(row.blockers.join(" "), /positive child-level tuition amount/);
   assert.match(row.blockers.join(" "), /effective date/);
 });

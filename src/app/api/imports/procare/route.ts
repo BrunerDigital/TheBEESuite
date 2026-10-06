@@ -69,8 +69,13 @@ import {
   procareTextSizeBytes,
 } from "@/lib/procare-upload-limits";
 
+import { readStagedSourceFiles } from "@/lib/procare-staged-source-server";
+import { acquireProcareImportLease } from "@/lib/procare-import-lease";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
+import { MAX_PROCARE_STAGED_BYTES } from "@/lib/procare-upload-limits";
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -1472,6 +1477,7 @@ async function readImportText(
   files: FormDataEntryValue[],
   pastedCsv: string,
   sourceAdapter: SchoolImportSourceAdapter,
+  sourceLimit = MAX_PROCARE_SOURCE_BYTES,
 ) {
   const uploadedFiles = files.filter((entry): entry is File => entry instanceof File && entry.size > 0);
   if (uploadedFiles.length && pastedCsv.trim()) {
@@ -1484,7 +1490,7 @@ async function readImportText(
     throw new Error(`The pasted source is larger than the ${MAX_PROCARE_SOURCE_LABEL} secure browser-source limit. Upload one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
   }
   const uploadedBytes = uploadedFiles.reduce((total, file) => total + file.size, 0);
-  if (uploadedBytes > MAX_PROCARE_SOURCE_BYTES) {
+  if (uploadedBytes > sourceLimit) {
     throw new Error(`The selected sources are larger than the ${MAX_PROCARE_SOURCE_LABEL} secure browser-source limit. Create one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
   }
   if (!uploadedFiles.length) {
@@ -2125,6 +2131,7 @@ async function GETHandler(request: NextRequest) {
 }
 
 async function POSTHandler(request: NextRequest) {
+  if (!hasTrustedMutationOrigin(request)) return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -2168,7 +2175,9 @@ async function POSTHandler(request: NextRequest) {
   }
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
-  const files = formData.getAll("file");
+  let files = formData.getAll("file");
+  const stagedSourceReceipt = clean(formData.get("stagedSourceReceipt"));
+  let stagedSourceManifest: Awaited<ReturnType<typeof readStagedSourceFiles>>["manifest"] | null = null;
   const pastedCsvValue = formData.get("csv");
   const pastedCsv = typeof pastedCsvValue === "string" ? pastedCsvValue : "";
   if (!centerId && !autoMap) return NextResponse.json({ ok: false, error: "Center ID is required." }, { status: 400 });
@@ -2208,7 +2217,13 @@ async function POSTHandler(request: NextRequest) {
 
   let importPayload: Awaited<ReturnType<typeof readImportText>>;
   try {
-    importPayload = await readImportText(files, pastedCsv, sourceAdapter);
+    if (stagedSourceReceipt) {
+      if (autoMap || !centerId || files.length || pastedCsv.trim()) throw new Error("Use one selected school and one report source per transfer.");
+      const staged = await readStagedSourceFiles(stagedSourceReceipt, { userId: user.id, tenantId: center.tenantId, centerId: center.id });
+      files = staged.files;
+      stagedSourceManifest = staged.manifest;
+    }
+    importPayload = await readImportText(files, pastedCsv, sourceAdapter, stagedSourceReceipt ? MAX_PROCARE_STAGED_BYTES : MAX_PROCARE_SOURCE_BYTES);
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Source export could not be read." },
@@ -2326,12 +2341,21 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
+  const billingReview = finalizeProcareMigrationReview(rows.slice(1).map((row, index) =>
+    buildProcareMigrationReviewRow(Object.fromEntries(headers.map((header, column) => [header, row[column] ?? ""])), index + 2),
+  ).filter((row): row is NonNullable<typeof row> => Boolean(row)));
+  if (billingReview.some((row) => row.blockers.some((blocker) => blocker.includes("conflicting opening balances")))) {
+    return NextResponse.json({ ok: false, error: "Conflicting balances were found for the same family. Confirm one opening account balance at the agreed date before importing." }, { status: 409 });
+  }
+  const releaseLease = await acquireProcareImportLease(`school-import-commit:${center.id}`);
+  if (!releaseLease) return NextResponse.json({ ok: false, error: "This transfer is already processing. Keep the same files selected and retry shortly; saved rows will not be repeated." }, { status: 409 });
+  try {
   const requestedBatch = requestedBatchId
-    ? await prisma.procareImportBatch.findFirst({ where: { id: requestedBatchId, centerId: center.id, uploadedById: user.id, status: "processing" }, include: { _count: { select: { rows: true } } } })
+    ? await prisma.procareImportBatch.findFirst({ where: { id: requestedBatchId, centerId: center.id, uploadedById: user.id }, include: { _count: { select: { rows: true } } } })
     : null;
   if (requestedBatchId && !requestedBatch) return NextResponse.json({ ok: false, error: "The resumable data import batch could not be found." }, { status: 409 });
   const resumableCandidates = requestedBatch ? [] : await prisma.procareImportBatch.findMany({
-    where: { centerId: center.id, uploadedById: user.id, status: "processing" },
+    where: { centerId: center.id, uploadedById: user.id, status: { in: ["processing", "completed", "completed_with_errors"] } },
     orderBy: { createdAt: "desc" },
     take: 10,
     include: { _count: { select: { rows: true } } },
@@ -2355,6 +2379,14 @@ async function POSTHandler(request: NextRequest) {
     || (existingSummary.sourceAdapter === "bee_flat_file_v1" ? "bee_flat_file_v1" : "procare") !== sourceAdapter
   )) {
     return NextResponse.json({ ok: false, error: "The reviewed files, field mapping, or duplicate mode changed while the import was running. Start a new import with one unchanged review." }, { status: 409 });
+  }
+
+  if (existingBatch && existingBatch.status !== "processing") {
+    const savedResults = await prisma.procareImportRow.findMany({
+      where: { batchId: existingBatch.id }, orderBy: { rowNumber: "asc" }, take: 500,
+      select: { rowNumber: true, status: true, message: true, rawData: true, createdFamilyId: true, createdChildId: true },
+    });
+    return NextResponse.json({ ok: true, alreadyCompleted: true, batchId: existingBatch.id, summary: existingSummary, rowResults: savedResults });
   }
 
   let stagedRowNumbers = new Set<number>();
@@ -2413,6 +2445,7 @@ async function POSTHandler(request: NextRequest) {
         sourceSha256,
         reviewFingerprint,
         mappingSignature,
+        stagedSourceManifest: stagedSourceManifest ?? undefined,
         stagedRowNumbers: [...stagedRowNumbers],
         duplicateReviewRows,
         validationWarnings: Object.fromEntries(validationWarningMessages),
@@ -2680,6 +2713,10 @@ async function POSTHandler(request: NextRequest) {
               },
             });
           }
+          await tx.procareImportRow.create({ data: {
+            batchId: batch.id, rowNumber, status: "imported",
+            rawData: { ...rawData, mappedCenterId: targetCenter.id, mappedEntity: "staff", ...(generatedLogin ? { teacherLoginEmail: generatedLogin.email } : {}) },
+          } });
           return { staffUserId: staffUser.id, createdStaffClassroom };
         }, { maxWait: 10_000, timeout: 60_000 });
         if (staffWrite.createdStaffClassroom) createdClassrooms += 1;
@@ -3546,6 +3583,13 @@ async function POSTHandler(request: NextRequest) {
         }
       }
 
+      // The checkpoint commits with the family/balance writes. A lost HTTP response
+      // can safely resume without repeating a posted opening balance.
+      await prisma.procareImportRow.create({ data: {
+        batchId: batch.id, rowNumber, status: "imported",
+        rawData: { ...rawData, mappedCenterId: targetCenter.id, mappedCenter: targetCenter.crmLocationId ?? targetCenter.name },
+        createdFamilyId: family.id, createdChildId: childId || null,
+      } });
       return { familyId: family.id, childId };
       }, { maxWait: 10_000, timeout: 60_000 });
 
@@ -3616,6 +3660,7 @@ async function POSTHandler(request: NextRequest) {
     sourceSha256,
     reviewFingerprint,
     mappingSignature,
+    stagedSourceManifest: stagedSourceManifest ?? existingSummary.stagedSourceManifest ?? undefined,
     rows: persistedRows,
     totalRows: rows.length - 1,
     imported: progressCounts.imported ?? 0,
@@ -3681,6 +3726,9 @@ async function POSTHandler(request: NextRequest) {
   });
 
   return NextResponse.json({ ok: true, batchId: batch.id, summary, rowResults });
+  } finally {
+    await releaseLease();
+  }
 }
 
 async function PATCHHandler(request: NextRequest) {

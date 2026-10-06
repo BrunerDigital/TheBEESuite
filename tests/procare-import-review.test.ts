@@ -118,7 +118,9 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /warningRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /duplicateReviewRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /same selected files; they are still selected/);
-  assert.match(panel, /secure browser-source limit/);
+  assert.match(panel, /50 MB per school package/);
+  assert.match(panel, /stageProcareSourceFiles/);
+  assert.match(panel, /stagedSourceReceipt/);
   assert.match(panel, /secure browser-request limit/);
   assert.match(panel, /batchId: "x"\.repeat\(64\)/);
   assert.match(panel, /Run the file-only preflight outside the browser and retain its review packet/);

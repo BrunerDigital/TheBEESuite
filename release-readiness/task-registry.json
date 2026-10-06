@@ -1,0 +1,47 @@
+{
+  "coordinator": "01a0e9a6-129b-7ce0-9277-831a64745453",
+  "manifest": "C:\\Users\\brend\\.codex\\worktrees\\87a7\\The BEE Suite\\release-readiness\\manifest.md",
+  "tasks": [
+    {
+      "n": 1,
+      "id": "01a0e9a6-129b-7ce0-9277-831a64745453",
+      "dir": "87a7",
+      "branch": "rollout/coordinator-20260928",
+      "model": "gpt-6-sol",
+      "path": "C:\\Users\\brend\\.codex\\worktrees\\87a7\\The BEE Suite"
+    },
+    {
+      "n": 2,
+      "id": "01a0e9a6-6e4f-7e43-bd29-8ce6c187a685",
+      "dir": "d7b0",
+      "branch": "rollout/access-20260928",
+      "model": "gpt-6-sol",
+      "path": "C:\\Users\\brend\\.codex\\worktrees\\d7b0\\The BEE Suite"
+    },
+    {
+      "n": 3,
+      "id": "01a0e9a6-6e36-7171-aae8-868d1b62d629",
+      "dir": "3948",
+      "branch": "rollout/task-3-billing-20260928",
+      "model": "gpt-6-sol",
+      "path": "C:\\Users\\brend\\.codex\\worktrees\\3948\\The BEE Suite"
+    },
+    {
+      "n": 4,
+      "id": "01a0e9a6-6e5e-7c50-8086-1326b8aac417",
+      "dir": "4fe0",
+      "branch": "rollout/reliability-20260928",
+      "model": "gpt-6-sol",
+      "path": "C:\\Users\\brend\\.codex\\worktrees\\4fe0\\The BEE Suite"
+    },
+    {
+      "n": 5,
+      "id": "01a0e9a6-84fa-7c60-a8b3-11b8cf82841f",
+      "dir": "8719",
+      "branch": "rollout/task-5-20260928",
+      "model": "gpt-6-luna",
+      "path": "C:\\Users\\brend\\.codex\\worktrees\\8719\\The BEE Suite"
+    }
+  ],
+  "createdAndRunning": true
+}

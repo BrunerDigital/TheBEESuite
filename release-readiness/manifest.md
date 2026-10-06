@@ -1,0 +1,80 @@
+# BEE Suite coordinated production rollout
+
+Updated: 2026-10-06 20:15 UTC. Lane: release, with discover/build/verify/operate/artifact workstreams. Task 1 owns this manifest. The September 29 checkpoint and bootstrap tables below are historical; use the current checkpoint for release decisions.
+
+## Current checkpoint — October 6
+
+- VERIFIED (Task 4, 19:58–19:59 UTC): canonical production is Vercel Ready deployment `dpl_Dk5hcfDijhrVVEXMi8HscKLA7Dpm` on `9b50b470c1fff93751356147ee207cc3c5fe18a3` (#459). Canonical `/api/health` returned HTTP 200 with database connected. Other aliases are present in deployment metadata, but their HTTP response and authenticated role flows were not rechecked on this commit. The coordinator checkout was safely fast-forwarded to this SHA; no worker change has been deployed through this rollout.
+- VERIFIED (Task 4, 19:58–19:59 UTC): live Prisma ledger has 31 rows with none unfinished or rolled back; Supabase registry has 49 through `20260909180912_agency_child_scope_guard_repair`. Daily physical database backups were listed through October 6 08:14:13 UTC. PITR is off, and database backups exclude Storage object bodies. Independent Storage backup custody, key recovery, alert owners and a restore of the current point remain UNVERIFIED. PR #310's schema gate remains BLOCKED for any new DDL or migration.
+- VERIFIED (Task 2, 20:05–20:10 UTC): current operational active scope is **45 schools** (43 Kid City USA excluding the lead queue, two Miss Honey's), down from 59 on September 29. Populated Longmont and Tyler are now `closed`; business authorization for those status changes is UNVERIFIED. The redacted school matrix is pushed as `rollout/access-20260928` at `d5c74006`; 52/52 focused access tests passed. Positive authenticated Parent/Teacher/Director/Corporate and school-isolation flows remain UNVERIFIED. Centennial's 14 active staff lack matching Auth identities in Task 2's read-only check. Kokomo invitation delivery receipts do not prove sign-in or the reported resend path.
+- VERIFIED (Task 3 and GPT-6 Astra review, through 20:15 UTC): source-only billing branch `rollout/task-3-billing-20260928` is pushed at `d02a1998` (including `7cfca8c6` and `33fa8291`). It addresses missing cadence anchors, paused-school invoice creation, success metadata and an introduced same-school lock upgrade deadlock. Astra found no remaining **introduced** release blocker after the correction; the synthetic concurrent test is not a PostgreSQL integration proof. A pre-existing multi-family invoice lock-order risk remains. Task 3 reports final lint, typecheck, 2,649 repository tests, three additional route tests and Next.js build passing. Integration and production changed-flow verification remain UNVERIFIED. Granbury ACH capability, Kokomo amount intent, Centennial edit freeze, aged pending/manual-review webhooks and all real payment paths remain BLOCKED or UNVERIFIED. No charge, refund, invoice, autopay or billing-pause mutation occurred for this audit.
+- VERIFIED (Task 4, through 20:15 UTC): redacted reliability report is pushed on `rollout/reliability-20260928` at `8718b99e`. Stripe has 45 pending and 9 manual-review webhook receipts requiring exact reconciliation. Twilio payout SMS and SendGrid daily-report delivery failures require recipient/provider-scoped review; no resend or provider setting changed. Monitoring acknowledgment and complete recovery custody remain UNVERIFIED.
+- VERIFIED (Task 5): release package index is pushed on `rollout/task-5-20260928` at `c0553dd7`. Final deployed-interface and App Store URL checks remain UNVERIFIED; no store submission or public communication occurred.
+- BLOCKED release decision: only Task 1 may integrate/deploy/declare rollout complete. Its local Codex chat is paused on a stale failed Git metadata approval card although the safe fast-forward was completed. Do not infer approval of school closures, migrations, billing activation or iOS distribution from this technical checkpoint. Last proven rollback commit is current `9b50b470`, subject to an exact pre-deployment production recheck.
+
+## Historical September 29 checkpoint (superseded by October 6)
+
+- VERIFIED 2026-09-29 16:59 UTC: `origin/main` is `e326f6e6dc586cfd31f6374f81ea0b0208efea5c` (externally merged PR #438); Vercel canonical `thebeesuite.io` is READY deployment `dpl_5aa13Vzo77a3upjJbsThiPYyvMkd` on that SHA with primary, www, beta and main aliases. Vercel get-deployment response is the source. Task1 checkout still rests at `622aa849` with only release-readiness artifacts; **do not release this older checkout**. Current rollback baseline is the exact `e326f6e6` production release, subject to a fresh pre-deploy check.
+- VERIFIED 2026-09-29 16:59 UTC: Vercel grouped runtime errors showed none in the preceding hour. This is a bounded observation, not four-role workflow or job-queue proof. Canonical `/api/health` and protected changed-flow checks on `e326f6e6` remain UNVERIFIED at this checkpoint.
+- VERIFIED 2026-09-29 16:59 UTC: live `public._prisma_migrations` contains 31 rows, zero unfinished, latest finished 2026-08-24 13:38 UTC; Supabase migration registry lists 49 entries through `20260909180912 agency_child_scope_guard_repair`. Registry equivalence, exact agency SQL definitions, and recoverable backup/PITR freshness remain UNVERIFIED. PR #310's explicit production schema hold persists. No DDL or migration is authorized.
+- VERIFIED 2026-09-28 baseline: original `622aa849` source passed `npm run vercel-build` with 2544/2544 tests after repository postinstall. This is historical relative to today's production SHA and must be repeated on an integrated release candidate.
+- VERIFIED 2026-09-29: workers 2–5 active in independent branches/checkouts. Task3 owns coordinated, source-only fixes and focused tests for three confirmed billing code defects; source diff/commit is still pending. Kokomo cadence/rate mismatches, Centennial prior-account saved methods, and Granbury method bindings are held exact-target operational reviews, with no live financial mutation authorized. Task5 package must be compared with the final deployed interface and verified store URLs.
+- UNVERIFIED: current backup and independent vault/key custody, approved Parent/Teacher iOS build/API contract, positive authenticated Kokomo/Centennial and four-role checks, each school workflow, store links/approval and business activation. No rollout GO declaration.
+
+## Control and evidence
+
+Only Task 1 may integrate, merge to production, deploy, migrate after explicit authorization, or declare rollout complete. This orchestrator bootstraps tasks and supplies evidence. Task 1 owns this manifest. Every claim must carry VERIFIED, UNVERIFIED, or BLOCKED, an observation time, source, and evidence path. Other tasks own their own evidence directories and branches. No concurrent production-resource writes. Shared schema, authentication, ledger, or API edits require Task 1's coordination before implementation.
+
+## Verified bootstrap baseline
+
+| Item | State | Evidence |
+| --- | --- | --- |
+| Repository | VERIFIED | BrunerDigital/TheBEESuite; origin HTTPS remote; primary checkout D:/Brenden Bruner/Documents/The BEE Suite |
+| Primary checkout | VERIFIED dirty and behind | main 05fda84f41202a8c0b59f9b68b3f91468dce71ec; unrelated docs, assets, CRM, ProCare and device-preview changes preserved |
+| origin/main | VERIFIED | fetched 2026-09-28; 622aa8491a3ac03ef2a3db7bfae96527ad5cbd0b |
+| Production | VERIFIED | Vercel canonical hostname resolved to dpl_B1CCo9KBu3BoN2hn8BkvHqRmLBXt; READY; main SHA 622aa8491a3ac03ef2a3db7bfae96527ad5cbd0b |
+| Deployment Ready time | VERIFIED | Vercel timestamp 1790623664223; Task 1 render UTC and local time |
+| Canonical aliases | VERIFIED deployment metadata | thebeesuite.io; www.thebeesuite.io; the-bee-suite-beta.vercel.app; the-bee-suite-brunerdigital.vercel.app; the-bee-suite-git-main-brunerdigital.vercel.app |
+| Health | VERIFIED reachability only | 2026-09-28T20:11:50.972Z canonical /api/health: ok true, database connected |
+| Open PRs | VERIFIED snapshot | gh pr list returned [] at bootstrap; refresh before integration |
+| PR 310 | VERIFIED discrepancy; BLOCKED for new migration | GitHub MERGED, merge 087236b7c5a9eddc18f846399e4f944e79f1ce2f; body still says do not merge/apply production migrations until explicit schema gate and current backup/preflight. Merger is not proof of applied schema or migration authorization |
+| Supabase connection | VERIFIED control plane | TheBEESuite nqjrlktoewiueiwrubas ACTIVE_HEALTHY; Postgres 17.6.1.121; verify project binding before SQL |
+
+## Historical bootstrap gaps (refresh against October 6 checkpoint)
+
+- Schema version: UNVERIFIED applied migration ledger, hashes, failed/pending migrations, agency tables; reconcile Prisma and Supabase history. Repository migration count is not live schema evidence.
+- Backup: UNVERIFIED current snapshot/PITR, restore evidence, retention, recovery owner and RPO/RTO. No migration before current backup/readiness preflight and exact authorization.
+- Active locations: VERIFIED current read-only production directory projection is 59 (57 Kid City USA plus both Miss Honey's), excluding demo tenants and the lead queue. See [active-schools-bootstrap.json](active-schools-bootstrap.json) for exact predicate and names. Operational school workflow status remains UNVERIFIED; no directory count is a school pass.
+- Flags/holds: UNVERIFIED school tuitionBillingEnabled, billing pauses, Connect migration/active account, autopay authorization and rollout signoffs. Preserve every existing hold.
+- App/API contract: UNVERIFIED approved Parent/Teacher archive SHA, bundle/version/build, API assumptions and schema version; source wrappers historically load canonical /parents and /teachers. Backend must remain compatible before dependent iOS release. No store actions authorized.
+- MacBook contact/dependency: BLOCKED until exact task/thread, approved archive/build, public store URLs and compatibility evidence supplied or located. Do not invent store links.
+- Authenticated four-role checks: UNVERIFIED designated existing test credentials and safe scopes. No user recreation, password/PIN changes, access grants or invitations for testing.
+- Monitoring/logs/queues: UNVERIFIED current error windows, failed jobs, alert/on-call owner and recovery drill.
+
+## Workstream ownership
+
+| Task | Owner/model | File ownership | Status |
+| --- | --- | --- | --- |
+| 1 Release coordinator | GPT-6 Sol integration/deployment; GPT-6 Astra consequential/final reviews | manifest, integration branch, release decisions and school go/no-go | ACTIVE; current production drift and worker evidence under review |
+| 2 Access | GPT-6 Sol; Astra access-control review | own access report/matrix and coordinated access fixes | ACTIVE; read-only identity/school matrix in progress |
+| 3 Billing | GPT-6 Sol; Astra ledger/Stripe/migration safety review | own payment report/matrix and coordinated billing fixes | ACTIVE; read-only school matrix and coordinated source-only fixes in progress |
+| 4 Reliability | GPT-6 Sol; Astra production architecture/migration review | own reliability report, infrastructure/API compatibility evidence | ACTIVE; schema/backup/provider audit in progress |
+| 5 Release package | GPT-6 Luna bounded inventory/link/docs assembly; Sol substantial implementation | own package/index/changelog; preserve original files | ACTIVE; package and public link inventory in progress |
+
+Task IDs, branches, checkout paths and models are in [task-registry.json](task-registry.json). Reports are now owned within each worker's own checkout, and Task1 reads/collects them. GPT-6 Astra completed [bootstrap risk review](bootstrap-risk-review-astra.md); final rollout review is UNVERIFIED. Bootstrap live schema facts: 31 Prisma ledger rows, zero unfinished; latest Supabase registered migration 20260909180912. Ledger equivalence remains UNVERIFIED, with no authorization inferred. Today's merged combined recovery exercise provides bounded database/Auth/private-file evidence; current backup freshness, independent vault/key custody and incident acceptance remain separate gates.
+
+## Required evidence and release gates
+
+Each task reports progress, verified observations, reproduction, defect/configuration/training classification, changed files, focused tests, commit SHA, rollback, blockers and next action to Task 1. Record model and decision for consequential reviews. Use per-school pass/blocked/unverified states, including Kokomo Sep 28 access/invites, Centennial tuition edits, Granbury payments and Kokomo biweekly rates.
+
+Before production: scoped commits/protected PR checks; node --import tsx --test focused tests; npm run vercel-build; schema/backup authorization gates; backward-compatible API and exact iOS build contract; rollback point. Afterwards: intended SHA READY on aliases, canonical health, relevant logs, changed-flow and pre-existing critical-flow evidence for Parent/Teacher/Director/Corporate plus school isolation. Public 200 is not authenticated success. Task 5 must reconcile package against deployed UI and verified store links.
+
+## Safeguards and rollback
+
+No test charges/refunds/invoices/reminders/invitations/autopay changes, bulk resends, new real identities, access changes, billing unpauses, provider publishing or store submission. Preserve accounts, school/family/classroom links, attendance, payment/audit history, originals and unrelated running processes. Use representative existing authorized synthetic records; code tests may stub sends/payment providers. Never print secrets or family PII.
+
+Rollback baseline: VERIFIED existing deployment dpl_B1CCo9KBu3BoN2hn8BkvHqRmLBXt and Git 622aa8491a3ac03ef2a3db7bfae96527ad5cbd0b; UNVERIFIED schema rollback/backup compatibility until Task 1/4 establish it. Prefer protected revert for scoped code; no destructive ledger/schema rollback. Do not declare fully ready with critical access/attendance/billing/payment blockers.
+
+## Final report contract
+
+Task status; commit and deployment time; backup/schema; active schools checked/passing/blocked; exact app/store dependency; safeguards; focused/full tests and production smoke; package location; monitoring/rollback; exact external blockers. Continue independent work while a task is blocked.

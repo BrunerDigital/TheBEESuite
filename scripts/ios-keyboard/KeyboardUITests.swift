@@ -86,7 +86,8 @@ final class KeyboardUITests: XCTestCase {
         let draft = "Synthetic keyboard draft. Never sent."
         field.typeText(draft)
         eventually("Focused field remains above the keyboard") {
-            field.isHittable && field.frame.maxY <=  self.app.keyboards.firstMatch.frame.minY
+            field.isHittable && field.frame.minY >= self.app.webViews.firstMatch.frame.minY
+                && field.frame.maxY <= self.app.keyboards.firstMatch.frame.minY
         }
         #if !TEACHER
         eventually("Message action stays reachable above the open keyboard") {
@@ -98,7 +99,15 @@ final class KeyboardUITests: XCTestCase {
 
         // Production native apps intentionally support portrait only.
         XCUIDevice.shared.orientation = .landscapeLeft
-        eventually("Native app retains its supported portrait layout") { self.app.frame.height > self.app.frame.width }
+        eventually("Simulator processes the landscape request") { XCUIDevice.shared.orientation == .landscapeLeft }
+        // An immediate portrait-frame check can pass before UIKit rotates.
+        // Observe the settled request long enough to catch an unwanted rotation.
+        let landscapeFrame = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.app.frame.width > self.app.frame.height
+        }, object: nil)
+        landscapeFrame.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [landscapeFrame], timeout: 2), .completed, "Native app retains its portrait lock after rotation settles")
+        XCTAssertGreaterThan(app.frame.height, app.frame.width)
         XCTAssertTrue((field.value as? String)?.contains(draft) == true, "Rotation keeps the draft")
         evidence("rotation-draft-retained")
         XCUIDevice.shared.orientation = .portrait

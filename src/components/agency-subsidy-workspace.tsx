@@ -20,6 +20,7 @@ import { AGENCY_RETRY_STORAGE_ERROR, agencyRetryStorageKey, persistentAgencyRetr
 import { agencyProgramSetupBlockers } from "@/lib/agency-subsidy-billing";
 import { isCurrentlyEnrolledChildRecord, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
 import { agencyClaimServiceStartMin, agencyDateDefault } from "@/lib/agency-date-defaults";
+import { resolveAgencyWorkspaceCenter } from "@/lib/agency-workspace-selection";
 
 type Program = { id: string; centerId: string; name: string; programName: string | null; stateCode: string; status: string; providerNumber: string | null; vendorNumber: string | null; submissionMethod: string; portalUrl: string | null; remittanceEmail: string | null; paymentInstructions: string | null; receivableGlCode: string | null; cashGlCode: string | null; adjustmentGlCode: string | null; costCenterCode: string | null; setupBlockers: string[]; controlledLedgerBlockers: string[] };
 type Authorization = { id: string; centerId: string; agencyProgramId: string; familyId: string; childId: string; authorizationNumber: string; coverageStart: string; coverageEnd: string; authorizedRateCents: number; familyCopayCents: number; unitType: string; authorizedUnits: number | null; status: string; agencyProgram: { name: string; programName: string | null }; family: { name: string }; child: { fullName: string; enrollmentStatus: string; classroomId: string | null } };
@@ -48,13 +49,14 @@ function familyOptionLabel(family: Family) {
   return people.length ? `${family.name} · ${people.join(" · ")}` : family.name;
 }
 
-export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: string; name: string; state?: string | null; timezone?: string | null }> }) {
-  const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
+export function AgencySubsidyWorkspace({ centers, initialCenterId }: { centers: Array<{ id: string; name: string; state?: string | null; timezone?: string | null }>; initialCenterId?: string }) {
+  const initialSelection = resolveAgencyWorkspaceCenter(centers, initialCenterId);
+  const [centerId, setCenterId] = useState(initialSelection);
   const selectedTimeZone = centers.find((center) => center.id === centerId)?.timezone || "America/New_York";
   const [data, setData] = useState<Workspace | null>(null);
-  const [pending, setPending] = useState(Boolean(centers[0]?.id));
+  const [pending, setPending] = useState(Boolean(initialSelection));
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialCenterId && !initialSelection ? "The requested school is unavailable. Choose an authorized school to view its agency billing." : "");
   const [setupProgramId, setSetupProgramId] = useState("new");
   const [programId, setProgramId] = useState("");
   const [familyId, setFamilyId] = useState("");
@@ -108,6 +110,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   }, [adjustmentCursor, adjustmentPage, batchCursor, batchPage, centerId, claimCursor, claimPage, ledgerCursor, ledgerSearchParams, setPending, setError]);
 
   useEffect(() => {
+    if (!centerId) return;
     let active = true;
     const centerParam = centerId === "all" ? "" : `centerId=${encodeURIComponent(centerId)}&`;
     fetch(`/api/billing/agency-claims?${centerParam}claimPage=${claimPage}${claimCursor ? `&claimCursor=${encodeURIComponent(claimCursor)}` : ""}&batchPage=${batchPage}${batchCursor ? `&batchCursor=${encodeURIComponent(batchCursor)}` : ""}&adjustmentPage=${adjustmentPage}${adjustmentCursor ? `&adjustmentCursor=${encodeURIComponent(adjustmentCursor)}` : ""}${ledgerCursor ? `&ledgerCursor=${encodeURIComponent(ledgerCursor)}` : ""}${ledgerSearchParams}`, { cache: "no-store" })

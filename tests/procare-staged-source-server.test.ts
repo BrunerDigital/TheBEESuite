@@ -59,6 +59,10 @@ test("staged reports reject missing, changed, or wrong-school bytes before impor
     await assert.rejects(server.module.readStagedSourceFiles(receipt, scope), /could not be retrieved/);
     control.mode = "hash";
     await assert.rejects(server.module.readStagedSourceFiles(receipt, scope), /changed after upload/);
+    control.mode = "valid";
+    const archive = { ...manifest, files: manifest.files.map(file => ({ ...file, path: "school-import-archives/2026-10-06/tenant/school/reviewer/batch-1/0-" + file.sha256 })) };
+    assert.equal(await (await server.module.readArchivedSourceFiles(archive, scope))[0].text(), bytes.toString());
+    await assert.rejects(server.module.readArchivedSourceFiles(archive, { ...scope, centerId: "other-school" }), /backup scope is invalid/);
   } finally {
     delete globals.__beeIntakeMock;
     await server.close();

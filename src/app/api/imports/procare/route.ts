@@ -69,7 +69,10 @@ import {
   procareTextSizeBytes,
 } from "@/lib/procare-upload-limits";
 
-import { readStagedSourceFiles } from "@/lib/procare-staged-source-server";
+import { readArchivedSourceFiles, readStagedSourceFiles } from "@/lib/procare-staged-source-server";
+import { verifyStagedSourceManifest, type StagedSourceManifest } from "@/lib/procare-staged-source";
+import { persistVerifiedImportSource, readVerifiedImportSource, removeConsumedImportStaging, stagedDescriptorsMatch, type VerifiedSourceCache, type RelationshipEvidence } from "@/lib/procare-source-cache";
+import { IMPORT_COUNTER_CHECKPOINT, importCounterDelta, recoveredImportCounters } from "@/lib/procare-import-counters";
 import { acquireProcareImportLease } from "@/lib/procare-import-lease";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 import { MAX_PROCARE_STAGED_BYTES } from "@/lib/procare-upload-limits";
@@ -2215,15 +2218,72 @@ async function POSTHandler(request: NextRequest) {
   }
   const centerByAlias = buildCenterAliasMap(visibleCenters);
 
+  const stagedScope = { userId: user.id, tenantId: center.tenantId, centerId: center.id };
+  let verifiedSourceCache: VerifiedSourceCache | null = null;
+  let verifiedSourceCacheBatchId: string | null = null;
+  let verifiedSourceSha256: string | null = null;
+  let cachedPartialSource = false;
+  let cachedSourceRangeStart: number | undefined;
+  let cachedRelationshipEvidence: RelationshipEvidence | undefined;
+  let stagedSourceArchiveManifest: StagedSourceManifest | null = null;
   let importPayload: Awaited<ReturnType<typeof readImportText>>;
   try {
+    let cachedPayload: Awaited<ReturnType<typeof readImportText>> | null = null;
     if (stagedSourceReceipt) {
       if (autoMap || !centerId || files.length || pastedCsv.trim()) throw new Error("Use one selected school and one report source per transfer.");
-      const staged = await readStagedSourceFiles(stagedSourceReceipt, { userId: user.id, tenantId: center.tenantId, centerId: center.id });
-      files = staged.files;
-      stagedSourceManifest = staged.manifest;
+      stagedSourceManifest = verifyStagedSourceManifest(stagedSourceReceipt, stagedScope, process.env.AUTH_SECRET || "");
+      const cachedBatches = await prisma.procareImportBatch.findMany({
+        where: { centerId: center.id, uploadedById: user.id, ...(requestedBatchId ? { id: requestedBatchId } : {}), status: { in: ["processing", "completed", "completed_with_errors"] } },
+        orderBy: { createdAt: "desc" }, take: 10,
+      });
+      for (const candidate of cachedBatches) {
+        const saved = candidate.summary && typeof candidate.summary === "object" && !Array.isArray(candidate.summary) ? candidate.summary as Record<string, unknown> : {};
+        const priorManifest = saved.stagedSourceManifest as StagedSourceManifest | undefined;
+        if (!priorManifest?.files || saved.sourceAdapter !== sourceAdapter || !stagedDescriptorsMatch(priorManifest, stagedSourceManifest)) continue;
+        if (saved.stagedSourceArchiveManifest) stagedSourceArchiveManifest = saved.stagedSourceArchiveManifest as StagedSourceManifest;
+        if (!dryRun && saved.sourceSha256 !== submittedSourceSha256) continue;
+        if (!dryRun && saved.reviewFingerprint === submittedReviewFingerprint && candidate.status !== "processing") {
+          const savedResults = await prisma.procareImportRow.findMany({ where: { batchId: candidate.id }, orderBy: { rowNumber: "asc" }, take: 500, select: { rowNumber: true, status: true, message: true, rawData: true, createdFamilyId: true, createdChildId: true } });
+          return NextResponse.json({ ok: true, alreadyCompleted: true, batchId: candidate.id, summary: saved, rowResults: savedResults });
+        }
+        if (saved.sourceCache) {
+          try {
+            let range: { startRow: number; count: number } | undefined;
+            if (!dryRun && candidate.status === "processing" && saved.reviewFingerprint === submittedReviewFingerprint) {
+              const savedRows = await prisma.procareImportRow.findMany({ where: { batchId: candidate.id }, orderBy: { rowNumber: "asc" }, select: { rowNumber: true } });
+              let startRow = 1;
+              for (const row of savedRows) {
+                if (row.rowNumber === startRow + 1) startRow++;
+                else if (row.rowNumber > startRow + 1) break;
+              }
+              range = { startRow, count: requestedChunkSize };
+            }
+            const preparedPayload = await readVerifiedImportSource<Awaited<ReturnType<typeof readImportText>>>(saved.sourceCache as VerifiedSourceCache, stagedScope, candidate.id, range);
+            cachedPayload = preparedPayload;
+            verifiedSourceSha256 = preparedPayload.verifiedSourceSha256;
+            cachedPartialSource = preparedPayload.partialSource;
+            cachedSourceRangeStart = preparedPayload.sourceRangeStart;
+            cachedRelationshipEvidence = preparedPayload.relationshipEvidence;
+            verifiedSourceCache = saved.sourceCache as VerifiedSourceCache;
+            verifiedSourceCacheBatchId = candidate.id;
+            stagedSourceArchiveManifest = saved.stagedSourceArchiveManifest as StagedSourceManifest;
+          } catch {
+            // Expired caches can be rebuilt from a freshly reselected, verified package.
+          }
+        }
+        if (cachedPayload) break;
+      }
+      if (!cachedPayload) {
+        try {
+          const staged = await readStagedSourceFiles(stagedSourceReceipt, stagedScope);
+          files = staged.files;
+        } catch (error) {
+          if (!stagedSourceArchiveManifest || !stagedDescriptorsMatch(stagedSourceArchiveManifest, stagedSourceManifest)) throw error;
+          files = await readArchivedSourceFiles(stagedSourceArchiveManifest, stagedScope);
+        }
+      }
     }
-    importPayload = await readImportText(files, pastedCsv, sourceAdapter, stagedSourceReceipt ? MAX_PROCARE_STAGED_BYTES : MAX_PROCARE_SOURCE_BYTES);
+    importPayload = cachedPayload ?? await readImportText(files, pastedCsv, sourceAdapter, stagedSourceReceipt ? MAX_PROCARE_STAGED_BYTES : MAX_PROCARE_SOURCE_BYTES);
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Source export could not be read." },
@@ -2282,7 +2342,7 @@ async function POSTHandler(request: NextRequest) {
     sourceAdapter,
     fields: Object.entries(fieldMapping).sort(([a], [b]) => a.localeCompare(b)),
   });
-  const sourceSha256 = procareSourceSha256(text);
+  const sourceSha256 = verifiedSourceSha256 ?? procareSourceSha256(text);
   const buildReviewFingerprint = (warningRowNumbers: number[], duplicateReviewRowNumbers: number[]) => (
     procareImportReviewFingerprint({
       text: importReviewEvidence({ sourceAdapter, sourceSha256, mappingSignature, warningRowNumbers, duplicateReviewRowNumbers }),
@@ -2341,7 +2401,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const billingReview = finalizeProcareMigrationReview(rows.slice(1).map((row, index) =>
+  const billingReview = cachedPartialSource ? [] : finalizeProcareMigrationReview(rows.slice(1).map((row, index) =>
     buildProcareMigrationReviewRow(Object.fromEntries(headers.map((header, column) => [header, row[column] ?? ""])), index + 2),
   ).filter((row): row is NonNullable<typeof row> => Boolean(row)));
   if (billingReview.some((row) => row.blockers.some((blocker) => blocker.includes("conflicting opening balances")))) {
@@ -2431,43 +2491,10 @@ async function POSTHandler(request: NextRequest) {
   );
   const rowResults: Array<{ rowNumber: number; status: string; message?: string; rawData: Record<string, string>; createdFamilyId?: string; createdChildId?: string }> = [];
 
-  const batch = existingBatch ?? await prisma.procareImportBatch.create({
-    data: {
-      centerId: center.id,
-      uploadedById: user.id,
-      filename: importPayload.filename,
-      status: "processing",
-      summary: {
-        sourceAdapter,
-        sourceType: importPayload.sourceType,
-        importMethod: guardedRenderedImport ? "guarded_rendered_package" : undefined,
-        excludedUnresolvedRows,
-        sourceSha256,
-        reviewFingerprint,
-        mappingSignature,
-        stagedSourceManifest: stagedSourceManifest ?? undefined,
-        stagedRowNumbers: [...stagedRowNumbers],
-        duplicateReviewRows,
-        validationWarnings: Object.fromEntries(validationWarningMessages),
-      },
-    },
-  });
-  const savedRowNumbers = existingBatch
-    ? await prisma.procareImportRow.findMany({
-        where: { batchId: existingBatch.id },
-        orderBy: { rowNumber: "asc" },
-        select: { rowNumber: true },
-      })
-    : [];
-  let chunkStart = 1;
-  for (const savedRow of savedRowNumbers) {
-    if (savedRow.rowNumber === chunkStart + 1) chunkStart += 1;
-    else if (savedRow.rowNumber > chunkStart + 1) break;
-  }
-  chunkStart = Math.min(chunkStart, rows.length);
-  const chunkEnd = Math.min(chunkStart + requestedChunkSize, rows.length);
   const completeRelationshipIdsByAccount = new Map<string, { guardians: Set<string>; emergency: Set<string>; pickup: Set<string> }>();
-  for (let sourceIndex = 1; sourceIndex < rows.length; sourceIndex += 1) {
+  if (cachedPartialSource && cachedRelationshipEvidence) {
+    for (const [key, desired] of cachedRelationshipEvidence) completeRelationshipIdsByAccount.set(key, { guardians: new Set(desired.guardians), emergency: new Set(desired.emergency), pickup: new Set(desired.pickup) });
+  } else for (let sourceIndex = 1; sourceIndex < rows.length; sourceIndex += 1) {
     const sourceRawData = Object.fromEntries(headers.map((header, column) => [header, rows[sourceIndex]?.[column] ?? ""]));
     if (!hasImportField(sourceRawData, ["procare relationship records"])) continue;
     const sourceAccountExternalId = externalValue(sourceRawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
@@ -2516,9 +2543,66 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
+  const batch = existingBatch ?? await prisma.procareImportBatch.create({
+    data: {
+      centerId: center.id,
+      uploadedById: user.id,
+      filename: importPayload.filename,
+      status: "processing",
+      summary: {
+        sourceAdapter,
+        sourceType: importPayload.sourceType,
+        importMethod: guardedRenderedImport ? "guarded_rendered_package" : undefined,
+        excludedUnresolvedRows,
+        sourceSha256,
+        reviewFingerprint,
+        mappingSignature,
+        stagedSourceManifest: stagedSourceManifest ?? undefined,
+        stagedRowNumbers: [...stagedRowNumbers],
+        duplicateReviewRows,
+        validationWarnings: Object.fromEntries(validationWarningMessages),
+      },
+    },
+  });
+  if (stagedSourceManifest && (!verifiedSourceCache || verifiedSourceCacheBatchId !== batch.id)) {
+    const relationshipEvidence: RelationshipEvidence = [...completeRelationshipIdsByAccount].map(([key, desired]) => [key, { guardians: [...desired.guardians], emergency: [...desired.emergency], pickup: [...desired.pickup] }]);
+    const prepared = await persistVerifiedImportSource(batch.id, stagedScope, stagedSourceManifest, { ...importPayload, parsedRows: rows, relationshipEvidence }, sourceSha256, stagedSourceArchiveManifest, async plannedArchive => {
+      await prisma.procareImportBatch.update({ where: { id: batch.id }, data: { summary: {
+        ...(batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary) ? batch.summary as Record<string, Prisma.InputJsonValue> : {}),
+        stagedSourceArchiveManifest: plannedArchive, sourceBackupState: "preparing",
+      } } });
+    });
+    verifiedSourceCache = prepared.cache;
+    stagedSourceArchiveManifest = prepared.archiveManifest;
+    await prisma.procareImportBatch.update({ where: { id: batch.id }, data: { summary: {
+      ...(batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary) ? batch.summary as Record<string, Prisma.InputJsonValue> : {}),
+      sourceCache: verifiedSourceCache,
+      stagedSourceArchiveManifest,
+      sourceBackupState: "ready",
+    } } });
+  }
+  const currentImportCounters = () => ({ createdFamilies, updatedFamilies, createdChildren, ledgerRows, createdClassrooms, createdStaff, updatedStaff, createdStaffLogins, emergencyContacts, authorizedPickups, medicalRows, attendanceRows, checkLogRows, invoiceRows });
+  const savedRowNumbers = existingBatch
+    ? await prisma.procareImportRow.findMany({
+        where: { batchId: existingBatch.id },
+        orderBy: { rowNumber: "asc" },
+        select: { rowNumber: true },
+      })
+    : [];
+  let chunkStart = 1;
+  for (const savedRow of savedRowNumbers) {
+    if (savedRow.rowNumber === chunkStart + 1) chunkStart += 1;
+    else if (savedRow.rowNumber > chunkStart + 1) break;
+  }
+  chunkStart = Math.min(chunkStart, rows.length);
+  if (cachedPartialSource && cachedSourceRangeStart !== chunkStart) return NextResponse.json({ ok: false, error: "This transfer advanced in another request. Keep the same files selected and retry." }, { status: 409 });
+  const chunkEnd = Math.min(chunkStart + requestedChunkSize, rows.length);
+  const savedRowNumberSet = new Set(savedRowNumbers.map(row => row.rowNumber));
+
   for (let index = chunkStart; index < chunkEnd; index += 1) {
     const rawData = Object.fromEntries(headers.map((header, column) => [header, rows[index]?.[column] ?? ""]));
     const rowNumber = index + 1;
+    if (savedRowNumberSet.has(rowNumber)) continue;
     const checkpointCenterValue = value(rawData, [
       "location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site",
     ]);
@@ -2715,7 +2799,13 @@ async function POSTHandler(request: NextRequest) {
           }
           await tx.procareImportRow.create({ data: {
             batchId: batch.id, rowNumber, status: "imported",
-            rawData: { ...rawData, mappedCenterId: targetCenter.id, mappedEntity: "staff", ...(generatedLogin ? { teacherLoginEmail: generatedLogin.email } : {}) },
+            rawData: { ...rawData, mappedCenterId: targetCenter.id, mappedEntity: "staff", ...(generatedLogin ? { teacherLoginEmail: generatedLogin.email } : {}),
+              [IMPORT_COUNTER_CHECKPOINT]: JSON.stringify({ version: 1, counters: {
+                ...importCounterDelta(rowCounterSnapshot, currentImportCounters()),
+                createdStaff: existingStaff ? 0 : 1, updatedStaff: existingStaff ? 1 : 0,
+                createdClassrooms: currentImportCounters().createdClassrooms - rowCounterSnapshot.createdClassrooms + (createdStaffClassroom ? 1 : 0),
+              } }),
+            },
           } });
           return { staffUserId: staffUser.id, createdStaffClassroom };
         }, { maxWait: 10_000, timeout: 60_000 });
@@ -3587,7 +3677,9 @@ async function POSTHandler(request: NextRequest) {
       // can safely resume without repeating a posted opening balance.
       await prisma.procareImportRow.create({ data: {
         batchId: batch.id, rowNumber, status: "imported",
-        rawData: { ...rawData, mappedCenterId: targetCenter.id, mappedCenter: targetCenter.crmLocationId ?? targetCenter.name },
+        rawData: { ...rawData, mappedCenterId: targetCenter.id, mappedCenter: targetCenter.crmLocationId ?? targetCenter.name,
+          [IMPORT_COUNTER_CHECKPOINT]: JSON.stringify({ version: 1, counters: importCounterDelta(rowCounterSnapshot, currentImportCounters()) }),
+        },
         createdFamilyId: family.id, createdChildId: childId || null,
       } });
       return { familyId: family.id, childId };
@@ -3634,12 +3726,18 @@ async function POSTHandler(request: NextRequest) {
     skipDuplicates: true,
   });
 
-  const cumulativeNumber = (key: string, current: number) => Number(existingSummary[key] ?? 0) + current;
+  const counterRecords = await prisma.$queryRaw<Array<{ checkpoint: string | null; centerId: string | null }>>(Prisma.sql`
+    SELECT "rawData"->> '_beeImportCounterCheckpoint' AS checkpoint, "rawData"->> 'mappedCenterId' AS "centerId"
+    FROM "ProcareImportRow" WHERE "batchId" = ${batch.id} AND "status" = 'imported'
+  `);
+  for (const row of counterRecords) if (row.centerId) centersTouched.add(row.centerId);
+  const recoveredCounters = recoveredImportCounters(existingSummary, counterRecords.map(row => ({ rawData: { [IMPORT_COUNTER_CHECKPOINT]: row.checkpoint } })));
+  const cumulativeNumber = (key: keyof typeof recoveredCounters.counters) => recoveredCounters.counters[key];
   const progress = await prisma.procareImportRow.groupBy({ by: ["status"], where: { batchId: batch.id }, _count: { _all: true } });
   const progressCounts = Object.fromEntries(progress.map((item) => [item.status, item._count._all]));
   const persistedRows = Object.values(progressCounts).reduce((total, count) => total + count, 0);
   const isPartial = persistedRows < rows.length - 1;
-  const nextRow = Math.min(chunkStart + rowResults.length, rows.length);
+  const nextRow = Math.min(chunkEnd, rows.length);
   const unresolvedRows = isPartial ? [] : await prisma.procareImportRow.findMany({
     where: { batchId: batch.id, status: "needs_resolution" },
     orderBy: { rowNumber: "asc" },
@@ -3661,26 +3759,30 @@ async function POSTHandler(request: NextRequest) {
     reviewFingerprint,
     mappingSignature,
     stagedSourceManifest: stagedSourceManifest ?? existingSummary.stagedSourceManifest ?? undefined,
+    sourceCache: verifiedSourceCache ?? existingSummary.sourceCache ?? undefined,
+    stagedSourceArchiveManifest: stagedSourceArchiveManifest ?? existingSummary.stagedSourceArchiveManifest ?? undefined,
+    sourceBackupState: stagedSourceArchiveManifest ? "ready" : existingSummary.sourceBackupState ?? undefined,
+    checkpointCounters: recoveredCounters.checkpointCounters,
     rows: persistedRows,
     totalRows: rows.length - 1,
     imported: progressCounts.imported ?? 0,
     errors: progressCounts.error ?? 0,
     unresolved: progressCounts.needs_resolution ?? 0,
     disposed: progressCounts.disposed ?? 0,
-    createdFamilies: cumulativeNumber("createdFamilies", createdFamilies),
-    updatedFamilies: cumulativeNumber("updatedFamilies", updatedFamilies),
-    createdChildren: cumulativeNumber("createdChildren", createdChildren),
-    createdClassrooms: cumulativeNumber("createdClassrooms", createdClassrooms),
-    createdStaff: cumulativeNumber("createdStaff", createdStaff),
-    updatedStaff: cumulativeNumber("updatedStaff", updatedStaff),
-    createdStaffLogins: cumulativeNumber("createdStaffLogins", createdStaffLogins),
-    emergencyContacts: cumulativeNumber("emergencyContacts", emergencyContacts),
-    authorizedPickups: cumulativeNumber("authorizedPickups", authorizedPickups),
-    medicalRows: cumulativeNumber("medicalRows", medicalRows),
-    attendanceRows: cumulativeNumber("attendanceRows", attendanceRows),
-    checkLogRows: cumulativeNumber("checkLogRows", checkLogRows),
-    invoiceRows: cumulativeNumber("invoiceRows", invoiceRows),
-    ledgerRows: cumulativeNumber("ledgerRows", ledgerRows),
+    createdFamilies: cumulativeNumber("createdFamilies"),
+    updatedFamilies: cumulativeNumber("updatedFamilies"),
+    createdChildren: cumulativeNumber("createdChildren"),
+    createdClassrooms: cumulativeNumber("createdClassrooms"),
+    createdStaff: cumulativeNumber("createdStaff"),
+    updatedStaff: cumulativeNumber("updatedStaff"),
+    createdStaffLogins: cumulativeNumber("createdStaffLogins"),
+    emergencyContacts: cumulativeNumber("emergencyContacts"),
+    authorizedPickups: cumulativeNumber("authorizedPickups"),
+    medicalRows: cumulativeNumber("medicalRows"),
+    attendanceRows: cumulativeNumber("attendanceRows"),
+    checkLogRows: cumulativeNumber("checkLogRows"),
+    invoiceRows: cumulativeNumber("invoiceRows"),
+    ledgerRows: cumulativeNumber("ledgerRows"),
     centersTouched: centersTouched.size,
     centerIdsTouched: [...centersTouched],
     stagedRowNumbers: [...stagedRowNumbers],
@@ -3725,6 +3827,9 @@ async function POSTHandler(request: NextRequest) {
     metadata: summary,
   });
 
+  if (stagedSourceManifest && stagedSourceArchiveManifest) {
+    await removeConsumedImportStaging(stagedSourceManifest).catch(() => console.warn("Temporary school import cleanup deferred."));
+  }
   return NextResponse.json({ ok: true, batchId: batch.id, summary, rowResults });
   } finally {
     await releaseLease();

@@ -36,6 +36,7 @@ export default function FamilyBillingTransferGuide() {
         <h3 className="font-medium">{item.title}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{item.detail}</p>
       </div>)}</div>
       <p className="text-sm text-muted-foreground">Upload a folder, individual supported reports, or a ZIP. Packages support up to 50 MB total, 20 MB per file, and 500 files; ZIP expansion is limited to 100 MB. If your complete package exceeds these limits, request BEE setup help. Do not remove required reports to make it fit.</p>
+      <p className="text-sm text-muted-foreground">Original reports are kept as linked private backups. Temporary uploads are cleared after the transfer, and expired uploads and prepared data are cleaned up automatically.</p>
     </section>
     <ol className="space-y-4">{steps.map((step, index) => <li key={step.title} className="rounded-xl border p-5">
       <h2 className="font-semibold">{index + 1}. {step.title}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{step.text}</p>

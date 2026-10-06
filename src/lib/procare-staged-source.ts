@@ -20,14 +20,14 @@ export function validateStagedSourceFiles(value: unknown): Array<Omit<StagedSour
   return files;
 }
 
-function pathPrefix(scope: StagedSourceScope) {
+function pathPrefix(scope: StagedSourceScope, createdAt: number) {
   // Encode identity parts independently; a slash in an identifier cannot widen the scope.
-  return `school-imports/${encodeURIComponent(scope.tenantId)}/${encodeURIComponent(scope.centerId)}/${encodeURIComponent(scope.userId)}/`;
+  return `school-imports/${new Date(createdAt).toISOString().slice(0, 10)}/${encodeURIComponent(scope.tenantId)}/${encodeURIComponent(scope.centerId)}/${encodeURIComponent(scope.userId)}/`;
 }
 
 export function makeStagedSourceManifest(scope: StagedSourceScope, files: unknown, now = Date.now()): StagedSourceManifest {
   return { ...scope, version: 1, expiresAt: now + 24 * 60 * 60 * 1000,
-    files: validateStagedSourceFiles(files).map((file) => ({ ...file, path: pathPrefix(scope) + randomUUID() })) };
+    files: validateStagedSourceFiles(files).map((file) => ({ ...file, path: pathPrefix(scope, now) + randomUUID() })) };
 }
 
 function secretKey(secret: string) {
@@ -51,7 +51,7 @@ export function verifyStagedSourceManifest(receipt: string, scope: StagedSourceS
   if (manifest.version !== 1 || manifest.userId !== scope.userId || manifest.tenantId !== scope.tenantId || manifest.centerId !== scope.centerId) throw new Error("These reports belong to a different user or school.");
   if (!Number.isSafeInteger(manifest.expiresAt) || manifest.expiresAt <= now || manifest.expiresAt > now + 24 * 60 * 60 * 1000) throw new Error("The report upload has expired. Select the same files again to continue safely.");
   validateStagedSourceFiles(manifest.files);
-  const prefix = pathPrefix(scope);
+  const prefix = pathPrefix(scope, manifest.expiresAt - 24 * 60 * 60 * 1000);
   if (manifest.files.some((file) => typeof file.path !== "string" || !file.path.startsWith(prefix) || !/^[a-f0-9-]{36}$/.test(file.path.slice(prefix.length)))) throw new Error("The report storage scope is invalid.");
   if (new Set(manifest.files.map((file) => file.path)).size !== manifest.files.length) throw new Error("The report selection contains duplicate storage references.");
   return manifest;

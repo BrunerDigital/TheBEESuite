@@ -261,11 +261,19 @@ test("green-X school removals cannot return through fallback or Avada options", 
   }
 });
 
-test("retained Cordera, Vero Beach and both Jasper schools remain in fallback and Avada", () => {
+test("retained Vero Beach and both Jasper schools remain in fallback and Avada", () => {
   const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
   const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
-  for (const id of ["Kid City USA - CO | Colorado Springs - Cordera", "Kid City USA - FL | Vero Beach", "Kid City USA - IN | Jasper - Truman", "Kid City USA - IN | Jasper - Baden Strasse"]) {
+  for (const id of ["Kid City USA - FL | Vero Beach", "Kid City USA - IN | Jasper - Truman", "Kid City USA - IN | Jasper - Baden Strasse"]) {
     assert.equal(file.locations.some((item) => item.crmLocationId === id), true, id);
     assert.equal(snippet.includes(`value="${id}"`), true, id);
   }
+});
+
+test("Cordera cannot return through public fallback or Avada options", () => {
+  const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
+  const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
+  const id = "Kid City USA - CO | Colorado Springs - Cordera";
+  assert.equal(file.locations.some((item) => item.crmLocationId === id), false);
+  assert.equal(snippet.includes(`value="${id}"`), false);
 });

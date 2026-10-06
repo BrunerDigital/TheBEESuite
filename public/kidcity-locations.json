@@ -1,16 +1,6 @@
 {
   "locations": [
     {
-      "crmLocationId": "Kid City USA - CO | Colorado Springs - Cordera",
-      "locationId": "Kid City USA - CO | Colorado Springs - Cordera",
-      "name": "Kid City USA - Cordera (Colorado Springs)",
-      "address": "10085 Pearl Pass View",
-      "city": "Colorado Springs",
-      "state": "CO",
-      "postalCode": "80924",
-      "phone": "719-301-0049"
-    },
-    {
       "crmLocationId": "Kid City USA - CO | Highlands Ranch",
       "locationId": "Kid City USA - CO | Highlands Ranch",
       "name": "Kid City USA - Highlands Ranch",

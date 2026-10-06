@@ -13,7 +13,9 @@ export function revealFocusedPortalControl(trigger: HTMLElement | null) {
   const bounds = trigger.getBoundingClientRect();
   if (bounds.top >= top + 12 && bounds.bottom <= bottom - 12) return false;
   // Workspace scroll margins account for shell overlays. Never refocus a later interaction.
-  trigger.scrollIntoView({ block: "nearest", behavior: "instant" });
+  const shortPortal = viewport.innerHeight <= 440 && viewport.innerWidth <= 1023 && trigger.closest(".parent-portal-workspace, .teacher-mobile-workspace");
+  const portalField = trigger.matches?.("input, textarea, select") && trigger.closest(".parent-portal-workspace, .teacher-mobile-workspace");
+  trigger.scrollIntoView({ block: shortPortal || portalField ? "center" : "nearest", behavior: "instant" });
   return true;
 }
 

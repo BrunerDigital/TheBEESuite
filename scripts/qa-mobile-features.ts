@@ -26,7 +26,7 @@ assert.ok(["light", "dark"].includes(theme), "Unsupported theme");
 assert.ok(screenOption === "all" || screens.includes(screenOption), "Unsupported screen");
 
 async function settle(page: Page) {
-  await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+  await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => done())))));
 }
 
 async function layoutFindings(page: Page) {
@@ -83,10 +83,19 @@ async function checkSelectors(page: Page) {
       const arrows = [...element.querySelectorAll<HTMLElement>('[data-slot="select-scroll-up-button"], [data-slot="select-scroll-down-button"]')]
         .filter((arrow) => getComputedStyle(arrow).visibility !== "hidden")
         .map((arrow) => { const rect = arrow.getBoundingClientRect(); return { left: rect.left, right: rect.right, width: rect.width }; });
-      return { left: box.left, right: box.right, viewport: innerWidth, clipped: element.scrollWidth > element.clientWidth + 3, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, verticalOverflow: element.scrollHeight > element.clientHeight + 3, arrows };
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, height: innerHeight, viewport: innerWidth, clipped: element.scrollWidth > element.clientWidth + 3, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, verticalOverflow: (() => { const list = element.querySelector('[role="listbox"]') ?? element; return list.scrollHeight > list.clientHeight + 3; })(), arrows };
     });
     assert.ok(bounds.left >= -1 && bounds.right <= bounds.viewport + 1 && !bounds.clipped, `Selector options remain inside the viewport: ${JSON.stringify({ trigger: await trigger.getAttribute("aria-label") ?? await trigger.textContent(), bounds })}`);
-    assert.ok(!bounds.verticalOverflow || bounds.arrows.length > 0, `Scrollable selector has a visible scroll arrow: ${JSON.stringify(bounds)}`);
+    assert.ok(bounds.top >= -1 && bounds.bottom <= bounds.height + 1, `Selector fits the available viewport height: ${JSON.stringify(bounds)}`);
+    if (bounds.verticalOverflow) {
+      await page.keyboard.press("End");
+      await settle(page);
+      const lastOption = await popup.locator('[role="option"]').last().evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return { top: box.top, bottom: box.bottom, height: innerHeight };
+      });
+      assert.ok(lastOption.top >= -1 && lastOption.bottom <= lastOption.height + 1, `The last selector option remains reachable by keyboard: ${JSON.stringify(lastOption)}`);
+    }
     assert.ok(bounds.arrows.every((arrow) => arrow.left >= bounds.left - 1 && arrow.right <= bounds.right + 1 && arrow.width >= bounds.right - bounds.left - 20), `Selector scroll arrows remain full-width hit targets: ${JSON.stringify(bounds)}`);
     await page.keyboard.press("Escape");
     await popup.waitFor({ state: "hidden" });
@@ -113,6 +122,27 @@ async function checkHelp(page: Page) {
     await trigger.press("Enter");
     await popup.getByRole("button", { name: "Close information", exact: true }).click();
     await popup.waitFor({ state: "hidden" });
+    checked++;
+  }
+  return checked;
+}
+
+async function checkFormFocus(page: Page) {
+  let checked = 0;
+  for (const field of await page.locator('main input:not([type="hidden"]):not([type="file"]), main textarea, main select').all()) {
+    if (!await field.isVisible() || await field.isDisabled()) continue;
+    if (await field.evaluate((element) => (element as HTMLElement).tabIndex < 0 || element.getAttribute("aria-hidden") === "true")) continue;
+    await field.focus();
+    await settle(page);
+    const bounds = await field.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const x = box.left + box.width / 2, y = box.top + box.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      return { top: box.top, bottom: box.bottom, height: innerHeight,
+        focused: document.activeElement === element,
+        reachable: y >= 0 && y < innerHeight && (hit === element || element.contains(hit)) };
+    });
+    assert.ok(bounds.focused && bounds.reachable, `Focused field stays reachable: ${JSON.stringify({ id: await field.getAttribute("id"), bounds })}`);
     checked++;
   }
   return checked;
@@ -184,6 +214,7 @@ async function main() {
               assert.equal(await page.evaluate(() => document.activeElement?.parentElement?.getAttribute("data-parent-document")), afterIds.find((id) => !beforeIds.includes(id)), "Continuation focuses the first newly revealed priority-ordered document");
             }
             assert.equal(await page.getByRole("button", { name: "Show more documents", exact: true }).count(), 0);
+            await openDetails(page);
             const signature = page.locator('[data-parent-document="preview-document-1"]');
             await signature.getByLabel("Type your full name", { exact: true }).fill("Jordan Example");
             await signature.getByRole("checkbox").check();
@@ -204,6 +235,8 @@ async function main() {
           stage = "layout";
           await settle(page);
           findings.push(...await layoutFindings(page));
+          stage = "form focus";
+          result.fieldsFocused = await checkFormFocus(page);
           stage = "selectors";
           result.selectorsChecked = await checkSelectors(page);
           stage = "help popovers";

@@ -841,6 +841,23 @@
     min-width: 0;
   }
 
+  @media (max-width: 1023px) {
+    /* Keep phone editing readable without shrinking enlarged text or causing
+       the keyboard's focused field to use smaller type than the viewport. */
+    :is(.parent-portal-workspace, .teacher-mobile-workspace, .auth-halo-shell) :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select) {
+      font-size: max(16px, 1rem);
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .teacher-mobile-workspace .truncate {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      overflow-wrap: anywhere;
+    }
+  }
+
   :is(.parent-portal-workspace, .teacher-mobile-workspace) [data-slot="button"]:not([data-size^="icon"]) {
     min-width: 0;
     max-width: 100%;

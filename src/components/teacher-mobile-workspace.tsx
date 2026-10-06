@@ -1294,7 +1294,8 @@ export function TeacherMobileWorkspace({
       </CollapsibleCard>
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-        <CollapsibleCard id="teacher-attendance" compactHeader title="Attendance" description={selectedChild?.fullName ?? "Choose a child"} collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${attendanceStatus}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+        <CollapsibleCard id="teacher-attendance" compactHeader title="Attendance" collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${attendanceStatus}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+            <TeacherChildPicker id="attendance-child" label="Child for attendance" groups={byClassroom} selectedChildId={selectedChildId} disabled={isPending} onChildChange={chooseChild} />
             <div className="space-y-1">
               <Label htmlFor="teacher-attendance-status">Status</Label>
               <Select value={attendanceStatus} onValueChange={(value) => value && setAttendanceStatus(value)}>

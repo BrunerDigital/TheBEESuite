@@ -148,13 +148,13 @@ test("parent app store metadata starts at the parent-only login entry", () => {
 test("web app login routes teacher accounts into teacher-safe workflows", () => {
   assert.equal(loginHrefForNextPath("/teacher-portal"), "/teachers?next=%2Fteacher-portal");
   assert.equal(loginHrefForNextPath("/dashboard"), "/directors?next=%2Fdashboard");
-  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/dashboard" }), "/teacher-portal");
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/dashboard" }), "/teacher-portal#teacher-roster");
   assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/teacher-portal#teacher-attendance" }), "/teacher-portal#teacher-attendance");
   assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/daily-reports" }), "/daily-reports");
-  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/school-setup" }), "/teacher-portal");
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/school-setup" }), "/teacher-portal#teacher-roster");
   assert.equal(resolvePostLoginPath({ role: UserRole.CENTER_DIRECTOR, requestedNext: "/teacher-portal" }), "/classroom-dashboard");
   assert.equal(resolvePostLoginPath({ role: UserRole.BILLING_ADMIN, requestedNext: "/teacher-portal" }), "/dashboard");
-  assert.equal(resolvePortalPostLoginPath({ portal: "teachers", role: UserRole.TEACHER, requestedNext: "/dashboard" }), "/teacher-portal");
+  assert.equal(resolvePortalPostLoginPath({ portal: "teachers", role: UserRole.TEACHER, requestedNext: "/dashboard" }), "/teacher-portal#teacher-roster");
   assert.equal(resolvePortalPostLoginPath({ portal: "executives", role: UserRole.CENTER_DIRECTOR, requestedNext: "/dashboard" }), "/dashboard");
 });
 
@@ -1638,7 +1638,7 @@ test("teacher web surfaces preserve capabilities while failing closed to assigne
   const profileRoute = readFileSync("src/app/api/teacher/profile/route.ts", "utf8");
   const notificationsRoute = readFileSync("src/app/api/notifications/summary/route.ts", "utf8");
 
-  assert.match(dashboard, /usesDedicatedTeacherWorkspace\(user\.role\)\) redirect\("\/teacher-portal"\)/);
+  assert.match(dashboard, /usesDedicatedTeacherWorkspace\(user\.role\)\) redirect\(homePathForRole\(user\.role\)\)/);
   assert.ok((livePage.match(/__no_assigned_teacher_classroom__/g) ?? []).length >= 2);
   assert.match(livePage, /teacherMessageScope\s*\? \{ id: user\.id, tenantId: user\.tenantId, isActive: true \}/);
   assert.match(profileRoute, /currentProfile\.classroomId !== existingProfile\.classroomId/);

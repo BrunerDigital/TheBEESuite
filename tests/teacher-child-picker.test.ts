@@ -4,14 +4,14 @@ import test from "node:test";
 
 test("every individual task exposes the same controlled guarded child picker", () => {
   const source = readFileSync("src/components/teacher-mobile-workspace.tsx", "utf8");
-  for (const [task, id, label] of [["teacher-photo", "photo-child", "Child for photo"], ["teacher-incident", "incident-child", "Child for incident"], ["teacher-location", "location-child", "Child to move"]]) {
+  for (const [task, id, label] of [["teacher-attendance", "attendance-child", "Child for attendance"], ["teacher-photo", "photo-child", "Child for photo"], ["teacher-incident", "incident-child", "Child for incident"], ["teacher-location", "location-child", "Child to move"]]) {
     const start = source.indexOf(`<CollapsibleCard id="${task}"`);
     const section = source.slice(start, source.indexOf("</CollapsibleCard>", start));
     assert.match(section, new RegExp(`<TeacherChildPicker id="${id}" label="${label}"`));
     assert.match(section, /groups=\{byClassroom\} selectedChildId=\{selectedChildId\} disabled=\{isPending\} onChildChange=\{chooseChild\}/);
     assert.doesNotMatch(section.split(">")[0], /description=/, "Expanded forms must not repeat the child above its picker");
   }
-  assert.equal((source.match(/<TeacherChildPicker /g) ?? []).length, 3);
+  assert.equal((source.match(/<TeacherChildPicker /g) ?? []).length, 4);
   assert.equal((source.match(/setSelectedChildId\(/g) ?? []).length, 1, "Only the existing guarded transition changes individual context");
   assert.match(source, /<fieldset\s+disabled=\{isPending\}/);
   assert.match(source, /changesChild && hasSingleChildDraft/);
@@ -31,7 +31,7 @@ test("shared child picker shows full current identity without fallback or privat
   assert.match(source, /children.some\(child => child.id === value\)/);
   assert.match(source, /<SelectValue[^>]*>\{selected\?\.fullName\}/);
   assert.match(source, /aria-describedby=\{`\$\{id\}-hint`\}/);
-  assert.match(source, /Shared child for Photo, Incident and Location/);
+  assert.match(source, /Shared child for Attendance, Photo, Incident and Location/);
   assert.doesNotMatch(source, /children\[0\]|useState|useEffect|fetch\(|truncate|custody|medical|allerg/i);
 });
 

@@ -56,6 +56,15 @@ async function main() {
         await page.screenshot({ path: resolve(output, `${width}-${zoom}-${id}.png`) });
       };
       try {
+        // Login's default fragment must open even a previously collapsed roster.
+        await context.addInitScript(() => localStorage.setItem("bee-suite:collapsed:teacher-roster", "1"));
+        await page.goto(`${base}${teacher}#teacher-roster`, { waitUntil: "networkidle" });
+        await page.locator('html[data-device-preview-hydrated="true"]').waitFor();
+        await page.addStyleTag({ content: "nextjs-portal{display:none!important}" });
+        await page.locator('#teacher-roster[data-collapsed="false"]').waitFor();
+        await waitHash("#teacher-roster", "Roster", "teacher-roster");
+        await page.screenshot({ path: resolve(output, `${width}-${zoom}-operations-arrival.png`) });
+        assert.equal(await page.evaluate(() => localStorage.getItem("bee-suite:collapsed:teacher-roster")), "1", "Arrival retains the saved disclosure preference");
         await page.goto(`${base}${teacher}#teacher-quick-log`, { waitUntil: "networkidle" });
         await page.locator('html[data-device-preview-hydrated="true"]').waitFor();
         // Next's development indicator overlaps the first fixed nav item; it is

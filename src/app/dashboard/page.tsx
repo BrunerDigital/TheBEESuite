@@ -68,7 +68,7 @@ export default async function DashboardPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect(loginHrefForNextPath("/dashboard"));
   if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/dashboard");
-  if (usesDedicatedTeacherWorkspace(user.role)) redirect("/teacher-portal");
+  if (usesDedicatedTeacherWorkspace(user.role)) redirect(homePathForRole(user.role));
   if (!canAccessModule(user, "dashboard")) redirect(homePathForRole(user.role));
   const workspaceRedirect = workspaceSelectionRedirect(user.workspace, "/dashboard");
   if (workspaceRedirect) redirect(workspaceRedirect);

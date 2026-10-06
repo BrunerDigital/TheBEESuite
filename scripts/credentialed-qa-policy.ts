@@ -63,7 +63,7 @@ export function credentialedQaRequestAllowed(input: {
   if (url.pathname === "/api/auth/login") {
     return payload.email === input.email && payload.password === input.password
       && Object.keys(payload).every((key) => ["email", "password", "next", "loginPortal", "appMode", "deviceLabel"].includes(key))
-      && (payload.next === undefined || ["/dashboard", "/parent-portal", "/teacher-portal"].includes(String(payload.next)))
+      && (payload.next === undefined || ["/dashboard", "/parent-portal", "/teacher-portal", "/teacher-portal#teacher-roster"].includes(String(payload.next)))
       && (payload.loginPortal === undefined || ["parents", "teachers", "directors", "executives"].includes(String(payload.loginPortal)))
       && (payload.deviceLabel === undefined || typeof payload.deviceLabel === "string");
   }

@@ -42,7 +42,7 @@ export function TeacherChildPicker({ id, label, groups, selectedChildId, disable
         </SelectContent>
       </Select>
       <p id={`${id}-hint`} className="text-xs text-muted-foreground">
-        {children.length ? "Shared child for Photo, Incident and Location." : "No children are on your roster. Ask your school office to confirm your classroom."}
+        {children.length ? "Shared child for Attendance, Photo, Incident and Location." : "No children are on your roster. Ask your school office to confirm your classroom."}
       </p>
     </div>
   );

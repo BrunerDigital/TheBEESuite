@@ -578,7 +578,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /status: \{ in: \["approved", "partially_paid"\] \}[\s\S]*allocationClaims,/);
   assert.match(controls, /allocationClaims\.filter\(\(claim\) => \["approved", "partially_paid"\]\.includes\(claim\.status\) && operationalProgramIds\.has\(claim\.agencyProgram\.id\)\)/);
   assert.match(controls, /disabled=\{selectedElsewhere\.has\(claim\.id\)\}/);
-  assert.match(workspace, /const \[pending, setPending\] = useState\(Boolean\(centers\[0\]\?\.id\)\)/);
+  assert.match(workspace, /const \[pending, setPending\] = useState\(Boolean\(initialSelection\)\)/);
   assert.match(workspace, /centerIdRef\.current = value; setCenterId\(value\); setPending\(true\)/);
   assert.doesNotMatch(workspace, /useEffect\(\(\) => \{\s+let active = true;\s+setPending/);
   assert.match(workspace, /allocationClaims=\{data\.allocationClaims\}/);

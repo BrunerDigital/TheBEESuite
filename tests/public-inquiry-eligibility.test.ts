@@ -24,8 +24,8 @@ test("Centennial and eligible Kid City locations retain routing without altering
   }
 });
 
-test("latest retained-school instructions preserve active feeds and inquiry routing", () => {
-  for (const id of ["CO | Colorado Springs - Cordera", "FL | Altamonte - Douglas", "FL | Daytona Beach East", "FL | Longwood - Wekiva", "FL | Vero Beach", "IN | Jasper", "IN | Jasper - Truman", "IN | Jasper - Baden Strasse", "IN | Whitestown"]) {
+test("retained-school instructions preserve active feeds and inquiry routing", () => {
+  for (const id of ["FL | Altamonte - Douglas", "FL | Daytona Beach East", "FL | Longwood - Wekiva", "FL | Vero Beach", "IN | Jasper", "IN | Jasper - Truman", "IN | Jasper - Baden Strasse", "IN | Whitestown"]) {
     const center = { status: "active", crmLocationId: id, locationId: id, name: id };
     assert.equal(isActivePublicSchoolCandidate(center), true, id);
     assert.equal(isEligiblePublicInquiryCenter(center, true), true, id);
@@ -33,5 +33,17 @@ test("latest retained-school instructions preserve active feeds and inquiry rout
     assert.deepEqual(filterPublicKidCityLocations([location]), [location], id);
     assert.deepEqual(mergePublicKidCityLocations([location], [location]), [location], id);
     assert.equal(isEligiblePublicInquiryCenter({ ...center, status: "closed" }, true), false, id);
+  }
+});
+
+test("Cordera public retirement rejects branded and legacy stale options without changing school status", () => {
+  for (const id of ["CO | Colorado Springs - Cordera", "Kid City USA - CO | Colorado Springs - Cordera"]) {
+    const center = { status: "active", crmLocationId: id, locationId: id, name: id };
+    assert.equal(isActivePublicSchoolCandidate(center), false, id);
+    assert.equal(isEligiblePublicInquiryCenter(center, true), false, id);
+    assert.equal(isEligiblePublicInquiryCenter(center, false), false, id);
+    const location = toPublicKidCityLocation(center);
+    assert.deepEqual(mergePublicKidCityLocations([location], [location]), [], id);
+    assert.equal(center.status, "active");
   }
 });

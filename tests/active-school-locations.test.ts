@@ -119,6 +119,7 @@ test("static Kid City fallback excludes confirmed inactive schools", () => {
 
   for (const id of [
     "Kid City USA - CO | Woodland Park - Forest Edge",
+    "Kid City USA - FL | Jacksonville - Beach",
     "Kid City USA - FL | Jacksonville - Durbin",
     "Kid City USA - IN | Brownsburg",
     "Kid City USA - IN | Elkhart",
@@ -182,7 +183,7 @@ test("WordPress Avada inquiry snippet matches the corrected Indiana and closed-s
 
   assert.doesNotMatch(snippet, /<option value="Kid City USA - IN \| Fishers"/);
   assert.match(snippet, /<option value="Kid City USA - IN \| Loogootee"[^>]*data-address="505 N\. Oak Street"/);
-  for (const retiredLocation of ["Forest Edge", "Durbin", "Brownsburg", "Elkhart", "Lees Summit"]) {
+  for (const retiredLocation of ["Forest Edge", "Jacksonville - Beach", "Durbin", "Brownsburg", "Elkhart", "Lees Summit"]) {
     assert.doesNotMatch(snippet, new RegExp(`value="[^"]*${retiredLocation}`));
   }
 });

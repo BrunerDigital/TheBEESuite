@@ -26,6 +26,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { buildManualEmailCopy, type ManualEmailCopy } from "@/lib/manual-email-copy";
 import { billingFamilyAccountCategory } from "@/lib/prospective-family-billing";
+import { isAchPaymentProcessing } from "@/lib/ach-payment-lifecycle";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -74,7 +75,7 @@ async function POSTHandler(request: NextRequest) {
       centerId: true,
       name: true,
       billingEmail: true,
-      billingAccount: { select: { customFields: true } },
+      billingAccount: { select: { customFields: true, balanceCents: true, payments: { where: { status: "DRAFT", provider: "stripe" }, select: { amountCents: true, status: true, provider: true, customFields: true } } } },
       children: { select: { enrollmentStatus: true, classroomId: true } },
       guardians: {
         select: {
@@ -137,6 +138,14 @@ async function POSTHandler(request: NextRequest) {
       { ok: false, error: "Payment method links are unavailable for a past family account. Use a one-time payment method instead." },
       { status: 409 },
     );
+  }
+
+  if (body.balanceReminder === true && (
+    intent !== "payment_steps" || !family.billingAccount || family.billingAccount.balanceCents <= 0
+    || family.billingAccount.balanceCents !== body.expectedBalanceCents
+    || family.billingAccount.payments.some(isAchPaymentProcessing)
+  )) {
+    return NextResponse.json({ ok: false, error: "The balance or payment status changed. Refresh balances and review the reminder again before sending." }, { status: 409 });
   }
 
   const options = paymentMethodRequestRecipientOptions({

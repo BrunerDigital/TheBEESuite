@@ -319,7 +319,7 @@ test("director and executive dashboard billing widgets use current-family balanc
   const panel = readFileSync("src/components/accounts-receivable-panel.tsx", "utf8");
   assert.match(panel, /buttonLabel="Print balances"/);
   assert.match(panel, /reportTitle="School Account Balances Report"/);
-  assert.match(panel, /Current family accounts, with balances owed listed first/);
+  assert.match(panel, /const reportAccounts = visibleAccounts/);
   assert.match(panel, /Family balances/);
   assert.match(panel, /Status/);
   assert.match(panel, /Balance/);

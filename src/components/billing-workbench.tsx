@@ -2235,7 +2235,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </InfoTip>
             </div>
           </div>
-          <div className="mt-4 rounded-lg border bg-background/40 p-3">
+          <div id="billing-payment-reminder" className="mt-4 scroll-mt-24 rounded-lg border bg-background/40 p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 text-sm font-medium">

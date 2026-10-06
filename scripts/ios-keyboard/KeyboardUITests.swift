@@ -13,6 +13,7 @@ final class KeyboardUITests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
         app.launch()
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 60))
+        XCTAssertTrue(app.staticTexts["UI preview ready. Network actions, form submissions, and navigation to live workspaces are disabled."].waitForExistence(timeout: 120), "Synthetic preview is hydrated and guarded")
     }
 
     override func tearDownWithError() throws {
@@ -56,8 +57,10 @@ final class KeyboardUITests: XCTestCase {
                     .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.17)))
             } else { app.swipeUp() }
             #else
-            if element.frame.minY < app.frame.height * 0.2 { app.swipeDown() }
-            else { app.swipeUp() }
+            let lower = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+            let upper = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+            if element.frame.minY < app.frame.height * 0.2 { upper.press(forDuration: 0.1, thenDragTo: lower) }
+            else { lower.press(forDuration: 0.1, thenDragTo: upper) }
             #endif
         }
         XCTAssertTrue(unobscured(element), "Editor or action is fully clear of fixed navigation: \(element.frame)")

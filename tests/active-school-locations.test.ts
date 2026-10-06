@@ -284,4 +284,6 @@ test("approved Soddy Daisy reinstatement is available in fallback and Avada", ()
   assert.equal(location?.address, "9834 Dayton Pike");
   assert.equal(location?.postalCode, "37379");
   assert.equal(snippet.includes(`value="${id}"`), true);
+  const tennesseeGroup = snippet.match(/<optgroup label="TN">([\s\S]*?)<\/optgroup>/)?.[1] ?? "";
+  assert.equal(tennesseeGroup.includes(`value="${id}"`), true, "Soddy Daisy belongs under Tennessee");
 });

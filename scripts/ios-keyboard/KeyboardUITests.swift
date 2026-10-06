@@ -72,11 +72,11 @@ final class KeyboardUITests: XCTestCase {
         let draft = "Synthetic keyboard draft. Never sent."
         field.typeText(draft)
         eventually("Focused field remains above the keyboard") {
-            field.isHittable && field.frame.midY < self.app.keyboards.firstMatch.frame.minY
+            field.isHittable && field.frame.maxY <=  self.app.keyboards.firstMatch.frame.minY
         }
         #if !TEACHER
         eventually("Message action stays reachable above the open keyboard") {
-            action.isHittable && action.frame.midY < self.app.keyboards.firstMatch.frame.minY
+            action.isHittable && action.frame.maxY <=  self.app.keyboards.firstMatch.frame.minY
         }
         #endif
         evidence("portrait-keyboard-focused")

@@ -215,7 +215,7 @@ export async function verifyNative(role) {
       assert.ok(loginVisible, "Native screenshot must show the correct role-specific sign-in screen");
       check(`${launch} launch process alive and native sign-in heading recognized; screenshot captured`);
     }
-    report.keyboard = await verifyIOSKeyboard({ role, simulator: createdDevice, simulatorApp, buildRoot, evidencePath, run });
+    report.keyboard = await verifyIOSKeyboard({ role, simulator: createdDevice, simulatorApp, buildRoot, evidencePath, run, deadline });
     check("Synthetic portal editor: software keyboard, focus visibility, draft retention, portrait lock and dismissal verified");
     report.status = "passed";
   } catch (error) {

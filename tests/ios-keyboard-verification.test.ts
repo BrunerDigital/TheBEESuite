@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { keyboardPreviewPath, keyboardRequestAllowed, keyboardTestConfiguration } from "../scripts/verify-ios-keyboard.mjs";
+import { keyboardPhaseTimeout, keyboardPreviewPath, keyboardRequestAllowed, keyboardTestConfiguration } from "../scripts/verify-ios-keyboard.mjs";
 
 test("keyboard harness serves synthetic GET assets and refuses real routes and writes", () => {
   for (const path of ["/", "/device-preview", "/_next/static/chunk.js", "/brand/icon.png"]) assert.equal(keyboardRequestAllowed("GET", path), true);
@@ -22,4 +22,10 @@ test("only a matching disposable app gets a loopback configuration; original sta
     assert.deepEqual(source, before);
     assert.throws(() => keyboardTestConfiguration(source, role === "parent" ? "teacher" : "parent"));
   }
+});
+
+test("keyboard waits share the native deadline and reject exhausted time", () => {
+  assert.equal(keyboardPhaseTimeout(1200, 5000, 1000), 200);
+  assert.equal(keyboardPhaseTimeout(9000, 1000, 1000), 1000);
+  assert.throws(() => keyboardPhaseTimeout(1000, 5000, 1000));
 });

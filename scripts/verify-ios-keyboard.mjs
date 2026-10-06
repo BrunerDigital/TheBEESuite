@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer, request as requestLoopback } from "node:http";
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -24,10 +24,25 @@ export function keyboardTestConfiguration(original, role) {
     ios: { ...original.ios, webContentsDebuggingEnabled: false } };
 }
 
+export function keyboardPhaseTimeout(deadline, limit, now = Date.now()) {
+  const remaining = deadline - now;
+  assert.ok(remaining > 0, "Shared native verification deadline reached");
+  return Math.min(remaining, limit);
+}
+
+async function unusedLoopbackPort() {
+  const reservation = createServer();
+  await new Promise((resolve, reject) => { reservation.once("error", reject); reservation.listen(0, "127.0.0.1", resolve); });
+  const port = reservation.address().port;
+  await new Promise(resolve => reservation.close(resolve));
+  return port;
+}
+
 /** Isolated synthetic UI test against the built Capacitor binary, never a signed artifact. */
-export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRoot, evidencePath, run }) {
+export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRoot, evidencePath, run, deadline }) {
   assert.equal(process.platform, "darwin");
   assert.match(simulator, /^[A-F0-9-]{36}$/i);
+  const keyboardDeadline = deadline - 30000; // Leave time to export evidence and clean up.
   // Next loads dotenv automatically: reject a developer checkout with real secrets.
   for (const file of [".env", ".env.local", ".env.development", ".env.development.local"]) {
     assert.ok(!existsSync(file), `Keyboard CI requires a secret-free checkout (${file} exists)`);
@@ -44,7 +59,6 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
   run("/usr/libexec/PlistBuddy", ["-c", "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true", path.join(copy, "Info.plist")]);
   run("xcrun", ["simctl", "terminate", simulator, `com.brunerdigital.thebeesuite.${role}`]);
   run("xcrun", ["simctl", "install", simulator, copy]);
-  run("defaults", ["write", "com.apple.iphonesimulator", "ConnectHardwareKeyboard", "-bool", "false"]);
 
   cpSync("scripts/ios-keyboard/Host.swift", path.join(root, "Host.swift"));
   cpSync("scripts/ios-keyboard/KeyboardUITests.swift", path.join(root, "KeyboardUITests.swift"));
@@ -56,10 +70,15 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
   writeFileSync(path.join(root, "project.json"), JSON.stringify(spec, null, 2));
   run("xcodegen", ["generate", "--spec", path.join(root, "project.json"), "--project", root]);
 
+  const previewPort = await unusedLoopbackPort();
+  const preference = spawnSync("defaults", ["read", "com.apple.iphonesimulator", "ConnectHardwareKeyboard"], { encoding: "utf8", timeout: 10000 });
+  assert.ok(!preference.error, "Could not read Simulator keyboard preference");
+  const previousKeyboard = preference.status === 0 ? preference.stdout.trim() : null;
+  assert.ok(previousKeyboard === null || ["0", "1"].includes(previousKeyboard), "Unexpected Simulator keyboard preference");
   const serverLog = openSync(path.join(evidencePath, "keyboard-preview.log"), "w");
   const env = { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR,
     NODE_ENV: "development", NEXT_TELEMETRY_DISABLED: "1", DATABASE_URL: "postgresql://fixture:fixture@127.0.0.1:1/fixture" };
-  const next = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--hostname", "127.0.0.1", "--port", "3236"], { env, stdio: ["ignore", serverLog, serverLog] });
+  const next = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--hostname", "127.0.0.1", "--port", String(previewPort)], { env, stdio: ["ignore", serverLog, serverLog] });
   let launchError;
   next.on("error", (error) => { launchError = error; });
   const blocked = [];
@@ -75,7 +94,7 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
     }
     const destination = url.pathname === "/" ? keyboardPreviewPath(role) : `${url.pathname}${url.search}`;
     // Host and port are fixed transport options, never derived from a request URL.
-    const upstream = requestLoopback({ hostname: "127.0.0.1", port: 3236, path: destination, method: "GET" }, (local) => {
+    const upstream = requestLoopback({ hostname: "127.0.0.1", port: previewPort, path: destination, method: "GET" }, (local) => {
       response.writeHead(local.statusCode ?? 502, { "Content-Type": local.headers["content-type"] ?? "application/octet-stream", "Cache-Control": "no-store" });
       local.pipe(response);
     });
@@ -84,24 +103,41 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
   });
   try {
     console.log(`Starting ${role} synthetic keyboard preview`);
-    const startupDeadline = Date.now() + 3 * 60 * 1000;
+    const startupDeadline = Date.now() + keyboardPhaseTimeout(keyboardDeadline, 3 * 60 * 1000);
+    run("defaults", ["write", "com.apple.iphonesimulator", "ConnectHardwareKeyboard", "-bool", "false"]);
     while (true) {
       if (launchError) throw launchError;
       assert.equal(next.exitCode, null, "Local preview process exited");
-      try { if ((await fetch(`http://127.0.0.1:3236${keyboardPreviewPath(role)}`, { signal: AbortSignal.timeout(10000) })).ok) break; } catch { /* bounded startup */ }
+      // Require this child's readiness before probing: a port collision must fail,
+      // never accidentally verify another checkout's preview server.
+      if (/Ready in/.test(readFileSync(path.join(evidencePath, "keyboard-preview.log"), "utf8"))) {
+        try { if ((await fetch(`http://127.0.0.1:${previewPort}${keyboardPreviewPath(role)}`, { signal: AbortSignal.timeout(keyboardPhaseTimeout(startupDeadline, 10000)) })).ok) break; } catch { /* bounded startup */ }
+      }
       assert.ok(Date.now() < startupDeadline, "Local preview did not start within three minutes");
       await delay(1000);
     }
     await new Promise((resolve, reject) => { proxy.once("error", reject); proxy.listen(3237, "127.0.0.1", resolve); });
     console.log(`Running ${role} keyboard XCTest`);
+    const testTimeout = keyboardPhaseTimeout(keyboardDeadline, 15 * 60 * 1000);
     const log = openSync(path.join(evidencePath, "keyboard-xctest.log"), "w");
     try {
       // Async child keeps the loopback proxy responsive while XCTest drives UI.
       await new Promise((resolve, reject) => {
         const test = spawn("xcodebuild", ["-project", path.join(root, "KeyboardQA.xcodeproj"), "-scheme", "KeyboardQA", "-destination", `platform=iOS Simulator,id=${simulator}`, "-derivedDataPath", path.join(root, "DerivedData"), "-resultBundlePath", path.join(evidencePath, "keyboard.xcresult"), "-parallel-testing-enabled", "NO", "CODE_SIGNING_ALLOWED=NO", "test"], { stdio: ["ignore", log, log] });
-        const timer = setTimeout(() => { test.kill("SIGTERM"); reject(new Error("Keyboard XCTest exceeded 15 minutes")); }, 15 * 60 * 1000);
-        test.once("error", (error) => { clearTimeout(timer); reject(error); });
-        test.once("exit", (code) => { clearTimeout(timer); if (code === 0) resolve(); else reject(new Error(`Keyboard XCTest failed (${code}); see keyboard-xctest.log`)); });
+        let timedOut = false;
+        let forceKill;
+        const timer = setTimeout(() => {
+          timedOut = true;
+          test.kill("SIGTERM");
+          forceKill = setTimeout(() => test.kill("SIGKILL"), 5000);
+        }, testTimeout);
+        test.once("error", (error) => { clearTimeout(timer); clearTimeout(forceKill); reject(error); });
+        test.once("exit", (code) => {
+          clearTimeout(timer); clearTimeout(forceKill);
+          if (timedOut) reject(new Error("Keyboard XCTest exceeded its bounded deadline"));
+          else if (code === 0) resolve();
+          else reject(new Error(`Keyboard XCTest failed (${code}); see keyboard-xctest.log`));
+        });
       });
     } finally {
       closeSync(log);
@@ -112,6 +148,11 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
     assert.deepEqual(blocked, [], "No unexpected API, write, or navigation attempts");
     return { passed: true, synthetic: true, softwareKeyboard: true, authenticated: false, physicalDevice: false, blockedRequests: blocked.length };
   } finally {
+    const restore = previousKeyboard === null
+      ? ["delete", "com.apple.iphonesimulator", "ConnectHardwareKeyboard"]
+      : ["write", "com.apple.iphonesimulator", "ConnectHardwareKeyboard", "-bool", previousKeyboard === "1" ? "true" : "false"];
+    const restored = spawnSync("defaults", restore, { encoding: "utf8", timeout: 10000 });
+    if (restored.status !== 0) console.error("Could not restore Simulator keyboard preference:", restored.stderr);
     writeFileSync(path.join(evidencePath, "keyboard-network.json"), JSON.stringify({ blocked }, null, 2));
     proxy.closeAllConnections();
     await new Promise(resolve => proxy.close(resolve));
@@ -119,5 +160,6 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
     await Promise.race([new Promise(resolve => next.once("exit", resolve)), delay(5000)]);
     if (next.exitCode === null) next.kill("SIGKILL");
     closeSync(serverLog);
+    assert.equal(restored.status, 0, "Restore Simulator hardware-keyboard preference");
   }
 }

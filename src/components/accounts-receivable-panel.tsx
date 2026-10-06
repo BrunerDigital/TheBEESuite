@@ -7,6 +7,7 @@ import type {
   AccountsReceivableSnapshot,
   AccountsReceivableSummary,
   SchoolAccountBalanceStatus,
+  SchoolAccountBalance,
 } from "@/lib/accounts-receivable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,11 +15,14 @@ import { Input } from "@/components/ui/input";
 import { ReportPrintAction } from "@/components/printable-report";
 import { cn } from "@/lib/utils";
 import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
+import { balanceViewTotals, familyBillingActionHref, filterBalanceAccounts, type BalanceFilter } from "@/lib/balance-follow-up";
+import { BalancePaymentReminder } from "@/components/balance-payment-reminder";
 
-type AccountFilter = "all" | "overdue" | "processing" | SchoolAccountBalanceStatus;
+type AccountFilter = BalanceFilter;
 
 const accountFilters: Array<{ id: AccountFilter; label: string }> = [
   { id: "all", label: "All" },
+  { id: "follow_up", label: "Needs follow-up" },
   { id: "owes", label: "Owes" },
   { id: "overdue", label: "Overdue" },
   { id: "processing", label: "Processing" },
@@ -52,25 +56,23 @@ function statusLabel(status: SchoolAccountBalanceStatus) {
 export function AccountsReceivablePanel({
   snapshot,
   className,
+  canManageBilling = false,
 }: {
   snapshot: AccountsReceivableSnapshot;
   className?: string;
+  canManageBilling?: boolean;
 }) {
-  const [filter, setFilter] = useState<AccountFilter>("all");
+  const [filter, setFilter] = useState<AccountFilter>("owes");
   const [query, setQuery] = useState("");
+  const [reminderAccount, setReminderAccount] = useState<SchoolAccountBalance | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const showCenterNames = new Set(snapshot.accounts.map((account) => account.centerId).filter(Boolean)).size > 1;
   const visibleAccounts = useMemo(
-    () => snapshot.accounts.filter((account) => {
-      if (filter === "overdue" && !(account.balanceCents > 0 && account.overdueInvoiceCount > 0)) return false;
-      if (filter === "processing" && account.processingPaymentCount === 0) return false;
-      if (filter !== "all" && filter !== "overdue" && filter !== "processing" && account.status !== filter) return false;
-      if (!normalizedQuery) return true;
-      return `${account.familyName} ${account.centerName}`.toLocaleLowerCase().includes(normalizedQuery);
-    }),
+    () => filterBalanceAccounts(snapshot.accounts, filter, normalizedQuery),
     [filter, normalizedQuery, snapshot.accounts],
   );
-  const reportAccounts = snapshot.accounts;
+  const reportAccounts = visibleAccounts;
+  const viewTotals = balanceViewTotals(reportAccounts);
   const reportSchoolIds = new Set(reportAccounts.map((account) => account.centerId ?? `missing:${account.centerName}`));
   const reportSchoolLabel = reportSchoolIds.size === 1 ? reportAccounts[0]?.centerName ?? "School" : `${reportSchoolIds.size} schools`;
   const printCenterNames = reportSchoolIds.size > 1;
@@ -134,7 +136,7 @@ export function AccountsReceivablePanel({
             meta={[
               reportSchoolLabel,
               `As of ${shortDate(snapshot.asOf, { timeZone: "UTC" })}`,
-              "Current family accounts, with balances owed listed first",
+              `${accountFilters.find((item) => item.id === filter)?.label ?? "All"} · ${query.trim() ? `Search: ${query.trim()}` : "All matching families"}`,
             ]}
           >
             <section aria-label="Accounts receivable totals">
@@ -151,11 +153,11 @@ export function AccountsReceivablePanel({
                 </thead>
                 <tbody>
                   <tr>
-                    <td>{snapshot.owingAccountCount.toLocaleString("en-US")}</td>
-                    <td>{money(snapshot.totalOwedCents)}</td>
-                    <td>{money(Math.abs(snapshot.totalCreditCents))}</td>
-                    <td>{snapshot.currentAccountCount.toLocaleString("en-US")}</td>
-                    <td>{snapshot.overdueAccountCount.toLocaleString("en-US")}</td>
+                    <td>{viewTotals.owingCount.toLocaleString("en-US")}</td>
+                    <td>{money(viewTotals.owedCents)}</td>
+                    <td>{money(Math.abs(viewTotals.creditCents))}</td>
+                    <td>{viewTotals.currentCount.toLocaleString("en-US")}</td>
+                    <td>{viewTotals.overdueCount.toLocaleString("en-US")}</td>
                   </tr>
                 </tbody>
               </table>
@@ -192,13 +194,13 @@ export function AccountsReceivablePanel({
                 <tfoot>
                   <tr>
                     <th scope="row" colSpan={printCenterNames ? 3 : 2}>Net balance</th>
-                    <th>{money(snapshot.netBalanceCents)}</th>
-                    <td colSpan={4}>{snapshot.totalAccountCount.toLocaleString("en-US")} current-family accounts</td>
+                    <th>{money(viewTotals.netCents)}</th>
+                    <td colSpan={4}>{reportAccounts.length.toLocaleString("en-US")} matching current-family accounts</td>
                   </tr>
                   <tr>
                     <th scope="row" colSpan={printCenterNames ? 3 : 2}>Total owed</th>
-                    <th>{money(snapshot.totalOwedCents)}</th>
-                    <td colSpan={4}>{snapshot.owingAccountCount.toLocaleString("en-US")} families owing</td>
+                    <th>{money(viewTotals.owedCents)}</th>
+                    <td colSpan={4}>{viewTotals.owingCount.toLocaleString("en-US")} families owing</td>
                   </tr>
                 </tfoot>
               </table>
@@ -209,6 +211,7 @@ export function AccountsReceivablePanel({
         </div>
       </div>
 
+      <p className="text-sm" role="status">{visibleAccounts.length} matching accounts · {money(viewTotals.owedCents)} owed in this view</p>
       <div className="max-h-[32rem] overflow-y-auto rounded-xl border bg-background/40">
         <div className="divide-y">
           {visibleAccounts.map((account) => (
@@ -219,7 +222,7 @@ export function AccountsReceivablePanel({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
-                    href={`/billing-invoices?familyId=${encodeURIComponent(account.familyId)}${account.centerId ? `&centerId=${encodeURIComponent(account.centerId)}` : ""}#family-ledger`}
+                    href={familyBillingActionHref(account, "family-ledger")}
                     className="truncate font-medium hover:text-primary hover:underline"
                   >
                     {account.familyName}
@@ -247,6 +250,10 @@ export function AccountsReceivablePanel({
                       ? "No open invoices"
                       : "No billing activity yet"}
                 </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {account.processingPaymentCount > 0 ? <Button size="sm" variant="outline" nativeButton={false} render={<Link href={familyBillingActionHref(account, "billing-family-overview")} />}>Review processing payment</Button> : account.balanceCents > 0 && canManageBilling ? <Button size="sm" variant="outline" onClick={() => setReminderAccount(account)}>Send payment reminder</Button> : null}
+                  <Button size="sm" variant="outline" nativeButton={false} render={<Link href={familyBillingActionHref(account, "family-ledger")} />}>View statement</Button>
+                </div>
               </div>
               <div className="flex items-center justify-between gap-3 sm:justify-end">
                 <div className={cn(
@@ -264,7 +271,7 @@ export function AccountsReceivablePanel({
                   nativeButton={false}
                   render={(
                     <Link
-                      href={`/billing-invoices?familyId=${encodeURIComponent(account.familyId)}${account.centerId ? `&centerId=${encodeURIComponent(account.centerId)}` : ""}#family-ledger`}
+                      href={familyBillingActionHref(account, "family-ledger")}
                     />
                   )}
                 >
@@ -281,6 +288,7 @@ export function AccountsReceivablePanel({
         </div>
       </div>
 
+      {reminderAccount ? <BalancePaymentReminder key={reminderAccount.familyId} account={reminderAccount} onClose={() => setReminderAccount(null)} /> : null}
       <p className="text-xs text-muted-foreground">
         This view includes currently enrolled families only. Positive balances are owed, negative balances are family credits, and zero balances are current.
         {" "}Processing bank payments remain unsettled; review before adding a late fee or collecting again. Agency claims and remittances stay separate from family balances.

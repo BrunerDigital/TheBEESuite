@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { BadgeDollarSign, RefreshCw } from "lucide-react";
 import { AccountsReceivablePanel } from "@/components/accounts-receivable-panel";
+import { AgencyBalancesPanel } from "@/components/agency-balances-panel";
+import type { AgencyBalanceSummary } from "@/lib/balance-follow-up";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,12 +21,17 @@ type AccountsReceivableResponse = {
   ok?: boolean;
   error?: string;
   accountsReceivable?: AccountsReceivableSnapshot;
+  agencyBalances?: AgencyBalanceSummary[];
+  canManageBilling?: boolean;
 };
 
 export function AccountsReceivableSheet({ executive = false }: { executive?: boolean }) {
   const [snapshot, setSnapshot] = useState<AccountsReceivableSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [view, setView] = useState<"family" | "agency">("family");
+  const [agencyBalances, setAgencyBalances] = useState<AgencyBalanceSummary[] | null>(null);
+  const [canManageBilling, setCanManageBilling] = useState(false);
 
   async function loadBalances(force = false) {
     if ((snapshot && !force) || loading) return;
@@ -40,6 +47,8 @@ export function AccountsReceivableSheet({ executive = false }: { executive?: boo
         throw new Error(body.error || "Unable to load school account balances.");
       }
       setSnapshot(body.accountsReceivable);
+      setAgencyBalances(body.agencyBalances ?? null);
+      setCanManageBilling(body.canManageBilling === true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load school account balances.");
     } finally {
@@ -74,7 +83,7 @@ export function AccountsReceivableSheet({ executive = false }: { executive?: boo
             <div>
               <SheetTitle>{executive ? "Executive account balances" : "School account balances"}</SheetTitle>
               <SheetDescription>
-                {executive
+                {view === "agency" ? "Agency receivables, external receipts, and reconciliation follow-up across your visible schools." : executive
                   ? "Current family accounts across your visible schools, with families who owe listed first."
                   : "Current family accounts in your school, with families who owe listed first."}
               </SheetDescription>
@@ -111,7 +120,12 @@ export function AccountsReceivableSheet({ executive = false }: { executive?: boo
               </Button>
             </div>
           ) : null}
-          {snapshot ? <AccountsReceivablePanel snapshot={snapshot} /> : null}
+          {snapshot && agencyBalances ? <div className="mb-4 flex gap-2" role="group" aria-label="Balance account type">
+            <Button size="sm" variant={view === "family" ? "default" : "outline"} aria-pressed={view === "family"} onClick={() => setView("family")}>Family balances</Button>
+            <Button size="sm" variant={view === "agency" ? "default" : "outline"} aria-pressed={view === "agency"} onClick={() => setView("agency")}>Agency receivables</Button>
+          </div> : null}
+          {snapshot && (view === "family" || !agencyBalances) ? <AccountsReceivablePanel snapshot={snapshot} canManageBilling={canManageBilling} /> : null}
+          {snapshot && view === "agency" && agencyBalances ? <AgencyBalancesPanel accounts={agencyBalances} asOf={snapshot.asOf} /> : null}
         </div>
       </SheetContent>
     </Sheet>

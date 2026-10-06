@@ -5,7 +5,8 @@ import {
   buildAccountsReceivableSnapshot,
   canViewAccountBalances,
 } from "@/lib/accounts-receivable";
-import { getCurrentUser } from "@/lib/auth";
+import { canManageBilling, getCurrentUser } from "@/lib/auth";
+import { loadAgencyBalanceSummary } from "@/lib/agency-balance-summary";
 import { visibleFamilyWhere } from "@/lib/corporate-view-scope";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
@@ -46,10 +47,13 @@ async function GETHandler() {
   const centerNameById = Object.fromEntries(
     centers.map((center) => [center.id, center.crmLocationId ?? center.name]),
   );
-  const accountsReceivable = buildAccountsReceivableSnapshot(families, centerNameById);
+  const asOf = new Date();
+  const accountsReceivable = buildAccountsReceivableSnapshot(families, centerNameById, asOf);
+  const canReadAgency = canManageBilling(user) || user.role === "READ_ONLY_AUDITOR";
+  const agencyBalances = canReadAgency ? await loadAgencyBalanceSummary(activeCenterIds, centerNameById, asOf) : undefined;
 
   return NextResponse.json(
-    { ok: true, accountsReceivable },
+    { ok: true, accountsReceivable, agencyBalances, canManageBilling: canManageBilling(user) },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }

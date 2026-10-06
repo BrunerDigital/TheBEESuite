@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
+import { loginEntryPathForNextPath, loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
 
 type ResetResponse = {
   ok?: boolean;
@@ -24,7 +24,7 @@ function safeNextPath(value: string | null) {
 
 export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string }) {
   const next = safeNextPath(initialNext);
-  const parentPortalFlow = next === "/parent-portal" || next.startsWith("/parent-portal/");
+  const parentPortalFlow = loginEntryPathForNextPath(next) === "/parents";
   const parentSetupFlow = next === "/parent-portal/setup";
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
@@ -61,8 +61,8 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
   }
 
   return (
-    <main className="grid min-h-screen min-h-dvh bg-slate-950 p-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] text-white lg:grid-cols-[1fr_0.86fr]">
-      <section className="hidden min-h-[calc(100dvh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
+    <main className="auth-halo-shell grid min-h-screen min-h-dvh bg-slate-950 p-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] text-white lg:grid-cols-[1fr_0.86fr]">
+      <section className="auth-halo-story hidden min-h-[calc(100dvh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
           <div className="text-5xl font-semibold leading-tight tracking-normal" aria-hidden="true">
@@ -84,7 +84,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
       </section>
 
       <section className="grid place-items-center px-0 py-6 sm:px-6 lg:px-10">
-        <Card className="w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
+        <Card className="auth-halo-card w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
           <CardHeader className="text-center">
             <Link href="/" className="mx-auto block w-fit lg:hidden" aria-label="The BEE Suite home">
               <BrandIcon className="size-14 rounded-2xl" priority />

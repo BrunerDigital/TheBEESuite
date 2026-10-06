@@ -9,9 +9,9 @@ import { BrandLogo } from "@/components/brand-logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
-import { loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
+import { loginEntryPathForNextPath, loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
 import {
   hasPasswordRecoveryContext,
   MISSING_PASSWORD_RECOVERY_LINK_MESSAGE,
@@ -38,7 +38,7 @@ export function ResetPasswordForm() {
   const search = searchParams.toString();
   const forceReset = searchParams.get("force") === "1";
   const next = safeNextPath(searchParams.get("next"));
-  const parentPortalFlow = next === "/parent-portal" || next.startsWith("/parent-portal/");
+  const parentPortalFlow = loginEntryPathForNextPath(next) === "/parents";
   const parentSetupFlow = next === "/parent-portal/setup";
   const freshResetHref = `/forgot-password?next=${encodeURIComponent(next)}`;
   const credentialRef = useRef<PasswordRecoveryCredential>({});
@@ -140,8 +140,8 @@ export function ResetPasswordForm() {
   }
 
   return (
-    <main className="grid min-h-screen min-h-dvh bg-slate-950 p-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] text-white lg:grid-cols-[1fr_0.86fr]">
-      <section className="hidden min-h-[calc(100dvh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
+    <main className="auth-halo-shell grid min-h-screen min-h-dvh bg-slate-950 p-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] text-white lg:grid-cols-[1fr_0.86fr]">
+      <section className="auth-halo-story hidden min-h-[calc(100dvh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
           <div className="text-5xl font-semibold leading-tight tracking-normal" aria-hidden="true">
@@ -167,7 +167,7 @@ export function ResetPasswordForm() {
       </section>
 
       <section className="grid place-items-center px-0 py-6 sm:px-6 lg:px-10">
-        <Card className="w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
+        <Card className="auth-halo-card w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
           <CardHeader className="text-center">
             <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground">
               <LockKeyhole />
@@ -207,13 +207,12 @@ export function ResetPasswordForm() {
               {linkStatus === "ready" && forceReset ? (
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="currentPassword">Current password</Label>
-                  <Input
-                    id="currentPassword"
+                  <PasswordInput
+                    id="currentPassword" visibilityLabel="current password"
                     name="currentPassword"
                     className="h-11"
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
-                    type="password"
                     autoComplete="current-password"
                     required
                   />
@@ -223,13 +222,12 @@ export function ResetPasswordForm() {
                 <>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="password">New password</Label>
-                    <Input
-                      id="password"
+                    <PasswordInput
+                      id="password" visibilityLabel="new password"
                       name="newPassword"
                       className="h-11"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      type="password"
                       autoComplete="new-password"
                       minLength={8}
                       required
@@ -237,13 +235,12 @@ export function ResetPasswordForm() {
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="confirmPassword">Confirm password</Label>
-                    <Input
-                      id="confirmPassword"
+                    <PasswordInput
+                      id="confirmPassword" visibilityLabel="password confirmation"
                       name="confirmPassword"
                       className="h-11"
                       value={confirmPassword}
                       onChange={(event) => setConfirmPassword(event.target.value)}
-                      type="password"
                       autoComplete="new-password"
                       minLength={8}
                       required

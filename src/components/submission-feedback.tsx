@@ -27,6 +27,8 @@ export function SubmissionFeedback() {
 
   useEffect(() => {
     function announceSubmission(event: SubmitEvent) {
+      // These forms already announce their actual pending/error outcome inline.
+      if (event.target instanceof HTMLFormElement && event.target.dataset.submissionFeedback === "inline") return;
       const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
       const id = ++nextId.current;
 

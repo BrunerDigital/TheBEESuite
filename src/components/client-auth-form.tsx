@@ -10,7 +10,7 @@ const serverReady = () => false;
 export function ClientAuthForm({ children, onSubmit, fieldsetClassName = "flex flex-col gap-4", ...props }: Omit<ComponentProps<"form">, "method"> & { fieldsetClassName?: string }) {
   const ready = useSyncExternalStore(subscribe, clientReady, serverReady);
   return (
-    <form {...props} method="post" onSubmit={event => {
+    <form {...props} data-submission-feedback="inline" method="post" onSubmit={event => {
       event.preventDefault();
       if (ready) onSubmit?.(event);
     }}>

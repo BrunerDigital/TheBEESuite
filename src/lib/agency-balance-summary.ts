@@ -24,7 +24,7 @@ export async function loadAgencyBalanceSummary(centerIds: string[], centerNameBy
       COALESCE(claims.awaiting, 0)::bigint AS "awaitingPaymentCount",
       COALESCE(claims.overdue, 0)::bigint AS "overdueCount",
       ledger."balanceCents" AS "ledgerBalanceCents",
-      (COALESCE(deposits.review, 0) + COALESCE(adjustments.review, 0) + COALESCE(allocations.review, 0))::bigint AS "pendingReviewCount",
+      (COALESCE(deposits.review, 0) + COALESCE(adjustments.review, 0))::bigint AS "pendingReviewCount",
       COALESCE(deposits.unapplied, 0)::bigint AS "unappliedCents"
     FROM "AgencyProgram" program
     LEFT JOIN LATERAL (
@@ -45,7 +45,7 @@ export async function loadAgencyBalanceSummary(centerIds: string[], centerNameBy
       ON ledger."agencyProgramId" = program.id AND ledger."centerId" = program."centerId"
     LEFT JOIN LATERAL (
       SELECT COUNT(*) FILTER (WHERE batch.status = 'pending_review') AS review,
-        SUM(GREATEST(batch."unappliedCents", 0)) FILTER (WHERE batch.status IN ('unmatched', 'partially_allocated', 'exception')) AS unapplied
+        SUM(GREATEST(batch."unappliedCents", 0)) FILTER (WHERE batch."reviewedAt" IS NOT NULL AND batch.status <> 'rejected') AS unapplied
       FROM "AgencyRemittanceBatch" batch
       WHERE batch."agencyProgramId" = program.id AND batch."centerId" = program."centerId" AND batch."reversedAt" IS NULL
     ) deposits ON true
@@ -54,14 +54,6 @@ export async function loadAgencyBalanceSummary(centerIds: string[], centerNameBy
       WHERE adjustment."agencyProgramId" = program.id AND adjustment."centerId" = program."centerId"
         AND adjustment.status = 'pending_review' AND adjustment."reversedAt" IS NULL
     ) adjustments ON true
-    LEFT JOIN LATERAL (
-      SELECT COUNT(*) AS review FROM "AgencyRemittanceAllocation" allocation
-      JOIN "AgencyRemittanceBatch" batch ON batch.id = allocation."batchId"
-      JOIN "SubsidyClaim" claim ON claim.id = allocation."claimId"
-      WHERE batch."agencyProgramId" = program.id AND batch."centerId" = program."centerId"
-        AND claim."agencyProgramId" = program.id AND claim."centerId" = program."centerId"
-        AND allocation.status = 'pending_review' AND batch."reversedAt" IS NULL
-    ) allocations ON true
     WHERE program."centerId" IN (${Prisma.join(centerIds)})
     ORDER BY COALESCE(claims.outstanding, 0) DESC, program.name, program.id
   `);

@@ -13,6 +13,7 @@ Inspected from `origin/main` at `357bbaee`. Agency Claim Queue already records p
 - Reconcile agency payments opens the existing school-scoped Agency Claim Queue. Staff record actual externally received money there using the existing evidence, permission, review, and reversal controls.
 - Agency deep links initialize the queue to the requested authorized school and reset the workspace on school-query navigation. Unavailable targets show an error without loading a different school's queue.
 - Submitted claims awaiting approval count as claim amounts outstanding; draft/ready claims count only as needing submission. Posted ledger balances and unapplied deposits are separately labeled and must not be added to claim amounts. Family and agency totals remain separate.
+- Posted unapplied cash remains visible while an additional allocation is reviewed. Pending reviews count each batch once plus adjustment reviews, without adding the batch's allocation rows again. Unposted initial batches and reversals do not contribute unapplied cash.
 
 ## Validation
 

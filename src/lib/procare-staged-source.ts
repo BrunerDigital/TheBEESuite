@@ -56,4 +56,3 @@ export function verifyStagedSourceManifest(receipt: string, scope: StagedSourceS
   if (new Set(manifest.files.map((file) => file.path)).size !== manifest.files.length) throw new Error("The report selection contains duplicate storage references.");
   return manifest;
 }
-

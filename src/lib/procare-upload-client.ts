@@ -29,4 +29,3 @@ export async function stageProcareSourceFiles(centerId: string, files: File[], o
   }
   return { receipt: result.receipt, expiresAt: result.expiresAt };
 }
-

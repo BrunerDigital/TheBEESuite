@@ -46,4 +46,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Secure report upload is unavailable. Your files remain selected; request setup help or retry." }, { status: 503 });
   }
 }
-

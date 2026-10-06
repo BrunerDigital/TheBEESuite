@@ -30,4 +30,3 @@ export function validImportTuitionEffectiveDate(value: string, cadence: string |
   }
   return false;
 }
-

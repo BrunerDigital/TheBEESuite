@@ -18,4 +18,3 @@ export async function readStagedSourceFiles(receipt: string, scope: StagedSource
   }
   return { files, manifest };
 }
-

@@ -46,15 +46,15 @@ test("landing page presents real product screens in device mockups", () => {
   assert.ok(showcaseSource.includes('fetchPriority={preload ? "high" : undefined}'), "hero LCP image should receive high fetch priority");
   assert.ok(showcaseSource.includes("sizes="), "device images should provide responsive sizes");
   assert.ok(showcaseSource.includes("data-hero-product-stage"), "hero should expose its composed product stage");
-  assert.ok(showcaseSource.includes("connected-schools.webp"), "hero should use the recent branding graphic");
-  assert.ok(showcaseSource.includes('width={2048}') && showcaseSource.includes('height={682}'), "hero branding retains its intrinsic ratio");
+  assert.ok(showcaseSource.includes("hero-connected-campus.webp"), "hero should use the recent branding graphic");
+  assert.ok(showcaseSource.includes('width={1774}') && showcaseSource.includes('height={887}'), "hero branding retains its intrinsic ratio");
   assert.ok(showcaseSource.includes("(max-width: 1023px) 92vw"), "branding should request responsive mobile sizes");
 });
 
 test("landing page uses the recent branding imagery alongside product proof", () => {
   for (const expected of [
-    "/brand/the-bee-suite/landing/connected-schools.webp",
-    "/brand/the-bee-suite/landing/connected-growth.webp",
+    "/brand/the-bee-suite/landing/hero-connected-campus.webp",
+    "/brand/the-bee-suite/landing/classroom-learning.webp",
     "Built for the way schools actually work.",
     "Welcome families with a smoother front desk.",
     "Keep classroom updates close at hand.",

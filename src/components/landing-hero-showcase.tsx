@@ -149,10 +149,10 @@ export function LandingHeroShowcase() {
     >
       <div className="absolute inset-x-0 top-0 overflow-hidden rounded-[1.6rem] border border-white/75 bg-white/50 shadow-[0_24px_70px_rgba(36,89,131,0.15)] dark:border-white/15 dark:bg-white/5 sm:rounded-[2rem]">
         <Image
-          src="/brand/the-bee-suite/landing/connected-schools.webp"
-          alt="BEE Suite brand illustration of multi-school oversight, a childcare team working together, and a director with connected school workflows"
-          width={2048}
-          height={682}
+          src="/brand/the-bee-suite/landing/hero-connected-campus.webp"
+          alt="A director and teacher collaborate in a blue-and-yellow preschool lobby while a family arrives"
+          width={1774}
+          height={887}
           sizes="(max-width: 1023px) 92vw, 56vw"
           className="h-auto w-full"
           loading="eager"
@@ -168,13 +168,13 @@ export function LandingHeroShowcase() {
       <LaptopDevice
         src="/brand/the-bee-suite/screenshots/current/director-desktop-dashboard-light.png"
         alt="The BEE Suite director dashboard on a laptop"
-        className="absolute bottom-[5%] left-[4%] z-10 w-[82%] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-5 motion-safe:duration-700 sm:bottom-[1%]"
+        className="absolute bottom-[5%] left-[4%] z-10 w-[82%] sm:left-[8%] sm:w-[64%] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-5 motion-safe:duration-700 sm:bottom-[1%]"
         preload
       />
       <PhoneDevice
         src="/brand/the-bee-suite/screenshots/current/parent-iphone-overview-light.png"
         alt="The BEE Suite parent portal on a phone"
-        className="absolute bottom-0 right-0 z-20 w-[20%] rotate-[1.5deg] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-left-3 motion-safe:duration-700"
+        className="absolute bottom-0 right-0 z-20 w-[20%] sm:right-[10%] sm:w-[18%] rotate-[1.5deg] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-left-3 motion-safe:duration-700"
       />
     </div>
   );

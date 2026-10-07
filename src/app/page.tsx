@@ -149,7 +149,7 @@ export default function Home() {
           <section className="relative px-4 pb-20 pt-8 sm:px-6 sm:pb-24 sm:pt-16 lg:px-10 lg:pb-28 lg:pt-8 xl:px-12 xl:pb-24">
             <div className="mx-auto grid max-w-[1440px] items-center gap-6 sm:gap-10 lg:min-h-[38rem] lg:grid-cols-[0.9fr_1.1fr] lg:gap-2 2xl:min-h-[40rem]">
               <div className="relative z-20 max-w-[44rem] py-4 text-center lg:-mt-2 lg:py-10 lg:pr-8 lg:text-left xl:pr-12">
-                <h1 className="text-balance text-[clamp(2.75rem,4.5vw,4.6rem)] font-bold leading-[1.02] tracking-[-0.06em]">
+                <h1 className=" text-[clamp(2.75rem,4.5vw,4.6rem)] font-bold leading-[1.02] tracking-[-0.06em]">
                   The school day, connected.
                 </h1>
                 <p className="mx-auto mt-5 max-w-[39rem] text-pretty text-base leading-7 text-slate-600 dark:text-zinc-300 sm:mt-7 sm:text-lg sm:leading-8 lg:mx-0">
@@ -205,14 +205,23 @@ export default function Home() {
             id="in-schools"
             className="scroll-mt-20 bg-[#edf7ff] px-4 py-20 text-slate-950 dark:bg-[#0d1b26] dark:text-white sm:px-6 sm:py-24 lg:px-10 lg:py-28 xl:px-14"
           >
-            <div className="mx-auto grid max-w-[1400px] items-center gap-10 lg:grid-cols-[1.5fr_1fr] xl:gap-16">
-              <div className="relative aspect-[3/1] overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/60 shadow-[0_24px_60px_rgba(36,89,131,0.15)] dark:border-white/10 dark:bg-slate-900">
+            <div className="mx-auto grid max-w-[1400px] items-center gap-6 lg:grid-cols-[1.08fr_0.82fr_0.8fr] xl:gap-7">
+              <div className="relative aspect-[1.5/1] overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/60 shadow-[0_24px_60px_rgba(36,89,131,0.15)] dark:border-white/10 dark:bg-slate-900">
                 <Image
-                  src="/brand/the-bee-suite/landing/connected-growth.webp"
-                  alt="BEE Suite brand illustration connecting school leadership, school communities, and childcare software"
+                  src="/brand/the-bee-suite/landing/classroom-learning.webp"
+                  alt="A preschool teacher helps two children paint in a bright blue-and-yellow classroom"
                   fill
-                  sizes="(max-width: 1024px) 100vw, 60vw"
-                  className="object-contain"
+                  sizes="(max-width: 1024px) 100vw, 43vw"
+                  className="object-cover"
+                />
+              </div>
+              <div className="relative aspect-[1.5/1] overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/60 shadow-[0_24px_60px_rgba(36,89,131,0.15)] dark:border-white/10 dark:bg-slate-900 lg:translate-y-10">
+                <Image
+                  src="/brand/the-bee-suite/landing/director-family-welcome.webp"
+                  alt="A school director welcomes a parent and child at preschool reception"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 33vw"
+                  className="object-cover"
                 />
               </div>
               <div className="px-1 lg:py-6">

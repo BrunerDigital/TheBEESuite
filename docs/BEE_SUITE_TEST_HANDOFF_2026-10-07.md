@@ -1,32 +1,51 @@
-# BEE Suite testing handoff - October 7, 2026
+# BEE Suite Mac testing handoff — October 7, 2026
 
-## Current live version
+## Live application and evidence
 
-Canonical https://thebeesuite.io is Vercel Ready on acd607dbe916856e434c93b5ad6382ff4ab46249, deployment dpl_A8rQLehdbocpJErSkCSwsmE2LEMD. Homepage rendered in the browser; health returned HTTP200 with the database connected. Error/fatal queries for the preceding hour and the subsequent15-minute test window returned no entries. Main CI and unsigned iOS native verification passed on that exact source.
+Use https://thebeesuite.io. Parent sign-in: https://thebeesuite.io/parents. Teacher sign-in: https://thebeesuite.io/teachers. Director/billing: https://thebeesuite.io/directors. Executive: https://thebeesuite.io/executives. School imports: https://thebeesuite.io/data-readiness?tab=procare. Public transfer instructions: https://thebeesuite.io/resources/family-billing-transfer.
 
-Yesterday's shipped work includes agency receivables and balance follow-up (#451), historical/withdrawn-family billing access and advance payments (#450), family/billing transfer and honest school readiness (#458/#461), direct teacher operations and mobile sizing (#455-#460), and the approved public inquiry/dependency corrections (#452-#454).
+This audit started from current main/production `e3d02a0fee211d5c9892e1cc2c9d0f57dcaba730`, PR #462, deployment `dpl_FGABFcwc61upHoFgMGfMwFHaALW6`. Canonical/www/beta health returned 200 with the database connected. The protected follow-up release adds a disposable PostgreSQL verification runner and this refreshed evidence; it does not activate a school, alter production records or replace any shipped feature. The final exact deployment record is supplied with the Mac closeout package after protected merge and post-release checks.
 
-## Fresh verification and prepared release
+## Roles: actual checks and limits
 
-The reviewed rollout candidate was integrated into a fresh current-base checkout without touching the dirty main checkout or the original coordinator. npm run vercel-build passed: Prisma, lint, typecheck,2655/2655 tests, Next16.3.8 production compilation and180 pages. The extra cron module-mock tests passed3/3. These mocks are not PostgreSQL concurrency proof. The code candidate prevents tuition invoicing for paused/ineligible schools and unanchored multiweek schedules, keeps same-school invoice lock order consistent, and corrects succeeded PaymentIntent metadata.
+| Role | Status | October 7 Mac evidence | Remaining acceptance |
+| --- | --- | --- | --- |
+| Director | VERIFIED for listed interactions | Existing isolated account signs in; click View enrollment status opens analytics enrollment report; migration shortcut opens School migration setup with honest empty/blocked evidence | Upload/preview/correction and a reviewed real school package remain separate checks; no import commit |
+| Parent | VERIFIED for listed interactions | Existing protected App Review account signs in at 390×844; Message School opens its private synthetic conversation; Payments navigation opens account/payment view; no browser runtime exception | Actual software keyboard is native-test evidence; physical camera, notification and network recovery still require device acceptance |
+| Teacher | VERIFIED for listed interactions | Existing protected App Review account signs in at 390×844; attendance, daily report, incident, photo and roster sections expand/collapse; Messages opens family message workspace | Submission/media persistence and delivery are not certified by opening controls; no operational submission |
+| Executive | BLOCKED | Application/Auth identity and active grants exist in isolated demo tenant; saved Mac shared QA credential returns 401 | Current approved credential; workspace selection, all-location and positive/negative school isolation |
+| Billing | BLOCKED | Application/Auth identity and active school grant exist; saved Mac shared QA credential returns 401 | Current approved credential; claims, external reconciliation, historical families, statements and reminder recipient previews |
+| Pickup/kiosk | BLOCKED | Pickup application/Auth identity exists; saved Mac shared QA credential returns 401 | Current approved pickup/kiosk test access and safe synthetic attendance targets; no real PIN or pickup changes |
 
-The candidate remains separate from production until the designated coordinator completes protected PR checks, merge, Ready deployment and post-release verification. No manual production billing run or financial correction was performed.
+Browser evidence is under `output/playwright/mac-live/` in the isolated Mac checkout. Playwright was used because the Browser plugin is absent. Non-read requests were blocked except the intended isolated-account sign-in; login's normal session/audit records were retained. No real message, payment, attendance or import was submitted. Screenshots represent synthetic accounts and do not prove school-specific live acceptance.
 
-Read-only login/HTTP route checks passed existing isolated billing, executive, teacher and parent test accounts. Billing invoices, multi-location dashboard, teacher portal, parent home and parent payments each returned200 without a login redirect or server-error response. The saved director test password returned401. This is authenticated server-route evidence, not a full browser interaction test or positive acceptance at Kokomo/Centennial. Local direct-database QA configuration is stale; no password or identity was changed.
+## Safe test accounts, without passwords
 
-The team-share guide packet was regenerated from current committed source with an explicit October7 snapshot date.15 PDFs/103 pages; text/date/hash checks and first/last page layout inspection passed. Existing synthetic screenshot assets were retained. The generator now supports --publication-date YYYY-MM-DD and defaults to the current date instead of hard-coding September2.13 focused documentation tests passed after this artifact-only change.
+| Role | Existing account | Credential source/status |
+| --- | --- | --- |
+| Director | ux-qa-director@synthetic.thebeesuite.io | Existing secured Mac QA environment; works |
+| Parent | app-review-parent@thebeesuite.io | Existing secured Mac App Review environment; works |
+| Teacher | app-review-teacher@thebeesuite.io | Existing secured Mac App Review environment; works |
+| Executive | ux-qa-executive@synthetic.thebeesuite.io | Current credential needed; saved shared value rejected |
+| Billing | ux-qa-billing@synthetic.thebeesuite.io | Current credential needed; saved shared value rejected |
+| Pickup | ux-qa-pickup@synthetic.thebeesuite.io | Current credential needed; saved shared value rejected |
 
-## What to test
+The Mac environment's direct PostgreSQL credential is stale; the database connector supplied read-only identity evidence. No identity, password, role or grant was repaired. Do not paste passwords into chat or put them in guides.
 
-1. Teacher sign-in: confirm direct classroom operations, attendance navigation and daily-report controls on your usual phone.
-2. Parent portal: check home quick actions, messages and payment navigation at normal and enlarged text sizes; check draft visibility with the keyboard open.
-3. Billing: review agency claims/external receipts and reconciliation, family balance filters, historical/withdrawn-family access, statements and reminder recipient preview.
-4. School setup: open the family/billing transfer workflow, check required reports, preview, correction guidance and saved readiness state. The week plan and45-school worklist are in docs/SCHOOL_IMPORT_WEEK_PLAN_2026-10-06.md and docs/SCHOOL_IMPORT_WEEK_WORKLIST_2026-10-06.csv.
+## Exact safe steps
 
-## Gates still requiring exact school/account evidence
+1. Director: sign in, confirm Little Harbor / Center Director / one school. Click View enrollment status: expect Reporting and Analytics with enrollment status selected. Return and open School migration setup: expect one authorized location and no evaluated migration evidence. Open Start migration and Review and correct; do not interpret an empty queue as complete school readiness. Use a reviewed synthetic preview before testing a real package; import commit remains school-approved.
+2. Parent: sign in using the protected review account. Expect Little Harbor and its one synthetic child. Click Message School: expect the private demo conversation. Type an unsent synthetic draft, focus/dismiss input, and check it survives the supported in-page view changes. Do not send. Click Payments with no draft: expect the protected account/payment screen; do not create checkout or pay. Home quick actions must stay family-scoped.
+3. Teacher: sign in using the protected review account. Expect Toddler Hive / Little Harbor / 13 synthetic roster children. Expand Attendance, Daily Report, Incident report, Photo and Roster. Expect visible labeled fields and selected-child context. Enter an unsaved synthetic note and collapse/reopen the panel; expect retention. Navigate Messages: expect the scoped message workspace. Do not submit attendance, reports, incident, media or messages.
+4. Executive/billing/pickup: obtain current credentials through the approved store first. Test selection/isolation or billing preview controls in the isolated tenant. A loading page is insufficient: record the selected school, actual interaction, expected result and forbidden-school outcome. Never use real reminders, charges or pickup records as tests.
+5. Native: use the signed local Parent/Teacher package for review, or the verified simulator builds. Both are iPhone-only, version 1.0/build 5. Signed package preparation is not TestFlight distribution. Connect an approved iPhone with synthetic accounts for camera/media permission, notification availability, navigation, keyboard, cold/relaunch and offline/recovery acceptance. No physical iPad was available; iPad support is not claimed. Android retains the HTTPS web fallback, with no Android store release claimed.
 
-A fresh read-only operational inventory confirms45 active schools (Kid City USA and Miss Honey's, excluding demo tenants and the unassigned lead queue);16 have explicit tuitionBillingEnabled=true. Neither count is a readiness approval.
+## Schools, recovery, providers and guides
 
-Remaining school-specific items include approved reports/director confirmation and named setup operators; Kokomo access/attendance/media acceptance and exact affected examples; Centennial staff/Auth reconciliation; confirmation of Longmont/Tyler closure authority; Granbury ACH and aged/manual-review payment reconciliation; independent Storage/key recovery custody and monitoring owners; signed native builds, physical-device acceptance and public App Store links. The prior private email tracker also retains source/access/decision requests; Audrey's requested missing-items email was sent yesterday. No new outreach was sent in this closeout.
+[MAC_SCHOOL_READINESS_2026-10-07.csv](MAC_SCHOOL_READINESS_2026-10-07.csv) records all 45 operational active schools, 16 explicitly billing-enabled, current record/access/import inventory, owner roles, next steps and separate gates. These counts are not readiness approvals. Kokomo needs authorized positive attendance/media acceptance. Centennial needs exact staff/Auth reconciliation. Longmont and Tyler already read closed; closure authority and access/retention decisions need confirmation, not replay.
 
-School imports, invitations, access changes, billing activation, real messages/payments, migrations, provider changes and store submission remain their individually approved operations. User business data and unrelated dirty work were preserved.
+[TUITION_POSTGRES_REHEARSAL.md](TUITION_POSTGRES_REHEARSAL.md) documents real disposable PostgreSQL concurrency verification. Production dry run remains UNVERIFIED: saved credential 401; existing sensitive Vercel secret cannot be retrieved through available access. The owner supplies the existing bearer securely; do not rotate it.
+
+[MAC_RECOVERY_AND_PROVIDER_READINESS_2026-10-07.md](MAC_RECOVERY_AND_PROVIDER_READINESS_2026-10-07.md) distinguishes refreshed Storage/delivery evidence from missing backup-management, independent byte backup, second-owner and alert evidence. No retries or provider changes were performed. Granbury's exact family financial evidence and approval preview are private in the local closeout package; no refund or ledger adjustment was made.
+
+The current guide packet remains `output/pdf/TEAM_SHARE_GUIDES_CURRENT/`: 15 PDFs / 103 pages, October 7 publication date. All PDF hashes were rechecked against SOURCE_REFRESH_MANIFEST_2026-10-07.json. No guide-covered workflow changed in this technical release. Existing synthetic screenshots do not certify current end-to-end acceptance. Preserve source reports as recoverable backups after school/data verification and separate archival approval.

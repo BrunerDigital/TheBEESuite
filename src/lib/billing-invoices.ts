@@ -25,6 +25,28 @@ function metadataJson(value: Record<string, unknown>) {
   return value as Prisma.InputJsonObject;
 }
 
+// A batch holds every account it may invoice before the first invoice updates
+// the school. The recurring tuition job also locks account before school.
+export async function lockBatchInvoiceAccounts(
+  tx: Prisma.TransactionClient,
+  familyIds: string[],
+  centerId: string,
+) {
+  const sortedFamilyIds = [...new Set(familyIds)].sort();
+  if (!sortedFamilyIds.length) return;
+  await tx.billingAccount.createMany({
+    data: sortedFamilyIds.map((familyId) => ({ familyId, balanceCents: 0 })),
+    skipDuplicates: true,
+  });
+  const accounts = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id" FROM "BillingAccount"
+    WHERE "familyId" IN (${Prisma.join(sortedFamilyIds)})
+    ORDER BY "id" FOR UPDATE
+  `);
+  if (accounts.length !== sortedFamilyIds.length) throw new Error("Batch billing accounts changed during invoice creation.");
+  await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Center" WHERE "id" = ${centerId} FOR UPDATE`);
+}
+
 export async function createBillingInvoiceForFamily(
   tx: Prisma.TransactionClient,
   input: {

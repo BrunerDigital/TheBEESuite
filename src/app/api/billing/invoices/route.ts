@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
-import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
+import { createBillingInvoiceForFamily, lockBatchInvoiceAccounts } from "@/lib/billing-invoices";
 import {
   billingDedupeKey,
   normalizeBatchTarget,
@@ -428,6 +428,8 @@ async function createBatchInvoices(user: CurrentBillingUser, body: Record<string
     let skipped = 0;
     let totalCents = 0;
     const invoices: Array<{ id: string; number: string; totalCents: number }> = [];
+
+    await lockBatchInvoiceAccounts(tx, invoiceGroups.map((group) => group.familyId), centerAccess.center.id);
 
     for (const group of invoiceGroups) {
       const childIds = group.children.map((child) => child.id);

@@ -82,63 +82,64 @@
   "sources": [
     {
       "file": "scripts/build-team-guide-pdfs.py",
-      "sha256": "73ec96e4f5fdaa67c6dd7c17164d993119d534a5d016ff4b6863b37e4647784f"
+      "sha256": "d8040b9723c9ded6c8e87268d416f14905c3ee587cac0933ba8624c568ad5a4f"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/AGENCY_SUBSIDY_BILLING_OPERATIONS.md",
-      "sha256": "50665aaf99a0d8b3f7dfdde3f1369ccdc9d464abbdadadc5507f33b7d9880b90"
+      "sha256": "a87398404720db974bc57266e3d880238df4eafc08163928faf74da40f881aa2"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/BEE_SUITE_COMPLETE_GUIDE.md",
-      "sha256": "93baac67c0089d48a6ad74f73fa77de83003406de31ca589a24301de9de9cb39"
+      "sha256": "246f977cc6c95efda27f34174c72ff92beff1891cbadfa5a8855a99f0e25766f"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/BEE_SUITE_SCHOOL_DATA_IMPORT_AND_PARENT_LAUNCH_EMAILS.md",
-      "sha256": "c46868b8ee4635e2db152301b13b689fb3a1f1066595dc0e76f14a9460f73206"
+      "sha256": "0d1661d6d8107b5a14b93aef93cefb0fbcd30f0ef0453a08defcef4ef175aec8"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/BILLING_ADMIN_SOP.md",
-      "sha256": "f83c99faf34c4473d251b29a8312152ec60bd42826efd2e7167a5f70eee56738"
+      "sha256": "7ba54b77298905a7aaed5d6760ebd6cf5af2ffe3e99531051f4c59c833e5e55c"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md",
-      "sha256": "7023aeffa90524bb000c5cb04b3227b4d5427cc6284ae50b7261afe8daba3214"
+      "sha256": "cb9479580b35de73906c11c76f2c3ff61954cbe7626ebada901b5282d8579543"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/DIRECTOR_SOP.md",
-      "sha256": "2c1c995e6053bd4bf435999ce84dbfe2508ae1e04cd7cc49ff6972769019ea29"
+      "sha256": "1e84fd61d7afc8d06d4bb30a2822e074076352fc0aeaaf6be1c7fb3f74046bd1"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/EXECUTIVE_ADMIN_SOP.md",
-      "sha256": "4ef02755ca5430d38a91a36d8a312fe4b26828fdd0f9ca33a2569d9e5d1f02df"
+      "sha256": "1552121a68713de7c05f15d40bf6c58bfd1a73bd76dfe91b74111267a042f6b3"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md",
-      "sha256": "74c34c8dcc859ab92018d745bb4fcd36d16e6bb8408fb04ea3b1d94e60fbf0bb"
+      "sha256": "2043fa744e868e600b8598b055feb2be9a3ce1f010733addcd7c60b372ed2570"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/PARENT_ACH_PAYMENT_GUIDE.md",
-      "sha256": "4adc777d7bddd3dd603d45e187b3aa8af5f32e22175e90a7816ca073c448f7ba"
+      "sha256": "48f14aaaf00f907ab3246d8af15697b475252e23e01e566ce88dcd58efbf9abf"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/PARENT_PORTAL_INSTALL_GUIDE.md",
-      "sha256": "36c9d1e387d62f0b2735889720fde70d50ec9e0dfb87856e2bacadb49651c645"
+      "sha256": "3ccfd6d17621046f80e0771e320d7090e5de1637a7587d6f318ab5b755e3a673"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/PARENT_PORTAL_SOP.md",
-      "sha256": "72dd093c17af07fca843470c25fcb747652765dadbd1dbb19b8a3701edb73633"
+      "sha256": "627a575a93e187d3acbf9a86541b3e49e8973317226d5a999870af9a1e2ec366"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/SCHOOL_SYSTEM_OPERATING_MANUAL.md",
-      "sha256": "4331d2dc4111fe5eb306f6c43d1b5bc95bd7923b0938beba5611556de5ca8988"
+      "sha256": "d66840015ac0a460fab080e0a5529698bcd0d726880a490a54a4f00ffbeba355"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/SUPPORT_ESCALATION_GUIDE.md",
-      "sha256": "40f073682bf8045d579b8ccb6413460d9c522701f90973f8fb18d5ae3ab3b5cc"
+      "sha256": "33f6c98ab9d821aa2785daffaf17dfe4df3caa6052fef60d6a28bea30e1a41da"
     },
     {
       "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/TEACHER_SOP.md",
-      "sha256": "9d39a20494e48202a904008d10efca30fc17377f3735852653a517d34dc7f447"
+      "sha256": "d0e0a194e817fd7e162118e15c2fecc9348c4987ef2959d7889a7319ddc8745f"
     }
-  ]
+  ],
+  "textHashBasis": "SHA-256 of committed Git blob bytes (LF), independent of workingtree line endings"
 }

@@ -145,26 +145,18 @@ export function LandingHeroShowcase() {
   return (
     <div
       data-hero-product-stage
-      className="relative -mt-6 mx-auto h-[23rem] w-full max-w-[52rem] sm:mt-0 sm:h-[36rem] lg:h-[40rem] xl:h-[42rem] 2xl:h-[46rem]"
+      className="relative mx-auto h-[20rem] w-full max-w-[52rem] sm:h-[32rem] lg:h-[33rem] xl:h-[36rem]"
     >
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 360 260"
-        className="absolute left-[3%] top-[1%] h-[45%] w-[52%] text-amber-500/15 dark:text-amber-300/12"
-      >
-        <path d="M92 8h76l38 66-38 66H92L54 74 92 8Z" fill="none" stroke="currentColor" strokeWidth="2" />
-        <path d="M210 74h76l38 66-38 66h-76l-38-66 38-66Z" fill="none" stroke="currentColor" strokeWidth="2" />
-        <path d="M92 140h76l38 66-38 66H92l-38-66 38-66Z" fill="none" stroke="currentColor" strokeWidth="2" />
-      </svg>
-
-      <div className="absolute left-[4%] right-[4%] top-0 h-[clamp(11rem,52vw,12.75rem)] w-auto overflow-hidden rounded-l-[1.6rem] border-l-2 border-[#f6bd2c] bg-slate-200 shadow-[0_24px_70px_rgba(20,30,36,0.16)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-3 motion-safe:duration-700 dark:bg-slate-900 sm:left-auto sm:right-0 sm:h-[53%] sm:w-[55%] sm:rounded-l-[2rem]">
+      <div className="absolute inset-x-0 top-0 overflow-hidden rounded-[1.6rem] border border-white/75 bg-white/50 shadow-[0_24px_70px_rgba(36,89,131,0.15)] dark:border-white/15 dark:bg-white/5 sm:rounded-[2rem]">
         <Image
-          src="/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png"
-          alt="A family and school leader alongside BEE Suite check-in screens at a childcare front desk"
-          fill
-          sizes="(max-width: 639px) 92vw, (max-width: 1023px) 55vw, (max-width: 1280px) 34vw, 28vw"
-          className="object-contain object-center"
+          src="/brand/the-bee-suite/landing/connected-schools.webp"
+          alt="BEE Suite brand illustration of multi-school oversight, a childcare team working together, and a director with connected school workflows"
+          width={2048}
+          height={682}
+          sizes="(max-width: 1023px) 92vw, 56vw"
+          className="h-auto w-full"
           loading="eager"
+          fetchPriority="high"
         />
       </div>
 
@@ -176,13 +168,13 @@ export function LandingHeroShowcase() {
       <LaptopDevice
         src="/brand/the-bee-suite/screenshots/current/director-desktop-dashboard-light.png"
         alt="The BEE Suite director dashboard on a laptop"
-        className="absolute bottom-[18%] right-[1%] z-10 w-[88%] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-5 motion-safe:duration-700 sm:bottom-[6%]"
+        className="absolute bottom-[5%] left-[4%] z-10 w-[82%] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-5 motion-safe:duration-700 sm:bottom-[1%]"
         preload
       />
       <PhoneDevice
         src="/brand/the-bee-suite/screenshots/current/parent-iphone-overview-light.png"
         alt="The BEE Suite parent portal on a phone"
-        className="absolute bottom-[1%] left-[1%] z-20 w-[20%] -rotate-[1.5deg] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-left-3 motion-safe:duration-700"
+        className="absolute bottom-0 right-0 z-20 w-[20%] rotate-[1.5deg] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-left-3 motion-safe:duration-700"
       />
     </div>
   );
@@ -210,7 +202,7 @@ export function LandingRoleShowcase() {
               aria-controls="role-product-panel"
               onClick={() => setActiveId(view.id)}
               className={cn(
-                "relative min-h-12 shrink-0 touch-manipulation px-2 py-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-amber-300 dark:focus-visible:ring-offset-[#071018] sm:px-3 sm:text-sm",
+                "relative min-h-12 shrink-0 touch-manipulation px-2 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-amber-300 dark:focus-visible:ring-offset-[#071018] sm:px-3 sm:text-sm",
                 activeId === view.id
                   ? "text-amber-700 after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:bg-amber-500 dark:text-amber-300"
                   : "text-slate-500 hover:text-slate-950 dark:text-zinc-400 dark:hover:text-white",

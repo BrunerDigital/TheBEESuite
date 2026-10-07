@@ -36,6 +36,7 @@ function transactionClient() {
   const tx = {
     async $queryRaw(query) {
       const sql = query.strings.join("?");
+      if (/"Family".*FOR UPDATE/.test(sql)) return [{ centerId: "center-1" }];
       if (/"Center".*FOR UPDATE/.test(sql)) {
         releaseCenter = await lockCenter();
         hasCenterWriteLock = true;

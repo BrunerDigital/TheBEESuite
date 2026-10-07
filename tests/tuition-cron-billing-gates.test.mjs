@@ -11,6 +11,8 @@ let centerFields = { tuitionBillingEnabled: true };
 let transactions = 0;
 let invoices = 0;
 let locks = [];
+let currentFamilyCenterId = "center-1";
+let invoiceMetadata = null;
 const childFields = () => ({
   tuitionBillingEnabled: true,
   tuitionPlanId: "plan-1",
@@ -24,7 +26,11 @@ const child = () => ({
 });
 const plan = () => ({ id: "plan-1", centerId: "center-1", name: "Tuition", amountCents: 10000, cadence });
 const tx = {
-  async $queryRaw(query) { locks.push(query.strings.join("?")); return [{ id: "locked" }]; },
+  async $queryRaw(query) {
+    const sql = query.strings.join("?");
+    locks.push(sql);
+    return /"Family".*FOR UPDATE/.test(sql) ? [{ centerId: currentFamilyCenterId }] : [{ id: "locked" }];
+  },
   child: { async findFirst() { return { customFields: childFields() }; } },
   billingAccount: { async upsert() { return { id: "account-1" }; } },
   center: { async findUnique() { return { status: "active", customFields: centerFields }; } },
@@ -40,8 +46,9 @@ mock.module("@/lib/prisma", { namedExports: { prisma: {
   async $transaction(run) { transactions++; return run(tx); },
 } } });
 mock.module("@/lib/billing-invoices", { namedExports: {
-  async createBillingInvoiceForFamily() {
+  async createBillingInvoiceForFamily(_tx, input) {
     invoices++;
+    invoiceMetadata = input.customFields;
     return { created: true, invoice: { id: "invoice-1", number: "INV-1", totalCents: 10000 }, totalCents: 10000 };
   },
 } });
@@ -88,7 +95,43 @@ test("school pause after preflight prevents recurring invoice creation", async (
   assert.equal(result.body.failed, 1);
   assert.equal(transactions, 1);
   assert.equal(invoices, 0);
-  assert.match(locks[0], /"Child".*FOR UPDATE/);
-  assert.match(locks[1], /"BillingAccount".*FOR UPDATE/);
-  assert.match(locks[2], /"Center".*FOR UPDATE/);
+  assert.match(locks[0], /"Family".*FOR UPDATE/);
+  assert.match(locks[1], /"Child".*FOR UPDATE/);
+  assert.match(locks[2], /"BillingAccount".*FOR UPDATE/);
+  assert.match(locks[3], /"Center".*FOR UPDATE/);
+});
+
+test("family transfer after preflight skips both paused and enabled destination schools", async () => {
+  for (const paused of [true, false]) {
+    cadence = "weekly";
+    startsPeriod = "2026-W41";
+    pauseAfterPreflight = false;
+    centerFields = { tuitionBillingEnabled: true, tuitionBillingPaused: paused };
+    currentFamilyCenterId = "center-2";
+    transactions = 0;
+    invoices = 0;
+    locks = [];
+    const result = await run();
+    assert.equal(result.body.dueChildren, 1);
+    assert.equal(result.body.created, 0);
+    assert.equal(result.body.skipped, 1);
+    assert.equal(result.body.failed, 0);
+    assert.equal(invoices, 0);
+    assert.equal(transactions, 1);
+    assert.equal(locks.length, 1, "transfer rejected before account or school writes");
+    assert.match(locks[0], /"Family".*FOR UPDATE/);
+  }
+});
+
+test("unchanged eligible school creates an invoice with locked school metadata", async () => {
+  currentFamilyCenterId = "center-1";
+  centerFields = { tuitionBillingEnabled: true };
+  pauseAfterPreflight = false;
+  invoices = 0;
+  invoiceMetadata = null;
+  const result = await run();
+  assert.equal(result.body.created, 1);
+  assert.equal(result.body.failed, 0);
+  assert.equal(invoices, 1);
+  assert.equal(invoiceMetadata.centerId, "center-1");
 });

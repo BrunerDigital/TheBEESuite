@@ -183,6 +183,13 @@ async function GETHandler(request: NextRequest) {
         const grossTuitionCents = (amountCents + tuitionAdditionalChargesTotalCents) * invoiceWeekCount;
 
         const invoice = await prisma.$transaction(async (tx) => {
+          // Hold the family's current school assignment through invoice creation.
+          // A transfer after preflight must not bill against the old school gate.
+          const [freshFamily] = await tx.$queryRaw<Array<{ centerId: string | null }>>(
+            Prisma.sql`SELECT "centerId" FROM "Family" WHERE "id" = ${entry.child.familyId} FOR UPDATE`,
+          );
+          const centerId = freshFamily?.centerId;
+          if (!centerId || centerId !== entry.child.family.centerId || plan?.centerId !== centerId) return null;
           // Serialize against enrollment closeout; the preflight candidate may
           // have been withdrawn or its assignment disabled while the cron ran.
           await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Child" WHERE "id" = ${entry.child.id} FOR UPDATE`);
@@ -192,8 +199,6 @@ async function GETHandler(request: NextRequest) {
           }, select: { customFields: true } });
           if (!freshChild || clean(jsonObject(freshChild.customFields).tuitionPlanId) !== entry.planId
             || JSON.stringify(freshChild.customFields) !== JSON.stringify(entry.child.customFields)) return null;
-          const centerId = entry.child.family.centerId;
-          if (!centerId) throw new Error("Recurring tuition has no school assignment.");
           // Invoice creation locks the billing account before updating the school.
           // Keep the same order and take an exclusive school lock up front so
           // concurrent invoices cannot deadlock on a shared-lock upgrade.
@@ -266,7 +271,7 @@ async function GETHandler(request: NextRequest) {
               billingPeriod: entry.billingPeriod,
               billingCadence: entry.cadence,
               scheduledChargeDate: dueDate.toISOString(),
-              centerId: entry.child.family.centerId,
+              centerId,
               childId: entry.child.id,
               childName: entry.child.fullName,
               chargeSource: "tuitionPlan",

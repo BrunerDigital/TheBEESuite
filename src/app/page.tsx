@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
 import { LandingHeroShowcase, LandingRoleShowcase } from "@/components/landing-hero-showcase";
 import { PublicThemeToggle } from "@/components/public-theme-toggle";
 
@@ -43,10 +42,10 @@ const gettingStartedLinks = [
 ] as const;
 
 const primaryLinkClass =
-  "inline-flex min-h-13 touch-manipulation items-center justify-center gap-3 rounded-[1.15rem] bg-[#f6bd2c] px-7 py-3.5 text-sm font-semibold text-[#071018] shadow-[0_18px_48px_rgba(246,189,44,0.2)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-[#ffd15a] hover:shadow-[0_22px_54px_rgba(246,189,44,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6bd2c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8f5ed] dark:focus-visible:ring-offset-[#07131d] sm:px-8";
+  "inline-flex min-h-13 touch-manipulation items-center justify-center gap-3 rounded-[1.15rem] bg-[#f6bd2c] px-7 py-3.5 text-sm font-semibold text-[#071018] shadow-[0_18px_48px_rgba(246,189,44,0.2)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-[#ffd15a] hover:shadow-[0_22px_54px_rgba(246,189,44,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6bd2c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#edf7ff] dark:focus-visible:ring-offset-[#07131d] sm:px-8";
 
 const outlineLinkClass =
-  "inline-flex min-h-13 touch-manipulation items-center justify-center gap-2 rounded-[1.15rem] border border-amber-500/75 bg-white/45 px-7 py-3.5 text-sm font-semibold text-slate-950 transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-500 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8f5ed] dark:border-[#f6bd2c]/75 dark:bg-transparent dark:text-white dark:hover:border-[#ffd15a] dark:hover:bg-white/[0.06] dark:focus-visible:ring-[#f6bd2c] dark:focus-visible:ring-offset-[#07131d] sm:px-8";
+  "inline-flex min-h-13 touch-manipulation items-center justify-center gap-2 rounded-[1.15rem] border border-amber-500/75 bg-white/65 px-7 py-3.5 text-sm font-semibold text-slate-950 transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-500 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#edf7ff] dark:border-[#f6bd2c]/75 dark:bg-transparent dark:text-white dark:hover:border-[#ffd15a] dark:hover:bg-white/[0.06] dark:focus-visible:ring-[#f6bd2c] dark:focus-visible:ring-offset-[#07131d] sm:px-8";
 
 function WorkspaceLink({
   title,
@@ -88,22 +87,25 @@ export default function Home() {
         Skip to main content
       </a>
 
-      <div className="relative overflow-hidden bg-[#f8f5ed] text-slate-950 dark:bg-[#07131d] dark:text-white">
+      <div className="relative overflow-hidden bg-[#edf7ff] text-slate-950 dark:bg-[#07131d] dark:text-white">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,#f8f5ed_0%,#f8f5ed_51%,#efe5cf_100%)] dark:bg-[linear-gradient(118deg,#07131d_0%,#07131d_58%,#0b1c28_100%)]"
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,#edf7ff_0%,#edf7ff_51%,#d7edff_100%)] dark:bg-[linear-gradient(118deg,#07131d_0%,#07131d_58%,#0b1c28_100%)]"
         />
 
-        <header className="relative z-40 border-b border-slate-900/10 bg-[#f8f5ed]/90 backdrop-blur-xl dark:border-white/10 dark:bg-[#07131d]/90">
+        <header className="relative z-40 border-b border-slate-900/10 bg-white/85 backdrop-blur-xl dark:border-white/10 dark:bg-[#07131d]/90">
           <div className="mx-auto flex min-h-20 max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10 xl:px-12">
-            <BrandLogo
-              href="/"
-              compact
-              size="sm"
-              priority
-              className="min-h-11 touch-manipulation"
-              textClassName="[&>span:first-child]:text-amber-700 dark:[&>span:first-child]:text-amber-300"
-            />
+            <Link href="/" aria-label="The BEE Suite home" className="inline-flex min-h-11 shrink-0 touch-manipulation items-center rounded-xl bg-[#07131d] px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
+              <Image
+                src="/brand/the-bee-suite/logo-primary-horizontal-white.png"
+                alt="The BEE Suite"
+                width={1280}
+                height={360}
+                sizes="(max-width: 399px) 112px, (max-width: 639px) 176px, 224px"
+                className="h-auto w-28 min-[400px]:w-44 sm:w-56"
+                preload
+              />
+            </Link>
 
             <nav aria-label="Primary navigation" className="flex items-center gap-2 sm:gap-3">
               <div className="mr-2 hidden items-center gap-1 xl:flex">
@@ -135,7 +137,7 @@ export default function Home() {
               <PublicThemeToggle />
               <Link
                 href="/login"
-                className="inline-flex min-h-11 touch-manipulation items-center justify-center rounded-2xl bg-[#f6bd2c] px-5 py-2.5 text-sm font-semibold text-[#071018] shadow-[0_10px_28px_rgba(246,189,44,0.16)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-[#ffd15a] hover:shadow-[0_14px_34px_rgba(246,189,44,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8f5ed] dark:focus-visible:ring-amber-300 dark:focus-visible:ring-offset-[#07131d]"
+                className="inline-flex min-h-11 touch-manipulation items-center justify-center rounded-2xl bg-[#f6bd2c] px-5 py-2.5 text-sm font-semibold text-[#071018] shadow-[0_10px_28px_rgba(246,189,44,0.16)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-[#ffd15a] hover:shadow-[0_14px_34px_rgba(246,189,44,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#edf7ff] dark:focus-visible:ring-amber-300 dark:focus-visible:ring-offset-[#07131d]"
               >
                 Sign In
               </Link>
@@ -145,9 +147,9 @@ export default function Home() {
 
         <main id="main-content" className="relative">
           <section className="relative px-4 pb-20 pt-8 sm:px-6 sm:pb-24 sm:pt-16 lg:px-10 lg:pb-28 lg:pt-8 xl:px-12 xl:pb-24">
-            <div className="mx-auto grid max-w-[1440px] items-center gap-6 sm:gap-10 lg:min-h-[calc(100svh-13rem)] lg:grid-cols-[0.84fr_1.16fr] lg:gap-2 2xl:min-h-[44rem]">
-              <div className="relative z-20 max-w-[44rem] py-4 text-center lg:-mt-8 lg:py-10 lg:pr-8 lg:text-left xl:pr-12">
-                <h1 className="text-balance text-[clamp(3.35rem,5.35vw,5.35rem)] font-semibold leading-[0.94] tracking-[-0.06em]">
+            <div className="mx-auto grid max-w-[1440px] items-center gap-6 sm:gap-10 lg:min-h-[38rem] lg:grid-cols-[0.9fr_1.1fr] lg:gap-2 2xl:min-h-[40rem]">
+              <div className="relative z-20 max-w-[44rem] py-4 text-center lg:-mt-2 lg:py-10 lg:pr-8 lg:text-left xl:pr-12">
+                <h1 className=" text-[clamp(2.75rem,4.5vw,4.6rem)] font-bold leading-[1.02] tracking-[-0.06em]">
                   The school day, connected.
                 </h1>
                 <p className="mx-auto mt-5 max-w-[39rem] text-pretty text-base leading-7 text-slate-600 dark:text-zinc-300 sm:mt-7 sm:text-lg sm:leading-8 lg:mx-0">
@@ -201,28 +203,28 @@ export default function Home() {
 
           <section
             id="in-schools"
-            className="scroll-mt-20 bg-[#f5f3ee] px-4 py-20 text-slate-950 dark:bg-[#0d1b26] dark:text-white sm:px-6 sm:py-24 lg:px-10 lg:py-28 xl:px-14"
+            className="scroll-mt-20 bg-[#edf7ff] px-4 py-20 text-slate-950 dark:bg-[#0d1b26] dark:text-white sm:px-6 sm:py-24 lg:px-10 lg:py-28 xl:px-14"
           >
-            <div className="mx-auto grid max-w-[1400px] items-center gap-5 lg:grid-cols-[1.08fr_0.82fr_0.8fr] xl:gap-7">
-              <div className="relative aspect-[1.6/1] overflow-hidden rounded-[1.5rem] bg-slate-200 shadow-[0_24px_60px_rgba(20,30,36,0.12)] dark:bg-slate-900">
+            <div className="mx-auto grid max-w-[1400px] items-center gap-6 lg:grid-cols-[1.08fr_0.82fr_0.8fr] xl:gap-7">
+              <div className="relative aspect-[1.5/1] overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/60 shadow-[0_24px_60px_rgba(36,89,131,0.15)] dark:border-white/10 dark:bg-slate-900">
                 <Image
-                  src="/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png"
-                  alt="A preschool teacher alongside BEE Suite classroom and family update screens"
+                  src="/brand/the-bee-suite/landing/classroom-learning.webp"
+                  alt="A preschool teacher helps two children paint in a bright blue-and-yellow classroom"
                   fill
                   sizes="(max-width: 1024px) 100vw, 43vw"
-                  className="object-cover object-center"
+                  className="object-cover"
                 />
               </div>
-              <div className="relative aspect-[1.6/1] overflow-hidden rounded-[1.5rem] bg-slate-200 shadow-[0_24px_60px_rgba(20,30,36,0.12)] dark:bg-slate-900 lg:translate-y-10">
+              <div className="relative aspect-[1.5/1] overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/60 shadow-[0_24px_60px_rgba(36,89,131,0.15)] dark:border-white/10 dark:bg-slate-900 lg:translate-y-10">
                 <Image
-                  src="/brand/the-bee-suite/usage/bee-suite-director-operations.png"
-                  alt="A school leader alongside the BEE Suite School Operations screen"
+                  src="/brand/the-bee-suite/landing/director-family-welcome.webp"
+                  alt="A school director welcomes a parent and child at preschool reception"
                   fill
                   sizes="(max-width: 1024px) 100vw, 33vw"
-                  className="object-cover object-center"
+                  className="object-cover"
                 />
               </div>
-              <div className="px-1 pt-10 lg:pl-8 lg:pt-0 xl:pl-12">
+              <div className="px-1 lg:py-6">
                 <div aria-hidden="true" className="mb-7 h-1 w-16 bg-[#f6bd2c]" />
                 <h2 className="text-balance text-4xl font-semibold leading-[1.05] tracking-[-0.05em] sm:text-5xl">
                   Built for the way schools actually work.
@@ -306,7 +308,9 @@ export default function Home() {
               </Link>
             </div>
             <div className="flex flex-col gap-6 pt-8 sm:flex-row sm:items-center sm:justify-between">
-              <BrandLogo href="/" compact size="sm" className="min-h-11 touch-manipulation" />
+              <Link href="/" aria-label="The BEE Suite home" className="inline-flex min-h-11 touch-manipulation items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
+                <Image src="/brand/the-bee-suite/logo-primary-horizontal-white.png" alt="The BEE Suite" width={1280} height={360} sizes="224px" className="h-auto w-56" />
+              </Link>
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-zinc-400">
                 <Link href="/privacy" className="inline-flex min-h-11 touch-manipulation items-center transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
                   Privacy

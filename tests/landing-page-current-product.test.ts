@@ -46,20 +46,15 @@ test("landing page presents real product screens in device mockups", () => {
   assert.ok(showcaseSource.includes('fetchPriority={preload ? "high" : undefined}'), "hero LCP image should receive high fetch priority");
   assert.ok(showcaseSource.includes("sizes="), "device images should provide responsive sizes");
   assert.ok(showcaseSource.includes("data-hero-product-stage"), "hero should expose its composed product stage");
-  assert.ok(
-    showcaseSource.includes("left-[4%] right-[4%]") &&
-      showcaseSource.includes("h-[clamp(11rem,52vw,12.75rem)]") &&
-      showcaseSource.includes("sm:left-auto sm:right-0 sm:h-[53%] sm:w-[55%]"),
-    "school-use image should retain its landscape mobile frame with the revised desktop composition",
-  );
-  assert.ok(showcaseSource.includes("(max-width: 639px) 92vw"), "school-use image should request an appropriately sized mobile asset");
+  assert.ok(showcaseSource.includes("hero-connected-campus.webp"), "hero should use the recent branding graphic");
+  assert.ok(showcaseSource.includes('width={1774}') && showcaseSource.includes('height={887}'), "hero branding retains its intrinsic ratio");
+  assert.ok(showcaseSource.includes("(max-width: 1023px) 92vw"), "branding should request responsive mobile sizes");
 });
 
-test("landing page uses the existing in-school imagery as editorial product proof", () => {
+test("landing page uses the recent branding imagery alongside product proof", () => {
   for (const expected of [
-    "/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png",
-    "/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png",
-    "/brand/the-bee-suite/usage/bee-suite-director-operations.png",
+    "/brand/the-bee-suite/landing/hero-connected-campus.webp",
+    "/brand/the-bee-suite/landing/classroom-learning.webp",
     "Built for the way schools actually work.",
     "Welcome families with a smoother front desk.",
     "Keep classroom updates close at hand.",
@@ -139,19 +134,19 @@ test("landing page remains accessible, responsive, and motion-conscious", () => 
   assert.ok(!showcaseSource.includes("setInterval"), "product screens must not auto-advance");
 });
 
-test("landing page follows the editorial ink, white, and honey visual system in both themes", () => {
+test("landing page follows the baby blue, ink, white, and honey visual system in both themes", () => {
   for (const expected of [
     "bg-[#071018]",
     "bg-white",
-    "bg-[#f5f3ee]",
-    "bg-[#f8f5ed] text-slate-950 dark:bg-[#07131d] dark:text-white",
-    "linear-gradient(118deg,#f8f5ed_0%,#f8f5ed_51%,#efe5cf_100%)",
+    "bg-[#edf7ff]",
+    "bg-[#edf7ff] text-slate-950 dark:bg-[#07131d] dark:text-white",
+    "linear-gradient(118deg,#edf7ff_0%,#edf7ff_51%,#d7edff_100%)",
     "dark:bg-[linear-gradient(118deg,#07131d_0%,#07131d_58%,#0b1c28_100%)]",
     "bg-[#f6bd2c]",
     "dark:bg-[#071018]",
     "dark:bg-[#0a151f]",
     "dark:bg-[#0d1b26]",
-    "[&>span:first-child]:text-amber-700 dark:[&>span:first-child]:text-amber-300",
+    "/brand/the-bee-suite/logo-primary-horizontal-white.png",
     "PublicThemeToggle",
     "tracking-[-0.06em]",
     "[clip-path:polygon(0_35%,50%_100%,100%_35%,100%_100%,0_100%)]",

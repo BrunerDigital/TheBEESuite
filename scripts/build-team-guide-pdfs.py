@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import argparse
 import hashlib
 import html
 import io
 import re
 import shutil
 from pathlib import Path
+from datetime import date
 
 from PIL import Image as PILImage
 from reportlab.lib import colors
@@ -19,7 +21,7 @@ from reportlab.platypus import CondPageBreak, PageBreak, Paragraph, SimpleDocTem
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_CURRENT"
-PUBLICATION_DATE = "September 2, 2026"
+PUBLICATION_DATE = date.today().strftime("%B %d, %Y").replace(" 0", " ")
 
 FILES = [
     Path("docs/BEE_SUITE_COMPLETE_GUIDE.md"),
@@ -244,4 +246,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Rebuild current BEE Suite guide PDFs.")
+    parser.add_argument("--publication-date", type=date.fromisoformat, default=date.today(), help="Snapshot date in YYYY-MM-DD format")
+    args = parser.parse_args()
+    PUBLICATION_DATE = args.publication_date.strftime("%B %d, %Y").replace(" 0", " ")
     main()

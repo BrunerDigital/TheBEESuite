@@ -8,6 +8,7 @@ import {
   normalizeBillingPeriod,
   normalizeRecurringBillingDay,
   recurringDueDateForPeriod,
+  schoolTuitionBillingAllowed,
   shouldCreateRecurringTuitionInvoice,
   tuitionInvoiceWeekCount,
   utcBillingWeekday,
@@ -58,11 +59,11 @@ async function GETHandler(request: NextRequest) {
   const currentMonthlyDay = safeAsOf.getUTCDate();
   const currentWeeklyDay = utcBillingWeekday(safeAsOf);
   const openCenters = await prisma.center.findMany({
-    where: { status: { not: "closed" } },
-    select: { id: true },
+    where: { status: "active", customFields: { path: ["tuitionBillingEnabled"], equals: true } },
+    select: { id: true, customFields: true },
     take: 2000,
   });
-  const openCenterIds = openCenters.map((center) => center.id);
+  const openCenterIds = openCenters.filter((center) => schoolTuitionBillingAllowed(center.customFields)).map((center) => center.id);
 
   const assignedChildren = await prisma.child.findMany({
     where: {
@@ -118,7 +119,18 @@ async function GETHandler(request: NextRequest) {
     if (cadenceScope && cadence !== cadenceScope) return [];
     const weekBased = cadence === "weekly" || cadence === "biweekly" || cadence === "four_week";
     const billingPeriod = weekBased ? weeklyBillingPeriod : monthlyBillingPeriod;
-    const startsPeriod = defaultRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
+    const savedStartsPeriod = clean(entry.fields.tuitionBillingStartsPeriod);
+    if ((cadence === "biweekly" || cadence === "four_week") && !savedStartsPeriod) {
+      configurationFailures.push({
+        childId: entry.child.id,
+        familyId: entry.child.familyId,
+        error: "Recurring tuition is paused because its multiweek billing start period is missing.",
+      });
+      return [];
+    }
+    const startsPeriod = savedStartsPeriod
+      ? defaultRecurringBillingPeriod(savedStartsPeriod, safeAsOf, cadence)
+      : null;
     const billingDay = weekBased
       ? WEEKLY_TUITION_AUTOBILL_DAY
       : normalizeRecurringBillingDay(entry.fields.tuitionBillingDay, cadence);
@@ -171,6 +183,13 @@ async function GETHandler(request: NextRequest) {
         const grossTuitionCents = (amountCents + tuitionAdditionalChargesTotalCents) * invoiceWeekCount;
 
         const invoice = await prisma.$transaction(async (tx) => {
+          // Hold the family's current school assignment through invoice creation.
+          // A transfer after preflight must not bill against the old school gate.
+          const [freshFamily] = await tx.$queryRaw<Array<{ centerId: string | null }>>(
+            Prisma.sql`SELECT "centerId" FROM "Family" WHERE "id" = ${entry.child.familyId} FOR UPDATE`,
+          );
+          const centerId = freshFamily?.centerId;
+          if (!centerId || centerId !== entry.child.family.centerId || plan?.centerId !== centerId) return null;
           // Serialize against enrollment closeout; the preflight candidate may
           // have been withdrawn or its assignment disabled while the cron ran.
           await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Child" WHERE "id" = ${entry.child.id} FOR UPDATE`);
@@ -180,6 +199,24 @@ async function GETHandler(request: NextRequest) {
           }, select: { customFields: true } });
           if (!freshChild || clean(jsonObject(freshChild.customFields).tuitionPlanId) !== entry.planId
             || JSON.stringify(freshChild.customFields) !== JSON.stringify(entry.child.customFields)) return null;
+          // Invoice creation locks the billing account before updating the school.
+          // Keep the same order and take an exclusive school lock up front so
+          // concurrent invoices cannot deadlock on a shared-lock upgrade.
+          const billingAccount = await tx.billingAccount.upsert({
+            where: { familyId: entry.child.familyId },
+            update: {},
+            create: { familyId: entry.child.familyId, balanceCents: 0 },
+            select: { id: true },
+          });
+          await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "id" = ${billingAccount.id} FOR UPDATE`);
+          await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Center" WHERE "id" = ${centerId} FOR UPDATE`);
+          const currentCenter = await tx.center.findUnique({
+            where: { id: centerId },
+            select: { status: true, customFields: true },
+          });
+          if (currentCenter?.status !== "active" || !schoolTuitionBillingAllowed(currentCenter.customFields)) {
+            throw new Error("School tuition billing is paused; recurring invoice was not created.");
+          }
           const candidateInvoices = await tx.invoice.findMany({
             where: {
               status: { not: PaymentStatus.VOID },
@@ -234,7 +271,7 @@ async function GETHandler(request: NextRequest) {
               billingPeriod: entry.billingPeriod,
               billingCadence: entry.cadence,
               scheduledChargeDate: dueDate.toISOString(),
-              centerId: entry.child.family.centerId,
+              centerId,
               childId: entry.child.id,
               childName: entry.child.fullName,
               chargeSource: "tuitionPlan",

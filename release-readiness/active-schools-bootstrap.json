@@ -1,0 +1,481 @@
+{
+  "observedAt": "2026-09-28T20:19Z",
+  "scope": "active valid-CRM Kid City USA production tenant plus both active Miss Honeys; excludes demo tenants and Kid City unassigned lead queue",
+  "count": 59,
+  "query": "select t.slug as tenant_slug, b.name as brand, c.name, c.\"crmLocationId\", c.\"agencyReconciliationEnabled\", c.\"customFields\"->>'tuitionBillingEnabled' as tuition_billing_enabled from public.\"Center\" c join public.\"Organization\" o on o.id=c.\"organizationId\" join public.\"Brand\" b on b.id=o.\"brandId\" join public.\"Tenant\" t on t.id=b.\"tenantId\" where c.status='active' and ((t.slug='kid-city-usa' and c.\"crmLocationId\" ~ '^(.+[[:space:]]+-[[:space:]]+)?[A-Za-z]{2}[[:space:]]*\\|[[:space:]]*.+$') or t.slug='miss-honeys-learning-center') order by t.slug,c.name",
+  "rows": [
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Altamonte - Douglas",
+      "crmLocationId": "Kid City USA - FL | Altamonte - Douglas",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Altamonte - Maitland",
+      "crmLocationId": "Kid City USA - FL | Altamonte - Maitland",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Apopka",
+      "crmLocationId": "Kid City USA - FL | Apopka",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Avon",
+      "crmLocationId": "Kid City USA - IN | Avon",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Bargersville",
+      "crmLocationId": "Kid City USA - IN | Bargersville",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Canton",
+      "crmLocationId": "Kid City USA - NC | Canton",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - College Park",
+      "crmLocationId": "Kid City USA - FL | College Park",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Columbia",
+      "crmLocationId": "Kid City USA - TN | Columbia",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Cordera (Colorado Springs)",
+      "crmLocationId": "Kid City USA - CO | Colorado Springs - Cordera",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Corpus Christi",
+      "crmLocationId": "Kid City USA - TX | Corpus Christi",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Daytona Beach East",
+      "crmLocationId": "Kid City USA - FL | Daytona Beach East",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - DeLand - Ameila",
+      "crmLocationId": "Kid City USA - FL | Deland - Amelia",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - DeLand - Orange",
+      "crmLocationId": "Kid City USA - FL | Deland - Orange",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Deltona - Howland",
+      "crmLocationId": "Kid City USA - FL | Deltona - Howland",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Friendswood",
+      "crmLocationId": "Kid City USA - TX | Friendswood",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Fruit Cove",
+      "crmLocationId": "Kid City USA - FL | Jacksonville - Fruit Cove",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Glen St. Mary",
+      "crmLocationId": "Kid City USA - FL | Glen Saint Mary",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Granbury",
+      "crmLocationId": "Kid City USA - TX | Granbury",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Greenwood",
+      "crmLocationId": "Kid City USA - IN | Greenwood",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Hampton",
+      "crmLocationId": "Kid City USA - FL | Hampton",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Highlands Ranch",
+      "crmLocationId": "Kid City USA - CO | Highlands Ranch",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Holly Hill",
+      "crmLocationId": "Kid City USA - FL | Holly Hill",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Jasper - Baden Strasse",
+      "crmLocationId": "Kid City USA - IN | Jasper - Baden Strasse",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Jasper - Truman",
+      "crmLocationId": "Kid City USA - IN | Jasper - Truman",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Kokomo",
+      "crmLocationId": "Kid City USA - IN | Kokomo",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Lake City",
+      "crmLocationId": "Kid City USA - FL | Lake City",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Lake Wales",
+      "crmLocationId": "Kid City USA - FL | Lake Wales",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Leesburg",
+      "crmLocationId": "Kid City USA - FL | Leesburg",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Lewisburg",
+      "crmLocationId": "Kid City USA - TN | Lewisburg",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Longmont",
+      "crmLocationId": "Kid City USA - CO | Longmont",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - MacClenny",
+      "crmLocationId": "Kid City USA - FL | Macclenny",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Middleburg",
+      "crmLocationId": "Kid City USA - FL | Middleburg",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - North Richland Hills",
+      "crmLocationId": "Kid City USA - TX | North Richland Hills",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Oakleaf",
+      "crmLocationId": "Kid City USA - FL | Jacksonville - Oakleaf",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Oviedo",
+      "crmLocationId": "Kid City USA - FL | Oviedo",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Palatka",
+      "crmLocationId": "Kid City USA - FL | Palatka",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Paradise",
+      "crmLocationId": "Kid City USA - IN | Newburgh - Paradise",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Petersburg",
+      "crmLocationId": "Kid City USA - IN | Petersburg",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Pilot Point",
+      "crmLocationId": "Kid City USA - TX | Pilot Point",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Pisgah Forest",
+      "crmLocationId": "Kid City USA - NC | Pisgah Forest",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Port Orange",
+      "crmLocationId": "Kid City USA - FL | Port Orange",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Pulaski TN",
+      "crmLocationId": "Kid City USA - TN | Pulaski",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Sanford",
+      "crmLocationId": "Kid City USA - FL | Sanford",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Sarasota",
+      "crmLocationId": "Kid City USA - FL | Sarasota",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Soddy Daisy",
+      "crmLocationId": "Kid City USA - TN | Soddy Daisy",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - South Daytona",
+      "crmLocationId": "Kid City USA - FL | South Daytona",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Southpointe",
+      "crmLocationId": "Kid City USA - IN | Southpointe",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - St. Cloud",
+      "crmLocationId": "Kid City USA - FL | Saint Cloud",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Starke",
+      "crmLocationId": "Kid City USA - FL | Starke",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Tyler",
+      "crmLocationId": "Kid City USA - TX | Tyler",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Vero Beach",
+      "crmLocationId": "Kid City USA - FL | Vero Beach",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Wekiva",
+      "crmLocationId": "Kid City USA - FL | Longwood - Wekiva",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Westfield",
+      "crmLocationId": "Kid City USA - IN | Westfield",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Whitestown",
+      "crmLocationId": "Kid City USA - IN | Whitestown",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Winter Park",
+      "crmLocationId": "Kid City USA - FL | Winter Park",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Winter Springs",
+      "crmLocationId": "Kid City USA - FL | Winter Springs",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": null
+    },
+    {
+      "tenant_slug": "kid-city-usa",
+      "brand": "Kid City USA",
+      "name": "Kid City USA - Woodland Park - East Midland",
+      "crmLocationId": "Kid City USA - CO | Woodland Park - East Midland",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "miss-honeys-learning-center",
+      "brand": "Miss Honey's Learning Center",
+      "name": "Miss Honey's Learning Center - Centennial",
+      "crmLocationId": "Miss Honey's Learning Center - CO | Centennial",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "true"
+    },
+    {
+      "tenant_slug": "miss-honeys-learning-center",
+      "brand": "Miss Honey's Learning Center",
+      "name": "Miss Honey's Learning Center - Cuzco",
+      "crmLocationId": "Cuzco",
+      "agencyReconciliationEnabled": false,
+      "tuition_billing_enabled": "false"
+    }
+  ],
+  "limits": "Current school configuration projection only; no school is certified operationally ready. Null tuition flag requires canonical default semantics. Full billing pauses/account flags await Task3."
+}

@@ -1,6 +1,6 @@
 # Director SOP - The BEE Suite
 
-Last updated: September 2, 2026
+Last updated: October 7, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
@@ -48,6 +48,12 @@ Open `View enrollment status` from the director dashboard or School Operations, 
 
 ### Add A New Enrollment And Invite The Parent
 
+The registration form and the parent app invitation are two different actions:
+
+- Use the school-specific `Registration and enrollment form` when a family still needs to submit its enrollment packet. From `Enrollment CRM` -> `Leads`, select the lead and choose `Send registration form`. To copy the direct school link instead, open `Dashboard` -> `Explore dashboard details` -> `Registration and enrollment forms` -> `Copy registration link`.
+- Use `Send Parent App Invite` only after the family, guardian, and child are saved and verified in The BEE Suite. The invitation gives the guardian access to the parent app; it does not collect a registration packet.
+- If the family is already enrolled and its records are complete, skip the registration form and send the parent app invitation from the saved family record.
+
 1. Open `Families & Communication` -> `Families` -> `Add Family, Parent + Child`.
 2. Confirm `School / center`. Enter the family, primary guardian, and child. Leave `Prior balance owed at cutover` blank or `0` unless a verified pre-BEE Suite debt exists.
 3. Enter the guardian's personal email and phone. Choose the child's correct enrollment status, start date, and classroom when known.
@@ -68,9 +74,44 @@ Invitations are authorized from the records currently stored in The BEE Suite. A
 - Use an explicit `$0.00` child assignment for a verified fully agency-funded rate; it creates no family tuition invoice.
 - Four-week tuition cadence is available where configured. Review the service period and already-billed coverage before changing cadence.
 - `Create Invoice Now` creates an invoice; it does not immediately charge a payment method.
+- `One-time fee / credit` posts one approved late fee, vacation credit, or other adjustment to the current family ledger without changing the child's saved recurring tuition or future weekly invoices.
 - Void only an eligible unpaid invoice through the approved void action. Do not delete ledger history or void an invoice with a succeeded payment.
 - Withdrawn and historical families are excluded from active balance summaries but remain available for past-record review.
 - The school absorbs Stripe processing costs; no processing fee is added to the parent's payment total.
+
+### Record A Child Who Is Not Born Yet
+
+1. While using `Add Family, Parent + Child`, or after opening a saved family in `Families & Communication` -> `Families`, go to the child details.
+2. Add a child or open the expected child's existing record.
+3. Select `Child not born yet` and enter the `Expected due date`.
+4. Keep the child `pending` or `waitlisted`. Enter the planned start date when known and leave the classroom unassigned.
+5. Save and verify that the expected due date remains visible. Use the existing family notes for any additional non-medical follow-up; do not type a due date into the date-of-birth field.
+6. After birth, clear `Child not born yet`, enter the actual date of birth, and save. Enrollment and classroom assignment remain separate decisions.
+
+### Create An Enrollment Fee For A Pending Family
+
+1. Open `Billing & Payments` -> `Billing & invoices` and choose the exact school.
+2. Select the family labeled `Pending / waitlisted`. Do not mark the child enrolled merely to make the family appear in Billing.
+3. Select `Prepare Enrollment Fee`. Confirm `Family charge` and `Custom charge` are selected.
+4. Enter the approved amount, due date, billing period, and a clear `Enrollment fee` or deposit description.
+5. Select `Create Invoice`, confirm the exact family, and verify the invoice appears once on the ledger.
+
+This creates one invoice and does not enroll the child, assign a classroom, schedule recurring tuition, enable autopay, or submit a payment. Recurring tuition becomes available only after a child is current and assigned to a classroom.
+
+### Add One Late Fee Or Vacation Credit
+
+Do not change the child's saved tuition rate or recurring credits for a one-week exception.
+
+1. Open `Billing & Payments` -> `Billing & invoices`.
+2. Select the exact school and family, then confirm the sticky billing context and current balance.
+3. Under `Common billing tasks`, select `One-time fee / credit`.
+4. Choose `Late fee` to increase the family balance once or `Vacation credit` to lower it once.
+5. Enter the approved amount and `Applies to date`. Add the service week or policy reason in `Statement note` so the ledger entry is clear.
+6. Review `Current balance`, the signed one-time change, and `Projected balance`.
+7. Select `Post late fee` or `Post vacation credit`, then confirm the exact family and amount.
+8. Reopen the family ledger and verify the new entry and balance. Confirm the child's recurring tuition still shows the normal ongoing rate.
+
+This action does not submit a payment, enable autopay, edit an existing invoice, or repeat on a future invoice. Stop if the approved amount, family, service week, or policy reason is unclear.
 
 ### Confirmed AI Changes
 

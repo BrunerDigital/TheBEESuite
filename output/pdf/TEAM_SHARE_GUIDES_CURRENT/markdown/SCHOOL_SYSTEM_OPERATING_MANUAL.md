@@ -1,6 +1,6 @@
 # The BEE Suite School System Operating Manual
 
-Last updated: September 2, 2026
+Last updated: October 7, 2026
 
 Audience: owners, executives, school directors, billing admins, training leads, and launch support.
 

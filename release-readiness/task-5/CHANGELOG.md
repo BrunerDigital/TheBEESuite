@@ -1,0 +1,22 @@
+# Task 5 package changelog
+
+## 2026-09-29 — Initial internal release index
+
+- Added a role/audience index pointing to the existing canonical SOPs, onboarding guidance, support/FAQ, visual assets, App Store draft materials, school email kit, and public help pages.
+- Added provenance/authority register that separates canonical source, generated export, historical snapshot, review draft, and approval gate.
+- Verified public resource/support crawl, role route map, App Store screenshot manifest dimensions, PDF creation dates, selected source/export hash differences, brand palette declarations, and image encoding signatures.
+- Preserved every existing source and export. No public publishing or external send occurred.
+- Release holds: refresh and visually review role PDFs; resolve eight JPEG-as-PNG filename mismatches during reviewed asset refresh; verify approved store listing links and signed native binaries; confirm font family/license; refresh school-specific communication recipients and approvals.
+
+## 2026-09-29 — Deployed mobile-app page check
+
+- Opened the live `/mobile-apps` page after the coordinator reported deployment e326f6e6.
+- Confirmed Parent and Teacher still show “Coming shortly” and “Public compatibility pending verification”; web sign-ins and role PDF/FAQ/support links are visible.
+- Kept actual Apple listing availability unverified and retained the store-release hold; the live page displays no App Store URL.
+
+## 2026-10-01 — MacBook handoff and current deployment reconciliation
+
+- Rechecked the live `/mobile-apps` page in the browser. Parent and Teacher still show “Coming shortly” and “Public compatibility pending verification”; no store URLs are displayed.
+- Incorporated merged PR #442's MacBook handoff evidence: exact-source unsigned iOS checks passed on Xcode 26.6, but build 5 upload, signing, physical-device, TestFlight, and submission remain unverified or pending approval.
+- Recorded PR #445 (`665f89c3`) as a deployed web sign-out routing fix prompted by a Teacher build 5 observation. This does not establish a new native build or store availability.
+- Updated the source register and verification gaps to distinguish the PR #442 source baseline from the current deployment and retain the store-release hold.

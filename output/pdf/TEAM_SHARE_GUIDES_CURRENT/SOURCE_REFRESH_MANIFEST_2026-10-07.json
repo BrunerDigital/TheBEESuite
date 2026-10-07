@@ -1,0 +1,145 @@
+{
+  "date": "2026-10-07",
+  "base": "acd607dbe916856e434c93b5ad6382ff4ab46249",
+  "scope": "Current committed guide source regenerated. Existing synthetic visuals retained. First/last page layouts inspected; not a certification of every live workflow.",
+  "pdfs": [
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/AGENCY_SUBSIDY_BILLING_OPERATIONS.pdf",
+      "pages": 5,
+      "sha256": "5509eb06e69656e27316f7c0be82c491705fad740b6c7bd920c52af508e67a32"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/BEE_SUITE_COMPLETE_GUIDE.pdf",
+      "pages": 16,
+      "sha256": "5bf5d82f5952a0a196c581dda56910efa15455edde95ff4ced7d13dfabb66e78"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/BEE_SUITE_SCHOOL_DATA_IMPORT_AND_PARENT_LAUNCH_EMAILS.pdf",
+      "pages": 12,
+      "sha256": "d8e4929f63bf45e714c9aed48fca981becdee1a2249340f291c7f88768740e93"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/BILLING_ADMIN_SOP.pdf",
+      "pages": 11,
+      "sha256": "718a297cdc5b5de1ca25cc87cfbdf7202ec31e6255a9279bb081b3e776ef6431"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.pdf",
+      "pages": 7,
+      "sha256": "1b6b5ae965c63e7bc9341496652bb3a7866fdf6ddfd05e5ac4b05dbf1d75dc0c"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/DIRECTOR_SOP.pdf",
+      "pages": 9,
+      "sha256": "0e9b355d37a76526853df3f82f99a14e1c2b4cad7e0bee99e9caf875a208c5a2"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/EXECUTIVE_ADMIN_SOP.pdf",
+      "pages": 7,
+      "sha256": "61a6e3a32a2ec397d36321354335fe12e3e8277dfc570fa43cb909ce109c0dea"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.pdf",
+      "pages": 4,
+      "sha256": "7c2f9e26028727716c2f4bd10eb1e56a18683add9a0d372cd76c51c6ab78cccc"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/PARENT_ACH_PAYMENT_GUIDE.pdf",
+      "pages": 3,
+      "sha256": "921d5cb6cf870394a10835fb34a3dcce4e62abec827e29f95a162fb4689c29ae"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/PARENT_PORTAL_INSTALL_GUIDE.pdf",
+      "pages": 6,
+      "sha256": "185e95e53e3debbc93771c162c892c3f57faf918fcf1acdc92382bc5cdbe7928"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/PARENT_PORTAL_SOP.pdf",
+      "pages": 7,
+      "sha256": "894e6da8abea009656425cf52e76bd9ee5b45c826a4ebe7967859965007d3285"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/SCHOOL_SYSTEM_OPERATING_MANUAL.pdf",
+      "pages": 8,
+      "sha256": "3ab30e5c28585224c2c8a4c7cc1d2675d8366920ce580b6a5b4e7b203d75fc96"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/SUPPORT_ESCALATION_GUIDE.pdf",
+      "pages": 2,
+      "sha256": "97fd74b18fe70220b3ad3134963e80cfa387af88dccfad4159be956590297df7"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/TEACHER_SOP.pdf",
+      "pages": 5,
+      "sha256": "6199c8c61235d0451d8ea8d24aa2d64b754ea2840f917b718f18d181a061d17c"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/TEAM_SHARE_GUIDES_INDEX.pdf",
+      "pages": 1,
+      "sha256": "532c0da40a6e8f6459a2d3995abdc6e7ec64e87427669552fe7735dafb8dbcbd"
+    }
+  ],
+  "sources": [
+    {
+      "file": "scripts/build-team-guide-pdfs.py",
+      "sha256": "d8040b9723c9ded6c8e87268d416f14905c3ee587cac0933ba8624c568ad5a4f"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/AGENCY_SUBSIDY_BILLING_OPERATIONS.md",
+      "sha256": "a87398404720db974bc57266e3d880238df4eafc08163928faf74da40f881aa2"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/BEE_SUITE_COMPLETE_GUIDE.md",
+      "sha256": "246f977cc6c95efda27f34174c72ff92beff1891cbadfa5a8855a99f0e25766f"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/BEE_SUITE_SCHOOL_DATA_IMPORT_AND_PARENT_LAUNCH_EMAILS.md",
+      "sha256": "0d1661d6d8107b5a14b93aef93cefb0fbcd30f0ef0453a08defcef4ef175aec8"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/BILLING_ADMIN_SOP.md",
+      "sha256": "7ba54b77298905a7aaed5d6760ebd6cf5af2ffe3e99531051f4c59c833e5e55c"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md",
+      "sha256": "cb9479580b35de73906c11c76f2c3ff61954cbe7626ebada901b5282d8579543"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/DIRECTOR_SOP.md",
+      "sha256": "1e84fd61d7afc8d06d4bb30a2822e074076352fc0aeaaf6be1c7fb3f74046bd1"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/EXECUTIVE_ADMIN_SOP.md",
+      "sha256": "1552121a68713de7c05f15d40bf6c58bfd1a73bd76dfe91b74111267a042f6b3"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md",
+      "sha256": "2043fa744e868e600b8598b055feb2be9a3ce1f010733addcd7c60b372ed2570"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/PARENT_ACH_PAYMENT_GUIDE.md",
+      "sha256": "48f14aaaf00f907ab3246d8af15697b475252e23e01e566ce88dcd58efbf9abf"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/PARENT_PORTAL_INSTALL_GUIDE.md",
+      "sha256": "3ccfd6d17621046f80e0771e320d7090e5de1637a7587d6f318ab5b755e3a673"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/PARENT_PORTAL_SOP.md",
+      "sha256": "627a575a93e187d3acbf9a86541b3e49e8973317226d5a999870af9a1e2ec366"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/SCHOOL_SYSTEM_OPERATING_MANUAL.md",
+      "sha256": "d66840015ac0a460fab080e0a5529698bcd0d726880a490a54a4f00ffbeba355"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/SUPPORT_ESCALATION_GUIDE.md",
+      "sha256": "33f6c98ab9d821aa2785daffaf17dfe4df3caa6052fef60d6a28bea30e1a41da"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/markdown/TEACHER_SOP.md",
+      "sha256": "d0e0a194e817fd7e162118e15c2fecc9348c4987ef2959d7889a7319ddc8745f"
+    }
+  ],
+  "textHashBasis": "SHA-256 of committed Git blob bytes (LF), independent of workingtree line endings"
+}

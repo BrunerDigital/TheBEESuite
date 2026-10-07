@@ -305,7 +305,9 @@ test("director clean-start guide is bundled in both current PDF packets", () => 
 
   assert.match(teamBuilder, /Path\("docs\/sops\/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.md"\)/);
   assert.match(teamBuilder, /Path\("docs\/AGENCY_SUBSIDY_BILLING_OPERATIONS\.md"\)/);
-  assert.match(teamBuilder, /PUBLICATION_DATE = "September 2, 2026"/);
+  assert.match(teamBuilder, /--publication-date/);
+  assert.match(teamBuilder, /type=date\.fromisoformat, default=date\.today\(\)/);
+  assert.doesNotMatch(teamBuilder, /PUBLICATION_DATE = "September 2, 2026"/);
   assert.match(transitionBuilder, /"DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.pdf": "02_DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.pdf"/);
   assert.match(transitionBuilder, /shutil\.copy2\(MANIFEST, OUT \/ "README\.md"\)/);
 });

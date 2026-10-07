@@ -66,12 +66,13 @@ async function blockedRace(label, table, mutate) {
   } finally { release(); }
   await mutation;
   const { status, body } = await invoiceRun;
-  assert.equal(status, 200);
+  assert.equal(status, label === 'pause-race' ? 500 : 200);
+  if (label === 'pause-race') assert.match(body.failures[0]?.error ?? '', /paused/i);
   assert.equal(body.failed, label === 'pause-race' ? 1 : 0, `${label}: only the school pause intentionally fails invoicing`);
   assert.equal(body.created, 0);
   assert.equal(await prisma.invoice.count({ where: { billingAccount: { familyId: `${prefix}-0` } } }), 0);
   await deactivate(prefix);
-  results.push({ scenario: label, observedPostgresLockWait: blocked, created: body.created, failed: body.failed });
+  results.push({ scenario: label, observedPostgresLockWait: blocked, httpStatus: status, created: body.created, failed: body.failed });
 }
 try {
   assert.equal(await prisma.tenant.count(), 0, 'Rehearsal database must be empty; retain evidence and use a fresh database on rerun');

@@ -1,0 +1,13 @@
+# Final release risk review — GPT-6 Astra
+
+Observed 2026-10-06 20:24 UTC. Reviewer: GPT-6 Astra. Candidate `b19d3e0f33f13e8fb1476a4dd17a2e0bae731e59` against production/main `9b50b470c1fff93751356147ee207cc3c5fe18a3`. Sources: exact `git diff origin/main...HEAD`, `release-readiness/manifest.md`, and Tasks 2–5's committed reports. No production mutation or file edit was made by this reviewer.
+
+**Decision:** conditional GO for the scoped source-only protected code release after the integrated full build, protected PR checks, exact pre/post-deployment SHA, canonical health/logs, and safe changed-flow verification. **HOLD** for school-fleet and business activation.
+
+The billing patch fails closed for missing multiweek anchors and school tuition holds; it preserves fresh child revalidation, takes the family BillingAccount lock before an exclusive Center lock, and corrects PaymentIntent success metadata without bypassing settlement claiming. No schema or API shape change is introduced. No new release-blocking defect was found in the three changed production source files.
+
+The mocked same-school concurrency test does not prove PostgreSQL lock behavior. A pre-existing multi-family invoice account/Center lock inversion and a possible autopay consent race remain separately scoped follow-ups. No live charge or invoicing test is authorized. The next naturally scheduled tuition run should be monitored for failures and configuration-review counts; do not manually invoke a billing run for smoke testing. The webhook test includes source assertions and a claim-helper check rather than a full event-to-ledger execution.
+
+Fleet rollout remains held by unverified authorization for populated Longmont/Tyler closures, Centennial's 14 unmatched staff Auth identities, and positive verification of the reported Kokomo family access/attendance/media paths. Granbury ACH capability evidence is dated September 29; Centennial editing, prior-account methods, Kokomo rate intent, and aged/manual-review payment events remain open. Daily database backups are evidenced, but PITR is off and independent Storage bytes/key custody, recovery ownership and alert acknowledgment remain incomplete. Approved native build/API pairing, public store URLs, and refreshed/visually reviewed release PDFs are not yet verified.
+
+Complete the integrated production gate and protected PR first. Refresh the exact production rollback point before merge, then verify the intended merge SHA Ready on canonical aliases, `/api/health`, relevant cron/webhook/runtime logs and read-only changed-flow evidence. Existing authorized sessions should be used for Parent/Teacher/Director/Corporate and school-isolation checks; unavailable positive checks must be reported as incomplete.

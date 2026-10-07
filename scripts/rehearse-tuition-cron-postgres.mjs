@@ -8,7 +8,10 @@ import { NextRequest } from 'next/server';
 
 // Explicit disposable localhost database only. Never load the application's env files.
 const url = new URL(process.env.TUITION_REHEARSAL_DATABASE_URL || '');
+assert.equal(url.protocol, 'postgresql:');
 assert.equal(url.hostname, '127.0.0.1');
+assert.equal(url.search, '', 'Connection query parameters could override the validated local endpoint');
+assert.equal(url.hash, '', 'Connection fragments are not supported');
 assert.ok(url.port && url.port !== '5432', 'Use a separately started disposable cluster');
 assert.match(url.pathname, /^\/bee_tuition_rehearsal_[a-z0-9_]+$/);
 assert.equal(process.env.TUITION_REHEARSAL_CONFIRM, 'synthetic-disposable-local');

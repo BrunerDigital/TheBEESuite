@@ -7,6 +7,9 @@ import path from 'node:path';
 
 for (const [name, url, confirmation] of [
   ['remote database', 'postgresql://fixture@db.example.com:55437/bee_tuition_rehearsal_fixture', 'synthetic-disposable-local'],
+  ['query-string remote host override', 'postgresql://fixture@127.0.0.1:55437/bee_tuition_rehearsal_fixture?host=db.example.com', 'synthetic-disposable-local'],
+  ['query-string socket override', 'postgresql://fixture@127.0.0.1:55437/bee_tuition_rehearsal_fixture?host=/var/run/postgresql', 'synthetic-disposable-local'],
+  ['non-PostgreSQL protocol', 'mysql://fixture@127.0.0.1:55437/bee_tuition_rehearsal_fixture', 'synthetic-disposable-local'],
   ['default cluster port', 'postgresql://fixture@127.0.0.1:5432/bee_tuition_rehearsal_fixture', 'synthetic-disposable-local'],
   ['ordinary database', 'postgresql://fixture@127.0.0.1:55437/postgres', 'synthetic-disposable-local'],
   ['missing explicit disposable confirmation', 'postgresql://fixture@127.0.0.1:55437/bee_tuition_rehearsal_fixture', ''],

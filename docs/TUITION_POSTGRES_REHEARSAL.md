@@ -11,7 +11,7 @@ TUITION_REHEARSAL_SOURCE_COMMIT="$(git rev-parse HEAD)" \
 node --import tsx --experimental-test-module-mocks scripts/rehearse-tuition-cron-postgres.mjs
 ```
 
-The runner rejects remote hosts, port 5432, ordinary database names, missing disposable confirmation nonempty tenant data, dirty tracked work and a supplied revision that differs from HEAD. Transfer/withdrawal must return HTTP 200 with zero failures. School pause intentionally returns HTTP 500 with exactly one paused-school invoicing failure; that exact failure is asserted separately. Other requests must return HTTP 200 with zero failures. It verifies:
+The runner rejects non-PostgreSQL URLs, incoming connection query parameters/fragments (including remote host and socket overrides), remote hosts, port 5432, ordinary database names, missing disposable confirmation nonempty tenant data, dirty tracked work and a supplied revision that differs from HEAD. Transfer/withdrawal must return HTTP 200 with zero failures. School pause intentionally returns HTTP 500 with exactly one paused-school invoicing failure; that exact failure is asserted separately. Other requests must return HTTP 200 with zero failures. It verifies:
 
 - Dry run reports true, zero created, zero cents and no invoices; persisted invoice count stays zero.
 - Two concurrent cron requests covering two families at one school create exactly two invoices, two tuition ledger entries and the expected family balances; neither request fails.

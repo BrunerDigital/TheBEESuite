@@ -101,8 +101,8 @@ export default function Home() {
                 alt="The BEE Suite"
                 width={1280}
                 height={360}
-                sizes="(max-width: 639px) 176px, 224px"
-                className="h-auto w-44 sm:w-56"
+                sizes="(max-width: 399px) 112px, (max-width: 639px) 176px, 224px"
+                className="h-auto w-28 min-[400px]:w-44 sm:w-56"
                 preload
               />
             </Link>

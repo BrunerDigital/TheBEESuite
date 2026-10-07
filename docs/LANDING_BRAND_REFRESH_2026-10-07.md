@@ -33,3 +33,7 @@ Concept and rendered screenshots were visually inspected with `view_image`; the 
 - The repository's web-push postinstall patch was applied after installing dependencies with scripts disabled.
 
 Release readiness is verified separately against the final commit and canonical deployment. Screenshots and browser helpers are temporary QA artifacts, not product files.
+
+## Narrow-phone review follow-up
+
+Reduced the header wordmark to 112px below 400px; it returns to 176px at 400px and 224px at 640px. Verified that every visible header link and button stays inside 320px and 390px viewports in both themes.

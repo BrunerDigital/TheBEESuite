@@ -1,6 +1,6 @@
 # Billing Admin SOP - The BEE Suite
 
-Last updated: September 2, 2026
+Last updated: October 7, 2026
 
 Audience: billing admins, school directors handling billing, accounting users, and launch support.
 
@@ -28,6 +28,7 @@ Use the role-specific director/billing entry point at `https://thebeesuite.io/di
 - Weekly and four-week tuition cadences are supported where configured. Cadence changes anchor after already-billed coverage; verify the next service period before saving.
 - An explicit `$0.00` child assignment records a verified fully agency-funded rate and does not create a family tuition invoice.
 - Weekly tuition credits are itemized by child and service period. Apply and verify credits before deciding the remaining amount to collect.
+- A single late fee or vacation credit belongs under `One-time fee / credit`; it changes the family balance once and does not change recurring tuition or repeat on future weekly invoices.
 - Withdrawn and historical families do not appear in active receivables totals; use past-record review when historical balances need investigation.
 - `Create Invoice Now` creates a due-now invoice and does not charge a payment method.
 - Use the approved `Void invoice` action only for an eligible invoice with no succeeded payment. A voided invoice cannot open a new checkout. Preserve the invoice, payment, and ledger audit history.
@@ -108,6 +109,19 @@ The opening balance is a cutover tool, not a tuition-rate field.
 
 The intake form blocks negative opening balances and blocks adding another opening balance to a matched existing family.
 
+## Invoice A Pending Or Waitlisted Family
+
+Use this flow for an approved enrollment, registration, or deposit fee before care begins. A pending family appears in the family selector with `Pending / waitlisted`; changing enrollment status is not required.
+
+1. Open `Billing & Invoices`, select the exact school, and choose the prospective family.
+2. Confirm the pending/waitlisted banner and the correct family and child names.
+3. Select `Prepare Enrollment Fee`.
+4. Use `Custom charge` for an entered approved amount, or `Product / fee` when the school already has the exact fee configured.
+5. Enter the approved amount, due date, billing period, and description, then create the invoice.
+6. Reopen the ledger and verify the invoice appears exactly once. If payment instructions are needed, use the separate secure parent payment flow.
+
+Do not use a tuition plan for a prospective family. This action does not make the child current, assign a classroom, start recurring tuition, enable autopay, or charge a payment method. If the family already has a current sibling, select the pending child under `Family charge`; the pending child still cannot receive recurring tuition.
+
 ## Create Or Review A Family Invoice
 
 1. Open `Billing & Invoices`.
@@ -119,6 +133,25 @@ The intake form blocks negative opening balances and blocks adding another openi
 7. Add a clear description if needed.
 8. Create the invoice.
 9. Confirm the invoice appears on the family ledger and parent portal.
+
+## Post One Late Fee Or Vacation Credit
+
+Use the common `One-time fee / credit` task for an approved one-family exception. Do not temporarily change the child's saved tuition plan, recurring additional charges, or recurring credits and then try to remember to change them back.
+
+1. Open `Billing & Payments` -> `Billing & invoices`.
+2. Select the exact school and family. Confirm the sticky billing context, current balance, open invoices, and recent ledger entries.
+3. Select `One-time fee / credit` under `Common billing tasks`.
+4. Choose:
+   - `Late fee` to post one debit and increase the family balance.
+   - `Vacation credit` to post one credit and lower the family balance.
+   - `Other credit` or `Other fee / debit` only when the approved reason does not fit a named action.
+5. Enter the approved positive amount and `Applies to date`. The balance changes when posted; this date identifies the service or policy date in the ledger. Do not enter a minus sign; the selected action controls whether the ledger amount is positive or negative.
+6. Add the service week or policy reason in `Statement note`. A note is required for either `Other` action and is shown in the family ledger.
+7. Compare `Current balance`, the signed one-time change, and `Projected balance`.
+8. Select the named post action and read the confirmation aloud: exact family, amount, balance direction, and assurance that recurring tuition is unchanged.
+9. Reopen the family ledger. Verify the named entry appears once, the running balance is correct, and the child's ongoing tuition rate and recurring credits remain unchanged.
+
+This is a ledger adjustment. It does not submit a payment, enable autopay, void or edit an invoice, or repeat on future billing runs. If policy requires a separate formal invoice for the fee, use `Family charge` -> `Custom charge` instead and do not also post a debit.
 
 ## Batch Tuition Run
 
@@ -252,16 +285,32 @@ Card details are encrypted by Stripe hardware and never enter The BEE Suite. Sma
 
 ## Subsidy Or Agency Payments
 
-Use `docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md` or the public guide at `https://thebeesuite.io/resources/agency-payment-reconciliation` for the complete workflow.
+Release gate: the expanded batch, ledger, dual-review, adjustment, and period-close steps below are not production-live until the two agency-ledger migrations and the exact reviewed application commit have been released and validated. Until then, follow the production public guide's baseline direct `Record remittance` steps. A preview deployment does not prove runtime compatibility with the unmigrated production database.
+
+Until release, use the public guide at `https://thebeesuite.io/resources/agency-payment-reconciliation` only for the baseline direct-remittance workflow. After the migrations and application release are validated, use `docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md` and the release-aligned public guide for the complete expanded workflow.
+
+Baseline procedure before exact-school activation:
+
+1. Open the approved or partially paid claim for the exact school and choose `Record remittance`.
+2. Enter the exact remittance amount, agency paid date, payment method, and unique external ACH, check, or portal reference from the evidence.
+3. Review those fields and save once. After a timeout or ambiguous response, refresh before retrying.
+4. Verify the claim paid amount/status and the saved remittance/reference, and confirm parent-visible family responsibility is unchanged.
+5. Correct an error with `Reverse remittance` and a specific reason, then verify the original and compensating history. Never delete or overwrite the original entry.
+
+Expanded procedure only after application release, database migration, and exact-school activation:
 
 1. Open `Billing & Payments` -> `Billing & invoices` -> `Agency receivables` for the exact school.
 2. Confirm the school-specific agency program shows `Ready`.
-3. Match the approved claim to the agency, child, authorization, service period, amount, paid date, and remittance reference.
-4. Use `Record remittance` on the approved claim. Do not use the family cash/check payment action for agency money.
-5. Refresh and verify the claim paid amount/status, remittance history, matching agency ledger application, and unchanged parent-visible family responsibility.
-6. Reverse an incorrect remittance with a correction reason, then enter the corrected record. Never delete or overwrite payment evidence.
+3. Match the approved claim and remittance evidence to the agency, child, authorization, service period, amount, paid date, method, and unique payment reference.
+4. Prepare one deposit batch and its exact claim allocations. Use each claim only once per active batch allocation. Unsupported cash remains unapplied with an owner and follow-up date; never guess an allocation or use the family cash/check action.
+5. A different billing administrator or accounting reviewer approves or rejects the batch. The preparer cannot post their own batch.
+6. Refresh and verify deposit total equals allocated plus unapplied cash, the calculated and agency-ledger balances have zero variance, and family responsibility is unchanged.
+7. Use reviewed adjustment or batch-reversal controls for corrections. Never delete or overwrite financial evidence.
+8. Export deposits, ledger activity, and reconciliation before closing the school accounting period. CSV exports preserve formula-like external values as text. Use the history controls when an older posted, rejected, reversed, or reconciled record is not on the first page; open items remain visible on every page. Do not close beyond the current UTC accounting day. Clear every earlier pending batch, allocation, and adjustment through the period end. Close preflight never recreates claim approvals, direct remittances, adjustments, or reversals from today's editable program mappings. It may restore a missing controlled-batch event only from immutable event-time snapshots and exact source links; missing or conflicting evidence blocks close. The close audit commits atomically with the period, and family billing is unchanged. If a historical period must be reopened, reopen later closed periods first and retain the reason for each period.
 
-Stop when a bank deposit or Stripe payout cannot be tied to an exact approved claim and agency remittance notice. Do not write off or shift a balance to the family without separate director or accounting approval.
+Access continuity: platform owners, brand administrators, regional managers, center directors, assistant directors, and billing administrators retain the baseline claim and direct `Record remittance` workflow before exact-school activation. The expanded workflow requires two distinct authorized active users for that school. All-schools and read-only-auditor views remain read-only; classroom and family roles cannot mutate agency financial records. Activation does not remove unrelated billing, enrollment, classroom, parent, payment-method, or reporting access.
+
+Stop when a bank deposit or Stripe payout cannot be tied to exact agency evidence, a batch reference is duplicated, the effective date falls within or before the latest closed period, or reconciliation has a variance. Do not write off or shift a balance to the family without separate documented approval.
 
 ## Reconciliation Procedure
 

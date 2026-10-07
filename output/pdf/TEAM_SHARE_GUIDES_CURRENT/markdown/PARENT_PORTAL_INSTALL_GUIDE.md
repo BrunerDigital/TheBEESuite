@@ -1,6 +1,6 @@
 # Parent Step-By-Step Guide: Install The BEE Suite Parent Portal
 
-Last updated: September 2, 2026
+Last updated: October 7, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite.
 

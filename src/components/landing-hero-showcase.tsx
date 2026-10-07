@@ -153,7 +153,7 @@ export function LandingHeroShowcase() {
           alt="A director and teacher collaborate in a blue-and-yellow preschool lobby while a family arrives"
           width={1774}
           height={887}
-          sizes="(max-width: 1023px) 92vw, 56vw"
+          sizes="(max-width: 1023px) 92vw, (max-width: 1485px) 56vw, 832px"
           className="h-auto w-full"
           loading="eager"
           fetchPriority="high"

@@ -90,6 +90,7 @@ type ShellUser = {
   email: string;
   role: string;
   accessScope?: string;
+  isSchoolOwner?: boolean;
   centerIds?: string[];
   profilePhotoUrl?: string | null;
   branding?: WorkspaceBranding;
@@ -922,7 +923,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
             <AccountMenu currentUser={currentUser} onLogout={onLogout ?? (() => undefined)} previewMode={previewMode} previewHrefBase={previewHrefBase} onNavigate={close} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{shellUserViewText(currentUser.name, currentUser)}</div>
-              <div className="truncate text-xs text-muted-foreground">{roleLabel(currentUser.role)}</div>
+              <div className="truncate text-xs text-muted-foreground">{currentUser.isSchoolOwner ? "School owner" : roleLabel(currentUser.role)}</div>
             </div>
           </div>
         </div>
@@ -1013,7 +1014,7 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
               )}
             </div>
             <div className="px-3 pb-2">
-              <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{roleLabel(currentUser.role)}</span>
+              <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{currentUser.isSchoolOwner ? "School owner" : roleLabel(currentUser.role)}</span>
             </div>
           </>
         )}
@@ -1715,7 +1716,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                     <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
                     <div className="hidden rounded-lg border bg-card/70 px-3 py-1.5 text-right 2xl:block">
                       <div className="text-xs font-medium leading-none">{displayUserName}</div>
-                      <div className="mt-1 text-[0.65rem] text-muted-foreground">{roleLabel(currentUser.role)}</div>
+                      <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.isSchoolOwner ? "School owner" : roleLabel(currentUser.role)}</div>
                     </div>
                     {!previewMode ? (
                       <Button variant="outline" size="icon" className="hidden 2xl:inline-flex" aria-label="Sign out" onClick={logout}>

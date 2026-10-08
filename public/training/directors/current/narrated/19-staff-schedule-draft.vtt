@@ -1,0 +1,17 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:10.728
+Confirm the exact school and record. This uses the real app editor with synthetic training records. Check the school, family or employee before changing a field.
+
+00:00:10.728 --> 00:00:21.264
+Open the schedule section. Choose the intended employee and the existing schedule row when correcting one. This example prepares a new synthetic row.
+
+00:00:21.264 --> 00:00:31.800
+Enter start and end times. Use school-local times and the approved shift. Check for overlapping coverage.
+
+00:00:31.800 --> 00:00:42.336
+Review the schedule status. Scheduled and Confirmed represent different states. Use the status supported by the actual staffing plan.
+
+00:00:42.336 --> 00:00:54.128
+Review before saving. In normal use, save once only with authorization, wait for confirmation, then reopen the record. This demonstration stops before saving.
+

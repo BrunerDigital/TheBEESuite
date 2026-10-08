@@ -1,0 +1,17 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:11.192
+Start with the correct school. Search for an existing household before creating one. This empty training directory uses no live records.
+
+00:00:11.192 --> 00:00:22.384
+Enter the household, guardian and child. Enter approved identity details. This training example is pending enrollment and uses reserved example email addresses.
+
+00:00:22.384 --> 00:00:34.112
+Save the training intake. Select Save Family, Parent plus Child once. This local training backend retains the records without creating real logins or kiosk credentials.
+
+00:00:34.112 --> 00:00:45.304
+Reopen the saved record. Reload the page and confirm the family name and address were retained. In normal work, continue with guardian and child records.
+
+00:00:45.304 --> 00:00:56.496
+Verify persistence. This receipt is loaded from the local training file. A saved family does not establish portal access, tuition or enrollment.
+

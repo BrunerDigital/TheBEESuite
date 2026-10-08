@@ -1,0 +1,14 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:13.200
+Read the workflow purpose. This screen stores workflow configuration only. Saving it does not run a workflow or send messages. Review the intended audience and purpose.
+
+00:00:13.200 --> 00:00:26.400
+Review trigger and conditions. Check the recorded trigger, audience and delay. These describe the intended process; they do not prove that an action will execute.
+
+00:00:26.400 --> 00:00:39.600
+Review the proposed action. Inspect delay, channel, template and review requirement. A configured workflow is not authorization to send real messages.
+
+00:00:39.600 --> 00:00:52.800
+Verify actual outcomes. Saved workflow history alone is not proof of execution. Verify sends and delivery in the actual communication workflow.
+

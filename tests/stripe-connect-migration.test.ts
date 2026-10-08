@@ -271,13 +271,15 @@ test("branded invitation accurately separates Stripe verification from program e
   const invite = buildStripeReauthorizationInvite({
     schoolName: "Kid City USA - Example",
     reauthorizationUrl: "https://thebeesuite.io/stripe-reauthorization?center=center_1",
+    stripeContactEmail: "owner@example.com",
   });
   assert.match(invite.subject, /Finish your school's Stripe account setup/);
-  assert.match(invite.text, /school email and its existing Stripe password/i);
-  assert.match(invite.text, /no password was set/i);
+  assert.match(invite.text, /login authorized for that existing account and its existing Stripe password/i);
+  assert.match(invite.text, /owner@example.com/i);
+  assert.match(invite.text, /do not create another connected account/i);
   assert.match(invite.text, /never receives or stores the Stripe password/i);
   assert.match(invite.text, /Program eligibility and funding approvals remain/i);
-  assert.match(invite.text, /Parent payments can continue/i);
+  assert.match(invite.text, /current approved billing process/i);
   assert.match(invite.html, /logo-primary-horizontal-white\.png/);
   assert.match(invite.html, /thebeesuite\.io\/stripe-reauthorization/);
   assert.doesNotMatch(invite.html, /connect\.stripe\.com/);
@@ -434,14 +436,14 @@ test("approved corporate verification links are current-due only and cannot invo
   assert.match(card, /I agree to the terms of service/);
   assert.match(card, /schoolEmail/);
   assert.match(card, /existing Stripe password/);
-  assert.match(card, /no Stripe password was created/);
+  assert.match(card, /do not create another connected account/);
   assert.match(card, /never receives or stores the Stripe password/);
   assert.doesNotMatch(card, /\$99|software-payment-method|stripe_balance/);
   const standardCard = readFileSync("src/components/stripe-reauthorization-card.tsx", "utf8");
   assert.match(standardCard, /I agree to the terms of service/);
   assert.match(standardCard, /schoolEmail/);
   assert.match(standardCard, /existing Stripe password/);
-  assert.match(standardCard, /no Stripe password was created/);
+  assert.match(standardCard, /do not create another connected account/);
   assert.match(standardCard, /never receives or stores the Stripe password/);
   assert.doesNotMatch(standardCard, /\$99|software-payment-method|stripe_balance/);
   assert.match(migrationRoute, /collectionFields: corporateVerification \? "currently_due" : "eventually_due"/);

@@ -29,7 +29,10 @@ async function GETHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     const loginUrl = new URL("/directors", baseUrl);
-    loginUrl.searchParams.set("next", "/billing-settings");
+    const requestedCenterId = request.nextUrl.searchParams.get("centerId");
+    loginUrl.searchParams.set("next", requestedCenterId
+      ? `/billing-settings?center=${encodeURIComponent(requestedCenterId)}`
+      : "/billing-settings");
     return NextResponse.redirect(loginUrl);
   }
 

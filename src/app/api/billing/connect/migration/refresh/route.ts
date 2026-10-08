@@ -54,7 +54,9 @@ async function GETHandler(request: NextRequest) {
     const loginUrl = new URL("/directors", baseUrl);
     loginUrl.searchParams.set("next", approvedTarget
       ? `/stripe-reauthorization?center=${encodeURIComponent(requestedCenterId)}&portfolio=corporate&start=1`
-      : returnToCorporatePortfolio ? "/stripe-reauthorization/corporate" : "/billing-settings");
+      : requestedCenterId
+        ? `/stripe-reauthorization?center=${encodeURIComponent(requestedCenterId)}${portfolioQuery}`
+        : returnToCorporatePortfolio ? "/stripe-reauthorization/corporate" : "/billing-settings");
     return NextResponse.redirect(loginUrl);
   }
   const centerId = requestedCenterId || user.primaryCenterId;
@@ -97,9 +99,15 @@ async function GETHandler(request: NextRequest) {
       retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId }),
       listStripeConnectedAccountPayoutBanks({ accountId: migration.targetAccountId, tenantId: user.tenantId }),
     ]);
-    if (!target.ok || !target.account || !banks.ok) return NextResponse.redirect(verificationPageUrl(baseUrl, center.id, "refresh_failed"));
+    if (!target.ok || !target.account || target.account.id !== migration.targetAccountId || !banks.ok) return NextResponse.redirect(verificationPageUrl(baseUrl, center.id, "refresh_failed"));
     const status = stripeVerificationState(target.account, corporateStripePayoutBankIsConfirmed(banks.banks));
     if (status !== "stripe_verification_required") return NextResponse.redirect(verificationPageUrl(baseUrl, center.id, status));
+  } else {
+    const target = await retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId });
+    if (!target.ok || !target.account || target.account.id !== migration.targetAccountId ||
+        target.account.feesCollector !== "stripe" || target.account.lossesCollector !== "stripe") {
+      return NextResponse.redirect(fallbackUrl(baseUrl, returnToCorporatePortfolio, center.id, "refresh_failed"));
+    }
   }
   const effectivePortfolioQuery = corporateVerification ? "&portfolio=corporate" : portfolioQuery;
   const returnUrl = `${baseUrl}/stripe-reauthorization?stripeMigration=return&center=${encodeURIComponent(center.id)}${effectivePortfolioQuery}`;

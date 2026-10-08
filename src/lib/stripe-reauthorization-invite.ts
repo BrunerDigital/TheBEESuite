@@ -12,6 +12,7 @@ function escapeHtml(value: string) {
 export function buildStripeReauthorizationInvite(input: {
   schoolName: string;
   reauthorizationUrl: string;
+  stripeContactEmail?: string | null;
   supportEmail?: string | null;
 }) {
   const schoolName = input.schoolName.trim();
@@ -19,7 +20,8 @@ export function buildStripeReauthorizationInvite(input: {
   const supportEmail = input.supportEmail?.trim() || "support@thebeesuite.io";
   const subject = `${STRIPE_REAUTHORIZATION_SUBJECT_PREFIX} for ${schoolName}`;
   const explanation =
-    "Your school's Stripe account has already been created. Sign in with the school email and its existing Stripe password, or create the Stripe login for that same email if no password was set, to complete the remaining business and payout requirements.";
+    "Your school's Stripe account has already been created. Open the school-specific BEE Suite link below and follow Stripe's instructions to complete the remaining business and payout requirements. If Stripe asks you to sign in, use the login authorized for that existing account and its existing Stripe password. Use Stripe's password-reset option if needed; do not create another connected account." +
+    (input.stripeContactEmail?.trim() ? ` The contact email on this Stripe account is ${input.stripeContactEmail.trim()}.` : "");
   const accuracyNote =
     "Stripe securely verifies your business, authorized representative, and payout information. Program eligibility and funding approvals remain with the applicable school and government agency.";
   const text = [
@@ -31,7 +33,7 @@ export function buildStripeReauthorizationInvite(input: {
     "",
     accuracyNote,
     "",
-    "Parent payments can continue during this transition. The existing payout bank is not removed or changed by opening this invitation.",
+    "Opening this invitation does not switch the school's payment account or remove or change its existing payout bank. Continue the school's current approved billing process until its transition is confirmed.",
     "",
     `Start secure reauthorization: ${url}`,
     "",
@@ -51,7 +53,7 @@ export function buildStripeReauthorizationInvite(input: {
 <p style="font-size:16px;line-height:1.65;margin:0 0 18px">An authorized business representative should complete the secure steps for the school. The BEE Suite login and Stripe login are separate, and The BEE Suite never receives or stores the Stripe password.</p>
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px;margin:20px 0"><strong>Please have available:</strong><ul style="line-height:1.7;margin:10px 0 0;padding-left:20px"><li>Legal business and tax information</li><li>Authorized representative details</li><li>The school&apos;s payout-bank information</li></ul></div>
 <p style="font-size:14px;line-height:1.6;color:#526079;margin:0 0 22px">${escapeHtml(accuracyNote)}</p>
-<p style="font-size:14px;line-height:1.6;color:#526079;margin:0 0 24px"><strong>Parent payments can continue during this transition.</strong> Opening this invitation does not remove or change the school&apos;s existing payout bank.</p>
+<p style="font-size:14px;line-height:1.6;color:#526079;margin:0 0 24px">Opening this invitation does not switch the school&apos;s payment account or remove or change its existing payout bank. Continue the school&apos;s current approved billing process until its transition is confirmed.</p>
 <a href="${escapeHtml(url)}" style="display:inline-block;background:#f4c430;color:#111827;text-decoration:none;font-weight:700;border-radius:10px;padding:14px 20px">Finish Stripe account setup</a>
 <p style="font-size:13px;line-height:1.6;color:#64748b;margin:24px 0 0">For security, this button opens The BEE Suite first. Stripe&apos;s one-time handoff is generated only after the authorized representative signs in and confirms the school.</p>
 </td></tr>

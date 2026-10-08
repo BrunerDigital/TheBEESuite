@@ -240,6 +240,9 @@ async function POSTHandler(request: NextRequest) {
   if (!target.ok || !target.account) {
     return NextResponse.json({ ok: false, error: target.error || "The prepared Stripe account could not be checked." }, { status: target.configured ? 502 : 503 });
   }
+  if (target.account.id !== migration.targetAccountId) {
+    return NextResponse.json({ ok: false, error: "The school's designated Stripe account could not be verified. No setup session was created." }, { status: 409 });
+  }
   if (!corporateVerification && (target.account.feesCollector !== "stripe" || target.account.lossesCollector !== "stripe")) {
     return NextResponse.json({ ok: false, error: target.error || "The prepared Stripe account has the wrong fee or loss responsibility." }, { status: target.configured ? 409 : 503 });
   }

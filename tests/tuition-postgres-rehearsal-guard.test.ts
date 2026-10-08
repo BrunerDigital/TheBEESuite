@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 for (const [name, url, confirmation] of [
   ['remote database', 'postgresql://fixture@db.example.com:55437/bee_tuition_rehearsal_fixture', 'synthetic-disposable-local'],
@@ -36,7 +37,7 @@ for (const dirty of [false, true]) {
     git(['-c', 'user.name=Synthetic Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'synthetic fixture']);
     const revision = git(['rev-parse', 'HEAD']);
     if (dirty) writeFileSync(path.join(cwd, 'fixture.txt'), 'modified synthetic source');
-    const result = spawnSync(process.execPath, ['--import', path.resolve('node_modules/tsx/dist/loader.mjs'), path.resolve('scripts/rehearse-tuition-cron-postgres.mjs')], {
+    const result = spawnSync(process.execPath, ['--import', pathToFileURL(path.resolve('node_modules/tsx/dist/loader.mjs')).href, path.resolve('scripts/rehearse-tuition-cron-postgres.mjs')], {
       cwd, encoding: 'utf8', timeout: 30_000,
       env: { ...process.env, TUITION_REHEARSAL_DATABASE_URL: 'postgresql://fixture@127.0.0.1:55437/bee_tuition_rehearsal_fixture',
         TUITION_REHEARSAL_CONFIRM: 'synthetic-disposable-local', TUITION_REHEARSAL_SOURCE_COMMIT: dirty ? revision : '0'.repeat(40) },

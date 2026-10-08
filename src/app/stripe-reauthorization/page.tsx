@@ -81,8 +81,8 @@ export default async function StripeReauthorizationPage({
       : "stripe_verification_error";
   } else {
     if (readStripeConnectedAccountId(center.customFields) !== migration.sourceAccountId || migration.cutoverAt) notFound();
-    const target = await retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId });
-    if (target.ok && target.account?.id === migration.targetAccountId) {
+    const target = await retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId }).catch(() => null);
+    if (target?.ok && target.account?.id === migration.targetAccountId) {
       stripeContactEmail = target.account.contactEmail || null;
     } else {
       initialStatus = "stripe_verification_error";

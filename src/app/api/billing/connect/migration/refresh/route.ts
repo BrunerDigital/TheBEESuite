@@ -103,8 +103,8 @@ async function GETHandler(request: NextRequest) {
     const status = stripeVerificationState(target.account, corporateStripePayoutBankIsConfirmed(banks.banks));
     if (status !== "stripe_verification_required") return NextResponse.redirect(verificationPageUrl(baseUrl, center.id, status));
   } else {
-    const target = await retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId });
-    if (!target.ok || !target.account || target.account.id !== migration.targetAccountId ||
+    const target = await retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId }).catch(() => null);
+    if (!target?.ok || !target.account || target.account.id !== migration.targetAccountId ||
         target.account.feesCollector !== "stripe" || target.account.lossesCollector !== "stripe") {
       return NextResponse.redirect(fallbackUrl(baseUrl, returnToCorporatePortfolio, center.id, "refresh_failed"));
     }

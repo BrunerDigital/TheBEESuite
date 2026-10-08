@@ -10,6 +10,7 @@ const PUBLIC_SESSIONLESS_PATHS = new Set([
   "/eula",
   "/privacy",
   "/resources",
+  "/resources/director-training",
   "/support",
   "/terms",
 ]);
@@ -24,6 +25,11 @@ export async function proxy(request: NextRequest) {
     if (process.env.NODE_ENV !== "development") {
       return new NextResponse(null, { status: 404 });
     }
+    return NextResponse.next();
+  }
+
+  // Only published static training files are sessionless; no API or sandbox route is included.
+  if (["GET", "HEAD"].includes(request.method) && request.nextUrl.pathname.startsWith("/training/directors/current/")) {
     return NextResponse.next();
   }
 

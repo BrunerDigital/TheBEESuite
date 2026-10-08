@@ -1,0 +1,17 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:10.728
+Confirm the exact school and record. This uses the real app editor with synthetic training records. Check the school, family or employee before changing a field.
+
+00:00:10.728 --> 00:00:21.304
+Choose the supported review status. After checking the incident facts and response, choose the status that accurately reflects the review.
+
+00:00:21.304 --> 00:00:31.880
+Record the follow-up task. Write a specific next step and owner. This field does not replace the school’s urgent incident process.
+
+00:00:31.880 --> 00:00:42.456
+Keep notification and acknowledgement separate. Parent notified records an action that already happened. The parent acknowledgement timestamp is a separate state.
+
+00:00:42.456 --> 00:00:53.863
+Review before saving. After an authorized save, reopen the incident and verify its review, notification and acknowledgement states. This review is not submitted.
+

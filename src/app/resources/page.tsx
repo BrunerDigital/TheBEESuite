@@ -681,6 +681,8 @@ export default function ResourcesPage() {
           <section aria-labelledby="director-training-heading" className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-6">
             <h2 id="director-training-heading" className="text-2xl font-semibold text-white">Director video tutorials</h2>
             <p className="mt-3 text-slate-200">Watch narrated lessons, follow step-by-step task guides, and practice with the director checklist. Examples use synthetic records; each lesson explains what it demonstrates.</p>
+            {/* Static HTML requires a full document load rather than an App Router transition. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a href="/training/directors/current/index.html" className="mt-4 inline-block rounded-lg bg-amber-300 px-5 py-3 font-semibold text-slate-950 underline-offset-4 hover:underline">Open the director training library</a>
           </section>
 

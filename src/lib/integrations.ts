@@ -182,6 +182,7 @@ export type StripeCheckoutSessionSnapshot = {
 export type StripeConnectedAccountSnapshot = {
   id: string;
   livemode: boolean;
+  contactEmail?: string | null;
   displayName?: string | null;
   dashboard?: string | null;
   configurations: StripeAccountLinkConfiguration[];
@@ -598,6 +599,7 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
   return {
     id: clean(account.id),
     livemode: account.livemode === true,
+    contactEmail: clean(account.contact_email) || clean(account.email) || null,
     displayName: clean(account.display_name) || clean(account.displayName) || null,
     dashboard: clean(account.dashboard) || clean(legacyStripeDashboard.type) || null,
     configurations,

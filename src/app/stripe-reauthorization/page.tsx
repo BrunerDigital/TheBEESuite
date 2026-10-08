@@ -62,6 +62,7 @@ export default async function StripeReauthorizationPage({
   const migration = readStripeConnectMigration(center.customFields);
   if (!migration.targetAccountId || !migration.sourceAccountId) notFound();
   let initialStatus: string = migration.status;
+  let stripeContactEmail: string | null = null;
   if (corporateVerification) {
     if (!corporateStripeVerificationBindingIsValid({
       activeAccountId: readStripeConnectedAccountId(center.customFields),
@@ -73,9 +74,19 @@ export default async function StripeReauthorizationPage({
       retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId }),
       listStripeConnectedAccountPayoutBanks({ accountId: migration.targetAccountId, tenantId: user.tenantId }),
     ]);
-    initialStatus = target.ok && target.account && banks.ok
-      ? stripeVerificationState(target.account, corporateStripePayoutBankIsConfirmed(banks.banks))
+    const verified = target.ok && target.account && target.account.id === migration.targetAccountId;
+    stripeContactEmail = verified ? target.account!.contactEmail || null : null;
+    initialStatus = verified && banks.ok
+      ? stripeVerificationState(target.account!, corporateStripePayoutBankIsConfirmed(banks.banks))
       : "stripe_verification_error";
+  } else {
+    if (readStripeConnectedAccountId(center.customFields) !== migration.sourceAccountId || migration.cutoverAt) notFound();
+    const target = await retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId }).catch(() => null);
+    if (target?.ok && target.account?.id === migration.targetAccountId) {
+      stripeContactEmail = target.account.contactEmail || null;
+    } else {
+      initialStatus = "stripe_verification_error";
+    }
   }
   const featureCards = corporateVerification
     ? [
@@ -123,7 +134,7 @@ export default async function StripeReauthorizationPage({
             </div>
 
             <div className="mt-6 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm leading-6 text-emerald-50">
-              <strong>Parent payments remain available during this transition.</strong> Funds stay in the school&apos;s current Stripe account while the new setup is completed. Opening this page does not remove or modify the existing payout bank.
+              <strong>Setup and payment activation are separate.</strong> Opening this page does not switch the school&apos;s payment account or remove or modify its existing payout bank. Continue the school&apos;s current approved billing process until its transition is confirmed.
             </div>
           </section>
 
@@ -132,7 +143,7 @@ export default async function StripeReauthorizationPage({
               <CorporateStripeVerificationCard
                 centerId={center.id}
                 schoolName={`${center.name}${center.city || center.state ? ` — ${[center.city, center.state].filter(Boolean).join(", ")}` : ""}`}
-                schoolEmail={center.email}
+                schoolEmail={stripeContactEmail}
                 initialStatus={initialStatus}
                 returning={params.stripeMigration === "return"}
                 autoStart={autoStart}
@@ -141,7 +152,7 @@ export default async function StripeReauthorizationPage({
               <StripeReauthorizationCard
                 centerId={center.id}
                 schoolName={`${center.name}${center.city || center.state ? ` — ${[center.city, center.state].filter(Boolean).join(", ")}` : ""}`}
-                schoolEmail={center.email}
+                schoolEmail={stripeContactEmail}
                 initialStatus={initialStatus}
                 returning={params.stripeMigration === "return"}
                 returnToCorporatePortfolio={returnToCorporatePortfolio}

@@ -15,6 +15,7 @@ import {
   PROCARE_FIELD_OPTIONS,
   normalizeProcareEnrollmentStatusWithEndDate,
   procareAgeGroup,
+  procareAllergyRecords,
   procareChildFullName,
   procareChildPreferredName,
   procareClassroomName,
@@ -3184,14 +3185,7 @@ async function POSTHandler(request: NextRequest) {
           }
         }
 
-        const allergyText = value(rawData, ["allergies", "allergy", "allergy notes", "medical allergy"]);
-        const allergyRecords = (() => {
-          try {
-            const parsed = JSON.parse(value(rawData, ["procare allergy records"]) || "[]") as unknown;
-            if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
-          } catch { /* Fall back to the standard single allergy field. */ }
-          return allergyText ? [allergyText] : [];
-        })();
+        const allergyRecords = procareAllergyRecords(rawData);
         for (const allergyRecord of [...new Set(allergyRecords)]) {
           if (!childId) break;
           const allergen = allergyRecord.slice(0, 120);

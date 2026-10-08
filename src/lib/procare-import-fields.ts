@@ -1,5 +1,20 @@
 export type ProcareImportRecord = Record<string, string>;
 
+export function procareAllergyRecords(record: ProcareImportRecord): string[] {
+  const sourceRecords = procareValue(record, ["procare allergy records"]);
+  if (sourceRecords) {
+    try {
+      const parsed: unknown = JSON.parse(sourceRecords);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim()).filter(Boolean);
+      }
+    } catch { /* Fall back to the standard single allergy field. */ }
+  }
+  const allergyText = procareValue(record, ["allergies", "allergy", "allergy notes", "medical allergy"]);
+  return allergyText ? [allergyText] : [];
+}
+
 export const PROCARE_FIELD_OPTIONS = [
   { key: "tuition amount", label: "Tuition amount per billing period", aliases: ["tuition rate", "contract amount", "charge amount"] },
   { key: "tuition amount cents", label: "Tuition amount in cents", aliases: ["confirmed tuition amount cents", "source tuition amount cents"] },

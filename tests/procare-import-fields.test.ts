@@ -9,12 +9,30 @@ import {
   normalizeProcareEnrollmentStatus,
   normalizeProcareEnrollmentStatusWithEndDate,
   procareAgeGroup,
+  procareAllergyRecords,
   procareChildFullName,
   procareChildPreferredName,
   procareClassroomName,
   procareSourceFields,
   procareValue,
 } from "../src/lib/procare-import-fields";
+
+test("flat-file allergies survive an absent or blank multi-report allergy column", () => {
+  assert.deepEqual(procareAllergyRecords({ allergies: "Peanuts" }), ["Peanuts"]);
+  assert.deepEqual(procareAllergyRecords({ "procare allergy records": "", "medical allergy": " Dairy " }), ["Dairy"]);
+  assert.deepEqual(procareAllergyRecords({ "allergy notes": "Eggs" }), ["Eggs"]);
+});
+
+test("explicit multi-report allergy arrays remain authoritative, including an empty array", () => {
+  assert.deepEqual(procareAllergyRecords({ "procare allergy records": '[" Peanuts ", "", null, 3]', allergies: "Dairy" }), ["Peanuts"]);
+  assert.deepEqual(procareAllergyRecords({ "procare allergy records": "[]", allergies: "Dairy" }), []);
+});
+
+test("malformed allergy arrays retain the standard field and missing evidence stays empty", () => {
+  assert.deepEqual(procareAllergyRecords({ "procare allergy records": "bad JSON", allergy: "Peanuts" }), ["Peanuts"]);
+  assert.deepEqual(procareAllergyRecords({ "procare allergy records": "{}", allergy: "Peanuts" }), ["Peanuts"]);
+  assert.deepEqual(procareAllergyRecords({}), []);
+});
 
 test("ProCare import fields ignore placeholder values from exported reports", () => {
   assert.equal(cleanProcareImportValue("-------"), "");

@@ -8,6 +8,7 @@ import {
   ArrowRight,
   BadgeDollarSign,
   Bell,
+  BookOpen,
   Building2,
   CheckCheck,
   ChevronDown,
@@ -83,6 +84,7 @@ import type { WorkspaceScopeContext } from "@/lib/workspace-scope";
 import type { WorkspaceState } from "@/lib/workspace-selection";
 import { WorkspaceSelector } from "@/components/workspace-selector";
 import { navigationNeighborhoodLabel, roleExperienceFor } from "@/lib/role-experience";
+import { canUseBeesResources } from "@/lib/bees-resources";
 
 type ShellUser = {
   id?: string;
@@ -419,9 +421,10 @@ function SidebarRail({ currentUser, onLogout, previewMode = false, previewHrefBa
   const parentNavigationItems = parentPortalShellItemsForUser(currentUser);
   const { activeView, familyId } = useParentPortalNavigationState(previewMode);
   const primaryNavigation = new Set(roleExperienceFor(currentUser?.role).primaryNavigation);
-  const visibleItems = navGroups
+  const visibleItems: { label: string; slug: string; Icon: typeof Home; group: string }[] = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
     .filter((item) => primaryNavigation.has(item.slug) && canAccessShellModule(currentUser, item.slug));
+  if (canUseBeesResources(currentUser)) visibleItems.push({ label: "BEES", slug: "bees", Icon: BookOpen, group: "Director & owner resources" });
   const brandHref = parentFacing
     ? parentPortalShellHref("home", previewMode, previewHrefBase, pathname, familyId)
     : previewSafeShellHref("/", previewMode, previewHrefBase, pathname);
@@ -784,6 +787,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
   const parentNavigationLabel = currentUser?.role === "AUTHORIZED_PICKUP" ? "Pickup access" : "Family portal";
   const { activeView, familyId } = useParentPortalNavigationState(previewMode);
   const descriptionBySlug = new Map<string, string>(modules.map((module) => [module.slug, module.description]));
+  descriptionBySlug.set("bees", "Kid City USA director and owner files, forms, and training resources.");
   const primaryNavigation = new Set(roleExperienceFor(currentUser?.role).primaryNavigation);
   const allNavigationItems: ShellNavItem[] = [];
   for (const group of navGroups) {
@@ -886,6 +890,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
                 </div>
                 <div className="flex flex-col gap-1">
                   {primaryItems.map(renderWorkspaceNavItem)}
+                  {canUseBeesResources(currentUser) ? renderWorkspaceNavItem(["BEES", "bees", BookOpen]) : null}
                 </div>
               </div>
               {visibleNavGroups.length ? (
@@ -1194,6 +1199,12 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
             <SheetHeader className="min-h-[68px] shrink-0 py-[16px] pl-0 pr-[56px]"><SheetTitle className="text-left">More</SheetTitle></SheetHeader>
             <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-[4px]">
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-[8px] pb-px sm:grid-cols-2">
+                {canUseBeesResources(currentUser) ? (
+                  <Link href={previewSafeShellHref("/bees", previewMode, previewHrefBase, pathname)} onClick={() => setMoreOpen(false)} className="flex min-h-[56px] min-w-0 items-center gap-3 rounded-xl border bg-card/70 p-3 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><BookOpen className="size-5" aria-hidden="true" /></span>
+                    <span className="min-w-0"><span className="block text-sm font-semibold">BEES</span><span className="block text-xs text-muted-foreground">Director & owner resources</span></span>
+                  </Link>
+                ) : null}
                 {moreItems.map(({ label, slug, Icon, group }) => {
                   const targetHref = shellModuleHref(currentUser, slug);
                   const href = previewSafeShellHref(targetHref, previewMode, previewHrefBase, pathname);

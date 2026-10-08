@@ -31,7 +31,7 @@ async function GETHandler(request: NextRequest) {
     const loginUrl = new URL("/directors", baseUrl);
     const requestedCenterId = request.nextUrl.searchParams.get("centerId");
     loginUrl.searchParams.set("next", requestedCenterId
-      ? `/billing-settings?center=${encodeURIComponent(requestedCenterId)}`
+      ? `/api/billing/connect/refresh?centerId=${encodeURIComponent(requestedCenterId)}`
       : "/billing-settings");
     return NextResponse.redirect(loginUrl);
   }

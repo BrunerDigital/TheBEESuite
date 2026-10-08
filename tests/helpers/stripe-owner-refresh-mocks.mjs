@@ -45,7 +45,7 @@ test("signed-out expired links retain the exact school through login", async () 
   const migrated = await migrationRefresh(request("/api/billing/connect/migration/refresh?centerId=school_a"));
   assert.equal(new URL(migrated.headers.get("location")).searchParams.get("next"), "/stripe-reauthorization?center=school_a");
   const initial = await connectRefresh(request("/api/billing/connect/refresh?centerId=school_a"));
-  assert.equal(new URL(initial.headers.get("location")).searchParams.get("next"), "/billing-settings?center=school_a");
+  assert.equal(new URL(initial.headers.get("location")).searchParams.get("next"), "/api/billing/connect/refresh?centerId=school_a");
   assert.equal(links.length, 0);
 });
 test("owner scope and retrieved account ID are checked before a refreshed handoff", async () => {

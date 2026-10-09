@@ -34,6 +34,7 @@ import {
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 import { TUITION_CREDIT_CATEGORIES, type TuitionCreditCategory } from "@/lib/tuition-credits";
+import { tuitionScheduleAfterRateSave } from "@/lib/tuition-rate-schedule";
 import { PAY_AHEAD_MAX_MONTHS, payAheadTotalCents } from "@/lib/pay-ahead";
 import {
   ONE_TIME_BILLING_ADJUSTMENT_OPTIONS,
@@ -488,6 +489,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planCadence, setPlanCadence] = useState(tuitionBillingCadence(initialAssignedPlan?.cadence));
   const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
   const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
+  const [savedRateRecords, setSavedRateRecords] = useState<BillingWorkbenchTuitionPlan[]>([]);
   const [billingAction, setBillingAction] = useState(initialFamilyIsProspective ? "single" : "recurring");
   const [moreBillingActionsExpanded, setMoreBillingActionsExpanded] = useState(false);
   const [familyListMode, setFamilyListMode] = useState<BillingFamilyListMode>(initialFamily ? billingFamilyAccountCategory(initialFamily) : "current");
@@ -537,8 +539,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     [effectiveFamilyListMode, scopedFamilies],
   );
   const locationTuitionPlans = useMemo(
-    () => tuitionPlans.filter((plan) => plan.centerId === centerId),
-    [centerId, tuitionPlans],
+    () => [
+      ...tuitionPlans.filter((plan) => plan.centerId === centerId)
+        .filter((plan) => !savedRateRecords.some((saved) => saved.id === plan.id)),
+      ...savedRateRecords.filter((plan) => plan.centerId === centerId),
+    ],
+    [centerId, tuitionPlans, savedRateRecords],
   );
   const effectiveFamilyId = familyId && filteredFamilies.some((family) => family.id === familyId)
     ? familyId
@@ -1654,6 +1660,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitAssignment() {
     if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving tuition.");
+    if (planDraftIsDirty && assignmentEnabled === "true") {
+      saveTuitionPlan();
+      return;
+    }
     if (assignmentEnabled === "true") {
       const childEligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
       if (childEligibilityError) return setErrorMessage(childEligibilityError);
@@ -1747,6 +1757,22 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (planFundingType === "voucher" && planAmountCents !== 0) {
       return setErrorMessage("No-family-charge tuition must be saved at $0.00 family responsibility.");
     }
+    const applyToChild = Boolean(selectedFamily && selectedAssignmentChild && assignmentEnabled === "true" && selectedAssignmentChildIsCurrent);
+    if (applyToChild && selectedAssignmentChild) {
+      const eligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
+      if (eligibilityError) return setErrorMessage(eligibilityError);
+      if (planFundingType !== "voucher" && effectiveAssignmentCreditsTotalCents >= planAmountCents + effectiveAssignmentAdditionalChargesTotalCents) {
+        return setErrorMessage("Credits must be less than the gross recurring tuition rate.");
+      }
+      if (!confirmBillingAction("save this rate and recurring child tuition", selectedAssignmentChild.fullName)) return;
+    }
+    const nextSchedule = tuitionScheduleAfterRateSave({
+      assignmentCadence,
+      startsPeriod: assignmentStartPeriod,
+      previousRateCadence: planBeingEdited?.cadence,
+      savedRateCadence: planCadence,
+      defaultPeriod: currentPeriodForCadence,
+    });
     runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -1780,20 +1806,54 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setErrorMessage(json?.error || "Tuition plan could not be saved.");
         return;
       }
-      setStatusMessage(
-        preserveAssignedChildren
-          ? `New child-specific ${planCadence === "monthly" ? "monthly" : "weekly"} rate created. Previously saved children kept their existing rates.`
-          : planFundingType === "voucher"
-          ? `$0.00 no-family-charge rate ${planEditorId === "new" ? "created" : "updated"}. Assign it to the intended child under Recurring.`
-          : `${planCadence === "monthly" ? "Monthly" : "Weekly"} tuition rate ${planEditorId === "new" ? "created" : "updated"}.`,
-      );
-      if (json?.record?.id) {
-        setPlanEditorId(json.record.id);
-        setTuitionPlanId(json.record.id);
-        setAssignmentTuitionPlanId(json.record.id);
-        setAssignmentCadence(planCadence);
-        setAssignmentStartPeriod(currentPeriodForCadence(planCadence));
-        setAssignmentDescription(planName.trim());
+      const savedRateId = json?.record?.id;
+      if (!savedRateId) {
+        setErrorMessage("The rate response was incomplete. Refresh and verify the saved rate before retrying.");
+        return;
+      }
+      const savedRate = { id: savedRateId, centerId, name: planName.trim(), ageGroup: planAgeGroup, cadence: planCadence, amountCents: planAmountCents };
+      setSavedRateRecords((current) => [...current.filter((rate) => rate.id !== savedRateId), savedRate]);
+      setPlanName(savedRate.name);
+      setPlanEditorId(savedRateId);
+      setTuitionPlanId(savedRateId);
+      setAssignmentTuitionPlanId(savedRateId);
+      setAssignmentCadence(nextSchedule.cadence);
+      setAssignmentStartPeriod(nextSchedule.startsPeriod);
+      setAssignmentDescription(savedRate.name);
+      if (applyToChild && selectedFamily && selectedAssignmentChild) {
+        const credits = planFundingType === "voucher" ? [] : effectiveAssignmentCredits;
+        const additionalCharges = planFundingType === "voucher" ? [] : effectiveAssignmentAdditionalCharges;
+        const billingDay = nextSchedule.cadence === "monthly" ? assignmentBillingDay : "4";
+        const assignmentResponse = await fetch("/api/billing/tuition-assignments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            familyId: selectedFamily.id, childId: selectedAssignmentChild.id, enabled: true,
+            tuitionPlanId: savedRateId, billingCadence: nextSchedule.cadence, billingDay,
+            billingStartPeriod: nextSchedule.startsPeriod, description: savedRate.name,
+            tuitionCredits: credits, tuitionAdditionalCharges: additionalCharges,
+          }),
+        });
+        const assignmentJson = await assignmentResponse.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+        if (!assignmentResponse.ok || assignmentJson?.ok !== true) {
+          setErrorMessage(`Rate saved, but child tuition was not saved. ${assignmentJson?.error || "Refresh and review the child assignment before retrying."}`);
+          setBillingAction("recurring");
+          router.refresh();
+          return;
+        }
+        const creditInputs = tuitionCreditInputs(credits);
+        const additionalChargeInputs = tuitionAdditionalChargeInputs(additionalCharges);
+        setAssignmentCredits(creditInputs);
+        setAssignmentAdditionalCharges(additionalChargeInputs);
+        setAssignmentBillingDay(billingDay);
+        setLastSavedTuitionDraftSignature(JSON.stringify({
+          enabled: "true", cadence: nextSchedule.cadence, billingDay, tuitionPlanId: savedRateId,
+          startPeriod: nextSchedule.startsPeriod, description: savedRate.name,
+          credits: creditInputs, additionalCharges: additionalChargeInputs,
+        }));
+        setStatusMessage(`Rate and recurring tuition saved for ${selectedAssignmentChild.fullName}.${preserveAssignedChildren ? " Previously saved children kept their existing rates." : ""}`);
+      } else {
+        setStatusMessage("Rate saved. Child tuition is not saved yet. Choose the intended child, enable recurring tuition, and select Save Tuition Assignment.");
       }
       setBillingAction("recurring");
       router.refresh();
@@ -2307,7 +2367,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 Tuition rate setup{selectedFamily ? ` · ${selectedFamily.name}` : ""}
               </div>
               <p className="text-xs text-muted-foreground">
-                Choose or create a weekly or monthly school rate, including an explicit $0.00 family rate for CCDF or voucher-funded care, then save it to the intended child under Recurring.
+                Choose or create a school rate, including an explicit $0.00 family rate for CCDF or voucher-funded care. Save Rate &amp; Child Tuition applies it to the selected child and preserves other children’s rates.
               </p>
             </div>
             <Badge variant="outline">{selectedFamily?.name ?? "Choose a family"}</Badge>
@@ -2381,7 +2441,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="flex items-end">
               <Button disabled={isPending || Boolean(planBeingEdited?.archived)} onClick={saveTuitionPlan} className="w-full">
-                Save Rate
+                {selectedAssignmentChildIsCurrent && assignmentEnabled === "true" ? "Save Rate & Child Tuition" : "Save Rate"}
               </Button>
             </div>
           </div>

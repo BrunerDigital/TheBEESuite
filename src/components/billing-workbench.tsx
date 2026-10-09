@@ -1667,7 +1667,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitAssignment() {
     if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving tuition.");
-    if (planDraftIsDirty && assignmentEnabled === "true") {
+    const selectedRateIsBeingEdited = planEditorId === effectiveAssignmentPlanId
+      || (planEditorId === "new" && !effectiveAssignmentPlanId);
+    if (planDraftIsDirty && assignmentEnabled === "true" && selectedRateIsBeingEdited) {
       saveTuitionPlan();
       return;
     }
@@ -1819,6 +1821,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       const savedRate = { id: savedRateId, centerId, name: planName.trim(), ageGroup: planAgeGroup, cadence: planCadence, amountCents: planAmountCents };
+      const savedChildDescription = effectiveAssignmentDescription.trim() || savedRate.name;
       setSavedRateRecords((current) => [...current.filter((rate) => rate.id !== savedRateId), savedRate]);
       setPlanName(savedRate.name);
       setPlanEditorId(savedRateId);
@@ -1826,7 +1829,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       setAssignmentTuitionPlanId(savedRateId);
       setAssignmentCadence(nextSchedule.cadence);
       setAssignmentStartPeriod(nextSchedule.startsPeriod);
-      setAssignmentDescription(savedRate.name);
+      setAssignmentDescription(savedChildDescription);
       if (applyToChild && selectedFamily && selectedAssignmentChild) {
         const credits = planFundingType === "voucher" ? [] : effectiveAssignmentCredits;
         const additionalCharges = planFundingType === "voucher" ? [] : effectiveAssignmentAdditionalCharges;
@@ -1837,7 +1840,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           body: JSON.stringify({
             familyId: selectedFamily.id, childId: selectedAssignmentChild.id, enabled: true,
             tuitionPlanId: savedRateId, billingCadence: nextSchedule.cadence, billingDay,
-            billingStartPeriod: nextSchedule.startsPeriod, description: savedRate.name,
+            billingStartPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
             tuitionCredits: credits, tuitionAdditionalCharges: additionalCharges,
           }),
         });
@@ -1855,7 +1858,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setAssignmentBillingDay(billingDay);
         setLastSavedTuitionDraftSignature(JSON.stringify({
           enabled: "true", cadence: nextSchedule.cadence, billingDay, tuitionPlanId: savedRateId,
-          startPeriod: nextSchedule.startsPeriod, description: savedRate.name,
+          startPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
           credits: creditInputs, additionalCharges: additionalChargeInputs,
         }));
         setStatusMessage(`Rate and recurring tuition saved for ${selectedAssignmentChild.fullName}.${preserveAssignedChildren ? " Previously saved children kept their existing rates." : ""}`);

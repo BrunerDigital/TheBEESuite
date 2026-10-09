@@ -29,7 +29,7 @@ async function main() {
   const address = server.address(); assert.ok(address && typeof address !== "string");
   const base = "http://127.0.0.1:" + address.port;
   await withFixtureBrowser(server, () => chromium.launch({ headless: true }), async browser => {
-    for (const scenario of ["saved", "assignment-failed", "voucher", "save-assignment-button", "existing-rate", "disabled", "cancelled"]) {
+    for (const scenario of ["saved", "assignment-failed", "voucher", "save-assignment-button", "custom-label", "unrelated-rate-draft", "existing-rate", "disabled", "cancelled"]) {
       const page = await browser.newPage();
       const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
       const dialogs: string[] = [];
@@ -52,12 +52,17 @@ async function main() {
       } else if (scenario === "existing-rate") {
         await page.locator("#billing-assignment-plan").click();
         await page.getByRole("option", { name: /Fake alternate/ }).click();
+      } else if (scenario === "unrelated-rate-draft") {
+        await page.locator("#billing-rate-record").click();
+        await page.getByRole("option", { name: /Fake alternate/ }).click();
+        await page.locator("#billing-rate-family-amount").fill("220");
       } else await page.locator("#billing-rate-family-amount").fill("200");
+      if (scenario === "custom-label") await page.locator("#billing-assignment-description").fill("Custom child invoice label");
       if (scenario === "disabled") {
         await page.locator("#billing-assignment-status").click();
         await page.getByRole("option", { name: "Disabled", exact: true }).click();
       }
-      await page.getByRole("button", { name: ["save-assignment-button", "existing-rate", "disabled"].includes(scenario) ? "Save Tuition Assignment" : "Save Rate & Child Tuition", exact: true }).click();
+      await page.getByRole("button", { name: ["save-assignment-button", "existing-rate", "unrelated-rate-draft", "disabled"].includes(scenario) ? "Save Tuition Assignment" : "Save Rate & Child Tuition", exact: true }).click();
       if (scenario === "cancelled") {
         assert.equal(writes.length, 0);
       } else if (scenario === "disabled") {
@@ -74,6 +79,12 @@ async function main() {
         const priorDialogs = dialogs.length;
         await page.getByRole("link", { name: "Leave fixture" }).click();
         assert.equal(dialogs.length, priorDialogs);
+      } else if (scenario === "unrelated-rate-draft") {
+        await page.getByText(/Recurring tuition enabled for Fake Child 1/).waitFor();
+        assert.equal(writes.length, 1);
+        assert.equal(writes[0].body.tuitionPlanId, "fake-rate");
+        assert.equal(writes[0].body.description, "Fake rate");
+        assert.equal(await page.locator("#billing-rate-family-amount").inputValue(), "220");
       } else {
         await page.getByText(scenario === "assignment-failed" ? /Rate saved, but child tuition was not saved/ : /Rate and recurring tuition saved for Fake Child 1/).waitFor();
         const assignment = writes.find(write => write.path.endsWith("tuition-assignments"));
@@ -82,6 +93,7 @@ async function main() {
         assert.equal(assignment.body.tuitionPlanId, "fake-new-rate");
         assert.equal(assignment.body.billingCadence, "biweekly");
         assert.equal(assignment.body.billingStartPeriod, "2026-W40");
+        assert.equal(assignment.body.description, scenario === "custom-label" ? "Custom child invoice label" : "Fake rate");
         assert.ok(writes.every(write => write.body.childId !== "fake-child-2"));
         if (scenario === "voucher") assert.equal(writes[1].body.amountDollars, "0.00");
         const priorDialogs = dialogs.length;

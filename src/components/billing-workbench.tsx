@@ -34,7 +34,7 @@ import {
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 import { TUITION_CREDIT_CATEGORIES, type TuitionCreditCategory } from "@/lib/tuition-credits";
-import { tuitionScheduleAfterRateSave } from "@/lib/tuition-rate-schedule";
+import { tuitionDescriptionAfterRateSave, tuitionScheduleAfterRateSave } from "@/lib/tuition-rate-schedule";
 import { PAY_AHEAD_MAX_MONTHS, payAheadTotalCents } from "@/lib/pay-ahead";
 import {
   ONE_TIME_BILLING_ADJUSTMENT_OPTIONS,
@@ -1614,7 +1614,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const nextSchedule = tuitionScheduleAfterRateSave({
       assignmentCadence,
       startsPeriod: assignmentStartPeriod,
-      previousRateCadence: effectiveAssignmentPlan?.cadence,
       savedRateCadence: nextCadence,
       defaultPeriod: currentPeriodForCadence,
     });
@@ -1778,7 +1777,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const nextSchedule = tuitionScheduleAfterRateSave({
       assignmentCadence,
       startsPeriod: assignmentStartPeriod,
-      previousRateCadence: planBeingEdited?.cadence,
       savedRateCadence: planCadence,
       defaultPeriod: currentPeriodForCadence,
     });
@@ -1821,7 +1819,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       const savedRate = { id: savedRateId, centerId, name: planName.trim(), ageGroup: planAgeGroup, cadence: planCadence, amountCents: planAmountCents };
-      const savedChildDescription = effectiveAssignmentDescription.trim() || savedRate.name;
+      const savedChildDescription = tuitionDescriptionAfterRateSave(effectiveAssignmentDescription, effectiveAssignmentPlan?.name, savedRate.name);
       setSavedRateRecords((current) => [...current.filter((rate) => rate.id !== savedRateId), savedRate]);
       setPlanName(savedRate.name);
       setPlanEditorId(savedRateId);

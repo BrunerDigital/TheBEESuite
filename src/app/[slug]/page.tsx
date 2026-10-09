@@ -353,7 +353,7 @@ function visibleTeacherStaffWhere(scopedCenterIds: ReturnType<typeof centerIdFil
 
 async function getVisibleCenters(user: CurrentUser) {
   return prisma.center.findMany({
-    where: { ...getLeadScopeWhere(user), ...schoolHistoryStatusWhere(user.role) },
+    where: { ...getLeadScopeWhere(user), ...schoolHistoryStatusWhere(user.role, user.workspace) },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
     select: {
       id: true,

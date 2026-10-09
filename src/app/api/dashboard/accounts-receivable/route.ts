@@ -27,7 +27,7 @@ async function GETHandler() {
 
   const centerIds = accountBalanceCenterIds(user);
   const centers = await prisma.center.findMany({
-    where: { id: { in: centerIds }, ...schoolHistoryStatusWhere(user.role) },
+    where: { id: { in: centerIds }, ...schoolHistoryStatusWhere(user.role, user.workspace) },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
     select: {
       id: true,

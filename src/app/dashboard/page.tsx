@@ -73,7 +73,7 @@ export default async function DashboardPage() {
   const workspaceRedirect = workspaceSelectionRedirect(user.workspace, "/dashboard");
   if (workspaceRedirect) redirect(workspaceRedirect);
 
-  const centerWhere = { ...getDashboardCenterScopeWhere(user), ...schoolHistoryStatusWhere(user.role) };
+  const centerWhere = { ...getDashboardCenterScopeWhere(user), ...schoolHistoryStatusWhere(user.role, user.workspace) };
   const centers = await prisma.center.findMany({
     where: centerWhere,
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
@@ -87,6 +87,7 @@ export default async function DashboardPage() {
       postalCode: true,
       timezone: true,
       licensedCapacity: true,
+      status: true,
       customFields: true,
     },
   });
@@ -138,6 +139,8 @@ export default async function DashboardPage() {
     ? removeDemoMarkersFromUserView(value)
     : value;
   const centerIds = centers.map((center) => center.id);
+  const operationalCenters = centers.filter((center) => center.status !== "closed");
+  const operationalCenterIds = new Set(operationalCenters.map((center) => center.id));
   const scopedCenterFilter = centerIds.length ? { in: centerIds } : { in: ["__no_centers__"] };
   const allCentersAccess = canAccessAllCenters(user);
   const leadWhere = {
@@ -741,17 +744,17 @@ export default async function DashboardPage() {
     const weekDate = new Date(fteDueState.weekStart);
     weekDate.setUTCDate(weekDate.getUTCDate() - 7 * (7 - index));
     const week = weekDate.toISOString().slice(0, 10);
-    const rows = fteRowsByWeek.get(week) ?? [];
+    const rows = (fteRowsByWeek.get(week) ?? []).filter((row) => operationalCenterIds.has(row.centerId));
     const submitted = new Set(rows.map((row) => row.centerId)).size;
     return {
       week,
       submitted,
-      missing: Math.max(centers.length - submitted, 0),
+      missing: Math.max(operationalCenters.length - submitted, 0),
       fteTotal: Math.round(rows.reduce((sum, row) => sum + row.fteCount, 0) * 100) / 100,
       enrolledTotal: rows.reduce((sum, row) => sum + row.enrolledCount, 0),
     };
   });
-  const executiveSchoolComparisons = centers.map((center) => {
+  const executiveSchoolComparisons = operationalCenters.map((center) => {
     const classroomStats = classroomStatsByCenter.get(center.id);
     const children = classroomStats?.children ?? 0;
     const capacityForCenter = classroomStats?.capacity || center.licensedCapacity || 0;

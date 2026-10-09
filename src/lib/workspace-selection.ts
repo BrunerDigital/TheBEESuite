@@ -57,8 +57,21 @@ export function canViewClosedSchoolHistory(role: UserRole | string) {
   return isWorkspaceExecutiveRole(role);
 }
 
-export function schoolHistoryStatusWhere(role: UserRole | string) {
-  return canViewClosedSchoolHistory(role) ? {} : { status: { not: "closed" } };
+export function schoolHistoryStatusWhere(role: UserRole | string, workspace?: WorkspaceState) {
+  return canViewClosedSchoolHistory(role) && isClosedSchoolHistoryWorkspace(workspace)
+    ? {} : { status: { not: "closed" } };
+}
+
+export function isClosedSchoolHistoryWorkspace(workspace?: Pick<WorkspaceState, "mode" | "activeCenterId" | "options">) {
+  if (!workspace || !["center", "fixed"].includes(workspace.mode)) return false;
+  return workspace.options.some((center) => center.id === workspace.activeCenterId
+    && center.status?.trim().toLowerCase() === "closed");
+}
+
+// Use existing read-only authorization for every server handler and UI capability.
+// The stored identity role and the workspace switching options remain unchanged.
+export function effectiveWorkspaceRole(role: UserRole, workspace: WorkspaceState): UserRole {
+  return isClosedSchoolHistoryWorkspace(workspace) ? UserRole.READ_ONLY_AUDITOR : role;
 }
 
 export function centerWorkspaceSelection(centerId: string): WorkspaceSelectionValue {
@@ -86,7 +99,7 @@ export function resolveWorkspaceState({
     .filter((center) => isSelectableWorkspaceCenterStatus(center.status)
       || (canViewClosedSchoolHistory(role) && center.status?.trim().toLowerCase() === "closed"))
     .map((center) => center.status?.trim().toLowerCase() === "closed"
-      ? { ...center, name: `${center.name} (Closed)`, detail: `${center.detail} - Closed school history` }
+      ? { ...center, name: `${center.name} (Closed)`, detail: `${center.detail} - Read-only closed school history` }
       : center);
   const companyLabel = workspaceCompanyLabel(options);
   const multiLocationExecutive = isWorkspaceExecutiveRole(role) && options.length > 1;
@@ -172,7 +185,10 @@ export function effectiveCenterIdsForWorkspace(
   workspace: WorkspaceState,
   authorizedCenterIds: string[],
 ) {
-  if (workspace.mode === "all") return [...authorizedCenterIds];
+  if (workspace.mode === "all") {
+    const historicalIds = new Set(workspace.options.filter((center) => center.status?.trim().toLowerCase() === "closed").map((center) => center.id));
+    return authorizedCenterIds.filter((id) => !historicalIds.has(id));
+  }
   if (workspace.mode === "fixed") return [...authorizedCenterIds];
   if (workspace.activeCenterId) return [workspace.activeCenterId];
   return [];

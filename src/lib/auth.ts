@@ -14,6 +14,7 @@ import { workspaceScopeContext, type WorkspaceScopeContext } from "@/lib/workspa
 import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 import {
   effectiveCenterIdsForWorkspace,
+  effectiveWorkspaceRole,
   resolveWorkspaceState,
   type WorkspaceSelectionValue,
   type WorkspaceState,
@@ -464,7 +465,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     tenantId: selectedPlatformCenter?.organization.tenantId ?? user.tenantId,
     email: user.email,
     name: user.name,
-    role: user.role,
+    role: effectiveWorkspaceRole(user.role, workspace),
     organizationId: effectiveOrganizationId,
     mustResetPassword: user.mustResetPassword,
     centerIds,

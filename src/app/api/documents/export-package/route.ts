@@ -1,3 +1,4 @@
+import { schoolHistoryStatusWhere } from "@/lib/workspace-selection";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
@@ -63,8 +64,8 @@ async function GETHandler(request: NextRequest) {
   const requestedCenterId = request.nextUrl.searchParams.get("centerId")?.trim() || "";
   const centerScopeWhere = getLeadScopeWhere(user);
   const centerWhere = requestedCenterId
-    ? { AND: [centerScopeWhere, { id: requestedCenterId }, { status: { not: "closed" } }] }
-    : { ...centerScopeWhere, status: { not: "closed" } };
+    ? { AND: [centerScopeWhere, { id: requestedCenterId }, schoolHistoryStatusWhere(user.role, user.workspace)] }
+    : { ...centerScopeWhere, ...schoolHistoryStatusWhere(user.role, user.workspace) };
 
   const centers = await prisma.center.findMany({
     where: centerWhere,

@@ -12,6 +12,7 @@ export type WorkspaceCenterOption = {
 
 export type WorkspaceState = {
   mode: "pending" | "all" | "center" | "fixed";
+  readOnlyHistory?: boolean;
   selection: WorkspaceSelectionValue | null;
   activeCenterId: string | null;
   label: string;
@@ -133,6 +134,7 @@ export function resolveWorkspaceState({
   if (multiLocationExecutive && selectedCenter) {
     return {
       mode: "center",
+      readOnlyHistory: selectedCenter.status?.trim().toLowerCase() === "closed",
       selection: centerWorkspaceSelection(selectedCenter.id),
       activeCenterId: selectedCenter.id,
       label: selectedCenter.name,
@@ -167,6 +169,7 @@ export function resolveWorkspaceState({
   const fixedCenter = options[0] ?? null;
   return {
     mode: "fixed",
+    readOnlyHistory: fixedCenter?.status?.trim().toLowerCase() === "closed",
     selection: fixedCenter ? centerWorkspaceSelection(fixedCenter.id) : null,
     activeCenterId: fixedCenter?.id ?? null,
     label: fixedCenter?.name ?? "Workspace unavailable",

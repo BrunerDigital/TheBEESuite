@@ -1,3 +1,4 @@
+import { canAccessModule, canAccessResolvedModuleRoute } from "@/lib/rbac";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { UserRole } from "@prisma/client";
@@ -34,8 +35,14 @@ test("closed school workspaces use read-only server capabilities and switching r
   ];
   for (const identityRole of [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER, UserRole.PLATFORM_OWNER]) {
     const history = resolveWorkspaceState({ role: identityRole, authorizedCenters, requestedSelection: "center:garland" });
-    const historyUser = { role: effectiveWorkspaceRole(identityRole, history) };
+    const historyUser = { role: effectiveWorkspaceRole(identityRole, history), workspace: history };
     assert.equal(historyUser.role, UserRole.READ_ONLY_AUDITOR);
+    assert.equal(canAccessModule(historyUser, "payments"), true);
+    assert.equal(canAccessResolvedModuleRoute(historyUser, "billing-invoices", "payments"), true);
+    for (const module of ["family-detail", "billing-invoices", "analytics", "documents", "fte-reports"]) {
+      assert.equal(canAccessModule(historyUser, module), true);
+    }
+    assert.equal(canAccessModule({ role: UserRole.READ_ONLY_AUDITOR }, "payments"), false);
     for (const capability of [canManageBilling, canManageOperations, canManageCrmLeads, canManageStaffCompensation, canManageClassroomTasks]) {
       assert.equal(capability(historyUser), false);
     }

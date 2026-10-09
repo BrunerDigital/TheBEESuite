@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     createSessionToken({
       id: user.id,
       email: user.email,
-      role: user.role,
+      role: session.role,
       sessionVersion: session.sessionVersion,
       mfaVerified: session.mfaVerified,
       deviceSessionId: session.deviceSessionId,

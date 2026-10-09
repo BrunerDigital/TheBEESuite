@@ -1,3 +1,4 @@
+import { schoolHistoryStatusWhere } from "@/lib/workspace-selection";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
@@ -62,7 +63,7 @@ async function GETHandler(request: NextRequest) {
   }
 
   const centers = await prisma.center.findMany({
-    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
+    where: { ...getLeadScopeWhere(user), ...schoolHistoryStatusWhere(user.role, user.workspace) },
     select: { id: true, name: true, crmLocationId: true },
   });
   const centerIds = centers.map((center) => center.id);

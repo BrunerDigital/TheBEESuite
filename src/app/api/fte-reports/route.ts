@@ -1,3 +1,4 @@
+import { isClosedSchoolHistoryWorkspace, schoolHistoryStatusWhere } from "@/lib/workspace-selection";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { canManageOperations, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
@@ -224,7 +225,7 @@ async function GETHandler(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
-  if (!canManageOperations(user)) {
+  if (!canManageOperations(user) && !isClosedSchoolHistoryWorkspace(user.workspace)) {
     return NextResponse.json({ ok: false, error: "FTE reporting is not allowed for this role." }, { status: 403 });
   }
 
@@ -234,7 +235,7 @@ async function GETHandler(request: NextRequest) {
   const format = clean(searchParams.get("format"));
   const requestedWeekStart = parseDate(searchParams.get("weekStart"));
   const visibleCenters = await prisma.center.findMany({
-    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
+    where: { ...getLeadScopeWhere(user), ...schoolHistoryStatusWhere(user.role, user.workspace) },
     select: { id: true },
   });
   const visibleCenterIds = visibleCenters.map((center) => center.id);

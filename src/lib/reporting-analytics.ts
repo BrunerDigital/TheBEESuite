@@ -1,3 +1,4 @@
+import { schoolHistoryStatusWhere } from "@/lib/workspace-selection";
 import { EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { centerServiceDayWindow, readCenterTimeZone } from "@/lib/attendance-state";
 import { getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
@@ -274,7 +275,7 @@ function exportCell(value: unknown) {
 
 async function getAccessibleCenters(user: CurrentUser) {
   const centers = await prisma.center.findMany({
-    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
+    where: { ...getLeadScopeWhere(user), ...schoolHistoryStatusWhere(user.role, user.workspace) },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
     select: { id: true, name: true, crmLocationId: true, address: true, city: true, state: true, postalCode: true, phone: true, timezone: true, customFields: true },
   });

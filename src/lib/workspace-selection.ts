@@ -12,6 +12,7 @@ export type WorkspaceCenterOption = {
 
 export type WorkspaceState = {
   mode: "pending" | "all" | "center" | "fixed";
+  readOnlyHistory?: boolean;
   selection: WorkspaceSelectionValue | null;
   activeCenterId: string | null;
   label: string;
@@ -52,6 +53,28 @@ export function isSelectableWorkspaceCenterStatus(status: string | null | undefi
   return !normalized || !["closed", "archived", "inactive"].includes(normalized);
 }
 
+// Historical visibility never changes a school's operational status or grants.
+export function canViewClosedSchoolHistory(role: UserRole | string) {
+  return isWorkspaceExecutiveRole(role);
+}
+
+export function schoolHistoryStatusWhere(role: UserRole | string, workspace?: WorkspaceState) {
+  return canViewClosedSchoolHistory(role) && isClosedSchoolHistoryWorkspace(workspace)
+    ? {} : { status: { not: "closed" } };
+}
+
+export function isClosedSchoolHistoryWorkspace(workspace?: Pick<WorkspaceState, "mode" | "activeCenterId" | "options">) {
+  if (!workspace || !["center", "fixed"].includes(workspace.mode)) return false;
+  return workspace.options.some((center) => center.id === workspace.activeCenterId
+    && center.status?.trim().toLowerCase() === "closed");
+}
+
+// Use existing read-only authorization for every server handler and UI capability.
+// The stored identity role and the workspace switching options remain unchanged.
+export function effectiveWorkspaceRole(role: UserRole, workspace: WorkspaceState): UserRole {
+  return isClosedSchoolHistoryWorkspace(workspace) ? UserRole.READ_ONLY_AUDITOR : role;
+}
+
 export function centerWorkspaceSelection(centerId: string): WorkspaceSelectionValue {
   return `center:${centerId}`;
 }
@@ -73,7 +96,12 @@ export function resolveWorkspaceState({
   authorizedCenters: WorkspaceCenterOption[];
   requestedSelection?: string | null;
 }): WorkspaceState {
-  const options = authorizedCenters.filter((center) => isSelectableWorkspaceCenterStatus(center.status));
+  const options = authorizedCenters
+    .filter((center) => isSelectableWorkspaceCenterStatus(center.status)
+      || (canViewClosedSchoolHistory(role) && center.status?.trim().toLowerCase() === "closed"))
+    .map((center) => center.status?.trim().toLowerCase() === "closed"
+      ? { ...center, name: `${center.name} (Closed)`, detail: `${center.detail} - Read-only closed school history` }
+      : center);
   const companyLabel = workspaceCompanyLabel(options);
   const multiLocationExecutive = isWorkspaceExecutiveRole(role) && options.length > 1;
   const requestedCenterId = centerIdFromWorkspaceSelection(requestedSelection);
@@ -106,6 +134,7 @@ export function resolveWorkspaceState({
   if (multiLocationExecutive && selectedCenter) {
     return {
       mode: "center",
+      readOnlyHistory: selectedCenter.status?.trim().toLowerCase() === "closed",
       selection: centerWorkspaceSelection(selectedCenter.id),
       activeCenterId: selectedCenter.id,
       label: selectedCenter.name,
@@ -140,6 +169,7 @@ export function resolveWorkspaceState({
   const fixedCenter = options[0] ?? null;
   return {
     mode: "fixed",
+    readOnlyHistory: fixedCenter?.status?.trim().toLowerCase() === "closed",
     selection: fixedCenter ? centerWorkspaceSelection(fixedCenter.id) : null,
     activeCenterId: fixedCenter?.id ?? null,
     label: fixedCenter?.name ?? "Workspace unavailable",
@@ -158,7 +188,10 @@ export function effectiveCenterIdsForWorkspace(
   workspace: WorkspaceState,
   authorizedCenterIds: string[],
 ) {
-  if (workspace.mode === "all") return [...authorizedCenterIds];
+  if (workspace.mode === "all") {
+    const historicalIds = new Set(workspace.options.filter((center) => center.status?.trim().toLowerCase() === "closed").map((center) => center.id));
+    return authorizedCenterIds.filter((id) => !historicalIds.has(id));
+  }
   if (workspace.mode === "fixed") return [...authorizedCenterIds];
   if (workspace.activeCenterId) return [workspace.activeCenterId];
   return [];

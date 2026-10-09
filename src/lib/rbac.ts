@@ -12,7 +12,7 @@ type AccessSubject =
       email?: string | null;
       accessScope?: string | null;
       centerIds?: string[] | null;
-      workspace?: { mode?: string | null } | null;
+      workspace?: { mode?: string | null; readOnlyHistory?: boolean } | null;
     };
 
 const enrollmentRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"]);
@@ -137,7 +137,10 @@ export function canAccessModule(subject: AccessSubject, slug: string) {
   if (parentRoles.has(role)) return false;
   if (slug === "dashboard" || slug === "notifications" || slug === "help") return true;
   if (slug === "teacher-portal") return role === "TEACHER";
-  if (role === "READ_ONLY_AUDITOR") return readOnlyAuditorModules.has(slug as ModuleSlug);
+  if (role === "READ_ONLY_AUDITOR") {
+    const historyPayments = slug === "payments" && typeof subject === "object" && subject?.workspace?.readOnlyHistory === true;
+    return historyPayments || readOnlyAuditorModules.has(slug as ModuleSlug);
+  }
   if (slug === "terminal-store") return terminalStoreEnabled() && terminalStoreRoles.has(role);
   if (slug === "asset-hub") return ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"].includes(role);
   if (slug === "corporate-billing") return hasTenantWideUiAccess(subject);

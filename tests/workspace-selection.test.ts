@@ -37,24 +37,24 @@ test("multi-location executives must choose a live authorized workspace", () => 
   assert.deepEqual(effectiveCenterIdsForWorkspace(revoked, centers.map((center) => center.id)), []);
 });
 
-test("closed and inactive locations are not selectable workspaces", () => {
+test("non-executive users cannot select closed or inactive workspaces", () => {
   const options = [
     ...centers,
     { id: "school_closed", name: "Former school", detail: "Closed", companyName: "Kid City USA", status: "closed" },
     { id: "school_inactive", name: "Paused school", detail: "Inactive", companyName: "Kid City USA", status: "inactive" },
   ];
-  const pending = resolveWorkspaceState({ role: UserRole.BRAND_ADMIN, authorizedCenters: options });
+  const pending = resolveWorkspaceState({ role: UserRole.CENTER_DIRECTOR, authorizedCenters: options });
   assert.deepEqual(pending.options.map((center) => center.id), ["school_a", "school_b"]);
   assert.equal(pending.authorizedCenterCount, 2);
 
   const stale = resolveWorkspaceState({
-    role: UserRole.BRAND_ADMIN,
+    role: UserRole.CENTER_DIRECTOR,
     authorizedCenters: options,
     requestedSelection: "center:school_closed",
   });
-  assert.equal(stale.mode, "pending");
-  assert.equal(stale.invalidSelection, true);
-  assert.deepEqual(effectiveCenterIdsForWorkspace(stale, stale.options.map((center) => center.id)), []);
+  assert.equal(stale.mode, "fixed");
+  assert.equal(stale.invalidSelection, false);
+  assert.ok(!stale.options.some((center) => center.id === "school_closed"));
 
   const allLocationsAdmin = {
     centerIds: ["school_a", "school_b"],
@@ -194,4 +194,26 @@ test("workspace switching retains browser fragments and dashboard actions honor 
   assert.match(shell, /const currentPath = `\$\{pathname\}\$\{query \? `\?\$\{query\}` : ""\}\$\{currentHash\}`/);
   assert.match(dashboard, /accessibleModuleRouteSlug\(\{/);
   assert.match(dashboard, /slug !== "data-readiness" \|\| dataReadinessCenterEnabled\(\)/);
+});
+
+
+test("executives can inspect authorized closed schools without adding unauthorized or inactive schools", () => {
+  const options = [...centers,
+    { id: "garland", name: "Garland", detail: "TX", status: "closed" },
+    { id: "inactive", name: "Inactive", detail: "TX", status: "inactive" },
+    { id: "archived", name: "Archived", detail: "TX", status: "archived" },
+  ];
+  for (const role of [UserRole.BRAND_ADMIN, UserRole.PLATFORM_OWNER, UserRole.REGIONAL_MANAGER, UserRole.READ_ONLY_AUDITOR]) {
+    const all = resolveWorkspaceState({ role, authorizedCenters: options, requestedSelection: "all" });
+    assert.deepEqual(all.options.map((center) => center.id), ["school_a", "school_b", "garland"]);
+    const selected = resolveWorkspaceState({ role, authorizedCenters: options, requestedSelection: "center:garland" });
+    assert.equal(selected.mode, "center");
+    assert.equal(selected.label, "Garland (Closed)");
+    assert.deepEqual(effectiveCenterIdsForWorkspace(selected, all.options.map((center) => center.id)), ["garland"]);
+    const user = { role, accessScope: "tenant" as const, centerIds: ["garland"], workspace: selected };
+    assert.equal(canAccessCenter(user, "garland"), true);
+    assert.equal(canAccessCenter(user, "school_a"), false);
+    assert.equal(canAccessCenter(user, "other_tenant_school"), false);
+  }
+  assert.equal("status" in options[2] ? options[2].status : null, "closed");
 });

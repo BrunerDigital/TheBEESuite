@@ -39,8 +39,8 @@ test("closed school workspaces use read-only server capabilities and switching r
     assert.equal(historyUser.role, UserRole.READ_ONLY_AUDITOR);
     assert.equal(canAccessModule(historyUser, "payments"), true);
     assert.equal(canAccessResolvedModuleRoute(historyUser, "billing-invoices", "payments"), true);
-    for (const module of ["family-detail", "billing-invoices", "analytics", "documents", "fte-reports"]) {
-      assert.equal(canAccessModule(historyUser, module), true);
+    for (const moduleSlug of ["family-detail", "billing-invoices", "analytics", "documents", "fte-reports"]) {
+      assert.equal(canAccessModule(historyUser, moduleSlug), true);
     }
     assert.equal(canAccessModule({ role: UserRole.READ_ONLY_AUDITOR }, "payments"), false);
     for (const capability of [canManageBilling, canManageOperations, canManageCrmLeads, canManageStaffCompensation, canManageClassroomTasks]) {

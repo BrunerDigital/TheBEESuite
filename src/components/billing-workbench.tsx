@@ -1611,8 +1611,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setAssignmentTuitionPlanId(value);
     setTuitionPlanId(value);
     const nextCadence = tuitionBillingCadence(plan?.cadence);
-    setAssignmentCadence(nextCadence);
-    setAssignmentStartPeriod((current) => periodMatchesCadence(current, nextCadence) ? current : currentPeriodForCadence(nextCadence));
+    const nextSchedule = tuitionScheduleAfterRateSave({
+      assignmentCadence,
+      startsPeriod: assignmentStartPeriod,
+      previousRateCadence: effectiveAssignmentPlan?.cadence,
+      savedRateCadence: nextCadence,
+      defaultPeriod: currentPeriodForCadence,
+    });
+    setAssignmentCadence(nextSchedule.cadence);
+    setAssignmentStartPeriod(nextSchedule.startsPeriod);
     if (plan) {
       setPlanEditorId(plan.id);
       setPlanName(plan.name);

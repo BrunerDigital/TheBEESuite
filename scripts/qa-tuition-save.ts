@@ -11,7 +11,7 @@ async function main() {
       tuitionAssignment: { enabled: true, tuitionPlanId: "fake-rate", tuitionPlanName: "Fake rate", cadence: "biweekly", amountCents: 18900, netAmountCents: 18900, billingDay: 4, startsPeriod: "2026-W40", description: "Fake rate", credits: [], additionalCharges: [] } })),
   };
   const fixture = await build({ stdin: { contents: `import React from "react";import {createRoot} from "react-dom/client";import {BillingWorkbench} from "./src/components/billing-workbench";
-    createRoot(document.getElementById("root")).render(<><a href="/leave">Leave fixture</a><BillingWorkbench families={${JSON.stringify([family])}} centers={[{id:"fake-school",name:"Fake School",crmLocationId:null,classrooms:[{id:"fake-room",name:"Fake room",ageGroup:"Preschool"}]}]} products={[]} tuitionPlans={[{id:"fake-rate",centerId:"fake-school",name:"Fake rate",ageGroup:"Preschool",cadence:"weekly",amountCents:18900}]} currentRole="CENTER_DIRECTOR" canManageEnrollment initialFamilyId="fake-family" initialCenterId="fake-school" initialChildId="fake-child-1" /></>);`,
+    createRoot(document.getElementById("root")).render(<><a href="/leave">Leave fixture</a><BillingWorkbench families={${JSON.stringify([family])}} centers={[{id:"fake-school",name:"Fake School",crmLocationId:null,classrooms:[{id:"fake-room",name:"Fake room",ageGroup:"Preschool"}]}]} products={[]} tuitionPlans={[{id:"fake-rate",centerId:"fake-school",name:"Fake rate",ageGroup:"Preschool",cadence:"weekly",amountCents:18900},{id:"fake-alternate",centerId:"fake-school",name:"Fake alternate",ageGroup:"Preschool",cadence:"weekly",amountCents:19000}]} currentRole="CENTER_DIRECTOR" canManageEnrollment initialFamilyId="fake-family" initialCenterId="fake-school" initialChildId="fake-child-1" /></>);`,
     resolveDir: process.cwd(), loader: "tsx" }, bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
     define: { "process.env": "{}", "process.env.NODE_ENV": '"test"' },
     plugins: [{ name: "fake-next", setup(builder) {
@@ -29,7 +29,7 @@ async function main() {
   const address = server.address(); assert.ok(address && typeof address !== "string");
   const base = "http://127.0.0.1:" + address.port;
   await withFixtureBrowser(server, () => chromium.launch({ headless: true }), async browser => {
-    for (const scenario of ["saved", "assignment-failed", "voucher", "save-assignment-button", "disabled", "cancelled"]) {
+    for (const scenario of ["saved", "assignment-failed", "voucher", "save-assignment-button", "existing-rate", "disabled", "cancelled"]) {
       const page = await browser.newPage();
       const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
       const dialogs: string[] = [];
@@ -49,12 +49,15 @@ async function main() {
       if (scenario === "voucher") {
         await page.locator("#billing-rate-funding").click();
         await page.getByRole("option", { name: /No family charge/ }).click();
+      } else if (scenario === "existing-rate") {
+        await page.locator("#billing-assignment-plan").click();
+        await page.getByRole("option", { name: /Fake alternate/ }).click();
       } else await page.locator("#billing-rate-family-amount").fill("200");
       if (scenario === "disabled") {
         await page.locator("#billing-assignment-status").click();
         await page.getByRole("option", { name: "Disabled", exact: true }).click();
       }
-      await page.getByRole("button", { name: ["save-assignment-button", "disabled"].includes(scenario) ? "Save Tuition Assignment" : "Save Rate & Child Tuition", exact: true }).click();
+      await page.getByRole("button", { name: ["save-assignment-button", "existing-rate", "disabled"].includes(scenario) ? "Save Tuition Assignment" : "Save Rate & Child Tuition", exact: true }).click();
       if (scenario === "cancelled") {
         assert.equal(writes.length, 0);
       } else if (scenario === "disabled") {
@@ -62,6 +65,15 @@ async function main() {
         assert.equal(writes.length, 1);
         assert.equal(writes[0].body.enabled, false);
         assert.equal(writes[0].body.childId, "fake-child-1");
+      } else if (scenario === "existing-rate") {
+        await page.getByText(/Recurring tuition enabled for Fake Child 1/).waitFor();
+        assert.equal(writes.length, 1);
+        assert.equal(writes[0].body.tuitionPlanId, "fake-alternate");
+        assert.equal(writes[0].body.billingCadence, "biweekly");
+        assert.equal(writes[0].body.billingStartPeriod, "2026-W40");
+        const priorDialogs = dialogs.length;
+        await page.getByRole("link", { name: "Leave fixture" }).click();
+        assert.equal(dialogs.length, priorDialogs);
       } else {
         await page.getByText(scenario === "assignment-failed" ? /Rate saved, but child tuition was not saved/ : /Rate and recurring tuition saved for Fake Child 1/).waitFor();
         const assignment = writes.find(write => write.path.endsWith("tuition-assignments"));

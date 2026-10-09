@@ -52,6 +52,15 @@ export function isSelectableWorkspaceCenterStatus(status: string | null | undefi
   return !normalized || !["closed", "archived", "inactive"].includes(normalized);
 }
 
+// Historical visibility never changes a school's operational status or grants.
+export function canViewClosedSchoolHistory(role: UserRole | string) {
+  return isWorkspaceExecutiveRole(role);
+}
+
+export function schoolHistoryStatusWhere(role: UserRole | string) {
+  return canViewClosedSchoolHistory(role) ? {} : { status: { not: "closed" } };
+}
+
 export function centerWorkspaceSelection(centerId: string): WorkspaceSelectionValue {
   return `center:${centerId}`;
 }
@@ -73,7 +82,12 @@ export function resolveWorkspaceState({
   authorizedCenters: WorkspaceCenterOption[];
   requestedSelection?: string | null;
 }): WorkspaceState {
-  const options = authorizedCenters.filter((center) => isSelectableWorkspaceCenterStatus(center.status));
+  const options = authorizedCenters
+    .filter((center) => isSelectableWorkspaceCenterStatus(center.status)
+      || (canViewClosedSchoolHistory(role) && center.status?.trim().toLowerCase() === "closed"))
+    .map((center) => center.status?.trim().toLowerCase() === "closed"
+      ? { ...center, name: `${center.name} (Closed)`, detail: `${center.detail} - Closed school history` }
+      : center);
   const companyLabel = workspaceCompanyLabel(options);
   const multiLocationExecutive = isWorkspaceExecutiveRole(role) && options.length > 1;
   const requestedCenterId = centerIdFromWorkspaceSelection(requestedSelection);

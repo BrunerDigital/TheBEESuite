@@ -9,6 +9,7 @@ import { canManageBilling, getCurrentUser } from "@/lib/auth";
 import { loadAgencyBalanceSummary } from "@/lib/agency-balance-summary";
 import { visibleFamilyWhere } from "@/lib/corporate-view-scope";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import { schoolHistoryStatusWhere } from "@/lib/workspace-selection";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 
@@ -26,7 +27,7 @@ async function GETHandler() {
 
   const centerIds = accountBalanceCenterIds(user);
   const centers = await prisma.center.findMany({
-    where: { id: { in: centerIds }, status: { not: "closed" } },
+    where: { id: { in: centerIds }, ...schoolHistoryStatusWhere(user.role) },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
     select: {
       id: true,

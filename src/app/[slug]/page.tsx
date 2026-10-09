@@ -278,7 +278,7 @@ import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { estimatedHourlyGrossPayCents, readStaffCompensation } from "@/lib/staff-compensation";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
-import { workspaceSelectionRedirect } from "@/lib/workspace-selection";
+import { schoolHistoryStatusWhere, workspaceSelectionRedirect } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -353,7 +353,7 @@ function visibleTeacherStaffWhere(scopedCenterIds: ReturnType<typeof centerIdFil
 
 async function getVisibleCenters(user: CurrentUser) {
   return prisma.center.findMany({
-    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
+    where: { ...getLeadScopeWhere(user), ...schoolHistoryStatusWhere(user.role) },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
     select: {
       id: true,

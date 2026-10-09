@@ -36,7 +36,7 @@ import { directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklist
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
-import { workspaceSelectionRedirect } from "@/lib/workspace-selection";
+import { schoolHistoryStatusWhere, workspaceSelectionRedirect } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +73,7 @@ export default async function DashboardPage() {
   const workspaceRedirect = workspaceSelectionRedirect(user.workspace, "/dashboard");
   if (workspaceRedirect) redirect(workspaceRedirect);
 
-  const centerWhere = { ...getDashboardCenterScopeWhere(user), status: { not: "closed" } };
+  const centerWhere = { ...getDashboardCenterScopeWhere(user), ...schoolHistoryStatusWhere(user.role) };
   const centers = await prisma.center.findMany({
     where: centerWhere,
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],

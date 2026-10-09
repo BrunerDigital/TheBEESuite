@@ -1,3 +1,4 @@
+import { isSchoolOwnerAccount } from "@/lib/school-owner-access";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { sessionMeetsMfaPolicy } from "@/lib/mfa-policy";
 import { cookies } from "next/headers";
@@ -50,6 +51,7 @@ export type CurrentUser = {
   deviceSessionId: string | null;
   accessScope: "platform" | "tenant" | "scoped" | "center" | "none";
   accessGrantCount: number;
+  isSchoolOwner?: boolean;
   profilePhotoUrl: string | null;
   branding: WorkspaceBranding;
   timeZone?: string;
@@ -429,6 +431,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
       status: center.status,
     })),
     requestedSelection: session.workspaceSelection,
+    schoolOwner: isSchoolOwnerAccount(user.role, user.customFields),
   });
   const selectableCenterIds = workspace.options.map((center) => center.id);
   centerIds = effectiveCenterIdsForWorkspace(workspace, selectableCenterIds);
@@ -474,6 +477,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     deviceSessionId: session.deviceSessionId ?? null,
     accessScope,
     accessGrantCount: activeGrants.length,
+    isSchoolOwner: isSchoolOwnerAccount(user.role, user.customFields),
     profilePhotoUrl: await resolveCurrentUserProfilePhotoUrl(user.customFields, user.role, branding),
     branding,
     timeZone: timeZonesByCenterId[centerIds[0] ?? ""] || "America/New_York",

@@ -215,5 +215,5 @@ test("executives can inspect authorized closed schools without adding unauthoriz
     assert.equal(canAccessCenter(user, "school_a"), false);
     assert.equal(canAccessCenter(user, "other_tenant_school"), false);
   }
-  assert.equal(options[2].status, "closed");
+  assert.equal("status" in options[2] ? options[2].status : null, "closed");
 });

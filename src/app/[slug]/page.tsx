@@ -179,8 +179,10 @@ import {
   isWeekBasedTuitionCadence,
   normalizeRecurringBillingDay,
   normalizeRecurringBillingPeriod,
+  normalizeTuitionInvoiceDelayWeeks,
   recurringDueDateForPeriod,
   shouldCreateRecurringTuitionInvoice,
+  tuitionInvoiceBillingPeriod,
   utcBillingWeekday,
 } from "@/lib/billing-workflows";
 import { canonicalizeSystemMessageTemplate, mergeStoredAndDefaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
@@ -457,11 +459,12 @@ function tuitionAssignmentFromCustomFields(customFields: unknown) {
   const netAmountCents = numberField(fields.tuitionNetAmountCents) ?? grossAmountCents;
   const additionalCharges = Array.isArray(fields.tuitionAdditionalCharges) ? fields.tuitionAdditionalCharges : [];
   const additionalChargesTotalCents = numberField(fields.tuitionAdditionalChargesTotalCents) ?? 0;
+  const cadence = stringField(fields.tuitionBillingCadence) || stringField(fields.tuitionPlanCadence);
   return {
     enabled: fields.tuitionBillingEnabled === true,
     tuitionPlanId: planId,
     tuitionPlanName: stringField(fields.tuitionPlanName),
-    cadence: stringField(fields.tuitionBillingCadence) || stringField(fields.tuitionPlanCadence),
+    cadence,
     amountCents: netAmountCents,
     grossAmountCents,
     additionalCharges,
@@ -471,6 +474,7 @@ function tuitionAssignmentFromCustomFields(customFields: unknown) {
     netAmountCents,
     billingDay: numberField(fields.tuitionBillingDay),
     startsPeriod: stringField(fields.tuitionBillingStartsPeriod),
+    invoiceDelayWeeks: normalizeTuitionInvoiceDelayWeeks(fields.tuitionBillingInvoiceDelayWeeks, cadence),
     description: stringField(fields.tuitionBillingDescription),
   };
 }
@@ -4417,7 +4421,9 @@ async function renderLivePage(
           if (!assignment.enabled) continue;
           const cadence = normalizeBillingCadence(assignment.cadence);
           const weekBased = isWeekBasedTuitionCadence(cadence);
-          const billingPeriod = weekBased ? currentWeeklyPeriod : currentMonthlyPeriod;
+          const billingPeriod = weekBased
+            ? tuitionInvoiceBillingPeriod(null, schedulerDate, cadence, assignment.invoiceDelayWeeks)
+            : currentMonthlyPeriod;
           const billingDay = normalizeRecurringBillingDay(assignment.billingDay, cadence);
           const currentDay = weekBased ? utcBillingWeekday(schedulerDate) : schedulerDate.getUTCDate();
           summary.activeAssignments += 1;

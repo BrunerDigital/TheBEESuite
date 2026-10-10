@@ -459,11 +459,12 @@ function tuitionAssignmentFromCustomFields(customFields: unknown) {
   const netAmountCents = numberField(fields.tuitionNetAmountCents) ?? grossAmountCents;
   const additionalCharges = Array.isArray(fields.tuitionAdditionalCharges) ? fields.tuitionAdditionalCharges : [];
   const additionalChargesTotalCents = numberField(fields.tuitionAdditionalChargesTotalCents) ?? 0;
+  const cadence = stringField(fields.tuitionBillingCadence) || stringField(fields.tuitionPlanCadence);
   return {
     enabled: fields.tuitionBillingEnabled === true,
     tuitionPlanId: planId,
     tuitionPlanName: stringField(fields.tuitionPlanName),
-    cadence: stringField(fields.tuitionBillingCadence) || stringField(fields.tuitionPlanCadence),
+    cadence,
     amountCents: netAmountCents,
     grossAmountCents,
     additionalCharges,
@@ -473,7 +474,7 @@ function tuitionAssignmentFromCustomFields(customFields: unknown) {
     netAmountCents,
     billingDay: numberField(fields.tuitionBillingDay),
     startsPeriod: stringField(fields.tuitionBillingStartsPeriod),
-    invoiceDelayWeeks: normalizeTuitionInvoiceDelayWeeks(fields.tuitionBillingInvoiceDelayWeeks, fields.tuitionBillingCadence),
+    invoiceDelayWeeks: normalizeTuitionInvoiceDelayWeeks(fields.tuitionBillingInvoiceDelayWeeks, cadence),
     description: stringField(fields.tuitionBillingDescription),
   };
 }

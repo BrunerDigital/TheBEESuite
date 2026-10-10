@@ -1,4 +1,40 @@
 import assert from "node:assert/strict";
+
+test("tracking with relationship columns cannot create duplicate enrollment rows", async () => {
+  const files = standardFiles({
+    enrollment: [["child-1", "child-person-1", "Child", "Synthetic Child", "Example", "Synthetic", "", "2022-01-01", "", "Room", "room-1", "Enrolled", "2026-01-01", "", "payer-1", "", "", "enrollment-1"]],
+    parents: [["account-1", "key-1", "payer-1", "Payer", "1", "Synthetic Parent", "Example", "Parent", "", "parent@example.test", "", "", "", "", "", "", ""]],
+    relationships: [["child-1", "relationship-1", "payer-1", "Relationship", "1", "Synthetic Parent", "Example", "Parent", "", "parent@example.test", "", "Parent", "Checked", "Checked", "Checked", "", "", "", "", "", "", "", "", ""]],
+  });
+  const trackingHeaders = ["Child ID", "Child Person ID", "Row ID", "Full Name", "Date of Birth", "Primary Classroom", "Enrollment Status", "Status Date", "Category Description", "Item Description", "Relationship Person ID", "Relationship Type", "Lives With"];
+  const trackingRows = [
+    ["child-1", "child-person-1", "tracking-1", "Synthetic Child", "2022-01-01", "Room", "Enrolled", "2026-01-01", "Favorite activity", "Blocks", "payer-1", "Parent", "Checked"],
+    ["child-1", "child-person-1", "tracking-2", "Synthetic Child", "2022-01-01", "Room", "Enrolled", "2026-01-01", "Favorite activity", "Blocks", "pickup-1", "Aunt", ""],
+  ];
+  files.set("combined-details.csv", csv(trackingHeaders, trackingRows));
+  const rows = await buildProcareMultiReportRowsFromFiles(files);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]["child person id"], "child-person-1");
+  assert.equal(rows[0]["account id"], "account-1");
+  const manifest = JSON.parse(rows[0]["procare dataset coverage manifest"]);
+  assert.deepEqual(manifest.reportDetection.enrollment.sourceNames, ["enrollment.csv"]);
+  assert.equal(manifest.sourceInventory.find((source: {sourceName: string}) => source.sourceName === "combined-details.csv").reportKind, "ignored");
+
+  files.delete("enrollment.csv");
+  await assert.rejects(() => buildProcareMultiReportRowsFromFiles(files), /Missing or ambiguous report data: enrollment/);
+
+  files.set("enrollment.csv", standardFiles({
+    enrollment: [["child-1", "child-person-1", "Child", "Synthetic Child", "Example", "Synthetic", "", "2022-01-01", "", "Room", "room-1", "Enrolled", "2026-01-01", "", "payer-1", "", "", "enrollment-1"]],
+    parents: [], relationships: [],
+  }).get("enrollment.csv")!);
+  files.set("combined-details.csv", csv([...trackingHeaders, "Item Is Active"], trackingRows.map(row => [...row, "Checked"])));
+  const supported = await buildProcareMultiReportRowsFromFiles(files);
+  assert.equal(supported.length, 1);
+  assert.equal(JSON.parse(supported[0]["procare child info source records"]).length, 2);
+  const supportedManifest = JSON.parse(supported[0]["procare dataset coverage manifest"]);
+  assert.equal(supportedManifest.sourceInventory.find((source: {sourceName: string}) => source.sourceName === "combined-details.csv").reportKind, "childinfo");
+});
+
 import { test } from "node:test";
 import {
   buildProcareMultiReportRowsFromFiles,

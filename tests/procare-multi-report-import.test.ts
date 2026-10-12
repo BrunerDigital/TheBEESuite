@@ -22,12 +22,17 @@ test("tracking with relationship columns cannot create duplicate enrollment rows
 
   files.delete("enrollment.csv");
   await assert.rejects(() => buildProcareMultiReportRowsFromFiles(files), /Missing or ambiguous report data: enrollment/);
+  const aliasHeaders = trackingHeaders.map(header => header === "Category Description" ? "Information Category" : header === "Item Description" ? "Information Item" : header);
+  files.set("combined-details.csv", csv(aliasHeaders, trackingRows));
+  await assert.rejects(() => buildProcareMultiReportRowsFromFiles(files), /Missing or ambiguous report data: enrollment/);
 
   files.set("enrollment.csv", standardFiles({
     enrollment: [["child-1", "child-person-1", "Child", "Synthetic Child", "Example", "Synthetic", "", "2022-01-01", "", "Room", "room-1", "Enrolled", "2026-01-01", "", "payer-1", "", "", "enrollment-1"]],
     parents: [], relationships: [],
   }).get("enrollment.csv")!);
-  files.set("combined-details.csv", csv([...trackingHeaders, "Item Is Active"], trackingRows.map(row => [...row, "Checked"])));
+  const aliasRows = await buildProcareMultiReportRowsFromFiles(files);
+  assert.equal(aliasRows.length, 1);
+  files.set("combined-details.csv", csv([...aliasHeaders, "Item Is Active"], trackingRows.map(row => [...row, "Checked"])));
   const supported = await buildProcareMultiReportRowsFromFiles(files);
   assert.equal(supported.length, 1);
   assert.equal(JSON.parse(supported[0]["procare child info source records"]).length, 2);

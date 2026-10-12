@@ -362,12 +362,16 @@ function reportCandidate(sourceName: string, parsed: ParsedCsv, reportKind: Proc
   const available = new Set(canonicalized.headers.map(normalizeColumnName));
   const required = PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.reports[reportKind].requiredColumns;
   if (!required.every((column) => available.has(normalizeColumnName(column)))) return null;
+  const trackingColumns = new Set(parsed.headers.map((header) => {
+    const normalized = normalizeColumnName(header);
+    return normalizeColumnName(REPORT_ALIAS_LOOKUPS.childinfo.get(normalized) ?? header);
+  }));
   if (
     reportKind === "enrollment"
     && (PROCARE_TIME_CARD_COLUMNS.some((column) => available.has(normalizeColumnName(column)))
       // Tracking exports can repeat one child for every item and relationship.
       // Their enrollment columns describe those detail rows, not new enrollments.
-      || ["Category Description", "Item Description"].every((column) => available.has(normalizeColumnName(column))))
+      || ["Category Description", "Item Description"].every((column) => trackingColumns.has(normalizeColumnName(column))))
   ) return null;
   const distinctiveMatches = REPORT_DISTINCTIVE_COLUMNS[reportKind]
     .filter((column) => available.has(normalizeColumnName(column))).length;

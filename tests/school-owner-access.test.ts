@@ -59,4 +59,6 @@ test("provisioning requires an explicit school list and strong temporary passwor
   assert.throws(() => normalizeOwnerLoginInput({ ...input, centerIds: [] }), /Select/);
   assert.throws(() => normalizeOwnerLoginInput({ ...input, email: "invalid" }), /email/);
   assert.throws(() => normalizeOwnerLoginInput({ ...input, password: "short" }), /password/);
+  assert.equal(normalizeOwnerLoginInput({ ...input, password: "  long-temporary-password  " }).password, input.password);
+  assert.throws(() => normalizeOwnerLoginInput({ ...input, password: "        short        " }), /password/);
 });

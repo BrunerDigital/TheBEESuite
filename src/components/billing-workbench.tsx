@@ -131,6 +131,7 @@ export type BillingWorkbenchFamily = {
       netAmountCents: number | null;
       billingDay: number | null;
       startsPeriod: string | null;
+      invoiceDelayWeeks?: number;
       description: string | null;
     } | null;
   }>;
@@ -3065,6 +3066,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <p className="text-xs text-muted-foreground">
               Weekly billing creates one week-ahead invoices. Biweekly billing creates one invoice equal to two net weekly rates every two weeks. Every-4-weeks billing creates one invoice equal to four net weekly rates. Monthly billing creates one invoice for the saved monthly rate on the selected day (1–28). The opening balance remains unchanged; enter an opening balance only when the family already owes money. This does not enable family autopay. Explicit $0.00 CCDF or voucher-funded assignments never create a family invoice or autopay attempt.
             </p>
+            {selectedAssignment?.invoiceDelayWeeks === 1 && effectiveAssignmentCadence === "biweekly" ? (
+              <p className="text-xs text-muted-foreground">This child&apos;s biweekly invoices are scheduled one week later. Saving tuition preserves that timing and the existing tuition coverage.</p>
+            ) : null}
           </TabsContent>
 
           <TabsContent value="agency" className="space-y-4 rounded-lg border bg-background/35 p-4">

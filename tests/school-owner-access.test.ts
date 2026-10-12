@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { UserRole } from "@prisma/client";
 import { isSchoolOwnerAccount, normalizeOwnerLoginInput } from "@/lib/school-owner-access";
-import { resolveWorkspaceState, effectiveCenterIdsForWorkspace } from "@/lib/workspace-selection";
+import { resolveWorkspaceState, effectiveCenterIdsForWorkspace, effectiveWorkspaceRole } from "@/lib/workspace-selection";
 import { canAccessCenter, canAccessAllCenters, canManageBilling, canManageOperations } from "@/lib/auth";
 
 const schools = [{ id: "a", name: "School A", detail: "" }, { id: "b", name: "School B", detail: "" }];
@@ -39,6 +39,18 @@ test("existing directors keep their fixed workspace and unrelated roles cannot b
   assert.equal(isSchoolOwnerAccount(UserRole.CENTER_DIRECTOR, {}), false);
   const teacher = resolveWorkspaceState({ role: UserRole.TEACHER, schoolOwner: true, authorizedCenters: schools });
   assert.equal(teacher.canSwitch, false);
+});
+
+test("owner selection excludes closed schools while executives retain read-only history", () => {
+  const centers = [...schools, { id: "closed", name: "Closed school", detail: "", status: "closed" }];
+  const owner = resolveWorkspaceState({ role: UserRole.CENTER_DIRECTOR, schoolOwner: true, authorizedCenters: centers, requestedSelection: "center:closed" });
+  assert.equal(owner.required, true);
+  assert.equal(owner.options.some((center) => center.id === "closed"), false);
+  assert.deepEqual(effectiveCenterIdsForWorkspace(owner, centers.map((center) => center.id)), []);
+  const executive = resolveWorkspaceState({ role: UserRole.BRAND_ADMIN, authorizedCenters: centers, requestedSelection: "center:closed" });
+  assert.equal(executive.readOnlyHistory, true);
+  assert.equal(effectiveWorkspaceRole(UserRole.BRAND_ADMIN, executive), UserRole.READ_ONLY_AUDITOR);
+  assert.deepEqual(effectiveCenterIdsForWorkspace(executive, centers.map((center) => center.id)), ["closed"]);
 });
 
 test("provisioning requires an explicit school list and strong temporary password", () => {

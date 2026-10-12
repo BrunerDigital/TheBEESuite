@@ -30,7 +30,7 @@ export default async function WorkspacePage({
             {user.workspace.required ? "Where are you working today?" : "Change workspace"}
           </h1>
           <p className="mt-3 max-w-3xl text-pretty text-sm leading-6 text-muted-foreground sm:text-base">
-            Choose one location for street-level work, or choose All locations for the authorized company-wide view. You can change this later from the shared header.
+            {user.isSchoolOwner ? "Choose one of your assigned schools to manage its setup, families, billing, and payouts. You can change schools from the shared header." : "Choose one location for street-level work, or choose All locations for the authorized company-wide view. You can change this later from the shared header."}
           </p>
         </header>
         <WorkspaceSelector workspace={user.workspace} nextPath={nextPath} />

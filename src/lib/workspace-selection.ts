@@ -91,10 +91,12 @@ export function resolveWorkspaceState({
   role,
   authorizedCenters,
   requestedSelection,
+  schoolOwner = false,
 }: {
   role: UserRole | string;
   authorizedCenters: WorkspaceCenterOption[];
   requestedSelection?: string | null;
+  schoolOwner?: boolean;
 }): WorkspaceState {
   const options = authorizedCenters
     .filter((center) => isSelectableWorkspaceCenterStatus(center.status)
@@ -103,7 +105,8 @@ export function resolveWorkspaceState({
       ? { ...center, name: `${center.name} (Closed)`, detail: `${center.detail} - Read-only closed school history` }
       : center);
   const companyLabel = workspaceCompanyLabel(options);
-  const multiLocationExecutive = isWorkspaceExecutiveRole(role) && options.length > 1;
+  const ownerWorkspace = schoolOwner && role === UserRole.CENTER_DIRECTOR;
+  const multiLocationExecutive = (isWorkspaceExecutiveRole(role) || ownerWorkspace) && options.length > 1;
   const requestedCenterId = centerIdFromWorkspaceSelection(requestedSelection);
   const selectedCenter = requestedCenterId
     ? options.find((center) => center.id === requestedCenterId) ?? null
@@ -114,7 +117,7 @@ export function resolveWorkspaceState({
     && (!isWorkspaceSelectionValue(requestedSelection) || !selectedCenter),
   );
 
-  if (multiLocationExecutive && requestedSelection === "all") {
+  if (multiLocationExecutive && !ownerWorkspace && requestedSelection === "all") {
     return {
       mode: "all",
       selection: "all",
@@ -124,7 +127,7 @@ export function resolveWorkspaceState({
       companyLabel,
       required: false,
       canSwitch: true,
-      canSelectAll: true,
+      canSelectAll: !ownerWorkspace,
       invalidSelection: false,
       authorizedCenterCount: options.length,
       options,
@@ -142,7 +145,7 @@ export function resolveWorkspaceState({
       companyLabel: selectedCenter.companyName?.trim() || companyLabel,
       required: false,
       canSwitch: true,
-      canSelectAll: true,
+      canSelectAll: !ownerWorkspace,
       invalidSelection: false,
       authorizedCenterCount: options.length,
       options,
@@ -159,7 +162,7 @@ export function resolveWorkspaceState({
       companyLabel,
       required: true,
       canSwitch: true,
-      canSelectAll: true,
+      canSelectAll: !ownerWorkspace,
       invalidSelection,
       authorizedCenterCount: options.length,
       options,

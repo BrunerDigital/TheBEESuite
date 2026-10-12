@@ -1,5 +1,6 @@
 "use client";
 
+import { OwnerLoginPanel } from "@/components/owner-login-panel";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { AlertCircle, Archive, Building2, CheckCircle2, Copy, FileUp, KeyRound, LogOut, MapPin, RefreshCw, Save, ShieldCheck, UserPlus } from "lucide-react";
@@ -746,6 +747,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
   return (
     <>
+      <OwnerLoginPanel centers={centers} />
       <Dialog open={Boolean(pendingConfirmation)} onOpenChange={(open) => {
         if (!open) setPendingConfirmation(null);
       }}>

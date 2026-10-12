@@ -283,10 +283,22 @@ export function firstUncoveredTuitionBillingPeriod(input: {
   return firstUncovered;
 }
 
-export function weeklyTuitionChargeDateForPeriod(period: string) {
+// A reviewed biweekly assignment can issue its invoice a week later without
+// moving the coverage anchor or billing a paid week again.
+export function normalizeTuitionInvoiceDelayWeeks(value: unknown, cadence: unknown) {
+  return normalizeBillingCadence(cadence) === BIWEEKLY_TUITION_AUTOBILL_CADENCE && value === 1 ? 1 : 0;
+}
+
+export function tuitionInvoiceBillingPeriod(value: unknown, asOf: Date, cadence: unknown, delayWeeks: unknown = 0) {
+  const invoiceDate = new Date(asOf);
+  invoiceDate.setUTCDate(invoiceDate.getUTCDate() - (normalizeTuitionInvoiceDelayWeeks(delayWeeks, cadence) * 7));
+  return defaultRecurringBillingPeriod(value, invoiceDate, cadence);
+}
+
+export function weeklyTuitionChargeDateForPeriod(period: string, delayWeeks = 0) {
   const followingWeekMonday = recurringDueDateForPeriod(period, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
   const chargeDate = new Date(followingWeekMonday);
-  chargeDate.setUTCDate(followingWeekMonday.getUTCDate() - 4);
+  chargeDate.setUTCDate(followingWeekMonday.getUTCDate() - 4 + (delayWeeks === 1 ? 7 : 0));
   return chargeDate;
 }
 

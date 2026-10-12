@@ -1,0 +1,112 @@
+[
+  {
+    "title": "Welcome to The BEE Suite",
+    "start": 0,
+    "end": 26.9
+  },
+  {
+    "title": "Find your way around",
+    "start": 26.9,
+    "end": 57.503855
+  },
+  {
+    "title": "Dashboard",
+    "start": 57.503855,
+    "end": 84.553855
+  },
+  {
+    "title": "School Operations",
+    "start": 84.553855,
+    "end": 115.103855
+  },
+  {
+    "title": "Families & Communication",
+    "start": 115.103855,
+    "end": 147.45737
+  },
+  {
+    "title": "Billing & Payments",
+    "start": 147.45737,
+    "end": 180.210703
+  },
+  {
+    "title": "Staff & Access",
+    "start": 180.210703,
+    "end": 209.634694
+  },
+  {
+    "title": "Records & Compliance",
+    "start": 209.634694,
+    "end": 238.384694
+  },
+  {
+    "title": "Enrollment CRM",
+    "start": 238.384694,
+    "end": 270.293311
+  },
+  {
+    "title": "FTE reports",
+    "start": 270.293311,
+    "end": 298.14331100000004
+  },
+  {
+    "title": "Insights & Reputation",
+    "start": 298.14331100000004,
+    "end": 327.407347
+  },
+  {
+    "title": "Campaigns & Automations",
+    "start": 327.407347,
+    "end": 357.625624
+  },
+  {
+    "title": "AI Command and Mr. Bee",
+    "start": 357.625624,
+    "end": 385.749751
+  },
+  {
+    "title": "Settings & Setup",
+    "start": 385.749751,
+    "end": 420.807302
+  },
+  {
+    "title": "Data readiness, when enabled",
+    "start": 420.807302,
+    "end": 451.730386
+  },
+  {
+    "title": "BEES and training resources",
+    "start": 451.730386,
+    "end": 485.180386
+  },
+  {
+    "title": "Asset Hub",
+    "start": 485.180386,
+    "end": 512.039932
+  },
+  {
+    "title": "Notifications and Audit logs",
+    "start": 512.039932,
+    "end": 541.108685
+  },
+  {
+    "title": "Help and support",
+    "start": 541.108685,
+    "end": 569.2086850000001
+  },
+  {
+    "title": "Family kiosk, staff clock and portals",
+    "start": 569.2086850000001,
+    "end": 602.0820180000001
+  },
+  {
+    "title": "Sections that depend on access",
+    "start": 602.0820180000001,
+    "end": 631.945057
+  },
+  {
+    "title": "Choose the workspace by the task",
+    "start": 631.945057,
+    "end": 666.595057
+  }
+]

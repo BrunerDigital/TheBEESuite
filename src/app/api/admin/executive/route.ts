@@ -1,3 +1,4 @@
+import { normalizeOwnerLoginInput } from "@/lib/school-owner-access";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import {
@@ -30,6 +31,7 @@ export const runtime = "nodejs";
 type Payload = {
   action?: unknown;
   centerId?: unknown;
+  centerIds?: unknown;
   ownerGroupId?: unknown;
   organizationId?: unknown;
   name?: unknown;
@@ -569,6 +571,56 @@ async function ensureAccessGrant(input: {
   });
 }
 
+// Separate owner provisioning never converts an existing director, parent, or executive.
+async function createOwnerLogin(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>) {
+  const { name, email, password, centerIds } = normalizeOwnerLoginInput(payload);
+  if (appReviewReservedIdentityKind(email)) throw new Error("Reserved App Review logins cannot be used for an owner.");
+  if (centerIds.some((id) => !canAdministerCenter(actor, id))) throw new Error("A selected school is outside your authorized workspace.");
+  const centers = await prisma.center.findMany({
+    where: { id: { in: centerIds }, status: { in: ["active", "trial_setup", "paused"] }, organization: { tenantId: actor.tenantId } },
+    select: { id: true, organizationId: true },
+  });
+  if (centers.length !== centerIds.length) throw new Error("Every selected school must belong to this tenant and be available for setup.");
+  if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
+    throw new Error("This email already has an application account. Use a separate owner email; existing access and passwords were preserved.");
+  }
+  // Reserve the unique application email before creating Auth. Pending users cannot log in.
+  const pending = await prisma.user.create({ data: {
+    tenantId: actor.tenantId, organizationId: centers[0].organizationId,
+    name, email, role: UserRole.CENTER_DIRECTOR, isActive: false, mustResetPassword: true,
+    customFields: { accountType: "school_owner", ownerProvisioningStatus: "pending", createdByUserId: actor.id, requestedCenterIds: centerIds },
+  } });
+  try {
+    await upsertSupabaseAuthUserWithPassword({
+      email, name, password, role: UserRole.CENTER_DIRECTOR,
+      source: "bee_suite_school_owner", rejectIfExists: true,
+    });
+    const owner = await prisma.$transaction(async (tx) => {
+      const currentCenters = await tx.center.findMany({
+        where: { id: { in: centerIds }, status: { in: ["active", "trial_setup", "paused"] }, organization: { tenantId: actor.tenantId } },
+        select: { id: true },
+      });
+      if (currentCenters.length !== centerIds.length) throw new Error("School assignments changed during owner setup.");
+      for (const center of centers) {
+        await ensureAccessGrant({ userId: pending.id, tenantId: actor.tenantId, role: UserRole.CENTER_DIRECTOR, scopeType: "CENTER", centerId: center.id }, tx);
+      }
+      const saved = await tx.user.update({ where: { id: pending.id }, data: {
+        isActive: true,
+        customFields: { accountType: "school_owner", ownerProvisioningStatus: "ready", createdByUserId: actor.id, requestedCenterIds: centerIds },
+      }, select: { id: true, name: true, email: true, isActive: true } });
+      await tx.auditLog.create({ data: {
+        tenantId: actor.tenantId, userId: actor.id, action: "executive.school_owner.created", resource: "User", resourceId: saved.id,
+        metadata: { centerIds, scopeType: "CENTER", accountType: "school_owner", mustResetPassword: true },
+      } });
+      return saved;
+    });
+    return { user: owner, centerIds, loginUrl: "/login?next=/owner", setupUrl: "/owner" };
+  } catch {
+    // Keep the reservation inactive for a reviewed recovery; never reset or delete an existing Auth identity.
+    throw new Error("Owner setup did not complete. The reserved application account remains inactive. Review its Auth identity before retrying; no existing password was changed.");
+  }
+}
+
 async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>, requestUrl: string) {
   const submittedEmail = clean(payload.email).toLowerCase();
   const name = clean(payload.name);
@@ -1017,6 +1069,9 @@ async function POSTHandler(request: NextRequest) {
     }
     if (action === "setOwnerGroupStatus") {
       return NextResponse.json({ ok: true, ...(await setOwnerGroupStatus(payload, actor)) });
+    }
+    if (action === "createOwnerLogin") {
+      return NextResponse.json({ ok: true, ...(await createOwnerLogin(payload, actor)) }, { headers: { "Cache-Control": "no-store" } });
     }
     if (action === "saveUser") {
       return NextResponse.json({ ok: true, ...(await saveUser(payload, actor, request.url)) });

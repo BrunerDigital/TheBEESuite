@@ -1,3 +1,4 @@
+import { isSchoolOwnerAccount } from "@/lib/school-owner-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sessionMeetsMfaPolicy } from "@/lib/mfa-policy";
@@ -84,6 +85,7 @@ async function POSTHandler(request: NextRequest) {
       email: true,
       name: true,
       role: true,
+      customFields: true,
       mustResetPassword: true,
       sessionVersion: true,
     },
@@ -101,7 +103,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const nextPath = sessionMeetsMfaPolicy(user.role, verified.mfaVerified)
-    ? resolvePortalPostLoginPath({ role: user.role, requestedNext: body.next, portal: body.loginPortal })
+    ? resolvePortalPostLoginPath({ role: user.role, requestedNext: isSchoolOwnerAccount(user.role, user.customFields) && (!body.next || body.next === "/dashboard") ? "/owner" : body.next, portal: body.loginPortal })
     : "/account/security";
   const userAgent = cleanUserAgent(request.headers.get("user-agent"));
   const appMode = normalizeDeviceAppMode(body.appMode, nextPath);

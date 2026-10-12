@@ -581,6 +581,9 @@ async function createOwnerLogin(payload: Payload, actor: Awaited<ReturnType<type
     select: { id: true, organizationId: true },
   });
   if (centers.length !== centerIds.length) throw new Error("Every selected school must belong to this tenant and be available for setup.");
+  if (new Set(centers.map((center) => center.organizationId)).size !== 1) {
+    throw new Error("Select schools from one organization for each owner login.");
+  }
   if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
     throw new Error("This email already has an application account. Use a separate owner email; existing access and passwords were preserved.");
   }

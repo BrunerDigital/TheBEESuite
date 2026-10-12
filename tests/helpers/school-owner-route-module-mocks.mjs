@@ -59,6 +59,14 @@ test("existing users are preserved and Auth failures leave a disabled reservatio
   reset(); failTransaction = true; assert.equal((await request()).status, 400);
   assert.equal(created.isActive, false); assert.equal(grants.length, 0);
 });
+
+test("cross-organization school selections are rejected before provisioning", async () => {
+  reset(); centers[1].organizationId = "org-b";
+  const response = await request();
+  assert.equal(response.status, 400);
+  assert.match(JSON.stringify(await response.json()), /one organization/);
+  assert.equal(created, null); assert.equal(authCalls.length, 0); assert.equal(grants.length, 0);
+});
 test("successful owner provisioning activates exact CENTER grants atomically and never returns a password", async () => {
   reset(); const response = await request(); const result = await response.json();
   assert.equal(response.status, 200); assert.equal(response.headers.get("cache-control"), "no-store");

@@ -13,11 +13,15 @@ let invoices = 0;
 let locks = [];
 let currentFamilyCenterId = "center-1";
 let invoiceMetadata = null;
+let invoiceDelayWeeks = 0;
+let invoiceDueDate = null;
+let existingInvoices = [];
 const childFields = () => ({
   tuitionBillingEnabled: true,
   tuitionPlanId: "plan-1",
   tuitionPlanAmountCents: 10000,
   tuitionBillingCadence: cadence,
+  tuitionBillingInvoiceDelayWeeks: invoiceDelayWeeks,
   ...(startsPeriod ? { tuitionBillingStartsPeriod: startsPeriod } : {}),
 });
 const child = () => ({
@@ -34,7 +38,7 @@ const tx = {
   child: { async findFirst() { return { customFields: childFields() }; } },
   billingAccount: { async upsert() { return { id: "account-1" }; } },
   center: { async findUnique() { return { status: "active", customFields: centerFields }; } },
-  invoice: { async findMany() { return []; } },
+  invoice: { async findMany() { return existingInvoices; } },
 };
 mock.module("@/lib/prisma", { namedExports: { prisma: {
   center: { async findMany() { return [{ id: "center-1", customFields: { tuitionBillingEnabled: true } }]; } },
@@ -49,14 +53,15 @@ mock.module("@/lib/billing-invoices", { namedExports: {
   async createBillingInvoiceForFamily(_tx, input) {
     invoices++;
     invoiceMetadata = input.customFields;
+    invoiceDueDate = input.dueDate;
     return { created: true, invoice: { id: "invoice-1", number: "INV-1", totalCents: 10000 }, totalCents: 10000 };
   },
 } });
 mock.module("@/lib/request-response-logging", { namedExports: { withApiLogging(_name, handler) { return handler; } } });
 
 const { GET } = await import("../src/app/api/cron/tuition-billing/route.ts");
-const run = async () => {
-  const response = await GET(new NextRequest("https://app.test/api/cron/tuition-billing?asOf=2026-10-08", {
+const run = async (asOf = "2026-10-08", extra = "") => {
+  const response = await GET(new NextRequest(`https://app.test/api/cron/tuition-billing?asOf=${asOf}${extra}`, {
     headers: { authorization: "Bearer test-cron-secret" },
   }));
   return { status: response.status, body: await response.json() };
@@ -134,4 +139,51 @@ test("unchanged eligible school creates an invoice with locked school metadata",
   assert.equal(result.body.failed, 0);
   assert.equal(invoices, 1);
   assert.equal(invoiceMetadata.centerId, "center-1");
+});
+
+test("reviewed biweekly timing delays issuance without moving coverage or duplicating an early invoice", async () => {
+  cadence = "biweekly";
+  startsPeriod = "2026-W40";
+  invoiceDelayWeeks = 1;
+  centerFields = { tuitionBillingEnabled: true };
+  currentFamilyCenterId = "center-1";
+  pauseAfterPreflight = false;
+  existingInvoices = [];
+  invoices = 0;
+
+  assert.equal((await run("2026-10-08")).body.dueChildren, 0);
+  assert.equal((await run("2026-10-08", "&period=2026-W42")).body.dueChildren, 0);
+  assert.equal(invoices, 0);
+
+  assert.equal((await run("2026-10-15")).body.created, 1);
+  assert.equal(invoiceMetadata.billingPeriod, "2026-W42");
+  assert.equal(invoiceMetadata.coverageStartsPeriod, "2026-W42");
+  assert.equal(invoiceMetadata.invoiceWeekCount, 2);
+  assert.equal(invoiceMetadata.tuitionBillingInvoiceDelayWeeks, 1);
+  assert.equal(invoiceDueDate.toISOString(), "2026-10-15T12:00:00.000Z");
+  existingInvoices = [{ id: "invoice-early", number: "INV-EARLY", totalCents: 20000, customFields: { childId: "child-1", billingPeriod: "2026-W42" } }];
+  const repeated = await run("2026-10-15");
+  assert.equal(repeated.body.created, 0);
+  assert.equal(repeated.body.skipped, 1);
+  assert.equal(invoices, 1);
+
+  assert.equal((await run("2026-10-22")).body.dueChildren, 0);
+  existingInvoices = [];
+  assert.equal((await run("2026-10-29")).body.created, 1);
+  assert.equal(invoiceMetadata.coverageStartsPeriod, "2026-W44");
+  assert.equal(invoiceDueDate.toISOString(), "2026-10-29T12:00:00.000Z");
+  invoiceDelayWeeks = 0;
+});
+
+test("default biweekly invoice timing remains one week ahead of coverage", async () => {
+  cadence = "biweekly";
+  startsPeriod = "2026-W40";
+  invoiceDelayWeeks = 0;
+  existingInvoices = [];
+  invoices = 0;
+  const result = await run("2026-10-08");
+  assert.equal(result.body.created, 1);
+  assert.equal(invoiceMetadata.coverageStartsPeriod, "2026-W42");
+  assert.equal(invoiceDueDate.toISOString(), "2026-10-08T12:00:00.000Z");
+  assert.equal(invoiceMetadata.tuitionBillingInvoiceDelayWeeks, undefined);
 });

@@ -713,15 +713,14 @@ async function createManualCheckPayment(user: CurrentBillingUser, body: Record<s
       paidAt,
       accountBalanceAfterCents: updatedAccount.balanceCents,
     });
+    await writeAuditLog(user, {
+      centerId: familyAccess.centerId,
+      action: "billing.check_payment.created",
+      resource: "Payment",
+      resourceId: payment.id,
+      metadata: { familyId: familyAccess.family.id, amountCents, checkNumber },
+    }, tx);
     return { payment, entry, appliedInvoiceIds };
-  });
-
-  await writeAuditLog(user, {
-    centerId: familyAccess.centerId,
-    action: "billing.check_payment.created",
-    resource: "Payment",
-    resourceId: result.payment.id,
-    metadata: { familyId: familyAccess.family.id, amountCents, checkNumber },
   });
   return NextResponse.json({
     ok: true,
@@ -798,19 +797,18 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
       paidAt,
       accountBalanceAfterCents: updatedAccount.balanceCents,
     });
+    await writeAuditLog(user, {
+      centerId: familyAccess.centerId,
+      action: "billing.cash_payment.created",
+      resource: "Payment",
+      resourceId: payment.id,
+      metadata: {
+        familyId: familyAccess.family.id,
+        amountCents,
+        reference: reference || null,
+      },
+    }, tx);
     return { payment, entry, appliedInvoiceIds };
-  });
-
-  await writeAuditLog(user, {
-    centerId: familyAccess.centerId,
-    action: "billing.cash_payment.created",
-    resource: "Payment",
-    resourceId: result.payment.id,
-    metadata: {
-      familyId: familyAccess.family.id,
-      amountCents,
-      reference: reference || null,
-    },
   });
   return NextResponse.json({
     ok: true,
@@ -1664,3 +1662,4 @@ async function PATCHHandler(request: NextRequest) {
 
 export const POST = withApiLogging("POST", POSTHandler);
 export const PATCH = withApiLogging("PATCH", PATCHHandler);
+

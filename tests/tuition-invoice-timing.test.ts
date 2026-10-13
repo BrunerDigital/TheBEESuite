@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeTuitionInvoiceDelayWeeks, tuitionInvoiceBillingPeriod, weeklyTuitionChargeDateForPeriod } from "../src/lib/billing-workflows";
+import { nextBiweeklyInvoiceDate, resolveTuitionInvoiceDelay } from "../src/lib/tuition-invoice-timing";
 
 test("only an explicit reviewed biweekly delay changes invoice timing", () => {
   assert.equal(normalizeTuitionInvoiceDelayWeeks(1, "biweekly"), 1);
@@ -11,6 +12,22 @@ test("only an explicit reviewed biweekly delay changes invoice timing", () => {
     assert.equal(normalizeTuitionInvoiceDelayWeeks(1, cadence), 0);
     assert.equal(tuitionInvoiceBillingPeriod(null, new Date("2026-10-15T12:00:00Z"), cadence, 1), tuitionInvoiceBillingPeriod(null, new Date("2026-10-15T12:00:00Z"), cadence));
   }
+});
+
+test("director timing edits preserve omitted legacy delays and reject unsupported choices", () => {
+  const existing = { cadence: "biweekly", previousCadence: "biweekly", previousDelay: 1 };
+  assert.deepEqual(resolveTuitionInvoiceDelay({ ...existing, requested: undefined }), { ok: true, delayWeeks: 1 });
+  assert.deepEqual(resolveTuitionInvoiceDelay({ ...existing, requested: 0 }), { ok: true, delayWeeks: 0 });
+  for (const requested of ["1", 2, -1, null, true]) assert.equal(resolveTuitionInvoiceDelay({ ...existing, requested }).ok, false);
+  for (const cadence of ["weekly", "four_week", "monthly"]) assert.equal(resolveTuitionInvoiceDelay({ ...existing, cadence, requested: 1 }).ok, false);
+});
+
+test("Omar's prepaid-week preview retains the W40 anchor and alternating invoice dates", () => {
+  assert.equal(nextBiweeklyInvoiceDate("2026-W40", 0, new Date("2026-10-13T12:00:00Z"))?.toISOString(), "2026-10-22T12:00:00.000Z");
+  assert.equal(nextBiweeklyInvoiceDate("2026-W40", 1, new Date("2026-10-13T12:00:00Z"))?.toISOString(), "2026-10-15T12:00:00.000Z");
+  assert.equal(nextBiweeklyInvoiceDate("2026-W40", 1, new Date("2026-10-16T12:00:00Z"))?.toISOString(), "2026-10-29T12:00:00.000Z");
+  assert.equal(nextBiweeklyInvoiceDate("2027-W02", 1, new Date("2026-10-13T12:00:00Z"))?.toISOString(), "2027-01-14T12:00:00.000Z");
+  assert.equal(nextBiweeklyInvoiceDate("2026-W", 1, new Date("2026-10-13T12:00:00Z")), null);
 });
 
 test("delayed dates retain consecutive biweekly coverage across year boundaries", () => {

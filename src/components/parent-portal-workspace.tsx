@@ -18,6 +18,7 @@ import { isInternalSignatureRequest as requiresDocumentSignature, isParentDocume
 import type { RecordPagination } from "@/lib/record-pagination";
 import { remainingParentIncidentCount } from "@/lib/parent-attention";
 import { canCompactParentAccount } from "@/lib/parent-home-account";
+import { parentFamilyPaymentPanelVisible } from "@/lib/parent-family-payment-panel";
 import { parentActivePaymentSummary, parentPaymentStatusMessage, parentPaymentStatusTitle, type ParentAccountPaymentBlocker, type ParentPendingPayment } from "@/lib/parent-payment-status";
 import { activeItemScrollDelta } from "@/lib/horizontal-active-item";
 import { revealFocusedPortalControl, scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
@@ -1037,8 +1038,12 @@ function ParentPortalWorkspaceView({
     accountPaymentAmountRequired ||
     accountPaymentAmountInvalid ||
     accountPaymentAmountExceedsBalance;
-  const showFamilyPaymentPanel =
-    Boolean(billingAccount) && (!paymentContinuityAccess || balanceCents > 0);
+  const showFamilyPaymentPanel = parentFamilyPaymentPanelVisible({
+    hasBillingAccount: Boolean(billingAccount),
+    paymentContinuityAccess,
+    balanceCents,
+    responsibilityReviewRequired: parentBalanceReviewRequired,
+  });
   const latestAccountLedgerEntry =
     latestLedgerEntry ?? ledgerEntries[0] ?? null;
   const parentVisiblePayments = payments.filter(isParentVisiblePayment);
@@ -5001,3 +5006,4 @@ function ParentPortalWorkspaceView({
     </div>
   );
 }
+

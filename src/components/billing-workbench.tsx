@@ -35,6 +35,7 @@ import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 import { TUITION_CREDIT_CATEGORIES, type TuitionCreditCategory } from "@/lib/tuition-credits";
 import { tuitionDescriptionAfterRateSave, tuitionScheduleAfterRateSave } from "@/lib/tuition-rate-schedule";
+import { nextBiweeklyInvoiceDate } from "@/lib/tuition-invoice-timing";
 import { PAY_AHEAD_MAX_MONTHS, payAheadTotalCents } from "@/lib/pay-ahead";
 import {
   ONE_TIME_BILLING_ADJUSTMENT_OPTIONS,
@@ -463,6 +464,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     initialAssignment?.cadence === "monthly" ? "monthly" : initialAssignment?.cadence === "biweekly" ? "biweekly" : initialAssignment?.cadence === "four_week" ? "four_week" : "weekly",
   );
   const [assignmentBillingDay, setAssignmentBillingDay] = useState(String(initialAssignment?.billingDay ?? 1));
+  const [assignmentInvoiceDelayWeeks, setAssignmentInvoiceDelayWeeks] = useState(initialAssignment?.invoiceDelayWeeks === 1 ? "1" : "0");
+  const [assignmentTimingReason, setAssignmentTimingReason] = useState("");
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
   const [assignmentStartPeriod, setAssignmentStartPeriod] = useState(
     initialAssignment?.startsPeriod && periodMatchesCadence(initialAssignment.startsPeriod, initialAssignment.cadence ?? "weekly")
@@ -600,6 +603,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   );
   const effectiveAssignmentBillingDay = effectiveAssignmentCadence === "monthly" ? assignmentBillingDay : "4";
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
+  const effectiveAssignmentInvoiceDelayWeeks = effectiveAssignmentCadence === "biweekly" && assignmentInvoiceDelayWeeks === "1" ? 1 : 0;
+  const assignmentTimingChanging = effectiveAssignmentInvoiceDelayWeeks !== (selectedAssignment?.invoiceDelayWeeks === 1 ? 1 : 0);
+  const nextAssignmentInvoiceDate = effectiveAssignmentCadence === "biweekly"
+    ? nextBiweeklyInvoiceDate(effectiveAssignmentStartPeriod, effectiveAssignmentInvoiceDelayWeeks, new Date())
+    : null;
   const effectiveAssignmentDescription = assignmentDescription || effectiveAssignmentPlan?.name || selectedAssignment?.description || selectedAssignment?.tuitionPlanName || "";
   const effectiveAssignmentCredits = TUITION_CREDIT_CATEGORIES.flatMap(({ id }) => {
     const amountCents = dollarsToCents(assignmentCredits[id]);
@@ -707,6 +715,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     enabled: assignmentEnabled,
     cadence: assignmentCadence,
     billingDay: assignmentBillingDay,
+    invoiceDelayWeeks: assignmentInvoiceDelayWeeks,
     tuitionPlanId: assignmentTuitionPlanId,
     startPeriod: assignmentStartPeriod,
     description: assignmentDescription,
@@ -717,6 +726,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     enabled: selectedAssignment?.enabled === false ? "false" : "true",
     cadence: savedAssignmentCadence,
     billingDay: String(selectedAssignment?.billingDay ?? 1),
+    invoiceDelayWeeks: selectedAssignment?.invoiceDelayWeeks === 1 ? "1" : "0",
     tuitionPlanId: locationTuitionPlans.find((plan) => plan.id === selectedAssignment?.tuitionPlanId)?.id ?? "",
     startPeriod: savedAssignmentStartPeriod,
     description: selectedAssignment?.description ?? selectedAssignment?.tuitionPlanName ?? "",
@@ -1154,6 +1164,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const nextCadence = assignment?.cadence === "monthly" ? "monthly" : assignment?.cadence === "biweekly" ? "biweekly" : assignment?.cadence === "four_week" ? "four_week" : "weekly";
     setAssignmentCadence(nextCadence);
     setAssignmentBillingDay(String(assignment?.billingDay ?? 1));
+    setAssignmentInvoiceDelayWeeks(assignment?.invoiceDelayWeeks === 1 ? "1" : "0");
+    setAssignmentTimingReason("");
     setAssignmentTuitionPlanId(assignedPlan?.id ?? "");
     setAssignmentStartPeriod(
       assignment?.startsPeriod && periodMatchesCadence(assignment.startsPeriod, assignment?.cadence ?? "weekly")
@@ -1667,6 +1679,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitAssignment() {
     if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving tuition.");
+    if (assignmentTimingChanging && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
     const selectedRateIsBeingEdited = planEditorId === effectiveAssignmentPlanId
       || (planEditorId === "new" && !effectiveAssignmentPlanId);
     if (planDraftIsDirty && assignmentEnabled === "true" && selectedRateIsBeingEdited) {
@@ -1698,6 +1711,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           billingCadence: effectiveAssignmentCadence,
           billingDay: effectiveAssignmentBillingDay,
           billingStartPeriod: effectiveAssignmentStartPeriod,
+          invoiceDelayWeeks: effectiveAssignmentInvoiceDelayWeeks,
+          timingChangeReason: assignmentTimingReason,
           description: effectiveAssignmentDescription,
           tuitionAdditionalCharges: effectiveAssignmentAdditionalCharges,
           tuitionCredits: effectiveAssignmentCredits,
@@ -1755,6 +1770,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function saveTuitionPlan() {
+    if (assignmentTimingChanging && assignmentEnabled === "true" && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
     if (planBeingEdited?.archived) return setErrorMessage("Restore this archived rate before editing it.");
     if (!planName.trim() || !planAmountDollars.trim()) {
       return setErrorMessage("Tuition plan name and amount are required.");
@@ -1840,6 +1856,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             familyId: selectedFamily.id, childId: selectedAssignmentChild.id, enabled: true,
             tuitionPlanId: savedRateId, billingCadence: nextSchedule.cadence, billingDay,
             billingStartPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
+            invoiceDelayWeeks: nextSchedule.cadence === "biweekly" && assignmentInvoiceDelayWeeks === "1" ? 1 : 0,
+            timingChangeReason: assignmentTimingReason,
             tuitionCredits: credits, tuitionAdditionalCharges: additionalCharges,
           }),
         });
@@ -1857,6 +1875,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setAssignmentBillingDay(billingDay);
         setLastSavedTuitionDraftSignature(JSON.stringify({
           enabled: "true", cadence: nextSchedule.cadence, billingDay, tuitionPlanId: savedRateId,
+          invoiceDelayWeeks: assignmentInvoiceDelayWeeks,
           startPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
           credits: creditInputs, additionalCharges: additionalChargeInputs,
         }));
@@ -2951,7 +2970,27 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   placeholder={effectiveAssignmentCadence === "monthly" ? "2026-08" : "2026-W23"}
                 />
               </div>
+              {effectiveAssignmentCadence === "biweekly" && !assignmentIsVoucherFunded ? (
+                <div className="space-y-1">
+                  <Label htmlFor="billing-assignment-invoice-timing">Biweekly invoice timing</Label>
+                  <Select value={assignmentInvoiceDelayWeeks} onValueChange={(value) => { if (value) setAssignmentInvoiceDelayWeeks(value); }}>
+                    <SelectTrigger id="billing-assignment-invoice-timing"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Standard schedule</SelectItem>
+                      <SelectItem value="1">One week later · prepaid week</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Shifts future invoice dates by one week while keeping the saved tuition coverage and biweekly amount.</p>
+                  {nextAssignmentInvoiceDate ? <p className="text-xs">Next scheduled invoice: {formatInvoiceDueDate(nextAssignmentInvoiceDate)}</p> : null}
+                </div>
+              ) : null}
             </div>
+            {assignmentTimingChanging ? (
+              <div className="space-y-1">
+                <Label htmlFor="billing-assignment-timing-reason">Reason for timing change</Label>
+                <Input id="billing-assignment-timing-reason" value={assignmentTimingReason} onChange={(event) => setAssignmentTimingReason(event.target.value)} placeholder="For example, one week paid ahead at enrollment" />
+              </div>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <DisplayValue
                 label={`Customer ${effectiveRateCadence} tuition`}
@@ -3066,9 +3105,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <p className="text-xs text-muted-foreground">
               Weekly billing creates one week-ahead invoices. Biweekly billing creates one invoice equal to two net weekly rates every two weeks. Every-4-weeks billing creates one invoice equal to four net weekly rates. Monthly billing creates one invoice for the saved monthly rate on the selected day (1–28). The opening balance remains unchanged; enter an opening balance only when the family already owes money. This does not enable family autopay. Explicit $0.00 CCDF or voucher-funded assignments never create a family invoice or autopay attempt.
             </p>
-            {selectedAssignment?.invoiceDelayWeeks === 1 && effectiveAssignmentCadence === "biweekly" ? (
-              <p className="text-xs text-muted-foreground">This child&apos;s biweekly invoices are scheduled one week later. Saving tuition preserves that timing and the existing tuition coverage.</p>
-            ) : null}
+            <p className="text-xs text-muted-foreground">Save Tuition Assignment to apply future billing dates. To change an existing unpaid invoice&apos;s due date, open Edit invoice in this workbench. Existing invoices and payments are preserved when saving the recurring schedule.</p>
           </TabsContent>
 
           <TabsContent value="agency" className="space-y-4 rounded-lg border bg-background/35 p-4">

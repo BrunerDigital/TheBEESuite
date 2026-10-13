@@ -47,7 +47,7 @@ test("calendar display keeps safe fallbacks and compact kiosk labels", () => {
 
 test("all direct invoice display surfaces share the calendar formatter", () => {
   const sites = new Map([
-    ["src/components/billing-workbench.tsx", 4],
+    ["src/components/billing-workbench.tsx", 5],
     ["src/components/parent-portal-workspace.tsx", 3],
     ["src/components/billing-print-actions.tsx", 1],
     ["src/components/payment-method-request-form.tsx", 1],

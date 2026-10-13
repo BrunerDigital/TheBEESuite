@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { archivedTuitionAssignmentAllowed } from "@/lib/tuition-plan-archive";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents } from "@/lib/tuition-credits";
 import { childTuitionEligibilityError } from "@/lib/prospective-family-billing";
+import { resolveTuitionInvoiceDelay } from "@/lib/tuition-invoice-timing";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -78,6 +79,10 @@ async function POSTHandler(request: NextRequest) {
         tuitionFundingType: existingFields.tuitionFundingType,
         tuitionBillingEnabled: existingFields.tuitionBillingEnabled,
         tuitionBillingDisabledReason: existingFields.tuitionBillingDisabledReason,
+        tuitionBillingCadence: existingFields.tuitionBillingCadence,
+        tuitionBillingDay: existingFields.tuitionBillingDay,
+        tuitionBillingStartsPeriod: existingFields.tuitionBillingStartsPeriod,
+        tuitionBillingInvoiceDelayWeeks: existingFields.tuitionBillingInvoiceDelayWeeks,
       }
     : null;
   const tuitionAssignmentHistory = priorSnapshot
@@ -148,6 +153,21 @@ async function POSTHandler(request: NextRequest) {
     : WEEKLY_TUITION_AUTOBILL_DAY;
   const previousCadenceValue = clean(existingFields.tuitionBillingCadence ?? existingFields.tuitionPlanCadence);
   const previousCadence = previousCadenceValue ? normalizeBillingCadence(previousCadenceValue) : null;
+  const timing = resolveTuitionInvoiceDelay({
+    requested: body.invoiceDelayWeeks, cadence, previousCadence,
+    previousDelay: existingFields.tuitionBillingInvoiceDelayWeeks,
+  });
+  if (!timing.ok) return NextResponse.json({ ok: false, error: timing.error }, { status: 400 });
+  const invoiceDelayWeeks = timing.delayWeeks;
+  const previousTiming = resolveTuitionInvoiceDelay({
+    requested: undefined, cadence: previousCadence, previousCadence,
+    previousDelay: existingFields.tuitionBillingInvoiceDelayWeeks,
+  });
+  const timingChanging = previousTiming.ok && invoiceDelayWeeks !== previousTiming.delayWeeks;
+  const timingChangeReason = clean(body.timingChangeReason);
+  if (timingChanging && timingChangeReason.length < 5) {
+    return NextResponse.json({ ok: false, error: "Enter a reason for changing invoice timing." }, { status: 400 });
+  }
   const cadenceChanging = Boolean(previousCadence && previousCadence !== cadence);
   const existingInvoices = cadenceChanging ? await prisma.invoice.findMany({
     where: { billingAccount: { familyId }, status: { not: "VOID" } },
@@ -167,6 +187,10 @@ async function POSTHandler(request: NextRequest) {
   }
   const requestedStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
   const billingStartPeriod = requestedStartPeriod;
+  if (timingChanging && clean(existingFields.tuitionBillingStartsPeriod)
+    && billingStartPeriod !== existingFields.tuitionBillingStartsPeriod) {
+    return NextResponse.json({ ok: false, error: "Keep the saved coverage start week when changing invoice timing. Review existing tuition coverage before moving the start week." }, { status: 409 });
+  }
   const updatedAt = new Date().toISOString();
   const voucherFunded = isVoucherFundedTuitionAmount(plan.amountCents);
   const tuitionCredits = normalizeTuitionCredits(body.tuitionCredits);
@@ -209,6 +233,7 @@ async function POSTHandler(request: NextRequest) {
           tuitionAutobillEligible: !voucherFunded,
           tuitionBillingDay: billingDay,
           tuitionBillingStartsPeriod: billingStartPeriod,
+          tuitionBillingInvoiceDelayWeeks: invoiceDelayWeeks,
           tuitionBillingDescription: description || plan.name,
           tuitionBillingUpdatedAt: updatedAt,
           tuitionBillingUpdatedBy: updatedBy,
@@ -241,6 +266,7 @@ async function POSTHandler(request: NextRequest) {
       tuitionAutobillCadence: cadence,
       tuitionAutobillBillingDay: billingDay,
       tuitionAutobillStartsPeriod: billingStartPeriod,
+      tuitionBillingInvoiceDelayWeeks: invoiceDelayWeeks,
       tuitionAutobillPlanId: plan.id,
       tuitionAutobillPlanName: plan.name,
       tuitionAutobillAmountCents: plan.amountCents,
@@ -283,6 +309,10 @@ async function POSTHandler(request: NextRequest) {
       cadence,
       billingDay,
       billingStartPeriod,
+      invoiceDelayWeeks,
+      previousInvoiceDelayWeeks: previousTiming.ok ? previousTiming.delayWeeks : 0,
+      timingChangeReason: timingChanging ? timingChangeReason : null,
+      existingInvoicesUnchanged: true,
     },
   });
 

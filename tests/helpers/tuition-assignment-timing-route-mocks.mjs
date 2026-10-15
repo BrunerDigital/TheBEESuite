@@ -18,6 +18,7 @@ const db = {
   center: { async findFirst() { return tenantMatches ? { customFields: {} } : null; } },
   invoice: { async findMany() { return ["2026-W40", "2026-W42"].map(period => ({ customFields: { chargeSource: "tuitionPlan", mode: "recurring", childId: "child", billingPeriod: period, coverageStartsPeriod: period, invoiceWeekCount: 2 } })); } },
   billingAccount: { async findUnique() { return { customFields: { kept: "account" } }; }, async upsert({ update }) { assert.equal(update.customFields.kept, "account"); return {}; } },
+  async $queryRaw() { return []; },
   async $transaction(run) { return run(db); },
 };
 mock.module("@/lib/prisma", { namedExports: { prisma: db } });

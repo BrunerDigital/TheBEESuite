@@ -5,6 +5,7 @@ import { test } from "node:test";
 test("child tuition setup keeps sibling program, classroom, schedule, and rate separate", () => {
   const billing = readFileSync(new URL("../src/components/billing-workbench.tsx", import.meta.url), "utf8");
   const page = readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
+  const mutations = readFileSync(new URL("../src/lib/tuition-mutation.ts", import.meta.url), "utf8");
   const operations = readFileSync(new URL("../src/app/api/operations/records/route.ts", import.meta.url), "utf8");
   const enrollmentStatus = readFileSync(new URL("../src/lib/enrollment-status.ts", import.meta.url), "utf8");
 
@@ -52,6 +53,8 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(operations, /nextCustomFields\.scheduledDaysPerWeek = "not_set"/);
   assert.match(operations, /customFields\.scheduledDaysPerWeek = "not_set"/);
   assert.match(operations, /nextCustomFields\.scheduledDaysPerWeek = "legacy_part_time"/);
-  assert.match(operations, /customFields: \{ path: \["tuitionPlanId"\], equals: id \}/);
-  assert.match(operations, /code: "TUITION_PLAN_ASSIGNED_CREATE_NEW"/);
+  assert.match(operations, /saveTuitionPlanInTransaction\(tx, user, body\)/);
+  assert.match(mutations, /customFields: \{ path: \["tuitionPlanId"\], equals: id \}/);
+  assert.match(mutations, /"TUITION_PLAN_ASSIGNED_CREATE_NEW"/);
 });
+

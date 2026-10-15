@@ -1916,43 +1916,70 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
-      const persistRate = async (id?: string) => {
-        const response = await fetch("/api/operations/records", {
+      const existingRateId = planEditorId === "new" ? undefined : planEditorId;
+      const rateDraft = {
+        centerId,
+        name: planName,
+        ageGroup: planAgeGroup,
+        cadence: planCadence,
+        amountDollars: planAmountDollars,
+        zeroDollarVoucher: planFundingType === "voucher",
+      };
+      const savedChildDescription = tuitionDescriptionAfterRateSave(effectiveAssignmentDescription, effectiveAssignmentPlan?.name, planName.trim());
+      const credits = planFundingType === "voucher" ? [] : effectiveAssignmentCredits;
+      const additionalCharges = planFundingType === "voucher" ? [] : effectiveAssignmentAdditionalCharges;
+      const billingDay = nextSchedule.cadence === "monthly" ? assignmentBillingDay : "4";
+      type RateSaveResponse = { ok?: boolean; code?: string; error?: string; record?: { id?: string }; rateVersionCreated?: boolean };
+      let response: Response;
+      let json: RateSaveResponse | null;
+      let preserveAssignedChildren = false;
+      if (applyToChild && selectedFamily && selectedAssignmentChild) {
+        response = await fetch("/api/billing/tuition-assignments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            entity: "tuitionPlan",
-            id,
-            centerId,
-            name: planName,
-            ageGroup: planAgeGroup,
-            cadence: planCadence,
-            amountDollars: planAmountDollars,
-            zeroDollarVoucher: planFundingType === "voucher",
+            familyId: selectedFamily.id, childId: selectedAssignmentChild.id, enabled: true,
+            tuitionPlanDraft: { ...rateDraft, id: existingRateId },
+            billingCadence: nextSchedule.cadence, billingDay,
+            billingStartPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
+            invoiceDelayWeeks: rateSaveInvoiceDelayWeeks,
+            timingChangeReason: assignmentTimingReason,
+            tuitionCredits: credits, tuitionAdditionalCharges: additionalCharges,
           }),
         });
-        const json = await response.json().catch(() => null) as { code?: string; error?: string; record?: { id?: string } } | null;
-        return { response, json };
-      };
-      const existingRateId = planEditorId === "new" ? undefined : planEditorId;
-      let { response, json } = await persistRate(existingRateId);
-      const preserveAssignedChildren = response.status === 409
-        && json?.code === "TUITION_PLAN_ASSIGNED_CREATE_NEW"
-        && Boolean(existingRateId);
-      if (preserveAssignedChildren) {
-        ({ response, json } = await persistRate());
-      }
-      if (!response.ok) {
-        setErrorMessage(json?.error || "Tuition plan could not be saved.");
-        return;
+        json = await response.json().catch(() => null) as RateSaveResponse | null;
+        if (!response.ok || json?.ok !== true) {
+          setErrorMessage(json?.error || "Rate and recurring tuition could not be saved.");
+          return;
+        }
+        preserveAssignedChildren = json.rateVersionCreated === true;
+      } else {
+        const persistRate = async (id?: string) => {
+          const rateResponse = await fetch("/api/operations/records", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ entity: "tuitionPlan", ...rateDraft, id }),
+          });
+          const rateJson = await rateResponse.json().catch(() => null) as RateSaveResponse | null;
+          return { response: rateResponse, json: rateJson };
+        };
+        ({ response, json } = await persistRate(existingRateId));
+        if (response.status === 409 && json?.code === "TUITION_PLAN_ASSIGNED_CREATE_NEW" && existingRateId) {
+          ({ response, json } = await persistRate());
+        }
+        if (!response.ok) {
+          setErrorMessage(json?.error || "Tuition plan could not be saved.");
+          return;
+        }
       }
       const savedRateId = json?.record?.id;
       if (!savedRateId) {
-        setErrorMessage("The rate response was incomplete. Refresh and verify the saved rate before retrying.");
+        setErrorMessage(applyToChild
+          ? "The rate and tuition response was incomplete. Refresh and verify the saved rate and child assignment before retrying."
+          : "The rate response was incomplete. Refresh and verify the saved rate before retrying.");
         return;
       }
       const savedRate = { id: savedRateId, centerId, name: planName.trim(), ageGroup: planAgeGroup, cadence: planCadence, amountCents: planAmountCents };
-      const savedChildDescription = tuitionDescriptionAfterRateSave(effectiveAssignmentDescription, effectiveAssignmentPlan?.name, savedRate.name);
       setSavedRateRecords((current) => [...current.filter((rate) => rate.id !== savedRateId), savedRate]);
       setPlanName(savedRate.name);
       setPlanEditorId(savedRateId);
@@ -1962,28 +1989,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       setAssignmentStartPeriod(nextSchedule.startsPeriod);
       setAssignmentDescription(savedChildDescription);
       if (applyToChild && selectedFamily && selectedAssignmentChild) {
-        const credits = planFundingType === "voucher" ? [] : effectiveAssignmentCredits;
-        const additionalCharges = planFundingType === "voucher" ? [] : effectiveAssignmentAdditionalCharges;
-        const billingDay = nextSchedule.cadence === "monthly" ? assignmentBillingDay : "4";
-        const assignmentResponse = await fetch("/api/billing/tuition-assignments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            familyId: selectedFamily.id, childId: selectedAssignmentChild.id, enabled: true,
-            tuitionPlanId: savedRateId, billingCadence: nextSchedule.cadence, billingDay,
-            billingStartPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
-            invoiceDelayWeeks: rateSaveInvoiceDelayWeeks,
-            timingChangeReason: assignmentTimingReason,
-            tuitionCredits: credits, tuitionAdditionalCharges: additionalCharges,
-          }),
-        });
-        const assignmentJson = await assignmentResponse.json().catch(() => null) as { ok?: boolean; error?: string } | null;
-        if (!assignmentResponse.ok || assignmentJson?.ok !== true) {
-          setErrorMessage(`Rate saved, but child tuition was not saved. ${assignmentJson?.error || "Refresh and review the child assignment before retrying."}`);
-          setBillingAction("recurring");
-          router.refresh();
-          return;
-        }
         const creditInputs = tuitionCreditInputs(credits);
         const additionalChargeInputs = tuitionAdditionalChargeInputs(additionalCharges);
         setAssignmentCredits(creditInputs);

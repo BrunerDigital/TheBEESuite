@@ -19,11 +19,15 @@ test("tuition plans are persisted with a school relationship and indexed by loca
 
 test("tuition plan create, edit, assignment, and invoicing fail closed across schools", () => {
   const records = readFileSync("src/app/api/operations/records/route.ts", "utf8");
+  const mutations = readFileSync("src/lib/tuition-mutation.ts", "utf8");
   const assignments = readFileSync("src/app/api/billing/tuition-assignments/route.ts", "utf8");
   const invoices = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
   const scheduler = readFileSync("src/app/api/cron/tuition-billing/route.ts", "utf8");
-  assert.match(records, /School is required for every tuition plan/);
-  assert.match(records, /existing\.centerId && existing\.centerId !== requestedCenterId/);
+  assert.match(records, /runTuitionMutation/);
+  assert.match(records, /saveTuitionPlanInTransaction\(tx, user, body\)/);
+  assert.match(mutations, /School is required for every tuition plan/);
+  assert.match(mutations, /existing\?\.centerId && existing\.centerId !== centerId/);
+  assert.match(mutations, /organization: \{ tenantId: user\.tenantId \}/);
   assert.match(assignments, /plan\.centerId !== access\.centerId/);
   assert.match(invoices, /findFirst\(\{ where: \{ id: tuitionPlanId, centerId \} \}\)/);
   assert.match(scheduler, /plan\.centerId !== entry\.child\.family\.centerId/);
@@ -41,13 +45,14 @@ test("billing views load visible locations only and the workbench switches plan 
 
 test("$0 CCDF and voucher rates remain visible assignments without creating family charges", () => {
   const records = readFileSync("src/app/api/operations/records/route.ts", "utf8");
+  const mutations = readFileSync("src/lib/tuition-mutation.ts", "utf8");
   const assignments = readFileSync("src/app/api/billing/tuition-assignments/route.ts", "utf8");
   const invoices = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
   const scheduler = readFileSync("src/app/api/cron/tuition-billing/route.ts", "utf8");
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
 
-  assert.match(records, /zeroDollarVoucher = body\.zeroDollarVoucher === true/);
-  assert.match(records, /canSaveTuitionPlanAmount\(data\.amountCents, zeroDollarVoucher\)/);
+  assert.match(records, /saveTuitionPlanInTransaction\(tx, user, body\)/);
+  assert.match(mutations, /canSaveTuitionPlanAmount\(data\.amountCents, body\.zeroDollarVoucher === true\)/);
   assert.match(assignments, /tuitionFundingType: voucherFunded \? "voucher" : "family"/);
   assert.match(assignments, /tuitionAutobillEligible: !voucherFunded/);
   assert.match(assignments, /if \(voucherFunded\)/);
@@ -56,3 +61,4 @@ test("$0 CCDF and voucher rates remain visible assignments without creating fami
   assert.match(workbench, /CCDF \/ voucher-funded/);
   assert.match(workbench, /never create a family invoice or autopay attempt/);
 });
+

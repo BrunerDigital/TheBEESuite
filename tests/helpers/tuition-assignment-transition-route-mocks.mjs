@@ -30,6 +30,7 @@ fixture.db = {
     return filtered.slice(0, take ?? filtered.length);
   } },
   billingAccount: { async findUnique() { return { customFields: { kept: 'account history' } }; }, async upsert({ update }) { fixture.accountWrites++; assert.equal(update.customFields.kept, 'account history'); return {}; } },
+  async $queryRaw() { return []; },
   async $transaction(run) { return run(fixture.db); },
 };
 mock.module('@/lib/prisma', { namedExports: { prisma: fixture.db } });

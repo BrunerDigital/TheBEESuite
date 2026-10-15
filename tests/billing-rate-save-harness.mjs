@@ -74,7 +74,7 @@ export function createRateSaveHarness(overrides = {}, options = {}) {
     tuitionAdditionalChargeInputs: (charges) => charges,
     money: (cents) => `$${(cents / 100).toFixed(2)}`,
     confirmBillingAction: (...args) => { confirmations.push(args); return options.confirm !== false; },
-    runBillingTransition: (action) => { transitions.push(Promise.resolve().then(action)); },
+    startTransition: (action) => { transitions.push(Promise.resolve().then(action)); },
     router: { refresh: () => { refreshed++; } },
     ...overrides,
   });
@@ -106,14 +106,26 @@ export function createRateSaveHarness(overrides = {}, options = {}) {
         tuitionBillingInvoiceDelayWeeks: selectedAssignment?.invoiceDelayWeeks,
       };
       const NextResponse = { json: (body, init) => ({ body, status: init.status }) };
-      ${timingGuard}
-      return null;
+      class TimingValidationError extends Error {
+        constructor(status, message) { super(message); this.status = status; }
+      }
+      const tuitionMutationFailure = (status, message) => { throw new TimingValidationError(status, message); };
+      try {
+        ${timingGuard}
+        return null;
+      } catch (error) {
+        if (error instanceof TimingValidationError) {
+          return { body: { ok: false, error: error.message }, status: error.status };
+        }
+        throw error;
+      }
     }
   `), context);
   context.fetch = async (url, init) => {
     const body = JSON.parse(init.body);
     requests.push({ url, body });
     if (url === '/api/operations/records') {
+      if (options.rateResponse) return options.rateResponse;
       if (options.rateConflict && body.id) {
         return { ok: false, status: 409, json: async () => ({ code: 'TUITION_PLAN_ASSIGNED_CREATE_NEW' }) };
       }
@@ -121,14 +133,26 @@ export function createRateSaveHarness(overrides = {}, options = {}) {
     }
     assert.equal(url, '/api/billing/tuition-assignments');
     const rejection = context.validateServerTiming(body);
+    if (!rejection && options.assignmentResponse) {
+      return typeof options.assignmentResponse === 'function'
+        ? options.assignmentResponse(body)
+        : options.assignmentResponse;
+    }
     return rejection
       ? { ok: false, status: rejection.status, json: async () => rejection.body }
-      : { ok: true, status: 200, json: async () => ({ ok: true }) };
+      : { ok: true, status: 200, json: async () => ({
+        ok: true,
+        ...(body.tuitionPlanDraft ? {
+          record: { id: (!options.rateConflict && body.tuitionPlanDraft.id) || 'synthetic-created-rate' },
+          rateVersionCreated: Boolean(options.rateConflict && body.tuitionPlanDraft.id),
+        } : {}),
+      }) };
   };
+  const transitionFunction = between(workbench, '  function runBillingTransition(', '  const scopedFamilies =');
   const calculations = between(workbench, '  const effectiveAssignmentInvoiceDelayWeeks =', '  const nextAssignmentInvoiceDate =');
   const saveFunction = between(workbench, '  function saveTuitionPlan() {', '  function changeTuitionPlanArchive() {');
   const assignmentFunction = between(workbench, '  function submitAssignment() {', '  function handlePlanEditorChange(');
-  runInContext(script(calculations + saveFunction + assignmentFunction), context);
+  runInContext(script(transitionFunction + calculations + saveFunction + assignmentFunction), context);
   return {
     requests, confirmations, state,
     read: (expression) => runInContext(expression, context),

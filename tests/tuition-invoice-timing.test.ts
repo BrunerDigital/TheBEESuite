@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeTuitionInvoiceDelayWeeks, tuitionInvoiceBillingPeriod, weeklyTuitionChargeDateForPeriod } from "../src/lib/billing-workflows";
-import { nextBiweeklyInvoiceDate, resolveTuitionInvoiceDelay } from "../src/lib/tuition-invoice-timing";
+import { biweeklyCoveragePeriodBeforeRemovingDelay, nextBiweeklyInvoiceDate, resolveTuitionInvoiceDelay } from "../src/lib/tuition-invoice-timing";
 
 test("only an explicit reviewed biweekly delay changes invoice timing", () => {
   assert.equal(normalizeTuitionInvoiceDelayWeeks(1, "biweekly"), 1);
@@ -38,4 +38,20 @@ test("delayed dates retain consecutive biweekly coverage across year boundaries"
     assert.equal(tuitionInvoiceBillingPeriod(null, delayed, "biweekly", 1), period);
     assert.equal(tuitionInvoiceBillingPeriod(period, standard, "biweekly", 1), period, "an explicit recovery coverage period is not shifted");
   }
+});
+
+test("delay removal reviews coverage from the standard invoice day through the delayed invoice week", () => {
+  for (const date of ["2026-10-08", "2026-10-09", "2026-10-11", "2026-10-12", "2026-10-13", "2026-10-15", "2026-10-18"]) {
+    assert.equal(biweeklyCoveragePeriodBeforeRemovingDelay("2026-W40", new Date(`${date}T12:00:00Z`)), "2026-W42");
+  }
+  for (const date of ["2026-10-05", "2026-10-07", "2026-10-19"]) {
+    assert.equal(biweeklyCoveragePeriodBeforeRemovingDelay("2026-W40", new Date(`${date}T12:00:00Z`)), null);
+  }
+});
+
+test("delay removal coverage review respects future anchors and ISO year boundaries", () => {
+  assert.equal(biweeklyCoveragePeriodBeforeRemovingDelay("2027-W02", new Date("2026-10-13T12:00:00Z")), null);
+  assert.equal(biweeklyCoveragePeriodBeforeRemovingDelay("2026-W53", new Date("2026-12-29T12:00:00Z")), "2026-W53");
+  assert.equal(biweeklyCoveragePeriodBeforeRemovingDelay("2026-W53", new Date("2027-01-03T12:00:00Z")), "2026-W53");
+  assert.equal(biweeklyCoveragePeriodBeforeRemovingDelay("2026-W53", new Date("2027-01-04T12:00:00Z")), null);
 });

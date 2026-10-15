@@ -605,6 +605,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
   const effectiveAssignmentInvoiceDelayWeeks = effectiveAssignmentCadence === "biweekly" && assignmentInvoiceDelayWeeks === "1" ? 1 : 0;
   const assignmentTimingChanging = effectiveAssignmentInvoiceDelayWeeks !== (selectedAssignment?.invoiceDelayWeeks === 1 ? 1 : 0);
+  const rateSaveAppliesToChild = Boolean(selectedFamily && selectedAssignmentChild && assignmentEnabled === "true" && selectedAssignmentChildIsCurrent);
+  const rateSaveSchedule = tuitionScheduleAfterRateSave({
+    assignmentCadence,
+    startsPeriod: assignmentStartPeriod,
+    savedRateCadence: planCadence,
+    defaultPeriod: currentPeriodForCadence,
+  });
+  const rateSaveInvoiceDelayWeeks = rateSaveSchedule.cadence === "biweekly" && assignmentInvoiceDelayWeeks === "1" ? 1 : 0;
+  const rateSaveTimingChanging = rateSaveAppliesToChild
+    && rateSaveInvoiceDelayWeeks !== (selectedAssignment?.invoiceDelayWeeks === 1 ? 1 : 0);
   const nextAssignmentInvoiceDate = effectiveAssignmentCadence === "biweekly"
     ? nextBiweeklyInvoiceDate(effectiveAssignmentStartPeriod, effectiveAssignmentInvoiceDelayWeeks, new Date())
     : null;
@@ -1679,13 +1689,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitAssignment() {
     if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving tuition.");
-    if (assignmentTimingChanging && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
     const selectedRateIsBeingEdited = planEditorId === effectiveAssignmentPlanId
       || (planEditorId === "new" && !effectiveAssignmentPlanId);
     if (planDraftIsDirty && assignmentEnabled === "true" && selectedRateIsBeingEdited) {
       saveTuitionPlan();
       return;
     }
+    if (assignmentTimingChanging && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
     if (assignmentEnabled === "true") {
       const childEligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
       if (childEligibilityError) return setErrorMessage(childEligibilityError);
@@ -1770,7 +1780,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function saveTuitionPlan() {
-    if (assignmentTimingChanging && assignmentEnabled === "true" && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
+    if (rateSaveTimingChanging && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
     if (planBeingEdited?.archived) return setErrorMessage("Restore this archived rate before editing it.");
     if (!planName.trim() || !planAmountDollars.trim()) {
       return setErrorMessage("Tuition plan name and amount are required.");
@@ -1782,7 +1792,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (planFundingType === "voucher" && planAmountCents !== 0) {
       return setErrorMessage("No-family-charge tuition must be saved at $0.00 family responsibility.");
     }
-    const applyToChild = Boolean(selectedFamily && selectedAssignmentChild && assignmentEnabled === "true" && selectedAssignmentChildIsCurrent);
+    const applyToChild = rateSaveAppliesToChild;
     if (applyToChild && selectedAssignmentChild) {
       const eligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
       if (eligibilityError) return setErrorMessage(eligibilityError);
@@ -1791,12 +1801,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       }
       if (!confirmBillingAction("save this rate and recurring child tuition", selectedAssignmentChild.fullName)) return;
     }
-    const nextSchedule = tuitionScheduleAfterRateSave({
-      assignmentCadence,
-      startsPeriod: assignmentStartPeriod,
-      savedRateCadence: planCadence,
-      defaultPeriod: currentPeriodForCadence,
-    });
+    const nextSchedule = rateSaveSchedule;
     runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -1856,7 +1861,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             familyId: selectedFamily.id, childId: selectedAssignmentChild.id, enabled: true,
             tuitionPlanId: savedRateId, billingCadence: nextSchedule.cadence, billingDay,
             billingStartPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
-            invoiceDelayWeeks: nextSchedule.cadence === "biweekly" && assignmentInvoiceDelayWeeks === "1" ? 1 : 0,
+            invoiceDelayWeeks: rateSaveInvoiceDelayWeeks,
             timingChangeReason: assignmentTimingReason,
             tuitionCredits: credits, tuitionAdditionalCharges: additionalCharges,
           }),
@@ -2473,6 +2478,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Button>
             </div>
           </div>
+          {rateSaveTimingChanging ? (
+            <div className="mt-3 space-y-1">
+              <Label htmlFor="billing-rate-timing-reason">Reason for timing change</Label>
+              <Input id="billing-rate-timing-reason" value={assignmentTimingReason} onChange={(event) => setAssignmentTimingReason(event.target.value)} placeholder="For example, changing from prepaid biweekly to monthly tuition" />
+              <p className="text-xs text-muted-foreground">Saving this rate for the selected child changes their invoice timing. Enter a reason before saving.</p>
+            </div>
+          ) : null}
           {planBeingEdited ? <div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="outline" disabled={isPending} onClick={changeTuitionPlanArchive}>{planBeingEdited.archived ? "Restore rate" : "Archive rate"}</Button><p className="text-xs text-muted-foreground">Archiving removes a rate from new choices and preserves existing assignments and history.</p></div> : null}
         </div>
 

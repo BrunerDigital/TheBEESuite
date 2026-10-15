@@ -16,7 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { archivedTuitionAssignmentAllowed } from "@/lib/tuition-plan-archive";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents } from "@/lib/tuition-credits";
 import { childTuitionEligibilityError } from "@/lib/prospective-family-billing";
-import { resolveTuitionInvoiceDelay } from "@/lib/tuition-invoice-timing";
+import { biweeklyCoveragePeriodBeforeRemovingDelay, resolveTuitionInvoiceDelay } from "@/lib/tuition-invoice-timing";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -169,8 +169,18 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Enter a reason for changing invoice timing." }, { status: 400 });
   }
   const cadenceChanging = Boolean(previousCadence && previousCadence !== cadence);
-  const existingInvoices = cadenceChanging ? await prisma.invoice.findMany({
-    where: { billingAccount: { familyId }, status: { not: "VOID" } },
+  const asOf = new Date();
+  const coveragePeriodAtRisk = !cadenceChanging && timingChanging && cadence === "biweekly" && invoiceDelayWeeks === 0
+    ? biweeklyCoveragePeriodBeforeRemovingDelay(clean(existingFields.tuitionBillingStartsPeriod), asOf)
+    : null;
+  const existingInvoices = cadenceChanging || coveragePeriodAtRisk ? await prisma.invoice.findMany({
+    where: {
+      billingAccount: { familyId }, status: { not: "VOID" },
+      AND: [
+        { customFields: { path: ["chargeSource"], equals: "tuitionPlan" } },
+        { customFields: { path: ["childId"], equals: childId } },
+      ],
+    },
     orderBy: { createdAt: "desc" },
     take: 200,
     select: { customFields: true },
@@ -179,15 +189,27 @@ async function POSTHandler(request: NextRequest) {
     const fields = jsonObject(invoice.customFields);
     return clean(fields.chargeSource) === "tuitionPlan" && clean(fields.childId) === childId;
   });
-  if (hasExistingTuitionCoverage) {
+  if (cadenceChanging && hasExistingTuitionCoverage) {
     return NextResponse.json({
       ok: false,
       error: "Existing non-void tuition invoice coverage must be reviewed before changing this child's billing cycle.",
     }, { status: 409 });
   }
-  const requestedStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
+  if (coveragePeriodAtRisk && !existingInvoices.some((invoice) => {
+    const fields = jsonObject(invoice.customFields);
+    return clean(fields.chargeSource) === "tuitionPlan" && clean(fields.childId) === childId
+      && (fields.mode === "recurring" || fields.mode === "manual_weekly_recovery" || fields.countsTowardRecurringCoverage === true)
+      && fields.billingPeriod === coveragePeriodAtRisk && fields.coverageStartsPeriod === coveragePeriodAtRisk
+      && fields.invoiceWeekCount === 2;
+  })) {
+    return NextResponse.json({
+      ok: false,
+      error: `Review unbilled tuition coverage for ${coveragePeriodAtRisk} before returning to standard invoice timing. Keep the delay until its two-week invoice exists.`,
+    }, { status: 409 });
+  }
+  const requestedStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, asOf, cadence);
   const billingStartPeriod = requestedStartPeriod;
-  if (timingChanging && clean(existingFields.tuitionBillingStartsPeriod)
+  if (timingChanging && !cadenceChanging && clean(existingFields.tuitionBillingStartsPeriod)
     && billingStartPeriod !== existingFields.tuitionBillingStartsPeriod) {
     return NextResponse.json({ ok: false, error: "Keep the saved coverage start week when changing invoice timing. Review existing tuition coverage before moving the start week." }, { status: 409 });
   }

@@ -28,6 +28,22 @@ export function resolveTuitionInvoiceDelay(input: {
   return { ok: true as const, delayWeeks };
 }
 
+// Once the standard invoice day arrives, removing a delay must not depend on
+// another catch-up cron running before the weekly candidate advances.
+export function biweeklyCoveragePeriodBeforeRemovingDelay(startsPeriod: string, asOf: Date) {
+  const firstPeriod = tuitionInvoiceBillingPeriod(undefined, asOf, "biweekly", 1);
+  const today = asOf.toISOString().slice(0, 10);
+  for (let offset = 0; offset < 2; offset++) {
+    const period = addWeeksToBillingPeriod(firstPeriod, offset);
+    if (!shouldCreateRecurringTuitionInvoice({
+      enabled: true, planId: "coverage-review", amountCents: 1, startsPeriod,
+      billingPeriod: period, billingDay: 4, currentDay: 4, cadence: "biweekly",
+    })) continue;
+    return weeklyTuitionChargeDateForPeriod(period).toISOString().slice(0, 10) <= today ? period : null;
+  }
+  return null;
+}
+
 export function nextBiweeklyInvoiceDate(startsPeriod: string, delayWeeks: number, asOf: Date) {
   if (!/^\d{4}-W(?:0[1-9]|[1-4]\d|5[0-3])$/.test(startsPeriod)) return null;
   const today = asOf.toISOString().slice(0, 10);

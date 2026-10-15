@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { NextRequest } from "next/server";
+mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-13T12:00:00Z") });
 let actor, fields, writes, audits, tenantMatches;
 function reset() {
   actor = { id: "director", email: "director@example.test", tenantId: "tenant", role: "CENTER_DIRECTOR", centerIds: ["school"] };
@@ -15,7 +16,7 @@ const db = {
   },
   tuitionPlan: { async findUnique() { return { id: "rate", centerId: "school", name: "Weekly rate", cadence: "biweekly", amountCents: 20250 }; } },
   center: { async findFirst() { return tenantMatches ? { customFields: {} } : null; } },
-  invoice: { async findMany() { return [{ customFields: { chargeSource: "tuitionPlan", childId: "child", billingPeriod: "2026-W42" } }]; } },
+  invoice: { async findMany() { return [{ customFields: { chargeSource: "tuitionPlan", mode: "recurring", childId: "child", billingPeriod: "2026-W42", coverageStartsPeriod: "2026-W42", invoiceWeekCount: 2 } }]; } },
   billingAccount: { async findUnique() { return { customFields: { kept: "account" } }; }, async upsert({ update }) { assert.equal(update.customFields.kept, "account"); return {}; } },
   async $transaction(run) { return run(db); },
 };

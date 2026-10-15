@@ -28,7 +28,7 @@ function compile(relativePath, dependencies, exports) {
 export function inquiryFixture({ defaultCenterId = '', lookupFails = false, liveFails = false, emptyLive = false, genericTrial = false } = {}) {
   const centers = [school('center_daytona_fixture', daytona, ['old-daytona-form']), school('center_douglas_fixture', douglas)];
   if (genericTrial) centers.push({ ...school('center_trial_fixture', 'Example Learning Center'), crmLocationId: null, locationId: 'trial_fixture', status: 'trial' });
-  const effects = { leads: [], deliveries: [], emails: 0, sheets: 0, writes: 0, notificationLookups: 0, unexpectedNetwork: 0 };
+  const effects = { leads: /** @type {Array<{ centerId: string }>} */ ([]), deliveries: [], emails: 0, sheets: 0, writes: 0, notificationLookups: 0, unexpectedNetwork: 0 };
   const prisma = {
     tenant: { findUnique: async () => ({ id: 'tenant_fixture' }) },
     center: {

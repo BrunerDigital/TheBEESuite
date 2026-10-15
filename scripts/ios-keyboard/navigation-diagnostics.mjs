@@ -49,15 +49,16 @@ export function injectNavigationDiagnostics(html) {
 export function navigationDiagnosticsSource(port, fixturePath) {
   assert.ok(Number.isInteger(port) && port > 0 && port < 65536);
   assert.equal(fixturePath, "/device-preview?view=teacher&scenario=long-content");
-  return `(${installNavigationDiagnostics.toString()})(${JSON.stringify({
+  return `(${installNavigationDiagnosticsSource})(${JSON.stringify({
     origin: `http://localhost:${port}`, fixturePath, eventPath: NAVIGATION_EVENT_PATH, limit: MAX_NAVIGATION_EVENTS,
   })});\n`;
 }
 
-// Serialized into the disposable fixture, never imported by application code.
+// Fixed browser source for the disposable fixture, never imported by application code.
+// Keep it literal: tsx/esbuild can add module-local helpers to Function.toString().
 // It observes only event metadata and fixed synthetic element identities. It does
 // not dispatch events, change focus/hash/attributes, cancel events, or read values.
-function installNavigationDiagnostics(config) {
+const installNavigationDiagnosticsSource = String.raw`function installNavigationDiagnostics(config) {
   if (location.origin !== config.origin || location.pathname + location.search !== config.fixturePath) return;
   const started = performance.now();
   const pending = new Set();
@@ -123,4 +124,4 @@ function installNavigationDiagnostics(config) {
     if (nextCollapsed !== lastCollapsed) { lastCollapsed = nextCollapsed; record("collapse"); }
   }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-device-preview-hydrated", "data-collapsed"] });
   record("boot");
-}
+}`;

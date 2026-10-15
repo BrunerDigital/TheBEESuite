@@ -8,7 +8,7 @@ function reset() {
     actor: { id: 'director', email: 'director@example.test', tenantId: 'tenant', role: 'CENTER_DIRECTOR', centerIds: ['school'] },
     fields: { tuitionPlanId: 'rate', tuitionNetAmountCents: 20000, tuitionBillingEnabled: true, tuitionBillingCadence: 'biweekly', tuitionBillingStartsPeriod: '2026-W40', tuitionBillingInvoiceDelayWeeks: 1, kept: 'child history' },
     plan: { id: 'rate', centerId: 'school', name: 'Synthetic tuition rate', cadence: 'biweekly', amountCents: 20000 },
-    invoices: [], childWrites: 0, accountWrites: 0, invoiceReads: 0, audits: [], tenantMatches: true,
+    invoices: [cover({ billingPeriod: '2026-W40', coverageStartsPeriod: '2026-W40' })], childWrites: 0, accountWrites: 0, invoiceReads: 0, audits: [], tenantMatches: true,
   });
 }
 reset();
@@ -60,26 +60,26 @@ test('reject delay removal while W42 coverage is still unbilled', async () => {
 });
 
 test('allow standard timing when the at-risk two-week coverage already exists', async () => {
-  reset(); at('2026-10-13T12:00:00Z'); fixture.invoices = [cover()];
+  reset(); at('2026-10-13T12:00:00Z'); fixture.invoices.push(cover());
   try { const response = await POST(request()); assert.equal(response.status, 200, await response.text()); assert.equal(fixture.fields.tuitionBillingStartsPeriod, '2026-W40'); assert.equal(fixture.fields.tuitionBillingInvoiceDelayWeeks, 0); assert.equal(fixture.fields.kept, 'child history'); assert.equal(fixture.fields.tuitionAssignmentHistory.at(-1).tuitionBillingInvoiceDelayWeeks, 1); assert.equal(fixture.audits[0].metadata.existingInvoicesUnchanged, true); } finally { mock.timers.reset(); }
 });
 
 test('void, unrelated, partial, or non-coverage invoices do not unlock timing removal', async () => {
   at('2026-10-13T12:00:00Z');
   try {
-    for (const invoice of [ { ...cover(), status: 'VOID' }, cover({ childId: 'other-child' }), cover({ chargeSource: 'custom' }), cover({ billingPeriod: '2026-W40', coverageStartsPeriod: '2026-W40' }), cover({ invoiceWeekCount: 1 }), cover({ mode: 'single' }), cover({ coverageStartsPeriod: '2026-W43' }) ]) {
-      reset(); fixture.invoices = [invoice]; const response = await POST(request()); assert.equal(response.status, 409, JSON.stringify(invoice)); noWrites();
+    for (const invoice of [ { ...cover(), status: 'VOID' }, cover({ childId: 'other-child' }), cover({ chargeSource: 'custom' }), cover({ billingPeriod: '2026-W40', coverageStartsPeriod: '2026-W40' }), cover({ invoiceWeekCount: 1 }), cover({ mode: 'single' }), cover({ coverageStartsPeriod: '2026-W43' }), cover({ billingPeriod: ' 2026-W42 ', coverageStartsPeriod: ' 2026-W42 ' }) ]) {
+      reset(); fixture.invoices.push(invoice); const response = await POST(request()); assert.equal(response.status, 409, JSON.stringify(invoice)); noWrites();
     }
   } finally { mock.timers.reset(); }
 });
 
 test('allow reviewed delayed biweekly to monthly transition with no tuition coverage', async () => {
-  reset(); at('2026-10-13T12:00:00Z'); fixture.plan.cadence = 'monthly';
+  reset(); at('2026-10-13T12:00:00Z'); fixture.plan.cadence = 'monthly'; fixture.invoices = [];
   try { const response = await POST(request({ billingCadence: 'monthly', billingStartPeriod: '2026-10' })); assert.equal(response.status, 200, await response.text()); assert.equal(fixture.fields.tuitionBillingCadence, 'monthly'); assert.equal(fixture.fields.tuitionBillingStartsPeriod, '2026-10'); assert.equal(fixture.fields.tuitionBillingInvoiceDelayWeeks, 0); } finally { mock.timers.reset(); }
 });
 
 test('monthly cadence changes with existing child tuition coverage remain blocked', async () => {
-  reset(); fixture.plan.cadence = 'monthly'; fixture.invoices = [cover()];
+  reset(); fixture.plan.cadence = 'monthly'; fixture.invoices.push(cover());
   const response = await POST(request({ billingCadence: 'monthly', billingStartPeriod: '2026-10' })); assert.equal(response.status, 409); noWrites();
 });
 
@@ -108,6 +108,70 @@ test('removing delay before the standard invoice day remains allowed', async () 
 test('delay removal after the last Sunday cron cannot depend on a missed catch-up', async () => {
   reset(); at('2026-10-11T23:00:00Z');
   try { assert.equal((await POST(request())).status, 409); noWrites(); } finally { mock.timers.reset(); }
+});
+
+test('expired unbilled W42 coverage remains guarded across later invoice cycles', async () => {
+  for (const date of ['2026-10-19', '2026-10-22', '2026-10-29', '2026-11-02', '2026-11-05']) {
+    reset(); at(`${date}T12:00:00Z`);
+    try {
+      const response = await POST(request()); const body = await response.json();
+      assert.equal(response.status, 409, JSON.stringify(body)); assert.match(body.error, /2026-W42/); noWrites();
+    } finally { mock.timers.reset(); }
+  }
+});
+
+test('later covered cycles cannot hide the earliest unbilled anchored cycle', async () => {
+  for (const missingPeriod of ['2026-W40', '2026-W42']) {
+    reset(); at('2026-10-26T12:00:00Z');
+    fixture.invoices = ['2026-W40', '2026-W42', '2026-W44'].filter(period => period !== missingPeriod)
+      .map(period => cover({ billingPeriod: period, coverageStartsPeriod: period }));
+    try {
+      const response = await POST(request()); const body = await response.json();
+      assert.equal(response.status, 409, JSON.stringify(body)); assert.ok(body.error.includes(missingPeriod)); noWrites();
+    } finally { mock.timers.reset(); }
+  }
+});
+
+test('covered expired cycles allow removal until the next standard invoice day', async () => {
+  for (const [date, expected] of [['2026-10-19', 200], ['2026-10-22', 409]]) {
+    reset(); at(`${date}T12:00:00Z`); fixture.invoices.push(cover());
+    try {
+      const response = await POST(request()); const body = await response.json();
+      assert.equal(response.status, expected, JSON.stringify(body));
+      if (expected === 409) { assert.match(body.error, /2026-W44/); noWrites(); }
+    } finally { mock.timers.reset(); }
+  }
+});
+
+test('missing initial-cycle coverage blocks even before the next standard invoice day', async () => {
+  reset(); at('2026-10-07T12:00:00Z'); fixture.invoices = [];
+  try {
+    const response = await POST(request()); assert.equal(response.status, 409);
+    assert.match((await response.json()).error, /2026-W40/); noWrites();
+  } finally { mock.timers.reset(); }
+});
+
+test('invalid saved anchors require review before reading coverage or writing', async () => {
+  for (const anchor of ['', '2026-W00', '2026-W54', '2026-W', '2025-W53']) {
+    reset(); at('2026-10-19T12:00:00Z'); fixture.fields.tuitionBillingStartsPeriod = anchor;
+    try {
+      const response = await POST(request()); assert.equal(response.status, 409);
+      assert.match((await response.json()).error, /saved biweekly coverage start week/);
+      assert.equal(fixture.invoiceReads, 0); noWrites();
+    } finally { mock.timers.reset(); }
+  }
+});
+
+test('truncated or duplicate invoices never imply older cycles are covered', async () => {
+  reset(); at('2026-10-19T12:00:00Z');
+  fixture.invoices = [
+    { ...cover({ billingPeriod: '2026-W40', coverageStartsPeriod: '2026-W40' }), createdAt: 0 },
+    ...Array.from({ length: 201 }, (_, index) => ({ ...cover(), createdAt: index + 1 })),
+  ];
+  try {
+    const response = await POST(request()); assert.equal(response.status, 409);
+    assert.match((await response.json()).error, /2026-W40/); noWrites();
+  } finally { mock.timers.reset(); }
 });
 
 test('reason, authentication, role, school, tenant and family guards remain fail-closed', async () => {

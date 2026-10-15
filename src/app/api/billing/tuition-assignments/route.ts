@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
 import {
+  addWeeksToBillingPeriod,
   BIWEEKLY_TUITION_AUTOBILL_CADENCE,
   defaultRecurringBillingPeriod,
   FOUR_WEEK_TUITION_AUTOBILL_CADENCE,
@@ -170,10 +171,13 @@ async function POSTHandler(request: NextRequest) {
   }
   const cadenceChanging = Boolean(previousCadence && previousCadence !== cadence);
   const asOf = new Date();
-  const coveragePeriodAtRisk = !cadenceChanging && timingChanging && cadence === "biweekly" && invoiceDelayWeeks === 0
-    ? biweeklyCoveragePeriodBeforeRemovingDelay(clean(existingFields.tuitionBillingStartsPeriod), asOf)
-    : null;
-  const existingInvoices = cadenceChanging || coveragePeriodAtRisk ? await prisma.invoice.findMany({
+  const reviewTimingCoverage = !cadenceChanging && timingChanging && cadence === "biweekly" && invoiceDelayWeeks === 0;
+  const savedStartPeriod = clean(existingFields.tuitionBillingStartsPeriod);
+  if (reviewTimingCoverage && (!/^\d{4}-W(?:0[1-9]|[1-4]\d|5[0-3])$/.test(savedStartPeriod)
+    || addWeeksToBillingPeriod(savedStartPeriod, 0) !== savedStartPeriod)) {
+    return NextResponse.json({ ok: false, error: "Review the saved biweekly coverage start week before changing invoice timing." }, { status: 409 });
+  }
+  const existingInvoices = cadenceChanging || reviewTimingCoverage ? await prisma.invoice.findMany({
     where: {
       billingAccount: { familyId }, status: { not: "VOID" },
       AND: [
@@ -195,13 +199,18 @@ async function POSTHandler(request: NextRequest) {
       error: "Existing non-void tuition invoice coverage must be reviewed before changing this child's billing cycle.",
     }, { status: 409 });
   }
-  if (coveragePeriodAtRisk && !existingInvoices.some((invoice) => {
+  const coveredPeriods = existingInvoices.flatMap((invoice) => {
     const fields = jsonObject(invoice.customFields);
-    return clean(fields.chargeSource) === "tuitionPlan" && clean(fields.childId) === childId
+    const coversBiweeklyCycle = clean(fields.chargeSource) === "tuitionPlan" && clean(fields.childId) === childId
       && (fields.mode === "recurring" || fields.mode === "manual_weekly_recovery" || fields.countsTowardRecurringCoverage === true)
-      && fields.billingPeriod === coveragePeriodAtRisk && fields.coverageStartsPeriod === coveragePeriodAtRisk
+      && fields.billingPeriod === fields.coverageStartsPeriod
       && fields.invoiceWeekCount === 2;
-  })) {
+    return coversBiweeklyCycle && typeof fields.billingPeriod === "string" ? [fields.billingPeriod] : [];
+  });
+  const coveragePeriodAtRisk = reviewTimingCoverage
+    ? biweeklyCoveragePeriodBeforeRemovingDelay(savedStartPeriod, asOf, coveredPeriods)
+    : null;
+  if (coveragePeriodAtRisk) {
     return NextResponse.json({
       ok: false,
       error: `Review unbilled tuition coverage for ${coveragePeriodAtRisk} before returning to standard invoice timing. Keep the delay until its two-week invoice exists.`,

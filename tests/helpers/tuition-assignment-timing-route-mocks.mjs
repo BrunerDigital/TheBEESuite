@@ -16,7 +16,7 @@ const db = {
   },
   tuitionPlan: { async findUnique() { return { id: "rate", centerId: "school", name: "Weekly rate", cadence: "biweekly", amountCents: 20250 }; } },
   center: { async findFirst() { return tenantMatches ? { customFields: {} } : null; } },
-  invoice: { async findMany() { return [{ customFields: { chargeSource: "tuitionPlan", mode: "recurring", childId: "child", billingPeriod: "2026-W42", coverageStartsPeriod: "2026-W42", invoiceWeekCount: 2 } }]; } },
+  invoice: { async findMany() { return ["2026-W40", "2026-W42"].map(period => ({ customFields: { chargeSource: "tuitionPlan", mode: "recurring", childId: "child", billingPeriod: period, coverageStartsPeriod: period, invoiceWeekCount: 2 } })); } },
   billingAccount: { async findUnique() { return { customFields: { kept: "account" } }; }, async upsert({ update }) { assert.equal(update.customFields.kept, "account"); return {}; } },
   async $transaction(run) { return run(db); },
 };

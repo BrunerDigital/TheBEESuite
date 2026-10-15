@@ -28,18 +28,17 @@ export function resolveTuitionInvoiceDelay(input: {
   return { ok: true as const, delayWeeks };
 }
 
-// Once the standard invoice day arrives, removing a delay must not depend on
-// another catch-up cron running before the weekly candidate advances.
-export function biweeklyCoveragePeriodBeforeRemovingDelay(startsPeriod: string, asOf: Date) {
-  const firstPeriod = tuitionInvoiceBillingPeriod(undefined, asOf, "biweekly", 1);
+// Keep historical gaps anchored to the saved start, even after the delayed
+// invoice week expires. Every due cycle must have positive coverage evidence.
+export function biweeklyCoveragePeriodBeforeRemovingDelay(startsPeriod: string, asOf: Date, coveredPeriods: readonly string[] = []) {
+  const covered = new Set(coveredPeriods);
   const today = asOf.toISOString().slice(0, 10);
-  for (let offset = 0; offset < 2; offset++) {
-    const period = addWeeksToBillingPeriod(firstPeriod, offset);
-    if (!shouldCreateRecurringTuitionInvoice({
-      enabled: true, planId: "coverage-review", amountCents: 1, startsPeriod,
-      billingPeriod: period, billingDay: 4, currentDay: 4, cadence: "biweekly",
-    })) continue;
-    return weeklyTuitionChargeDateForPeriod(period).toISOString().slice(0, 10) <= today ? period : null;
+  let period = startsPeriod;
+  // Each successful iteration consumes one distinct covered cycle, so even an
+  // old anchor needs at most covered.size + 1 checks before finding a gap.
+  while (weeklyTuitionChargeDateForPeriod(period).toISOString().slice(0, 10) <= today) {
+    if (!covered.has(period)) return period;
+    period = addWeeksToBillingPeriod(period, 2);
   }
   return null;
 }

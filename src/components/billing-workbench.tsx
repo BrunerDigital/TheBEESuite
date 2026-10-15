@@ -611,6 +611,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
   const effectiveAssignmentInvoiceDelayWeeks = effectiveAssignmentCadence === "biweekly" && assignmentInvoiceDelayWeeks === "1" ? 1 : 0;
   const assignmentTimingChanging = effectiveAssignmentInvoiceDelayWeeks !== (selectedAssignment?.invoiceDelayWeeks === 1 ? 1 : 0);
+  const rateSaveAppliesToChild = Boolean(selectedFamily && selectedAssignmentChild && assignmentEnabled === "true" && selectedAssignmentChildIsCurrent);
+  const rateSaveSchedule = tuitionScheduleAfterRateSave({
+    assignmentCadence,
+    startsPeriod: assignmentStartPeriod,
+    savedRateCadence: planCadence,
+    defaultPeriod: currentPeriodForCadence,
+  });
+  const rateSaveInvoiceDelayWeeks = rateSaveSchedule.cadence === "biweekly" && assignmentInvoiceDelayWeeks === "1" ? 1 : 0;
+  const rateSaveTimingChanging = rateSaveAppliesToChild
+    && rateSaveInvoiceDelayWeeks !== (selectedAssignment?.invoiceDelayWeeks === 1 ? 1 : 0);
   const nextAssignmentInvoiceDate = effectiveAssignmentCadence === "biweekly"
     ? nextBiweeklyInvoiceDate(effectiveAssignmentStartPeriod, effectiveAssignmentInvoiceDelayWeeks, new Date())
     : null;
@@ -1790,13 +1800,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitAssignment() {
     if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving tuition.");
-    if (assignmentTimingChanging && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
     const selectedRateIsBeingEdited = planEditorId === effectiveAssignmentPlanId
       || (planEditorId === "new" && !effectiveAssignmentPlanId);
     if (planDraftIsDirty && assignmentEnabled === "true" && selectedRateIsBeingEdited) {
       saveTuitionPlan();
       return;
     }
+    if (assignmentTimingChanging && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
     if (assignmentEnabled === "true") {
       const childEligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
       if (childEligibilityError) return setErrorMessage(childEligibilityError);
@@ -1881,7 +1891,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function saveTuitionPlan() {
-    if (assignmentTimingChanging && assignmentEnabled === "true" && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
+    if (rateSaveTimingChanging && assignmentTimingReason.trim().length < 5) return setErrorMessage("Enter a reason for changing invoice timing.");
     if (planBeingEdited?.archived) return setErrorMessage("Restore this archived rate before editing it.");
     if (!planName.trim() || !planAmountDollars.trim()) {
       return setErrorMessage("Tuition plan name and amount are required.");
@@ -1893,7 +1903,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (planFundingType === "voucher" && planAmountCents !== 0) {
       return setErrorMessage("No-family-charge tuition must be saved at $0.00 family responsibility.");
     }
-    const applyToChild = Boolean(selectedFamily && selectedAssignmentChild && assignmentEnabled === "true" && selectedAssignmentChildIsCurrent);
+    const applyToChild = rateSaveAppliesToChild;
     if (applyToChild && selectedAssignmentChild) {
       const eligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
       if (eligibilityError) return setErrorMessage(eligibilityError);
@@ -1902,52 +1912,74 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       }
       if (!confirmBillingAction("save this rate and recurring child tuition", selectedAssignmentChild.fullName)) return;
     }
-    const nextSchedule = tuitionScheduleAfterRateSave({
-      assignmentCadence,
-      startsPeriod: assignmentStartPeriod,
-      savedRateCadence: planCadence,
-      defaultPeriod: currentPeriodForCadence,
-    });
+    const nextSchedule = rateSaveSchedule;
     runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
-      const persistRate = async (id?: string) => {
-        const response = await fetch("/api/operations/records", {
+      const existingRateId = planEditorId === "new" ? undefined : planEditorId;
+      const rateDraft = {
+        centerId,
+        name: planName,
+        ageGroup: planAgeGroup,
+        cadence: planCadence,
+        amountDollars: planAmountDollars,
+        zeroDollarVoucher: planFundingType === "voucher",
+      };
+      const savedChildDescription = tuitionDescriptionAfterRateSave(effectiveAssignmentDescription, effectiveAssignmentPlan?.name, planName.trim());
+      const credits = planFundingType === "voucher" ? [] : effectiveAssignmentCredits;
+      const additionalCharges = planFundingType === "voucher" ? [] : effectiveAssignmentAdditionalCharges;
+      const billingDay = nextSchedule.cadence === "monthly" ? assignmentBillingDay : "4";
+      type RateSaveResponse = { ok?: boolean; code?: string; error?: string; record?: { id?: string }; rateVersionCreated?: boolean };
+      let response: Response;
+      let json: RateSaveResponse | null;
+      let preserveAssignedChildren = false;
+      if (applyToChild && selectedFamily && selectedAssignmentChild) {
+        response = await fetch("/api/billing/tuition-assignments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            entity: "tuitionPlan",
-            id,
-            centerId,
-            name: planName,
-            ageGroup: planAgeGroup,
-            cadence: planCadence,
-            amountDollars: planAmountDollars,
-            zeroDollarVoucher: planFundingType === "voucher",
+            familyId: selectedFamily.id, childId: selectedAssignmentChild.id, enabled: true,
+            tuitionPlanDraft: { ...rateDraft, id: existingRateId },
+            billingCadence: nextSchedule.cadence, billingDay,
+            billingStartPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
+            invoiceDelayWeeks: rateSaveInvoiceDelayWeeks,
+            timingChangeReason: assignmentTimingReason,
+            tuitionCredits: credits, tuitionAdditionalCharges: additionalCharges,
           }),
         });
-        const json = await response.json().catch(() => null) as { code?: string; error?: string; record?: { id?: string } } | null;
-        return { response, json };
-      };
-      const existingRateId = planEditorId === "new" ? undefined : planEditorId;
-      let { response, json } = await persistRate(existingRateId);
-      const preserveAssignedChildren = response.status === 409
-        && json?.code === "TUITION_PLAN_ASSIGNED_CREATE_NEW"
-        && Boolean(existingRateId);
-      if (preserveAssignedChildren) {
-        ({ response, json } = await persistRate());
-      }
-      if (!response.ok) {
-        setErrorMessage(json?.error || "Tuition plan could not be saved.");
-        return;
+        json = await response.json().catch(() => null) as RateSaveResponse | null;
+        if (!response.ok || json?.ok !== true) {
+          setErrorMessage(json?.error || "Rate and recurring tuition could not be saved.");
+          return;
+        }
+        preserveAssignedChildren = json.rateVersionCreated === true;
+      } else {
+        const persistRate = async (id?: string) => {
+          const rateResponse = await fetch("/api/operations/records", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ entity: "tuitionPlan", ...rateDraft, id }),
+          });
+          const rateJson = await rateResponse.json().catch(() => null) as RateSaveResponse | null;
+          return { response: rateResponse, json: rateJson };
+        };
+        ({ response, json } = await persistRate(existingRateId));
+        if (response.status === 409 && json?.code === "TUITION_PLAN_ASSIGNED_CREATE_NEW" && existingRateId) {
+          ({ response, json } = await persistRate());
+        }
+        if (!response.ok) {
+          setErrorMessage(json?.error || "Tuition plan could not be saved.");
+          return;
+        }
       }
       const savedRateId = json?.record?.id;
       if (!savedRateId) {
-        setErrorMessage("The rate response was incomplete. Refresh and verify the saved rate before retrying.");
+        setErrorMessage(applyToChild
+          ? "The rate and tuition response was incomplete. Refresh and verify the saved rate and child assignment before retrying."
+          : "The rate response was incomplete. Refresh and verify the saved rate before retrying.");
         return;
       }
       const savedRate = { id: savedRateId, centerId, name: planName.trim(), ageGroup: planAgeGroup, cadence: planCadence, amountCents: planAmountCents };
-      const savedChildDescription = tuitionDescriptionAfterRateSave(effectiveAssignmentDescription, effectiveAssignmentPlan?.name, savedRate.name);
       setSavedRateRecords((current) => [...current.filter((rate) => rate.id !== savedRateId), savedRate]);
       setPlanName(savedRate.name);
       setPlanEditorId(savedRateId);
@@ -1957,28 +1989,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       setAssignmentStartPeriod(nextSchedule.startsPeriod);
       setAssignmentDescription(savedChildDescription);
       if (applyToChild && selectedFamily && selectedAssignmentChild) {
-        const credits = planFundingType === "voucher" ? [] : effectiveAssignmentCredits;
-        const additionalCharges = planFundingType === "voucher" ? [] : effectiveAssignmentAdditionalCharges;
-        const billingDay = nextSchedule.cadence === "monthly" ? assignmentBillingDay : "4";
-        const assignmentResponse = await fetch("/api/billing/tuition-assignments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            familyId: selectedFamily.id, childId: selectedAssignmentChild.id, enabled: true,
-            tuitionPlanId: savedRateId, billingCadence: nextSchedule.cadence, billingDay,
-            billingStartPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
-            invoiceDelayWeeks: nextSchedule.cadence === "biweekly" && assignmentInvoiceDelayWeeks === "1" ? 1 : 0,
-            timingChangeReason: assignmentTimingReason,
-            tuitionCredits: credits, tuitionAdditionalCharges: additionalCharges,
-          }),
-        });
-        const assignmentJson = await assignmentResponse.json().catch(() => null) as { ok?: boolean; error?: string } | null;
-        if (!assignmentResponse.ok || assignmentJson?.ok !== true) {
-          setErrorMessage(`Rate saved, but child tuition was not saved. ${assignmentJson?.error || "Refresh and review the child assignment before retrying."}`);
-          setBillingAction("recurring");
-          router.refresh();
-          return;
-        }
         const creditInputs = tuitionCreditInputs(credits);
         const additionalChargeInputs = tuitionAdditionalChargeInputs(additionalCharges);
         setAssignmentCredits(creditInputs);
@@ -2626,6 +2636,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Button>
             </div>
           </div>
+          {rateSaveTimingChanging ? (
+            <div className="mt-3 space-y-1">
+              <Label htmlFor="billing-rate-timing-reason">Reason for timing change</Label>
+              <Input id="billing-rate-timing-reason" value={assignmentTimingReason} onChange={(event) => setAssignmentTimingReason(event.target.value)} placeholder="For example, changing from prepaid biweekly to monthly tuition" />
+              <p className="text-xs text-muted-foreground">Saving this rate for the selected child changes their invoice timing. Enter a reason before saving.</p>
+            </div>
+          ) : null}
           {planBeingEdited ? <div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="outline" disabled={isPending} onClick={changeTuitionPlanArchive}>{planBeingEdited.archived ? "Restore rate" : "Archive rate"}</Button><p className="text-xs text-muted-foreground">Archiving removes a rate from new choices and preserves existing assignments and history.</p></div> : null}
         </div>
 

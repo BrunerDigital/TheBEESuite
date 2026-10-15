@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
 import {
+  addWeeksToBillingPeriod,
   BIWEEKLY_TUITION_AUTOBILL_CADENCE,
   defaultRecurringBillingPeriod,
   FOUR_WEEK_TUITION_AUTOBILL_CADENCE,
@@ -12,11 +13,12 @@ import {
   WEEKLY_TUITION_AUTOBILL_CADENCE,
   WEEKLY_TUITION_AUTOBILL_DAY,
 } from "@/lib/billing-workflows";
-import { prisma } from "@/lib/prisma";
+import { lockTuitionCenter, runTuitionMutation, saveTuitionPlanInTransaction, TuitionMutationError, tuitionMutationFailure } from "@/lib/tuition-mutation";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 import { archivedTuitionAssignmentAllowed } from "@/lib/tuition-plan-archive";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents } from "@/lib/tuition-credits";
 import { childTuitionEligibilityError } from "@/lib/prospective-family-billing";
-import { resolveTuitionInvoiceDelay } from "@/lib/tuition-invoice-timing";
+import { biweeklyCoveragePeriodBeforeRemovingDelay, resolveTuitionInvoiceDelay } from "@/lib/tuition-invoice-timing";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -31,9 +33,13 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-async function assertChildAccess(user: CurrentBillingUser, familyId: string, childId: string) {
+async function assertChildAccess(tx: Prisma.TransactionClient, user: CurrentBillingUser, familyId: string, childId: string) {
   if (!familyId || !childId) return { ok: false as const, status: 400, error: "Family and child are required." };
-  const child = await prisma.child.findUnique({
+  // Match recurring invoice creation's lock order. Family and child locks also
+  // serialize transfers, enrollment closeout, and simultaneous assignment edits.
+  await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Family" WHERE "id" = ${familyId} FOR UPDATE`);
+  await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Child" WHERE "id" = ${childId} FOR UPDATE`);
+  const child = await tx.child.findUnique({
     where: { id: childId },
     select: {
       id: true,
@@ -51,10 +57,13 @@ async function assertChildAccess(user: CurrentBillingUser, familyId: string, chi
   if (!child.family.centerId || !canAccessCenter(user, child.family.centerId)) {
     return { ok: false as const, status: 403, error: "You do not have access to this family." };
   }
-  return { ok: true as const, child, centerId: child.family.centerId };
+  await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "familyId" = ${familyId} FOR UPDATE`);
+  const center = await lockTuitionCenter(tx, user, child.family.centerId);
+  return { ok: true as const, child, centerId: child.family.centerId, center };
 }
 
 async function POSTHandler(request: NextRequest) {
+  if (!hasTrustedMutationOrigin(request)) return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageBilling(user)) {
@@ -62,11 +71,23 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const body = jsonObject(await request.json().catch(() => ({})));
+  try {
+    const result = await runTuitionMutation((tx) => saveAssignment(tx, user, body));
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof TuitionMutationError) {
+      return NextResponse.json({ ok: false, error: error.message, ...(error.code ? { code: error.code } : {}) }, { status: error.status });
+    }
+    throw error;
+  }
+}
+
+async function saveAssignment(tx: Prisma.TransactionClient, user: CurrentBillingUser, body: Record<string, unknown>) {
   const familyId = clean(body.familyId);
   const childId = clean(body.childId);
   const enabled = body.enabled !== false && clean(body.enabled).toLowerCase() !== "false";
-  const access = await assertChildAccess(user, familyId, childId);
-  if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+  const access = await assertChildAccess(tx, user, familyId, childId);
+  if (!access.ok) tuitionMutationFailure(access.status, access.error);
 
   const existingFields = jsonObject(access.child.customFields);
   const priorHistory = Array.isArray(existingFields.tuitionAssignmentHistory)
@@ -89,11 +110,12 @@ async function POSTHandler(request: NextRequest) {
     ? [...priorHistory.filter((item) => JSON.stringify(item) !== JSON.stringify(priorSnapshot)), priorSnapshot].slice(-50)
     : priorHistory.slice(-50);
   const description = clean(body.description);
-  const tuitionPlanId = clean(body.tuitionPlanId);
+  const tuitionPlanDraft = body.tuitionPlanDraft === undefined ? null : jsonObject(body.tuitionPlanDraft);
+  if (tuitionPlanDraft && !enabled) tuitionMutationFailure(400, "A rate can only be saved together with an enabled tuition assignment.");
   const updatedBy = user.email || user.id;
 
   if (!enabled) {
-    const updated = await prisma.child.update({
+    const updated = await tx.child.update({
       where: { id: childId },
       data: {
         customFields: {
@@ -112,27 +134,32 @@ async function POSTHandler(request: NextRequest) {
       resource: "Child",
       resourceId: childId,
       metadata: { familyId, childId },
-    });
-    return NextResponse.json({ ok: true, assignment: updated.customFields });
+    }, tx);
+    return { ok: true, assignment: updated.customFields };
   }
 
   const childEligibilityError = childTuitionEligibilityError(access.child);
   if (childEligibilityError) {
-    return NextResponse.json({ ok: false, error: childEligibilityError }, { status: 409 });
+    tuitionMutationFailure(409, childEligibilityError);
   }
 
+  const rateSave = tuitionPlanDraft
+    ? await saveTuitionPlanInTransaction(tx, user, tuitionPlanDraft, { versionAssigned: true, requiredCenterId: access.centerId })
+    : null;
+  const tuitionPlanId = rateSave?.record.id || clean(body.tuitionPlanId);
   if (!tuitionPlanId) {
-    return NextResponse.json({ ok: false, error: "Tuition plan is required when recurring billing is enabled." }, { status: 400 });
+    tuitionMutationFailure(400, "Tuition plan is required when recurring billing is enabled.");
   }
 
-  const plan = await prisma.tuitionPlan.findUnique({ where: { id: tuitionPlanId } });
-  if (!plan) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
+  if (!rateSave) await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "TuitionPlan" WHERE "id" = ${tuitionPlanId} FOR UPDATE`);
+  const plan = rateSave?.record || await tx.tuitionPlan.findUnique({ where: { id: tuitionPlanId } });
+  if (!plan) tuitionMutationFailure(404, "Tuition plan not found.");
   if (plan.centerId !== access.centerId) {
-    return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
+    tuitionMutationFailure(403, "Tuition plan belongs to a different school.");
   }
-  const planCenter = await prisma.center.findFirst({ where: { id: access.centerId, organization: { tenantId: user.tenantId } }, select: { customFields: true } });
+  const planCenter = access.center;
   if (!planCenter || !archivedTuitionAssignmentAllowed(planCenter.customFields, plan.id, existingFields.tuitionPlanId)) {
-    return NextResponse.json({ ok: false, error: "This tuition rate is archived. Restore it or choose an active rate for a new assignment." }, { status: 409 });
+    tuitionMutationFailure(409, "This tuition rate is archived. Restore it or choose an active rate for a new assignment.");
   }
   const planCadence = normalizeBillingCadence(plan.cadence);
   const requestedCadence = clean(body.billingCadence)
@@ -146,7 +173,7 @@ async function POSTHandler(request: NextRequest) {
       ? "monthly"
       : WEEKLY_TUITION_AUTOBILL_CADENCE;
   if ((planCadence === "monthly" && cadence !== "monthly") || (planCadence !== "monthly" && cadence === "monthly")) {
-    return NextResponse.json({ ok: false, error: "The tuition plan and assignment must use the same monthly or weekly rate cadence." }, { status: 400 });
+    tuitionMutationFailure(400, "The tuition plan and assignment must use the same monthly or weekly rate cadence.");
   }
   const billingDay = cadence === "monthly"
     ? normalizeRecurringBillingDay(body.billingDay, cadence)
@@ -157,7 +184,7 @@ async function POSTHandler(request: NextRequest) {
     requested: body.invoiceDelayWeeks, cadence, previousCadence,
     previousDelay: existingFields.tuitionBillingInvoiceDelayWeeks,
   });
-  if (!timing.ok) return NextResponse.json({ ok: false, error: timing.error }, { status: 400 });
+  if (!timing.ok) tuitionMutationFailure(400, timing.error);
   const invoiceDelayWeeks = timing.delayWeeks;
   const previousTiming = resolveTuitionInvoiceDelay({
     requested: undefined, cadence: previousCadence, previousCadence,
@@ -166,11 +193,39 @@ async function POSTHandler(request: NextRequest) {
   const timingChanging = previousTiming.ok && invoiceDelayWeeks !== previousTiming.delayWeeks;
   const timingChangeReason = clean(body.timingChangeReason);
   if (timingChanging && timingChangeReason.length < 5) {
-    return NextResponse.json({ ok: false, error: "Enter a reason for changing invoice timing." }, { status: 400 });
+    tuitionMutationFailure(400, "Enter a reason for changing invoice timing.");
   }
   const cadenceChanging = Boolean(previousCadence && previousCadence !== cadence);
-  const existingInvoices = cadenceChanging ? await prisma.invoice.findMany({
-    where: { billingAccount: { familyId }, status: { not: "VOID" } },
+  const asOf = new Date();
+  const reviewTimingCoverage = !cadenceChanging && timingChanging && cadence === "biweekly" && invoiceDelayWeeks === 0;
+  const savedStartPeriod = clean(existingFields.tuitionBillingStartsPeriod);
+  if (reviewTimingCoverage && (!/^\d{4}-W(?:0[1-9]|[1-4]\d|5[0-3])$/.test(savedStartPeriod)
+    || addWeeksToBillingPeriod(savedStartPeriod, 0) !== savedStartPeriod)) {
+    tuitionMutationFailure(409, "Review the saved biweekly coverage start week before changing invoice timing.");
+  }
+  if (cadenceChanging || reviewTimingCoverage) {
+    // Protect coverage evidence even from non-serializable invoice void/edit
+    // writers. Account/family locks above also serialize invoice/account inserts.
+    // Legacy invoice edits lock Invoice before BillingAccount; NOWAIT makes this
+    // request back off instead of deadlocking that writer while holding account.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "Invoice"."id" FROM "Invoice"
+      JOIN "BillingAccount" ON "BillingAccount"."id" = "Invoice"."billingAccountId"
+      WHERE "BillingAccount"."familyId" = ${familyId}
+        AND "Invoice"."status" <> 'VOID'
+        AND "Invoice"."customFields"->>'chargeSource' = 'tuitionPlan'
+        AND "Invoice"."customFields"->>'childId' = ${childId}
+      FOR UPDATE OF "Invoice" NOWAIT
+    `);
+  }
+  const existingInvoices = cadenceChanging || reviewTimingCoverage ? await tx.invoice.findMany({
+    where: {
+      billingAccount: { familyId }, status: { not: "VOID" },
+      AND: [
+        { customFields: { path: ["chargeSource"], equals: "tuitionPlan" } },
+        { customFields: { path: ["childId"], equals: childId } },
+      ],
+    },
     orderBy: { createdAt: "desc" },
     take: 200,
     select: { customFields: true },
@@ -179,17 +234,28 @@ async function POSTHandler(request: NextRequest) {
     const fields = jsonObject(invoice.customFields);
     return clean(fields.chargeSource) === "tuitionPlan" && clean(fields.childId) === childId;
   });
-  if (hasExistingTuitionCoverage) {
-    return NextResponse.json({
-      ok: false,
-      error: "Existing non-void tuition invoice coverage must be reviewed before changing this child's billing cycle.",
-    }, { status: 409 });
+  if (cadenceChanging && hasExistingTuitionCoverage) {
+    tuitionMutationFailure(409, "Existing non-void tuition invoice coverage must be reviewed before changing this child's billing cycle.");
   }
-  const requestedStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
+  const coveredPeriods = existingInvoices.flatMap((invoice) => {
+    const fields = jsonObject(invoice.customFields);
+    const coversBiweeklyCycle = clean(fields.chargeSource) === "tuitionPlan" && clean(fields.childId) === childId
+      && (fields.mode === "recurring" || fields.mode === "manual_weekly_recovery" || fields.countsTowardRecurringCoverage === true)
+      && fields.billingPeriod === fields.coverageStartsPeriod
+      && fields.invoiceWeekCount === 2;
+    return coversBiweeklyCycle && typeof fields.billingPeriod === "string" ? [fields.billingPeriod] : [];
+  });
+  const coveragePeriodAtRisk = reviewTimingCoverage
+    ? biweeklyCoveragePeriodBeforeRemovingDelay(savedStartPeriod, asOf, coveredPeriods)
+    : null;
+  if (coveragePeriodAtRisk) {
+    tuitionMutationFailure(409, `Review unbilled tuition coverage for ${coveragePeriodAtRisk} before returning to standard invoice timing. Keep the delay until its two-week invoice exists.`);
+  }
+  const requestedStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, asOf, cadence);
   const billingStartPeriod = requestedStartPeriod;
-  if (timingChanging && clean(existingFields.tuitionBillingStartsPeriod)
+  if (timingChanging && !cadenceChanging && clean(existingFields.tuitionBillingStartsPeriod)
     && billingStartPeriod !== existingFields.tuitionBillingStartsPeriod) {
-    return NextResponse.json({ ok: false, error: "Keep the saved coverage start week when changing invoice timing. Review existing tuition coverage before moving the start week." }, { status: 409 });
+    tuitionMutationFailure(409, "Keep the saved coverage start week when changing invoice timing. Review existing tuition coverage before moving the start week.");
   }
   const updatedAt = new Date().toISOString();
   const voucherFunded = isVoucherFundedTuitionAmount(plan.amountCents);
@@ -198,18 +264,18 @@ async function POSTHandler(request: NextRequest) {
   const tuitionAdditionalCharges = normalizeTuitionAdditionalCharges(body.tuitionAdditionalCharges);
   const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(tuitionAdditionalCharges);
   if (voucherFunded && tuitionCreditsTotalCents > 0) {
-    return NextResponse.json({ ok: false, error: "Credits cannot be added to a $0 voucher-funded tuition assignment." }, { status: 400 });
+    tuitionMutationFailure(400, "Credits cannot be added to a $0 voucher-funded tuition assignment.");
   }
   if (voucherFunded && tuitionAdditionalChargesTotalCents > 0) {
-    return NextResponse.json({ ok: false, error: "Additional charge lines cannot be added to a $0 voucher-funded tuition assignment." }, { status: 400 });
+    tuitionMutationFailure(400, "Additional charge lines cannot be added to a $0 voucher-funded tuition assignment.");
   }
   const tuitionGrossAmountCents = plan.amountCents + tuitionAdditionalChargesTotalCents;
   const tuitionNetAmountCents = tuitionGrossAmountCents - tuitionCreditsTotalCents;
   if (!voucherFunded && tuitionCreditsTotalCents >= tuitionGrossAmountCents) {
-    return NextResponse.json({ ok: false, error: "Credits must be less than the gross recurring tuition rate." }, { status: 400 });
+    tuitionMutationFailure(400, "Credits must be less than the gross recurring tuition rate.");
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await (async () => {
     const updatedChild = await tx.child.update({
       where: { id: childId },
       data: {
@@ -286,7 +352,7 @@ async function POSTHandler(request: NextRequest) {
     });
 
     return updatedChild;
-  });
+  })();
 
   await writeAuditLog(user, {
     centerId: access.centerId,
@@ -314,9 +380,18 @@ async function POSTHandler(request: NextRequest) {
       timingChangeReason: timingChanging ? timingChangeReason : null,
       existingInvoicesUnchanged: true,
     },
-  });
+  }, tx);
 
-  return NextResponse.json({ ok: true, assignment: updated.customFields });
+  if (rateSave) {
+    await writeAuditLog(user, {
+      centerId: access.centerId,
+      action: `operations.tuitionPlan.${rateSave.rateMode}`,
+      resource: "tuitionPlan",
+      resourceId: rateSave.record.id,
+      metadata: { mode: rateSave.rateMode },
+    }, tx);
+  }
+  return { ok: true, assignment: updated.customFields, ...(rateSave || {}) };
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

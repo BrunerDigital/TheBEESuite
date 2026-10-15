@@ -28,6 +28,21 @@ export function resolveTuitionInvoiceDelay(input: {
   return { ok: true as const, delayWeeks };
 }
 
+// Keep historical gaps anchored to the saved start, even after the delayed
+// invoice week expires. Every due cycle must have positive coverage evidence.
+export function biweeklyCoveragePeriodBeforeRemovingDelay(startsPeriod: string, asOf: Date, coveredPeriods: readonly string[] = []) {
+  const covered = new Set(coveredPeriods);
+  const today = asOf.toISOString().slice(0, 10);
+  let period = startsPeriod;
+  // Each successful iteration consumes one distinct covered cycle, so even an
+  // old anchor needs at most covered.size + 1 checks before finding a gap.
+  while (weeklyTuitionChargeDateForPeriod(period).toISOString().slice(0, 10) <= today) {
+    if (!covered.has(period)) return period;
+    period = addWeeksToBillingPeriod(period, 2);
+  }
+  return null;
+}
+
 export function nextBiweeklyInvoiceDate(startsPeriod: string, delayWeeks: number, asOf: Date) {
   if (!/^\d{4}-W(?:0[1-9]|[1-4]\d|5[0-3])$/.test(startsPeriod)) return null;
   const today = asOf.toISOString().slice(0, 10);

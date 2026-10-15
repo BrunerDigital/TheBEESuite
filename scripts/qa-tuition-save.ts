@@ -43,7 +43,10 @@ async function main() {
           await route.fulfill({ status: body.id ? 409 : 200, json: body.id ? { code: "TUITION_PLAN_ASSIGNED_CREATE_NEW" } : { record: { id: "fake-new-rate" } } });
         } else {
           assert.equal(pathname, "/api/billing/tuition-assignments");
-          await route.fulfill({ status: scenario === "assignment-failed" ? 409 : 200, json: scenario === "assignment-failed" ? { ok: false, error: "Review existing coverage." } : { ok: true, assignment: {} } });
+          const rateDraft = body.tuitionPlanDraft as { id?: string } | undefined;
+          await route.fulfill({ status: scenario === "assignment-failed" ? 409 : 200, json: scenario === "assignment-failed"
+            ? { ok: false, error: "Review existing coverage." }
+            : { ok: true, assignment: {}, ...(rateDraft ? { record: { id: "fake-new-rate" }, rateMode: "created", rateVersionCreated: Boolean(rateDraft.id) } : {}) } });
         }
       });
       const newChild = scenario.startsWith("new-");
@@ -71,6 +74,8 @@ async function main() {
         await page.locator("#billing-assignment-status").click();
         await page.getByRole("option", { name: "Disabled", exact: true }).click();
       }
+      const selectedRateBeforeSave = await page.locator("#billing-rate-record").textContent();
+      const selectedAssignmentBeforeSave = await page.locator("#billing-assignment-plan").textContent();
       await page.getByRole("button", { name: ["save-assignment-button", "existing-rate", "unrelated-rate-draft", "disabled"].includes(scenario) ? "Save Tuition Assignment" : "Save Rate & Child Tuition", exact: true }).click();
       if (scenario === "cancelled") {
         assert.equal(writes.length, 0);
@@ -95,17 +100,31 @@ async function main() {
         assert.equal(writes[0].body.description, "Fake rate");
         assert.equal(await page.locator("#billing-rate-family-amount").inputValue(), "220");
       } else {
-        await page.getByText(scenario === "assignment-failed" ? /Rate saved, but child tuition was not saved/ : /Rate and recurring tuition saved for Fake Child 1/).waitFor();
-        const assignment = writes.find(write => write.path.endsWith("tuition-assignments"));
-        assert.ok(assignment);
+        await page.getByText(scenario === "assignment-failed" ? /^Review existing coverage\.$/ : /Rate and recurring tuition saved for Fake Child 1/).waitFor();
+        assert.equal(writes.length, 1, scenario + " must save rate and assignment in one atomic request");
+        const assignment = writes[0];
+        assert.equal(assignment.path, "/api/billing/tuition-assignments");
         assert.equal(assignment.body.childId, "fake-child-1");
-        assert.equal(assignment.body.tuitionPlanId, "fake-new-rate");
+        assert.equal(assignment.body.tuitionPlanId, undefined);
+        const rateDraft = assignment.body.tuitionPlanDraft as Record<string, unknown> | undefined;
+        assert.ok(rateDraft);
+        assert.equal(rateDraft.id, newChild ? undefined : "fake-rate");
+        assert.equal(rateDraft.centerId, "fake-school");
+        assert.equal(rateDraft.amountDollars, scenario === "voucher" ? "0.00" : "200");
+        assert.equal(rateDraft.zeroDollarVoucher, scenario === "voucher");
         assert.equal(assignment.body.billingCadence, scenario === "new-four-week" ? "four_week" : "biweekly");
         assert.equal(assignment.body.billingStartPeriod, "2026-W40");
         const expectedDescription = scenario === "custom-label" ? "Custom child invoice label" : scenario === "renamed-rate" ? "Fake renamed rate" : newChild ? "Fake new rate" : "Fake rate";
         assert.equal(assignment.body.description, expectedDescription);
         assert.ok(writes.every(write => write.body.childId !== "fake-child-2"));
-        if (scenario === "voucher") assert.equal(writes[1].body.amountDollars, "0.00");
+        if (scenario === "assignment-failed") {
+          assert.equal(await page.locator("#billing-rate-record").textContent(), selectedRateBeforeSave);
+          assert.equal(await page.locator("#billing-assignment-plan").textContent(), selectedAssignmentBeforeSave);
+          assert.equal(await page.locator("#billing-rate-family-amount").inputValue(), "200");
+          assert.equal(await page.getByText(/Rate saved, but child tuition was not saved|Rate and recurring tuition saved for Fake Child 1/).count(), 0);
+        } else if (!newChild) {
+          await page.getByText(/Previously saved children kept their existing rates\./).waitFor();
+        }
         const priorDialogs = dialogs.length;
         await page.getByRole("link", { name: "Leave fixture" }).click();
         assert.equal(dialogs.slice(priorDialogs).filter(message => message.includes("unsaved")).length, scenario === "assignment-failed" ? 1 : 0, scenario + " unsaved-exit behavior");

@@ -4717,6 +4717,7 @@ export type BillingInvoicesPageData = {
     products: BillingWorkbenchProduct[];
     tuitionPlans: BillingWorkbenchTuitionPlan[];
     currentRole: string;
+    currentUserId?: string;
   };
   needsEnrollmentSetup: Array<{
     familyId: string;
@@ -5072,6 +5073,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           products={data.workbench.products}
           tuitionPlans={data.workbench.tuitionPlans}
           currentRole={data.workbench.currentRole}
+          currentUserId={data.workbench.currentUserId}
           canOpenFamilyProfile={data.canOpenFamilyProfile}
           canManageEnrollment={data.canManageEnrollment}
           initialFamilyId={data.initialSelection?.familyId}

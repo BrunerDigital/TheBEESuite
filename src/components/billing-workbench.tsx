@@ -9,6 +9,9 @@ import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
 import { formatInvoiceDueDate } from "@/lib/invoice-due-date";
+import { directorPaymentProgressTitle, type DirectorPaymentProgress } from "@/lib/director-payment-progress";
+import { isConfirmedOfflinePaymentReceipt, readOfflinePaymentReceipt } from "@/lib/offline-payment-receipt";
+import { clearConfirmedOfflinePaymentOperation, getOrCreateOfflinePaymentOperation, readOfflinePaymentOperation, type OfflinePaymentOperationScope } from "@/lib/offline-payment-operation";
 import { formatZonedDateTime, unambiguousZonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +72,7 @@ export type BillingWorkbenchFamily = {
   billingAccount?: {
     id: string;
     balanceCents: number;
+    paymentProgress?: DirectorPaymentProgress | null;
     autopayPlaceholder: boolean;
     paymentMethodManagement?: {
       autopayEnabled: boolean;
@@ -179,6 +183,7 @@ type Props = {
   products: BillingWorkbenchProduct[];
   tuitionPlans: BillingWorkbenchTuitionPlan[];
   currentRole: string;
+  currentUserId?: string;
   canOpenFamilyProfile: boolean;
   canManageEnrollment: boolean;
   initialFamilyId?: string;
@@ -392,8 +397,9 @@ function formatShortDate(value: Date | string | null | undefined) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-export function BillingWorkbench({ families, centers, products, tuitionPlans, currentRole, canOpenFamilyProfile, canManageEnrollment, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
+export function BillingWorkbench({ families, centers, products, tuitionPlans, currentRole, currentUserId, canOpenFamilyProfile, canManageEnrollment, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
   const router = useRouter();
+  const [offlineReceiptReview, setOfflineReceiptReview] = useState<{ scope: OfflinePaymentOperationScope; requestId: string; receipt: NonNullable<ReturnType<typeof readOfflinePaymentReceipt>> } | null>(null);
   const initialSelection = useMemo(
     () => resolveBillingFamilySelection({
       families, allowedCenterIds: centers.map((center) => center.id),
@@ -643,6 +649,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     activeWeeklyTuitionAssignments.length - (selectedSavedRateIsActive ? 1 : 0) + (selectedDraftRateIsActive ? 1 : 0),
   );
   const selectedBillingAccount = selectedFamily?.billingAccount ?? null;
+  const selectedPaymentProgress = selectedBillingAccount?.paymentProgress;
   const selectedPaymentMethod = selectedBillingAccount?.paymentMethodManagement ?? null;
   const selectedAutopayStatus = selectedPaymentMethod?.autopayStatus ?? (selectedBillingAccount?.autopayPlaceholder ? "enabled" : "disabled");
   const selectedPaymentRequestEmailOptions = paymentRequestEmailOptions(selectedFamily);
@@ -1208,15 +1215,26 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         partial?: boolean;
         adjustmentDescription?: string;
         balanceAfterCents?: number;
+        alreadyRecorded?: boolean;
+        receipt?: unknown;
       } | null;
       if (!response.ok) {
+        if ((payload.mode === "manualCheckPayment" || payload.mode === "manualCashPayment") && json?.receipt) reviewOfflineReceipt(json.receipt, payload);
         setErrorMessage(json?.error || "Billing action could not be completed.");
         return;
       }
+      if ((payload.mode === "manualCheckPayment" || payload.mode === "manualCashPayment")
+        && !isConfirmedOfflinePaymentReceipt(json, payload)) {
+        setErrorMessage("The payment receipt could not be confirmed. Keep this page open and retry the same payment to check its result safely.");
+        return;
+      }
       if (payload.mode === "manualCheckPayment") {
+        if (!completeOfflineOperation(payload)) return;
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
         const appliedCount = json?.appliedInvoiceIds?.length ?? 0;
-        setStatusMessage(`${total} check payment posted.${appliedCount ? ` ${appliedCount} open invoice${appliedCount === 1 ? " was" : "s were"} marked paid.` : " The family balance was updated."}`);
+        setStatusMessage(json?.alreadyRecorded
+          ? `${total} check payment was already recorded. No duplicate payment was posted.`
+          : `${total} check payment posted.${appliedCount ? ` ${appliedCount} open invoice${appliedCount === 1 ? " was" : "s were"} marked paid.` : " The family balance was updated."}`);
         setCheckAmountDollars("");
         setCheckNumber("");
         setCheckNotes("");
@@ -1225,9 +1243,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       if (payload.mode === "manualCashPayment") {
+        if (!completeOfflineOperation(payload)) return;
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
         const appliedCount = json?.appliedInvoiceIds?.length ?? 0;
-        setStatusMessage(`${total} cash payment posted.${appliedCount ? ` ${appliedCount} open invoice${appliedCount === 1 ? " was" : "s were"} marked paid.` : " The family balance was updated."}`);
+        setStatusMessage(json?.alreadyRecorded
+          ? `${total} cash payment was already recorded. No duplicate payment was posted.`
+          : `${total} cash payment posted.${appliedCount ? ` ${appliedCount} open invoice${appliedCount === 1 ? " was" : "s were"} marked paid.` : " The family balance was updated."}`);
         setCashAmountDollars("");
         setCashReference("");
         setCashNotes("");
@@ -1443,16 +1464,103 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     });
   }
 
+  function offlineOperationScope(selectedFamilyId: string): OfflinePaymentOperationScope {
+    const family = families.find((candidate) => candidate.id === selectedFamilyId);
+    if (!currentUserId || !family?.centerId) throw new Error("Refresh this billing page and choose a verified family before recording a payment.");
+    return { userId: currentUserId, centerId: family.centerId, familyId: family.id };
+  }
+
+  function offlinePaymentRequestIdFor(selectedFamilyId: string) {
+    try {
+      return getOrCreateOfflinePaymentOperation(window.sessionStorage, offlineOperationScope(selectedFamilyId)).requestId;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Payment recovery storage is unavailable. No payment was submitted.");
+      return null;
+    }
+  }
+
+  function reviewOfflineReceipt(value: unknown, operation: Record<string, unknown>) {
+    if (typeof operation.requestId !== "string" || typeof operation.familyId !== "string") return false;
+    const receipt = readOfflinePaymentReceipt(value, { requestId: operation.requestId, familyId: operation.familyId });
+    if (!receipt) return false;
+    const scope = offlineOperationScope(operation.familyId);
+    if (readOfflinePaymentOperation(window.sessionStorage, scope)?.requestId !== operation.requestId) return false;
+    setOfflineReceiptReview({ scope, requestId: operation.requestId, receipt });
+    return true;
+  }
+
+  function completeOfflineOperation(payload: Record<string, unknown>) {
+    if (typeof payload.familyId !== "string" || typeof payload.requestId !== "string") return false;
+    try {
+      const cleared = clearConfirmedOfflinePaymentOperation(window.sessionStorage, offlineOperationScope(payload.familyId), {
+        requestId: payload.requestId, receiptConfirmed: true,
+      });
+      if (!cleared) throw new Error("Payment recorded, but its browser recovery marker changed. Review the existing receipt before another payment.");
+      setOfflineReceiptReview(null);
+      return true;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Payment recorded. Review its receipt before another payment.");
+      return false;
+    }
+  }
+
+  function recoverOfflineReceipt() {
+    if (!selectedFamily) return;
+    const family = selectedFamily;
+    runBillingTransition(async () => {
+      setStatusMessage(""); setErrorMessage(""); setOfflineReceiptReview(null);
+      const scope = offlineOperationScope(family.id);
+      const operation = readOfflinePaymentOperation(window.sessionStorage, scope);
+      if (!operation) {
+        setStatusMessage("This browser tab has no unresolved payment marker for this family. Check payment history for earlier receipts.");
+        return;
+      }
+      const response = await fetch("/api/billing/invoices", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "offlinePaymentReceipt", familyId: family.id, requestId: operation.requestId }),
+      });
+      const result = await response.json().catch(() => null) as { ok?: boolean; found?: boolean; error?: string; receipt?: unknown } | null;
+      if (!response.ok || result?.ok !== true) { setErrorMessage(result?.error || "The receipt could not be checked. The saved request identity is retained."); return; }
+      if (result.found === true && reviewOfflineReceipt(result.receipt, operation)) return;
+      setErrorMessage("No confirmed receipt is available yet. The saved request identity is retained. No payment was submitted; re-enter the intended payment details to retry safely.");
+    });
+  }
+
+  function currentOfflineReceiptReview() {
+    if (!offlineReceiptReview || offlineReceiptReview.scope.familyId !== selectedFamily?.id
+      || offlineReceiptReview.scope.userId !== currentUserId || offlineReceiptReview.scope.centerId !== selectedFamily.centerId) return null;
+    try {
+      return readOfflinePaymentOperation(window.sessionStorage, offlineReceiptReview.scope)?.requestId === offlineReceiptReview.requestId
+        ? offlineReceiptReview : null;
+    } catch { return null; }
+  }
+
+  function acknowledgeOfflineReceipt() {
+    const currentReview = currentOfflineReceiptReview();
+    if (!currentReview) return;
+    const { receipt, requestId, scope } = currentReview;
+    if (!window.confirm(`I reviewed receipt ${receipt.paymentId} for ${money(receipt.amountCents)}. Start a separate new payment? Nothing will be posted until you submit again.`)) return;
+    if (!completeOfflineOperation({ familyId: scope.familyId, requestId })) return;
+    setCashAmountDollars(""); setCashReference(""); setCashNotes(""); setCashPaidAt(currentLocalDateTime(timeZone));
+    setCheckAmountDollars(""); setCheckNumber(""); setCheckNotes(""); setCheckPaidAt(currentLocalDateTime(timeZone));
+    setErrorMessage(""); setStatusMessage("Existing receipt reviewed. A separate payment can now be entered; no new payment was posted.");
+    router.refresh();
+  }
+
   function submitManualCheckPayment() {
     if (!selectedFamily) return setErrorMessage("Choose a family before posting a check payment.");
-    if (!checkAmountDollars || !checkNumber.trim()) return setErrorMessage("Enter the check amount and check number.");
+    const amountCents = dollarsToCents(checkAmountDollars);
+    if (amountCents <= 0 || !checkNumber.trim()) return setErrorMessage("Enter the check amount and check number.");
     const paidAt = manualPaymentTimestamp(checkPaidAt, timeZone);
     if (!paidAt) return setErrorMessage("Enter a valid check received date and time.");
     if (!confirmBillingAction(`post check #${checkNumber.trim()} as a payment`)) return;
+    const requestId = offlinePaymentRequestIdFor(selectedFamily.id);
+    if (!requestId) return;
     submit({
       mode: "manualCheckPayment",
       familyId: selectedFamily.id,
-      amountDollars: checkAmountDollars,
+      requestId,
+      amountCents,
       checkNumber: checkNumber.trim(),
       paidAt,
       description: `Check payment #${checkNumber.trim()}`,
@@ -1467,9 +1575,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const paidAt = manualPaymentTimestamp(cashPaidAt, timeZone);
     if (!paidAt) return setErrorMessage("Enter a valid cash received date and time.");
     if (!confirmBillingAction(`post ${money(amountCents)} received in cash`)) return;
+    const requestId = offlinePaymentRequestIdFor(selectedFamily.id);
+    if (!requestId) return;
     submit({
       mode: "manualCashPayment",
       familyId: selectedFamily.id,
+      requestId,
       amountCents,
       paidAt,
       reference: cashReference.trim(),
@@ -1930,6 +2041,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
 
+  const currentOfflineReview = currentOfflineReceiptReview();
+
   return (
     <>
     <Dialog open={Boolean(paymentReviewMethod)} onOpenChange={(open) => {
@@ -1952,6 +2065,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <SummaryMetric label="Apply payment to" value={directorPaymentTargetLabel} detail={selectedPaymentInvoice ? `Due ${formatInvoiceDueDate(selectedPaymentInvoice.dueDate)}` : "Family balance payment"} />
               <SummaryMetric label="Amount" value={money(directorPaymentAmountCents)} detail={effectivePaymentTarget === "custom" ? paymentDescription : selectedPaymentInvoice?.number ?? "Balance"} />
             </div>
+            {paymentReviewMethod !== "autopay" && effectivePaymentTarget.startsWith("invoice:") && hasHouseholdCreditAgainstInvoices ? (
+              <p className="rounded-lg border bg-background/45 p-3 text-sm text-muted-foreground">
+                This is an account payment. The selected invoice is prioritized,
+                and the payment may cover other open invoices. The current account
+                balance already reflects recorded payments and credits.
+              </p>
+            ) : null}
             <div className="rounded-lg border bg-background/45 p-3">
               <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Payment method</div>
               <div className="mt-2 text-sm font-medium">{paymentRouteSummary(paymentReviewMethod)}</div>
@@ -2021,6 +2141,18 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </Alert>
         ) : null}
 
+        {selectedFamily ? <Alert>
+          <AlertTitle>Interrupted cash or check payment?</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>Review the saved request after a reload or interrupted response. This only checks for an existing receipt and never submits a payment.</p>
+            <Button type="button" variant="outline" onClick={recoverOfflineReceipt}>Review unresolved payment</Button>
+            {currentOfflineReview ? <div className="space-y-2">
+              <p>Recorded {currentOfflineReview.receipt.provider === "manual_cash" ? "cash" : "check"} payment: {money(currentOfflineReview.receipt.amountCents)}. Receipt {currentOfflineReview.receipt.paymentId}. No additional payment was posted.</p>
+              <Button type="button" variant="outline" onClick={acknowledgeOfflineReceipt}>I reviewed this receipt; start a new payment</Button>
+            </div> : null}
+          </AlertDescription>
+        </Alert> : null}
+
         <WorkspaceSectionDirectory
           id="billing-workspace-directory"
           description="Keep the current family and balance visible, then move directly to payment setup or the billing task that needs a change. Less common corrections stay under More billing tasks."
@@ -2059,7 +2191,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           <div className="billing-summary-grid grid gap-3">
             <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} />
             <SummaryMetric label="Last updated" value={formatShortDate(selectedFamily?.updatedAt)} detail="Family billing information" />
-            <SummaryMetric label={familyBalanceCents < 0 ? "Household credit" : "Balance"} value={money(Math.abs(familyBalanceCents))} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
+            <SummaryMetric label={familyBalanceCents < 0 ? "Household credit" : "Ledger balance"} value={money(Math.abs(familyBalanceCents))} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
             <SummaryMetric label="Payment contacts" value={`${selectedPaymentRequestEmailOptions.length} contact${selectedPaymentRequestEmailOptions.length === 1 ? "" : "s"}`} detail={selectedFamily?.billingEmail ?? "No billing email"} />
             <SummaryMetric label="Children" value={selectedChildSummary} detail={selectedChildren.map((child) => child.fullName).slice(0, 2).join(", ") || "No child records"} />
             <SummaryMetric
@@ -2154,10 +2286,25 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </Select>
           </div>
           <div className="rounded-lg border bg-background/40 p-3">
-            <div className="text-xs text-muted-foreground">Selected balance</div>
+            <div className="text-xs text-muted-foreground">Selected ledger balance</div>
             <div className="text-lg font-semibold">{money(familyBalanceCents)}</div>
+            <p className="mt-1 text-xs text-muted-foreground">This posted account total may include agency responsibility and does not subtract pending ACH payments. Checkout verifies the collectible family amount.</p>
           </div>
         </div>
+
+        {selectedPaymentProgress ? (
+          <Alert data-director-payment-progress>
+            <AlertCircle className="size-4" />
+            <AlertTitle>{directorPaymentProgressTitle(selectedPaymentProgress)}</AlertTitle>
+            <AlertDescription className="space-y-1">
+              <p>{selectedPaymentProgress.count} active payment attempt{selectedPaymentProgress.count === 1 ? "" : "s"}. Check the payment status before collecting again.</p>
+              {selectedPaymentProgress.phase === "confirmation_unknown" ? <p>An earlier payment outcome is unconfirmed. An unknown outcome is not proof that a payment failed.</p> : null}
+              {selectedPaymentProgress.provisionalAchCreditCents > 0 ? (
+                <p>{money(selectedPaymentProgress.provisionalAchCreditCents)} in submitted ACH payments is awaiting bank settlement. Parent balances apply a provisional ACH credit. The ledger balance changes after settlement; a bank return restores the parent amount due.</p>
+              ) : <p>No provisional ACH credit is included for these attempts.</p>}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         {selectedCheckoutReadiness?.canAcceptParentPayments ? (
           <Alert className="border-emerald-500/30 bg-emerald-500/10">
@@ -2271,6 +2418,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <div className="text-sm font-medium">{directorPaymentTargetLabel}</div>
               </div>
             </div>
+            {hasHouseholdCreditAgainstInvoices ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Invoice totals show the amounts billed on each invoice. The current
+                account balance includes recorded payments and credits.
+              </p>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
               {effectivePaymentTarget.startsWith("invoice:") && !selectedFamilyIsPast ? (
                 <Button

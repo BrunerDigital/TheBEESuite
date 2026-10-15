@@ -1,5 +1,6 @@
 import { locationAliasesFromCustomFields } from "@/lib/school-location-identifiers";
 import { isRetiredPublicKidCityLocation } from "@/lib/active-school-locations";
+import { isBlockedPublicInquiryLocation } from "@/lib/public-inquiry-policy";
 
 export type IntakeCenterMatchCandidate = {
   crmLocationId: string | null;
@@ -15,6 +16,7 @@ function normalize(value: string) {
 
 export function isEligiblePublicInquiryCenter(center: IntakeCenterMatchCandidate, strictLocationRouting: boolean) {
   return (!strictLocationRouting || center.status === "active")
+    && !isBlockedPublicInquiryLocation(center)
     && !isRetiredPublicKidCityLocation(center.crmLocationId)
     && !isRetiredPublicKidCityLocation(center.locationId);
 }

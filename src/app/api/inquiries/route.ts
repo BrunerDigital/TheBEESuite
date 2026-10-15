@@ -17,6 +17,7 @@ import {
   computeIntegrationDeliveryState,
 } from "@/lib/integration-deliveries";
 import { isEligiblePublicInquiryCenter, selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
+import { isBlockedPublicInquiryIdentifier } from "@/lib/public-inquiry-policy";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
@@ -374,7 +375,7 @@ async function getIntakeCenter({
     }
   }
 
-  return getFallbackIntakeCenter();
+  return eligible(await getFallbackIntakeCenter());
 }
 
 async function getLocationNotificationEmails(centerId: string, centerEmail?: string | null) {
@@ -507,6 +508,11 @@ async function POSTHandler(request: NextRequest) {
 
     if (Object.keys(errors).length) {
       return json({ ok: false, errors }, 400, origin);
+    }
+
+    if ([payload.centerId, payload.locationId, payload.publicLocationId, payload.locationName]
+      .some(isBlockedPublicInquiryIdentifier)) {
+      throw new InquiryRoutingError("The selected school is not accepting public inquiries. Please choose another location or contact corporate.", "ineligible_public_location");
     }
 
     const turnstileFingerprintInput = {

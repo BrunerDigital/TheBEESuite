@@ -1,6 +1,6 @@
 # Kid City USA Inquiry Intake
 
-Last updated: July 24, 2026
+Last updated: October 14, 2026
 
 The public WordPress/Avada inquiry form should submit to:
 
@@ -28,7 +28,19 @@ Executive and center users can also copy live embed code from their BEE Suite da
 - Non-Kid City single-school users receive a center-specific embed powered by `/bee-suite-inquiry-form.js` and their center profile ID.
 - New public onboarding creates a gated trial workspace with a primary center profile and a center-linked embed code. Providers can copy that form immediately, then add more center-specific codes as additional profiles are completed.
 
-The hosted Kid City embed loads active Kid City USA open-school options from `/api/public/kidcity-locations` when it is used as a multi-location form. The first dropdown option is the placeholder, so a rendered form should show one more `<option>` element than the live API location count. When the script includes fixed location attributes, it renders the same form with the school locked and still posts to `/api/inquiries`.
+The hosted Kid City embed loads inquiry-eligible options from `/api/public/kidcity-locations?purpose=inquiry` when it is used as a multi-location form. The first dropdown option is the placeholder, so a rendered form should show one more `<option>` element than that inquiry API location count. When the script includes a fixed center ID, the read-only query also passes `centerId` and must return `inquiryCenterEligible: true` before a form is rendered. Unknown or unavailable eligibility does not render a fixed form. No center records or recipient details are exposed by that decision.
+
+### Daytona Beach East inquiry-only restriction
+
+The October 14, 2026 instruction removes Daytona Beach East from all public inquiry forms while retaining Altamonte–Douglas. `public-inquiry-policy.ts` keeps that restriction separate from school retirement. The default public-location API, static directory catalog, registration handoff, finance operations, user access, and historical records remain unchanged.
+
+The inquiry catalog applies this policy after both live/static merge and static fallback. Both hosted scripts also filter stale/custom catalogs, suppress known blocked fixed-location forms, and check opaque fixed IDs through the read-only eligibility query. The intake API rejects blocked submitted identifiers and resolved centers (including aliases and configured fallback centers) before recipient lookup, lead creation, delivery reservation, or provider calls. Existing queued deliveries and prior leads are not canceled or edited.
+
+The owned WordPress inquiry bridge needs a separate reviewed release to remove hardcoded or dynamically inserted legacy options from existing pages. Updating the BEE catalog cannot change WordPress database content or an old cached dropdown. The tracked Avada snippet removes only the Daytona option; unrelated location pages and registration controls are outside this change.
+
+A separate live Mailchimp “Sitewide Email Capture | Schedule A Tour” popup also contains this choice (experience 171246, variation 204499, location field MMERGE16). Its source configuration and vendor routing need their own authenticated review and approval. A scoped WordPress presentation/click guard cannot prove Mailchimp-side rejection; the BEE API policy does not govern Mailchimp ingestion.
+
+Before release, run the focused Daytona tests plus the full `npm run vercel-build` gate. Mocked tests do not prove live delivery or browser rendering. Do not submit real public leads or send emails to test this change. After separately approved deployment, use read-only rendered form/catalog checks and runtime logs. Roll back only the scoped commits/files if needed; no database restore or migration is involved. A rollback restores Daytona inquiry acceptance and requires an explicit decision.
 
 ## What Happens
 

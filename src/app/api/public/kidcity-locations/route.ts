@@ -10,6 +10,8 @@ import {
   type PublicKidCityLocation,
 } from "@/lib/active-school-locations";
 import { prisma } from "@/lib/prisma";
+import { filterPublicInquiryLocations } from "@/lib/public-inquiry-policy";
+import { isEligiblePublicInquiryCenter } from "@/lib/inquiry-routing";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -83,20 +85,49 @@ async function getLiveLocations() {
     .sort(comparePublicKidCityLocations);
 }
 
-async function GETHandler() {
+async function GETHandler(request: Request) {
+  const params = new URL(request.url).searchParams;
+  const inquiryOnly = params.get("purpose") === "inquiry";
+  const requestedCenterId = inquiryOnly ? (params.get("centerId") ?? "").trim() : "";
+  let inquiryCenterEligible: boolean | undefined;
+
+  // Opaque fixed-center embeds need a read-only decision before rendering.
+  // Never expose center records or use the intake fallback (which can write).
+  if (requestedCenterId) {
+    try {
+      const center = requestedCenterId.length <= 200
+        ? await prisma.center.findFirst({
+            where: { id: requestedCenterId, status: { not: "closed" } },
+            select: { crmLocationId: true, locationId: true, name: true, status: true },
+          })
+        : null;
+      inquiryCenterEligible = Boolean(center && isEligiblePublicInquiryCenter(center, false));
+    } catch (error) {
+      logOperationalError("public.kidcity_locations.inquiry_eligibility_failed", error);
+      return NextResponse.json({ error: "Inquiry availability could not be checked." }, { status: 503, headers: responseHeaders });
+    }
+  }
+
+  function respond(locations: PublicKidCityLocation[]) {
+    return NextResponse.json({
+      locations: inquiryOnly ? filterPublicInquiryLocations(locations) : locations,
+      ...(inquiryCenterEligible === undefined ? {} : { inquiryCenterEligible }),
+    }, { headers: responseHeaders });
+  }
+
   try {
     const liveLocations = await getLiveLocations();
     if (liveLocations.length) {
       const staticLocations = await loadStaticLocationsSafely();
       const locations = mergePublicKidCityLocations(liveLocations, staticLocations.locations);
-      return NextResponse.json({ locations }, { headers: responseHeaders });
+      return respond(locations);
     }
   } catch (error) {
     logOperationalError("public.kidcity_locations.lookup_failed", error);
   }
 
   const fallback = await loadStaticLocations();
-  return NextResponse.json({ locations: filterPublicKidCityLocations(fallback.locations) }, { headers: responseHeaders });
+  return respond(filterPublicKidCityLocations(fallback.locations));
 }
 
 function OPTIONSHandler() {

@@ -49,6 +49,22 @@
   `;
   document.head.appendChild(style);
 
+  // Keep this inquiry-only policy aligned with public-inquiry-policy.ts.
+  function isBlockedInquiryIdentifier(value) {
+    const key = String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return ["kid city usa fl daytona beach east", "fl daytona beach east",
+      "kid city usa daytona beach east", "daytona beach east"].includes(key);
+  }
+
+  function availableInquiryLocations(locations) {
+    return locations.filter((location) => ![location.crmLocationId, location.locationId, location.name]
+      .some(isBlockedInquiryIdentifier));
+  }
+
+  function showUnavailable() {
+    target.innerHTML = '<p class="bee-suite-status" data-state="error" role="status">This location is not accepting website inquiries. Please choose another location or contact corporate.</p>';
+  }
+
   function escapeHtml(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
@@ -135,6 +151,12 @@
   }
 
   function render(locations) {
+    if ([fixedCenterId, fixedLocationId, fixedPublicLocationId, fixedLocationName]
+      .some(isBlockedInquiryIdentifier)) {
+      showUnavailable();
+      return;
+    }
+    locations = availableInquiryLocations(locations);
     const fixedLocation = getFixedLocation(locations);
     const groups = groupLocations(locations);
     const locationOptions = Object.keys(groups)
@@ -261,6 +283,13 @@
         turnstileToken: String(formData.get("cf-turnstile-response") || "").trim(),
       };
 
+      if ([payload.centerId, payload.locationId, payload.publicLocationId, payload.locationName]
+        .some(isBlockedInquiryIdentifier)) {
+        status.dataset.state = "error";
+        status.textContent = "This location is not accepting website inquiries. Please choose another location.";
+        return;
+      }
+
       button.disabled = true;
       button.textContent = "Submitting...";
       try {
@@ -285,13 +314,32 @@
     });
   }
 
+  if ([fixedCenterId, fixedLocationId, fixedPublicLocationId, fixedLocationName]
+    .some(isBlockedInquiryIdentifier)) {
+    showUnavailable();
+    return;
+  }
+
   loadTurnstile();
 
-  fetch(`${baseUrl}/api/public/kidcity-locations`)
-    .then((response) => response.json())
-    .then((data) => render(data.locations || []))
+  const inquiryLocationsUrl = new URL(`${baseUrl}/api/public/kidcity-locations`);
+  inquiryLocationsUrl.searchParams.set("purpose", "inquiry");
+  if (fixedCenterId) inquiryLocationsUrl.searchParams.set("centerId", fixedCenterId);
+
+  fetch(inquiryLocationsUrl.href)
+    .then((response) => {
+      if (!response.ok) throw new Error("Inquiry availability could not be checked");
+      return response.json();
+    })
+    .then((data) => {
+      if (fixedCenterId && data.inquiryCenterEligible !== true) {
+        showUnavailable();
+        return;
+      }
+      render(data.locations || []);
+    })
     .catch(() => {
-      if (fixedLocationRequested) {
+      if (fixedLocationRequested && !fixedCenterId) {
         render([]);
         return;
       }

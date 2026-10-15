@@ -121,7 +121,7 @@ test("evidence storage has a hard event cap", async () => {
 test("injected observer records final event cancellation and hash/collapse without reading input values", () => {
   const emitted: Array<{ event: string; phase: string; defaultPrevented: boolean; hash: string; collapsed: string; noteVisible: boolean }> = [];
   const documentListeners = new Map<string, () => void>(), timers: Array<() => void> = [], frames: Array<() => void> = [];
-  let observer = () => { throw new Error("Observer was not installed"); };
+  let observer: () => void = () => { throw new Error("Observer was not installed"); };
   class Element {
     id: string;
     shortcut: boolean;

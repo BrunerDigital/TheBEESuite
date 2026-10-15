@@ -42,6 +42,7 @@ async function unusedLoopbackPort() {
 }
 
 
+/** @param {{ role: "parent" | "teacher", previewPort: number, blocked?: Array<{ method: string | undefined, path: string }> }} options */
 export function createKeyboardPreviewProxy({ role, previewPort, blocked = [] }) {
   keyboardPreviewPath(role);
   assert.ok(Number.isInteger(previewPort) && previewPort > 0 && previewPort < 65536);

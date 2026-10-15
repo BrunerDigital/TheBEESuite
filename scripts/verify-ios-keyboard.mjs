@@ -4,7 +4,6 @@ import { createServer, request as requestLoopback } from "node:http";
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { injectNavigationDiagnostics, MAX_DIAGNOSTIC_HTML_BYTES, MAX_NAVIGATION_EVENTS, NAVIGATION_EVENT_PATH, NAVIGATION_SCRIPT_PATH, navigationDiagnosticsSource, parseNavigationDiagnostic } from "./ios-keyboard/navigation-diagnostics.mjs";
 
 export function keyboardPreviewPath(role) {
   assert.ok(["parent", "teacher"].includes(role), "Unsupported keyboard role");
@@ -42,38 +41,11 @@ async function unusedLoopbackPort() {
 }
 
 
-/** @param {{ role: "parent" | "teacher", previewPort: number, blocked?: Array<{ method: string | undefined, path: string }> }} options */
 export function createKeyboardPreviewProxy({ role, previewPort, blocked = [] }) {
   keyboardPreviewPath(role);
   assert.ok(Number.isInteger(previewPort) && previewPort > 0 && previewPort < 65536);
-  const navigationDiagnostics = { enabled: role === "teacher", injectedDocuments: 0, scriptRequests: 0, rejectedEvents: 0, htmlFailures: 0, events: [] };
   const proxy = createServer((request, response) => {
     const url = new URL(request.url, "http://localhost");
-    if ([NAVIGATION_SCRIPT_PATH, NAVIGATION_EVENT_PATH].includes(url.pathname)) {
-      // Handle reserved evidence resources before the forward allowlist. They
-      // never reach Next, including on parent runs or malformed/write requests.
-      if (role !== "teacher" || request.method !== "GET" || request.headers["transfer-encoding"]
-        || (request.headers["content-length"] && request.headers["content-length"] !== "0")) {
-        blocked.push({ method: request.method, path: url.pathname });
-        response.writeHead(403).end("Synthetic navigation diagnostics refuse this request"); return;
-      }
-      if (url.pathname === NAVIGATION_SCRIPT_PATH) {
-        if (url.search) { response.writeHead(400).end(); return; }
-        navigationDiagnostics.scriptRequests++;
-        const address = proxy.address();
-        assert.ok(address && typeof address === "object");
-        response.writeHead(200, { "Content-Type": "application/javascript", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" })
-          .end(navigationDiagnosticsSource(address.port, keyboardPreviewPath("teacher"))); return;
-      }
-      const event = parseNavigationDiagnostic(url.search);
-      if (!event || navigationDiagnostics.events.some(previous => previous.seq === event.seq)
-        || navigationDiagnostics.events.length >= MAX_NAVIGATION_EVENTS) {
-        navigationDiagnostics.rejectedEvents++;
-        response.writeHead(400, { "Cache-Control": "no-store" }).end(); return;
-      }
-      navigationDiagnostics.events.push(event);
-      response.writeHead(204, { "Cache-Control": "no-store" }).end(); return;
-    }
     if (!keyboardRequestAllowed(request.method, url.pathname)) {
       blocked.push({ method: request.method, path: url.pathname });
       response.writeHead(403).end("Synthetic keyboard QA blocks this request"); return;
@@ -94,31 +66,6 @@ export function createKeyboardPreviewProxy({ role, previewPort, blocked = [] }) 
     const destination = `${url.pathname}${url.search}`;
     // Host and port are fixed transport options, never derived from a request URL.
     const upstream = requestLoopback({ hostname: "127.0.0.1", port: previewPort, path: destination, method: "GET" }, (local) => {
-      if (role === "teacher" && destination === keyboardPreviewPath("teacher") && local.statusCode === 200
-        && /^text\/html(?:;|$)/i.test(local.headers["content-type"] ?? "")) {
-        const chunks = [];
-        let size = 0, failed = false;
-        const fail = () => {
-          if (failed) return;
-          failed = true; navigationDiagnostics.htmlFailures++;
-          response.writeHead(502).end("Synthetic navigation diagnostics could not inspect the fixture");
-        };
-        local.on("data", chunk => {
-          size += chunk.length;
-          if (size > MAX_DIAGNOSTIC_HTML_BYTES) { fail(); local.destroy(); return; }
-          if (!failed) chunks.push(chunk);
-        });
-        local.once("error", fail);
-        local.once("end", () => {
-          if (failed) return;
-          try {
-            const html = injectNavigationDiagnostics(Buffer.concat(chunks).toString("utf8"));
-            navigationDiagnostics.injectedDocuments++;
-            response.writeHead(200, { "Content-Type": local.headers["content-type"], "Cache-Control": "no-store" }).end(html);
-          } catch { fail(); }
-        });
-        return;
-      }
       response.writeHead(local.statusCode ?? 502, { "Content-Type": local.headers["content-type"] ?? "application/octet-stream", "Cache-Control": "no-store" });
       local.pipe(response);
     });
@@ -158,7 +105,7 @@ export function createKeyboardPreviewProxy({ role, previewPort, blocked = [] }) 
     upstream.once("error", () => client.destroy());
     upstream.end();
   });
-  return { proxy, navigationDiagnostics, destroyUpgrades: () => { for (const socket of upgraded) socket.destroy(); } };
+  return { proxy, destroyUpgrades: () => { for (const socket of upgraded) socket.destroy(); } };
 }
 
 /** Isolated synthetic UI test against the built Capacitor binary, never a signed artifact. */
@@ -206,7 +153,7 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
   let launchError;
   next.on("error", (error) => { launchError = error; });
   const blocked = [];
-  const { proxy, navigationDiagnostics, destroyUpgrades } = createKeyboardPreviewProxy({ role, previewPort, blocked });
+  const { proxy, destroyUpgrades } = createKeyboardPreviewProxy({ role, previewPort, blocked });
   try {
     console.log(`Starting ${role} synthetic keyboard preview`);
     const startupDeadline = Date.now() + keyboardPhaseTimeout(keyboardDeadline, 3 * 60 * 1000);
@@ -260,8 +207,6 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
     const restored = spawnSync("defaults", restore, { encoding: "utf8", timeout: 10000 });
     if (restored.status !== 0) console.error("Could not restore Simulator keyboard preference:", restored.stderr);
     writeFileSync(path.join(evidencePath, "keyboard-network.json"), JSON.stringify({ blocked }, null, 2));
-    writeFileSync(path.join(evidencePath, "keyboard-navigation.json"), JSON.stringify({ ...navigationDiagnostics,
-      events: navigationDiagnostics.events.toSorted((a, b) => a.seq - b.seq) }, null, 2));
     destroyUpgrades();
     proxy.closeAllConnections();
     await new Promise(resolve => proxy.close(resolve));
@@ -272,4 +217,3 @@ export async function verifyIOSKeyboard({ role, simulator, simulatorApp, buildRo
     assert.equal(restored.status, 0, "Restore Simulator hardware-keyboard preference");
   }
 }
-

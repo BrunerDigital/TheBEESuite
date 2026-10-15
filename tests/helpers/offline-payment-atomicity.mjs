@@ -49,7 +49,14 @@ function fixture({ balance=10000, invoiceAmounts=[10000], allowed=true, agencyBl
     amountCentsFromBody:b=>b.amountCents??Math.round(Number(b.amountDollars)*100),
     manualFamilyPaymentExceedsVisibleBalance:async()=>agencyBlocked,
     parseDate:v=>new Date(v),randomUUID,
-    prisma:{...tx,$transaction:async(fn)=>{const before=structuredClone(state);try{return await fn(tx);}catch(e){state=before;throw e;}}},
+    prisma:{
+      ...tx,
+      // Global audit/version writes are not part of this transaction. Keeping
+      // them distinct makes a missing explicit tx argument fail this fixture.
+      auditLog:{create:async()=>{throw new Error('Audit must use the transaction client');}},
+      center:{update:async()=>{throw new Error('Billing version must use the transaction client');}},
+      $transaction:async(fn)=>{const before=structuredClone(state);try{return await fn(tx);}catch(e){state=before;throw e;}},
+    },
     NextResponse:{json:(body,options={})=>({status:options.status??200,body})},
   };
   const handlers=Function(...Object.keys(deps),js+'\nreturn {cash:createManualCashPayment,check:createManualCheckPayment};')(...Object.values(deps));

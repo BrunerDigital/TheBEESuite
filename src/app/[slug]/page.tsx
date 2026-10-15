@@ -121,7 +121,7 @@ import { childScheduleClassification, fteScheduledDaysPerWeek, scheduledDaysPerW
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
-import { getParentPortalFamilyScope, getParentPortalPaymentFamilyScope, getParentPortalPaymentReturn, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
+import { getParentPortalReadFamilyScope, getParentPortalPaymentFamilyScope, getParentPortalPaymentReturn, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 import { parentCurrentChildScope, readParentDocumentPage } from "@/lib/parent-document-query";
 import { parentAttentionScope, parentIncidentOrder, parentIncidentSelect, parentInvoiceOrder, parentInvoiceSelect, prioritizeParentAttentionRecords } from "@/lib/parent-attention";
@@ -149,6 +149,8 @@ import {
   jsonRecord,
 } from "@/lib/billing-guardrails";
 import { parentPaymentStatus } from "@/lib/parent-payment-status";
+import { parentPaymentHistoryWhere } from "@/lib/parent-payment-history";
+import { directorPaymentProgress } from "@/lib/director-payment-progress";
 import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
 import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import { activeClassroomWhere } from "@/lib/classroom-status";
@@ -2459,7 +2461,7 @@ async function renderLivePage(
       if (parentReviewScopeInvalid) return <AppReviewScopeBlocked portal="Parent" />;
     }
     const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
-      ? requestedParentFamilyScope ?? await getParentPortalFamilyScope(user.id, user.tenantId, selectedParentFamilyId)
+      ? requestedParentFamilyScope ?? await getParentPortalReadFamilyScope(user.id, user.tenantId, selectedParentFamilyId)
       : null;
     if (parentFamilyScope && !parentFamilyScope.ok) {
       return <ParentPortalAccessBlocked />;
@@ -2589,29 +2591,7 @@ async function renderLivePage(
             },
           },
           payments: {
-            where: {
-              NOT: { provider: AGENCY_LEDGER_SOURCE_SYSTEM },
-              OR: [
-                { status: PaymentStatus.PAID },
-                {
-                  provider: "stripe",
-                  status: PaymentStatus.DRAFT,
-                  OR: [
-                    { customFields: { path: ["status"], equals: "checkout_created" } },
-                    { customFields: { path: ["status"], equals: "checkout_pending" } },
-                    { customFields: { path: ["status"], equals: "paid_processing" } },
-                    { customFields: { path: ["status"], equals: "autopay_processing" } },
-                    { customFields: { path: ["status"], equals: "stored_method_processing" } },
-                    { customFields: { path: ["status"], equals: "director_saved_method_processing" } },
-                  ],
-                },
-                {
-                  provider: "stripe",
-                  status: PaymentStatus.FAILED,
-                  customFields: { path: ["status"], equals: "payment_returned" },
-                },
-              ],
-            },
+            where: parentPaymentHistoryWhere,
             orderBy: [{ paidAt: "desc" }, { id: "desc" }],
             take: 20,
             select: {
@@ -4334,6 +4314,21 @@ async function renderLivePage(
     const billingFamilies = requestedEligibleBillingFamily && !listedBillingFamilies.some((family) => family.id === requestedEligibleBillingFamily.id)
       ? [...listedBillingFamilies, requestedEligibleBillingFamily]
       : listedBillingFamilies;
+    // Pending attempts may be older than the bounded recent-payment history.
+    const workbenchDraftPayments = await prisma.payment.findMany({
+      where: {
+        billingAccountId: { in: billingFamilies.flatMap((family) => family.billingAccount ? [family.billingAccount.id] : []) },
+        provider: { in: ["stripe", "stripe_terminal"] },
+        status: PaymentStatus.DRAFT,
+      },
+      select: { id: true, billingAccountId: true, amountCents: true, status: true, provider: true, customFields: true },
+    });
+    const workbenchDraftPaymentsByAccount = new Map<string, typeof workbenchDraftPayments>();
+    for (const payment of workbenchDraftPayments) {
+      const rows = workbenchDraftPaymentsByAccount.get(payment.billingAccountId) ?? [];
+      rows.push(payment);
+      workbenchDraftPaymentsByAccount.set(payment.billingAccountId, rows);
+    }
     const historicalFamilyLookupKeys = Array.from(new Map(
       invoices
         .filter((invoice) => invoice.billingAccount.family._count.children === 0)
@@ -4498,6 +4493,7 @@ async function renderLivePage(
           },
           workbench: {
             currentRole: user.role,
+            currentUserId: user.id,
             families: billingFamilies.map((family) => ({
               ...family,
               accountCategory: billingFamilyAccountCategory(family.children),
@@ -4505,6 +4501,7 @@ async function renderLivePage(
                 ? {
                     id: family.billingAccount.id,
                     balanceCents: family.billingAccount.balanceCents,
+                    paymentProgress: directorPaymentProgress(workbenchDraftPaymentsByAccount.get(family.billingAccount.id) ?? []),
                     autopayPlaceholder: family.billingAccount.autopayPlaceholder,
                     paymentMethodManagement: {
                       ...billingPaymentMethodSummary({

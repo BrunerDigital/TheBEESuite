@@ -19,6 +19,7 @@ import type { RecordPagination } from "@/lib/record-pagination";
 import { remainingParentIncidentCount } from "@/lib/parent-attention";
 import { canCompactParentAccount } from "@/lib/parent-home-account";
 import { parentFamilyPaymentPanelVisible } from "@/lib/parent-family-payment-panel";
+import { paymentRefundDetails } from "@/lib/parent-payment-history";
 import { parentActivePaymentSummary, parentPaymentStatusMessage, parentPaymentStatusTitle, type ParentAccountPaymentBlocker, type ParentPendingPayment } from "@/lib/parent-payment-status";
 import { activeItemScrollDelta } from "@/lib/horizontal-active-item";
 import { revealFocusedPortalControl, scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
@@ -569,6 +570,8 @@ function paymentListLabel(payment: Payment, timeZone: string) {
       ? "Payment returned · Retry available"
       : "Payment returned";
   }
+  const refund = paymentRefundDetails(payment);
+  if (refund) return `${refund.label} · Original payment ${formatDateInTimeZone(payment.paidAt, timeZone)}`;
   if (isAchPaymentProcessing(payment)) return "Paid — processing · ACH";
   const activePayment = parentActivePaymentSummary(payment);
   if (activePayment) return parentPaymentStatusTitle(activePayment);
@@ -3301,9 +3304,10 @@ function ParentPortalWorkspaceView({
                   <div className="space-y-2">
                     {parentVisiblePayments.slice(0, 5).map((payment) => {
                       const returned = isReturnedStripePayment(payment);
+                      const refund = paymentRefundDetails(payment);
                       const completed = payment.status === "PAID" && !returned;
                       const provisionallyCredited = isAchPaymentProcessing(payment);
-                      const credited = completed || provisionallyCredited;
+                      const credited = (completed && !refund) || provisionallyCredited;
                       return (
                         <div key={payment.id} className="grid min-w-0 gap-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto]">
                           <div>
@@ -3313,7 +3317,7 @@ function ParentPortalWorkspaceView({
                             {completed && family ? (
                               <div className="mt-2">
                                 <PaymentReceiptPrintButton
-                                  buttonLabel="View / print receipt"
+                                  buttonLabel={refund ? "View / print original receipt" : "View / print receipt"}
                                   payment={{
                                     id: payment.id,
                                     amountCents: payment.amountCents,
@@ -3344,7 +3348,9 @@ function ParentPortalWorkspaceView({
                             ) : null}
                           </div>
                           <span className={credited ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
+                            {refund ? <span className="block text-xs">Original payment</span> : null}
                             {credited ? "−" : ""}{money(payment.amountCents)}
+                            {refund?.refundedCents != null ? <span className="block text-xs">Refunded {money(refund.refundedCents)}</span> : null}
                           </span>
                         </div>
                       );
@@ -3427,9 +3433,10 @@ function ParentPortalWorkspaceView({
               <div className="space-y-2">
                 {parentVisiblePayments.slice(0, 5).map((payment) => {
                   const returned = isReturnedStripePayment(payment);
+                  const refund = paymentRefundDetails(payment);
                   const completed = payment.status === "PAID" && !returned;
                   const provisionallyCredited = isAchPaymentProcessing(payment);
-                  const credited = completed || provisionallyCredited;
+                  const credited = (completed && !refund) || provisionallyCredited;
                   return (
                     <div
                       key={payment.id}
@@ -3443,7 +3450,7 @@ function ParentPortalWorkspaceView({
                         {completed && family ? (
                           <div className="mt-2">
                             <PaymentReceiptPrintButton
-                              buttonLabel="View / print receipt"
+                              buttonLabel={refund ? "View / print original receipt" : "View / print receipt"}
                               payment={{
                                 id: payment.id,
                                 amountCents: payment.amountCents,
@@ -3480,8 +3487,10 @@ function ParentPortalWorkspaceView({
                             : "font-medium text-muted-foreground"
                         }
                       >
+                        {refund ? <span className="block text-xs">Original payment</span> : null}
                         {credited ? "−" : ""}
                         {money(payment.amountCents)}
+                        {refund?.refundedCents != null ? <span className="block text-xs">Refunded {money(refund.refundedCents)}</span> : null}
                       </span>
                     </div>
                   );
@@ -3901,9 +3910,11 @@ function ParentPortalWorkspaceView({
                 <ChevronDown className="size-5 shrink-0 text-primary transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
               </summary>
               <div className="mt-4 space-y-3 border-t pt-4">
-                <p className="sr-only">
-                  Review invoice dates and payment status. The balance above is
-                  the current amount due from your family.
+                <p className="text-sm text-muted-foreground">
+                  Invoice totals show the amounts billed on each invoice.{" "}
+                  {parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed
+                    ? "During balance review, the family amount due is still being confirmed."
+                    : "Your current account balance reflects recorded payments and credits."}
                 </p>
             {invoices.map((sourceInvoice) => {
               const invoice = { ...sourceInvoice, pendingPayment: paymentRecovery.pendingInvoice(sourceInvoice.id) ?? sourceInvoice.pendingPayment };

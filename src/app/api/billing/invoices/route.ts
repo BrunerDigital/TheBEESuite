@@ -45,6 +45,8 @@ import {
   singleInvoiceFamilyEligibilityError,
 } from "@/lib/prospective-family-billing";
 
+import { offlinePaymentExternalId, offlinePaymentPaidAt, offlinePaymentRequestId, offlinePaymentRequestIdentity } from "@/lib/offline-payment-request";
+
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
@@ -600,8 +602,12 @@ async function createAgencyPayment(user: CurrentBillingUser, body: Record<string
   );
 }
 
-async function manualFamilyPaymentExceedsVisibleBalance(familyId: string, amountCents: number) {
-  const account = await prisma.billingAccount.findUnique({
+async function manualFamilyPaymentExceedsVisibleBalance(
+  familyId: string,
+  amountCents: number,
+  client: Pick<Prisma.TransactionClient, "billingAccount"> = prisma,
+) {
+  const account = await client.billingAccount.findUnique({
     where: { familyId },
     select: {
       balanceCents: true,
@@ -650,17 +656,68 @@ async function settleOpenInvoicesForOfflinePayment(
   return appliedInvoiceIds;
 }
 
+class OfflinePaymentRequestConflictError extends Error {}
+
+async function findOfflinePaymentReceipt(
+  tx: Prisma.TransactionClient,
+  input: { billingAccountId: string; externalId: string },
+) {
+  const entry = await tx.ledgerEntry.findFirst({
+    where: { billingAccountId: input.billingAccountId, externalId: input.externalId,
+      sourceSystem: { in: ["bee_suite_manual_cash", "bee_suite_manual_check"] } },
+    include: { payment: true },
+  });
+  if (!entry) return null;
+  if (!entry.payment || entry.payment.billingAccountId !== input.billingAccountId) throw new Error("Offline payment receipt is incomplete.");
+  const fields = jsonObject(entry.payment.customFields);
+  const appliedInvoiceIds = Array.isArray(fields.appliedInvoiceIds)
+    ? fields.appliedInvoiceIds.filter((value): value is string => typeof value === "string")
+    : [];
+  return { ok: true, totalCents: entry.payment.amountCents, payment: entry.payment, entry, appliedInvoiceIds, alreadyRecorded: true };
+}
+
+class OfflinePaymentReceiptConflictError extends Error {
+  readonly receipt: NonNullable<Awaited<ReturnType<typeof findOfflinePaymentReceipt>>>;
+  constructor(receipt: NonNullable<Awaited<ReturnType<typeof findOfflinePaymentReceipt>>>) {
+    super("This request already recorded a payment with different details. Review that receipt before starting another payment.");
+    this.receipt = receipt;
+  }
+}
+
+async function offlinePaymentReplay(
+  tx: Prisma.TransactionClient,
+  input: { billingAccountId: string; externalId: string; fingerprint: string },
+) {
+  const receipt = await findOfflinePaymentReceipt(tx, input);
+  if (receipt && jsonObject(receipt.entry.metadata).requestFingerprint !== input.fingerprint) {
+    throw new OfflinePaymentReceiptConflictError(receipt);
+  }
+  return receipt;
+}
+
+async function recoverOfflinePaymentReceipt(user: CurrentBillingUser, body: Record<string, unknown>) {
+  const access = await assertFamilyAccess(user, clean(body.familyId));
+  if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+  const requestId = offlinePaymentRequestId(body.requestId);
+  if (!requestId) return NextResponse.json({ ok: false, error: "A valid payment request identity is required." }, { status: 400 });
+  const account = await prisma.billingAccount.findUnique({ where: { familyId: access.family.id }, select: { id: true } });
+  if (!account) return NextResponse.json({ ok: true, found: false });
+  const receipt = await findOfflinePaymentReceipt(prisma, { billingAccountId: account.id, externalId: offlinePaymentExternalId(account.id, requestId) });
+  // Absence is not proof that a delayed request cannot still commit. The client retains the identity.
+  return NextResponse.json({ ok: true, found: Boolean(receipt), receipt });
+}
+
 async function createManualCheckPayment(user: CurrentBillingUser, body: Record<string, unknown>) {
   const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
   const amountCents = amountCentsFromBody(body);
   if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Check payment amount is required." }, { status: 400 });
-  if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents)) {
-    return NextResponse.json({ ok: false, error: "Check payment cannot exceed the family-responsibility balance." }, { status: 409 });
-  }
+  const requestId = offlinePaymentRequestId(body.requestId);
+  if (!requestId) return NextResponse.json({ ok: false, error: "Refresh this billing page before recording the payment." }, { status: 400 });
   const checkNumber = clean(body.checkNumber);
   if (!checkNumber) return NextResponse.json({ ok: false, error: "Check number or reference is required." }, { status: 400 });
-  const paidAt = parseDate(body.paidAt);
+  const paidAt = offlinePaymentPaidAt(body.paidAt);
+  if (!paidAt) return NextResponse.json({ ok: false, error: "A valid check received date and time is required." }, { status: 400 });
   const description = clean(body.description) || `Check payment #${checkNumber}`;
   const notes = clean(body.notes);
 
@@ -670,16 +727,27 @@ async function createManualCheckPayment(user: CurrentBillingUser, body: Record<s
       update: {},
       create: { familyId: familyAccess.family.id, balanceCents: 0 },
     });
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "id" = ${account.id} FOR UPDATE`);
+    const identity = offlinePaymentRequestIdentity({
+      billingAccountId: account.id, requestId, method: "check", amountCents, paidAt,
+      reference: checkNumber, description, notes,
+    });
+    const replay = await offlinePaymentReplay(tx, { billingAccountId: account.id, ...identity });
+    if (replay) return replay;
+    if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents, tx)) {
+      throw new OfflinePaymentRequestConflictError("Check payment cannot exceed the family-responsibility balance.");
+    }
     const payment = await tx.payment.create({
       data: {
         billingAccountId: account.id,
         amountCents,
         status: PaymentStatus.PAID,
         provider: "manual_check",
-        externalIdPlaceholder: `check:${checkNumber}:${randomUUID()}`,
+        externalIdPlaceholder: identity.externalId,
         paidAt,
         customFields: {
           paymentType: "manual_check",
+          requestId,
           checkNumber,
           notes: notes || null,
           enteredBy: user.email,
@@ -702,8 +770,8 @@ async function createManualCheckPayment(user: CurrentBillingUser, body: Record<s
         balanceAfterCents: updatedAccount.balanceCents,
         effectiveAt: paidAt,
         sourceSystem: "bee_suite_manual_check",
-        externalId: `check:${payment.id}`,
-        metadata: { checkNumber, notes: notes || null, enteredBy: user.email },
+        externalId: identity.externalId,
+        metadata: { checkNumber, notes: notes || null, enteredBy: user.email, requestId, requestFingerprint: identity.fingerprint },
       },
     });
     const appliedInvoiceIds = await settleOpenInvoicesForOfflinePayment(tx, {
@@ -720,14 +788,20 @@ async function createManualCheckPayment(user: CurrentBillingUser, body: Record<s
       resourceId: payment.id,
       metadata: { familyId: familyAccess.family.id, amountCents, checkNumber },
     }, tx);
-    return { payment, entry, appliedInvoiceIds };
+    return { payment, entry, appliedInvoiceIds, alreadyRecorded: false };
+  }).catch((error: unknown) => {
+    if (error instanceof OfflinePaymentReceiptConflictError) return { error: error.message, receipt: error.receipt } as const;
+    if (error instanceof OfflinePaymentRequestConflictError) return { error: error.message, receipt: null } as const;
+    throw error;
   });
+  if ("error" in result) return NextResponse.json({ ok: false, error: result.error, receipt: result.receipt }, { status: 409 });
   return NextResponse.json({
     ok: true,
     totalCents: amountCents,
     payment: result.payment,
     entry: result.entry,
     appliedInvoiceIds: result.appliedInvoiceIds,
+    alreadyRecorded: result.alreadyRecorded,
   });
 }
 
@@ -736,10 +810,10 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
   const amountCents = amountCentsFromBody(body);
   if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Cash payment amount is required." }, { status: 400 });
-  if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents)) {
-    return NextResponse.json({ ok: false, error: "Cash payment cannot exceed the family-responsibility balance." }, { status: 409 });
-  }
-  const paidAt = parseDate(body.paidAt);
+  const requestId = offlinePaymentRequestId(body.requestId);
+  if (!requestId) return NextResponse.json({ ok: false, error: "Refresh this billing page before recording the payment." }, { status: 400 });
+  const paidAt = offlinePaymentPaidAt(body.paidAt);
+  if (!paidAt) return NextResponse.json({ ok: false, error: "A valid cash received date and time is required." }, { status: 400 });
   const reference = clean(body.reference);
   const notes = clean(body.notes);
   const description = clean(body.description) || "Cash payment";
@@ -750,16 +824,27 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
       update: {},
       create: { familyId: familyAccess.family.id, balanceCents: 0 },
     });
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "id" = ${account.id} FOR UPDATE`);
+    const identity = offlinePaymentRequestIdentity({
+      billingAccountId: account.id, requestId, method: "cash", amountCents, paidAt,
+      reference: reference, description, notes,
+    });
+    const replay = await offlinePaymentReplay(tx, { billingAccountId: account.id, ...identity });
+    if (replay) return replay;
+    if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents, tx)) {
+      throw new OfflinePaymentRequestConflictError("Cash payment cannot exceed the family-responsibility balance.");
+    }
     const payment = await tx.payment.create({
       data: {
         billingAccountId: account.id,
         amountCents,
         status: PaymentStatus.PAID,
         provider: "manual_cash",
-        externalIdPlaceholder: `cash:${randomUUID()}`,
+        externalIdPlaceholder: identity.externalId,
         paidAt,
         customFields: {
           paymentType: "manual_cash",
+          requestId,
           reference: reference || null,
           notes: notes || null,
           enteredBy: user.email,
@@ -782,8 +867,10 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
         balanceAfterCents: updatedAccount.balanceCents,
         effectiveAt: paidAt,
         sourceSystem: "bee_suite_manual_cash",
-        externalId: `cash:${payment.id}`,
+        externalId: identity.externalId,
         metadata: {
+          requestId,
+          requestFingerprint: identity.fingerprint,
           reference: reference || null,
           notes: notes || null,
           enteredBy: user.email,
@@ -808,14 +895,20 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
         reference: reference || null,
       },
     }, tx);
-    return { payment, entry, appliedInvoiceIds };
+    return { payment, entry, appliedInvoiceIds, alreadyRecorded: false };
+  }).catch((error: unknown) => {
+    if (error instanceof OfflinePaymentReceiptConflictError) return { error: error.message, receipt: error.receipt } as const;
+    if (error instanceof OfflinePaymentRequestConflictError) return { error: error.message, receipt: null } as const;
+    throw error;
   });
+  if ("error" in result) return NextResponse.json({ ok: false, error: result.error, receipt: result.receipt }, { status: 409 });
   return NextResponse.json({
     ok: true,
     totalCents: amountCents,
     payment: result.payment,
     entry: result.entry,
     appliedInvoiceIds: result.appliedInvoiceIds,
+    alreadyRecorded: result.alreadyRecorded,
   });
 }
 
@@ -1636,6 +1729,7 @@ async function POSTHandler(request: NextRequest) {
   if (mode === "batch") return createBatchInvoices(user, body);
   if (mode === "adjustment") return createLedgerAdjustment(user, body);
   if (mode === "agencyPayment") return createAgencyPayment(user, body);
+  if (mode === "offlinePaymentReceipt") return recoverOfflinePaymentReceipt(user, body);
   if (mode === "manualCheckPayment") return createManualCheckPayment(user, body);
   if (mode === "manualCashPayment") return createManualCashPayment(user, body);
   if (mode === "payrollDeductionPayment") return createPayrollDeductionPayment(user, body);

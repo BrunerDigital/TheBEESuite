@@ -72,6 +72,39 @@ export function resolveParentPortalPaymentFamilyScope(
   };
 }
 
+/** Read-only portal selection; never use this scope to authorize mutations or payments. */
+export function resolveParentPortalReadFamilyScope(
+  guardians: Array<{ id: string; familyId: string; currentChildCount?: number }>,
+  requestedFamilyId?: string | null,
+): ParentPortalFamilyScope {
+  const linkedFamilyIds = Array.from(new Set(guardians.map((guardian) => guardian.familyId)));
+  const currentFamilyIds = Array.from(new Set(
+    guardians
+      .filter((guardian) => (guardian.currentChildCount ?? 0) > 0)
+      .map((guardian) => guardian.familyId),
+  ));
+  const defaultFamilyIds = currentFamilyIds.length > 0 ? currentFamilyIds : linkedFamilyIds;
+  const selectedFamilyId = requestedFamilyId
+    ? linkedFamilyIds.includes(requestedFamilyId) ? requestedFamilyId : null
+    : defaultFamilyIds.length === 1 ? defaultFamilyIds[0] : null;
+  if (!selectedFamilyId) {
+    return {
+      ok: false,
+      reason: requestedFamilyId && linkedFamilyIds.length
+        ? "requested_family_not_linked"
+        : defaultFamilyIds.length ? "multiple_linked_families" : "no_linked_family",
+      familyIds: requestedFamilyId ? linkedFamilyIds : defaultFamilyIds,
+    };
+  }
+  return {
+    ok: true,
+    familyId: selectedFamilyId,
+    guardianIds: guardians
+      .filter((guardian) => guardian.familyId === selectedFamilyId)
+      .map((guardian) => guardian.id),
+  };
+}
+
 export function selectParentPortalCurrentGuardians<
   T extends { family: { _count: { children: number } } },
 >(guardians: T[]) {
@@ -124,6 +157,30 @@ export async function getParentPortalFamilyScope(userId: string, tenantId: strin
     },
   });
   return resolveParentPortalFamilyScope(guardians.map((guardian) => ({
+    id: guardian.id,
+    familyId: guardian.familyId,
+    currentChildCount: guardian.family._count.children,
+  })), requestedFamilyId);
+}
+
+/** Page reads include linked billing history; mutation and payment eligibility stay separate. */
+export async function getParentPortalReadFamilyScope(userId: string, tenantId: string, requestedFamilyId?: string | null) {
+  const tenantCenterIds = await getParentPortalTenantCenterIds(tenantId);
+  const guardians = await prisma.guardian.findMany({
+    where: { userId, family: parentPortalTenantFamilyWhere(tenantCenterIds) },
+    select: {
+      id: true,
+      familyId: true,
+      family: {
+        select: {
+          _count: {
+            select: { children: { where: currentlyEnrolledChildWhere() } },
+          },
+        },
+      },
+    },
+  });
+  return resolveParentPortalReadFamilyScope(guardians.map((guardian) => ({
     id: guardian.id,
     familyId: guardian.familyId,
     currentChildCount: guardian.family._count.children,

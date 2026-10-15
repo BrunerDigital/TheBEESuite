@@ -202,7 +202,16 @@ test("administrative directories and teacher rosters do not silently omit record
 test("billing mutations surface interrupted requests with a reconciliation-safe message", () => {
   assert.match(billing, /function runBillingTransition\(action: \(\) => Promise<void>\)/);
   assert.match(billing, /Review the current account and Stripe activity, if applicable, before trying the action again/);
-  assert.equal((billing.match(/runBillingTransition\(async \(\) =>/g) ?? []).length, 11);
+  const recoveryStart = billing.indexOf("  function recoverOfflineReceipt()");
+  const recoveryEnd = billing.indexOf("  function currentOfflineReceiptReview()", recoveryStart);
+  assert.ok(recoveryStart >= 0 && recoveryEnd > recoveryStart);
+  const receiptRecovery = billing.slice(recoveryStart, recoveryEnd);
+  const otherBillingActions = billing.slice(0, recoveryStart) + billing.slice(recoveryEnd);
+  assert.equal((otherBillingActions.match(/runBillingTransition\(async \(\) =>/g) ?? []).length, 11);
+  assert.equal((receiptRecovery.match(/runBillingTransition\(async \(\) =>/g) ?? []).length, 1);
+  assert.match(receiptRecovery, /mode: "offlinePaymentReceipt"/);
+  assert.match(receiptRecovery, /saved request identity is retained/);
+  assert.doesNotMatch(receiptRecovery, /manualCashPayment|manualCheckPayment|completeOfflineOperation/);
   assert.match(billing, /useUnsavedChangesGuard\(hasUncommittedBillingInput/);
   const billingNavigationGuard = readFileSync("src/components/use-unsaved-changes-guard.ts", "utf8");
   assert.match(billingNavigationGuard, /beforeunload/);

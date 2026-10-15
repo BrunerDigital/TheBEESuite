@@ -3,15 +3,17 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 test("director monthly tuition setup preserves cadence and a school-selected billing day", () => {
+  const mutations = readFileSync("src/lib/tuition-mutation.ts", "utf8");
   const plansRoute = readFileSync("src/app/api/operations/records/route.ts", "utf8");
   const assignmentRoute = readFileSync("src/app/api/billing/tuition-assignments/route.ts", "utf8");
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
   const scheduler = readFileSync("src/app/api/cron/tuition-billing/route.ts", "utf8");
 
-  assert.match(plansRoute, /requestedTuitionCadence \? normalizeBillingCadence\(requestedTuitionCadence\) : "weekly"/);
-  assert.match(plansRoute, /tuitionPlanRecordChanged\(existingTuitionPlan, data\)/);
-  assert.match(plansRoute, /path: \["tuitionPlanId"\], equals: id/);
-  assert.match(plansRoute, /Create a new rate so previously saved child rates remain unchanged/);
+  assert.match(plansRoute, /saveTuitionPlanInTransaction\(tx, user, body\)/);
+  assert.match(mutations, /requestedCadence \? normalizeBillingCadence\(requestedCadence\) : "weekly"/);
+  assert.match(mutations, /tuitionPlanRecordChanged\(existing, data\)/);
+  assert.match(mutations, /path: \["tuitionPlanId"\], equals: id/);
+  assert.match(mutations, /Create a new rate so previously saved child rates remain unchanged/);
   assert.match(assignmentRoute, /requestedCadence === "monthly"/);
   assert.match(assignmentRoute, /normalizeRecurringBillingDay\(body\.billingDay, cadence\)/);
   assert.match(assignmentRoute, /planCadence === "monthly" && cadence !== "monthly"/);
@@ -70,3 +72,4 @@ test("weekly-only parent and AI controls cannot convert or select monthly plans"
   assert.match(aiRoute, /normalizeBillingCadence\(plan\.cadence\) !== WEEKLY_TUITION_AUTOBILL_CADENCE/);
   assert.match(aiRoute, /set_weekly_tuition action requires a weekly tuition plan/);
 });
+

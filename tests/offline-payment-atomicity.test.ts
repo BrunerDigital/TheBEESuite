@@ -9,6 +9,6 @@ test("offline payment handlers commit or roll back financial records and audit t
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const report = JSON.parse(result.stdout) as { results: Array<{ name: string; status: string }> };
-  assert.equal(report.results.length, 11);
+  assert.equal(report.results.length, 29);
   assert.ok(report.results.every((scenario) => scenario.status === "passed"));
 });

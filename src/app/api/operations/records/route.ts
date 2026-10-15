@@ -14,7 +14,7 @@ import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard } from "@/lib/operations-guardrails";
 import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
-import { tuitionPlanIsArchived } from "@/lib/tuition-plan-archive";
+import { runTuitionMutation, saveTuitionPlanInTransaction, TuitionMutationError } from "@/lib/tuition-mutation";
 import { parseCalendarDateOrTimestamp } from "@/lib/date-guardrails";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
 import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, readStaffCompensation, staffCompensationCustomFields } from "@/lib/staff-compensation";
@@ -55,7 +55,6 @@ import {
   isCurrentlyEnrolledStatus,
   isEnrollmentPipelineStatus,
 } from "@/lib/enrollment-status";
-import { canSaveTuitionPlanAmount, normalizeBillingCadence, tuitionPlanRecordChanged } from "@/lib/billing-workflows";
 import {
   childBirthCustomFields,
   childBirthFormState,
@@ -2282,61 +2281,27 @@ async function POSTHandler(request: NextRequest) {
     if (!data.name || data.amountCents <= 0) return NextResponse.json({ ok: false, error: "Product name and amount are required." }, { status: 400 });
     result = id ? await prisma.product.update({ where: { id }, data }) : await prisma.product.create({ data });
   } else if (entity === "tuitionPlan") {
-    const requestedCenterId = clean(body.centerId);
-    let existingTuitionPlan: { centerId: string | null; name: string; ageGroup: string; cadence: string; amountCents: number } | null = null;
-    if (!requestedCenterId) {
-      return NextResponse.json({ ok: false, error: "School is required for every tuition plan." }, { status: 400 });
-    }
-    if (!canAccessCenter(user, requestedCenterId)) {
-      return NextResponse.json({ ok: false, error: "You do not have access to this school's tuition plans." }, { status: 403 });
-    }
-    if (id) {
-      const existing = await prisma.tuitionPlan.findUnique({
-        where: { id },
-        select: { centerId: true, name: true, ageGroup: true, cadence: true, amountCents: true },
+    try {
+      const saved = await runTuitionMutation(async (tx) => {
+        // Share rate/center locks with combined rate + assignment saves. The
+        // assigned-child check must not race with another request assigning it.
+        const saved = await saveTuitionPlanInTransaction(tx, user, body);
+        await writeAuditLog(user, {
+          centerId: saved.record.centerId,
+          action: `operations.tuitionPlan.${saved.rateMode}`,
+          resource: "tuitionPlan",
+          resourceId: saved.record.id,
+          metadata: { mode: saved.rateMode },
+        }, tx);
+        return saved;
       });
-      if (!existing) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
-      if (existing.centerId && existing.centerId !== requestedCenterId) {
-        return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
+      return NextResponse.json({ ok: true, entity, mode: saved.rateMode, record: saved.record }, { status: saved.rateMode === "created" ? 201 : 200 });
+    } catch (error) {
+      if (error instanceof TuitionMutationError) {
+        return NextResponse.json({ ok: false, error: error.message, ...(error.code ? { code: error.code } : {}) }, { status: error.status });
       }
-      existingTuitionPlan = existing;
-      const rateCenter = await prisma.center.findFirst({ where: { id: requestedCenterId, organization: { tenantId: user.tenantId } }, select: { customFields: true } });
-      if (!rateCenter) return NextResponse.json({ ok: false, error: "School not found for this tenant." }, { status: 404 });
-      if (tuitionPlanIsArchived(rateCenter.customFields, id)) return NextResponse.json({ ok: false, error: "Restore this archived rate before editing it." }, { status: 409 });
+      throw error;
     }
-    centerId = requestedCenterId;
-    const requestedTuitionCadence = clean(body.cadence);
-    const data = {
-      centerId: requestedCenterId,
-      name: clean(body.name),
-      ageGroup: clean(body.ageGroup) || "Preschool",
-      cadence: requestedTuitionCadence ? normalizeBillingCadence(requestedTuitionCadence) : "weekly",
-      amountCents: intValue(body.amountCents || Number(body.amountDollars) * 100),
-    };
-    if (id && existingTuitionPlan && tuitionPlanRecordChanged(existingTuitionPlan, data)) {
-      const assignedChild = await prisma.child.findFirst({
-        where: {
-          family: { centerId: requestedCenterId },
-          customFields: { path: ["tuitionPlanId"], equals: id },
-        },
-        select: { id: true },
-      });
-      if (assignedChild) {
-        return NextResponse.json({
-          ok: false,
-          code: "TUITION_PLAN_ASSIGNED_CREATE_NEW",
-          error: "This rate is already assigned to a child. Create a new rate so previously saved child rates remain unchanged.",
-        }, { status: 409 });
-      }
-    }
-    const zeroDollarVoucher = body.zeroDollarVoucher === true;
-    if (!data.name || !canSaveTuitionPlanAmount(data.amountCents, zeroDollarVoucher)) {
-      return NextResponse.json({
-        ok: false,
-        error: "Plan name and a positive amount are required unless this is explicitly marked as a $0 CCDF or voucher rate.",
-      }, { status: 400 });
-    }
-    result = id ? await prisma.tuitionPlan.update({ where: { id }, data }) : await prisma.tuitionPlan.create({ data });
   } else if (entity === "review") {
     const requestedCenterId = clean(body.centerId) || null;
     if (requestedCenterId && !canAccessCenter(user, requestedCenterId)) {
@@ -2883,3 +2848,4 @@ async function DELETEHandler(request: NextRequest) {
 
 export const POST = withApiLogging("POST", POSTHandler);
 export const DELETE = withApiLogging("DELETE", DELETEHandler);
+

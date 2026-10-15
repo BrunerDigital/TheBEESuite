@@ -14,7 +14,7 @@ test("the parent portal places authoritative account activity ahead of invoice h
   assert.match(source, /ledgerEntries\.map\(\(entry\)/);
   assert.doesNotMatch(source, /ledgerEntries\.slice\(/);
   assert.match(source, /Charges, credits, payments, and adjustments included in your\s+family balance/i);
-  assert.match(source, /Review invoice dates and payment status/);
+  assert.match(source, /Invoice totals show the amounts billed on each invoice/);
   assert.match(source, /This is the amount currently due from your family/);
   assert.doesNotMatch(source, /balanceAfterCents/);
   assert.doesNotMatch(source, /latestAccountLedgerEntry\.amountCents|money\(entry\.amountCents\)/);
@@ -133,7 +133,9 @@ test("the parent portal query paginates the family ledger with a stable bounded 
   assert.match(parentPortal, /ledgerEntries\.slice\(0, PARENT_LEDGER_PAGE_SIZE\)/);
   assert.match(parentPortal, /hasNext:\s*\(billingAccount\?\.ledgerEntries\.length \?\? 0\) > PARENT_LEDGER_PAGE_SIZE/);
   assert.match(parentPortal, /parentVisibleBillingBalanceCents/);
-  assert.match(parentPortal, /NOT:\s*\{ provider: AGENCY_LEDGER_SOURCE_SYSTEM \}/);
+  assert.match(parentPortal, /where: parentPaymentHistoryWhere/);
+  const paymentHistory = readFileSync("src/lib/parent-payment-history.ts", "utf8");
+  assert.match(paymentHistory, /NOT:\s*\{ provider: AGENCY_LEDGER_SOURCE_SYSTEM \}/);
 });
 
 test("the parent portal keeps latest activity accurate while browsing older ledger pages", () => {

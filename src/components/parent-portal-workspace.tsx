@@ -691,7 +691,7 @@ export function ParentPortalWorkspace(props: Props) {
   const [paymentCheckoutMethod, setPaymentCheckoutMethod] =
     useState<PaymentCheckoutMethod>(null);
   const router = useRouter();
-  const paymentRecovery = useParentPaymentRecovery(familyId, parentPortalRequest, () => router.refresh(), props.accountPaymentBlocker);
+  const paymentRecovery = useParentPaymentRecovery(familyId, parentPortalRequest, () => router.refresh(), props.accountPaymentBlocker, `${activeView}:${familySection}`);
 
   return (
     <ParentPortalWorkspaceView
@@ -3016,7 +3016,8 @@ function ParentPortalWorkspaceView({
                 <AlertDescription className="min-w-0 break-words">
                   <p>{paymentRecovery.allSettled ? "Your earlier payment is recorded. Open the updated account before starting a new payment; do not repeat the earlier amount." : parentPaymentStatusMessage(accountPaymentBlocker, "account")}</p>
                   {accountPaymentBlocker.count > 1 ? <p>{accountPaymentBlocker.count} active payment attempts need confirmation.</p> : null}
-                  <Button type="button" variant="outline" className="mt-2 min-h-11 h-auto whitespace-normal" disabled={paymentRecovery.isRefreshing || paymentRecovery.isSubmitting} aria-busy={paymentRecovery.isRefreshing} onClick={() => void paymentRecovery.refresh()}>{paymentRecovery.isRefreshing ? "Refreshing status…" : "Refresh payment status"}</Button>
+                  <Button type="button" variant="outline" className="mt-2 min-h-11 h-auto whitespace-normal" disabled={paymentRecovery.isRefreshing || paymentRecovery.isSubmitting || paymentRecovery.isResuming} aria-busy={paymentRecovery.isRefreshing} onClick={() => void paymentRecovery.refresh()}>{paymentRecovery.isRefreshing ? "Refreshing status…" : "Refresh payment status"}</Button>
+                  {!paymentsReadOnly && !checkoutBlocked && accountPaymentBlocker.phase === "payment_pending" && accountPaymentBlocker.blocksInvoicePayments && accountPaymentBlocker.count === 1 ? <Button type="button" variant="outline" className="mt-2 ml-2 min-h-11 h-auto whitespace-normal" disabled={paymentRecovery.isRefreshing || paymentRecovery.isSubmitting || paymentRecovery.isResuming} aria-busy={paymentRecovery.isResuming} onClick={() => void paymentRecovery.resumeCheckout()}>{paymentRecovery.isResuming ? "Checking existing checkout…" : "Reopen existing checkout"}</Button> : null}
                   {paymentRecovery.allSettled ? <a className={buttonVariants({ variant: "outline", className: "mt-2 ml-2 min-h-11 h-auto whitespace-normal" })} href={workspaceHref("payments")}>Review updated balance</a> : null}
                   {paymentRecovery.refreshMessage ? <p role="status" className="mt-2">{paymentRecovery.refreshMessage}</p> : null}
                 </AlertDescription>
@@ -5017,4 +5018,5 @@ function ParentPortalWorkspaceView({
     </div>
   );
 }
+
 

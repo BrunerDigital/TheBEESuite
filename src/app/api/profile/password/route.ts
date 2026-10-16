@@ -14,7 +14,7 @@ function clean(value: unknown) {
 }
 
 async function POSTHandler(request: NextRequest) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ accessPurpose: "account_security" });
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }

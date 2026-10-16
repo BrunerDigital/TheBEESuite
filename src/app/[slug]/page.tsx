@@ -1,3 +1,4 @@
+import { restrictedFteCenterDisplay, restrictedFtePrefill } from "@/lib/fte-only-projection";
 import { readAutomationPage } from "@/lib/automation-page";
 import { AuditHistoryError, parseAuditHistoryFilters } from "@/lib/audit-history";
 import { readAuditHistoryPage } from "@/lib/audit-history-query";
@@ -7,6 +8,8 @@ import { notFound, redirect } from "next/navigation";
 import { tuitionPlanIsArchived } from "@/lib/tuition-plan-archive";
 import type { Metadata } from "next";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
+import { isFteOnlyUser } from "@/lib/application-access";
+import { FteOnlyShell } from "@/components/fte-only-shell";
 import { AppShell } from "@/components/app-shell";
 import { AppReviewScopeBlocked } from "@/components/app-review-scope-blocked";
 import { ConsolidatedWorkspaceNav } from "@/components/consolidated-workspace-nav";
@@ -76,7 +79,7 @@ import { aiSuggestionWhereForViewer, tenantIdsFromAiPromptContext } from "@/lib/
 import { canViewPlatformPaymentTelemetry, stripeWebhookErrorWhereForViewer, stripeWebhookWhereForViewer } from "@/lib/platform-telemetry-scope";
 import { announcementWhereForViewer, parentAnnouncementAudienceWhere } from "@/lib/announcement-scope";
 import { readAnnouncementPage } from "@/lib/announcement-page";
-import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, messageCenterIdsForUser, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageFteReporting, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, messageCenterIdsForUser, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { accountDeletionFingerprint } from "@/lib/account-deletion-policy";
 import {
   APP_REVIEW_TEACHER_CONTACT,
@@ -1557,12 +1560,12 @@ async function renderLivePage(
     return (
       <FteReportsPage
         data={{
-          canManageFte: canManageOperations(user),
+          canManageFte: canManageFteReporting(user),
           canApproveFte: isExecutiveFteManager(user.role),
           selection,
           writableCenterIds,
           mode: tenantWide ? "executive" : "director",
-          centers,
+          centers: isFteOnlyUser(user) ? centers.map(restrictedFteCenterDisplay) : centers,
           stats: {
             centers: centers.length,
             submittedFteReports: fteReports.length,
@@ -1587,7 +1590,7 @@ async function renderLivePage(
           centerSnapshots: trend.centerSnapshots,
           fte,
           fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity, locationData: centerLocationData(center) })),
-          ftePrefills,
+          ftePrefills: isFteOnlyUser(user) ? ftePrefills.map(restrictedFtePrefill) : ftePrefills,
           fteReports: fteReports.map(serializeFteReport),
           exportHref: "/api/fte-reports?format=csv",
         }}
@@ -7313,7 +7316,7 @@ export async function renderAuthenticatedModulePage(
   const authenticationNextPath = terminalStoreReturn
     ? `/terminal-store?purchase=${encodeURIComponent(terminalStoreReturn)}`
     : pathWithSearchParams(`/${slug}`, resolvedSearchParams);
-  const user = await getCurrentUser({ allowPasswordResetRequired: true });
+  const user = await getCurrentUser({ allowPasswordResetRequired: true, ...(slug === "fte-reports" ? { accessPurpose: "fte_reporting" as const } : {}) });
   if (!user) {
     redirect(loginHrefForNextPath(authenticationNextPath));
   }
@@ -7396,6 +7399,7 @@ export async function renderAuthenticatedModulePage(
   const allowedViews = (entries: ReadonlyArray<readonly [string, string]>) => entries.filter(([, moduleSlug]) => canAccessModule(user, moduleSlug)).map(([view]) => view);
   const livePage = await renderLivePage(effectiveSlug, user, resolvedSearchParams);
   if (livePage) {
+    if (isFteOnlyUser(user)) return <FteOnlyShell currentUser={user}>{livePage}</FteOnlyShell>;
     return <AppShell currentUser={user}>
       {slug === "crm-leads" ? <ConsolidatedWorkspaceNav workspace="enrollment" activeView={enrollmentView} /> : null}
       {slug === "campaigns" ? <ConsolidatedWorkspaceNav workspace="growth" activeView={growthView} /> : null}

@@ -1,7 +1,7 @@
 import { isClosedSchoolHistoryWorkspace, schoolHistoryStatusWhere } from "@/lib/workspace-selection";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
-import { canManageOperations, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { canManageFteReporting, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import {
   ageGroupTotal,
@@ -221,11 +221,11 @@ async function forwardToFteSheet(row: GoogleSheetValue[], tenantId: string | nul
 }
 
 async function GETHandler(request: NextRequest) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ accessPurpose: "fte_reporting" });
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
-  if (!canManageOperations(user) && !isClosedSchoolHistoryWorkspace(user.workspace)) {
+  if (!canManageFteReporting(user) && !isClosedSchoolHistoryWorkspace(user.workspace)) {
     return NextResponse.json({ ok: false, error: "FTE reporting is not allowed for this role." }, { status: 403 });
   }
 
@@ -319,11 +319,11 @@ async function GETHandler(request: NextRequest) {
 }
 
 async function POSTHandler(request: NextRequest) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ accessPurpose: "fte_reporting" });
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
-  if (!canManageOperations(user)) {
+  if (!canManageFteReporting(user)) {
     return NextResponse.json({ ok: false, error: "FTE reporting is not allowed for this role." }, { status: 403 });
   }
 

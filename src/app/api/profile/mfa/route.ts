@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   if (request.headers.get("origin") !== new URL(request.url).origin || !request.headers.get("content-type")?.startsWith("application/json")) {
     return NextResponse.json({ ok: false, error: "Open account security in The BEE Suite to continue." }, { status: 403, headers });
   }
-  const user = await getCurrentUser({ allowMfaEnrollment: true });
+  const user = await getCurrentUser({ allowMfaEnrollment: true, accessPurpose: "account_security" });
   if (!user) return NextResponse.json({ ok: false, error: "Sign in to manage your authenticators." }, { status: 401, headers });
   if (appReviewReservedIdentityKind(user.email)) return NextResponse.json({ ok: false, error: "Shared App Review account security is managed by the administrator." }, { status: 403, headers });
   const rate = await checkPersistentRateLimit({ key: `profile-mfa:${requestIp(request.headers)}:${user.id}`, limit: 12, windowMs: 15 * 60 * 1000 });

@@ -69,7 +69,25 @@ async function POSTHandler(request: NextRequest) {
       verifiedEmail = verified.email;
     }
 
-    const recoveryIdentity = await getSupabaseAuthEmailForAccessToken(resetAccessToken);
+    const recoveryIdentity = await getSupabaseAuthEmailForAccessToken(resetAccessToken).catch((error) => {
+      logOperationalError("auth.reset_password.identity_lookup_unavailable", error);
+      return { ok: false as const, status: 503 };
+    });
+    if (!recoveryIdentity.ok && (recoveryIdentity.status === 429 || recoveryIdentity.status >= 500)) {
+      if (claimedSetupTokenId) await releaseParentPortalSetupToken(claimedSetupTokenId);
+      // Verification already consumed the one-time link. Reuse the existing
+      // bounded retry credential, but always recheck provider identity on retry.
+      const nextRetryToken = tokenHash && verifiedEmail
+        ? recoveryRetryToken || sealPasswordRecoveryRetry({ accessToken: resetAccessToken, tokenHash, email: verifiedEmail }) : undefined;
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Password reset service is temporarily unavailable. Please wait a moment and try again.",
+          ...(nextRetryToken ? { recoveryRetryToken: nextRetryToken } : {}),
+        },
+        { status: recoveryIdentity.status === 429 ? 429 : 503, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
     if (!recoveryIdentity.ok || (verifiedEmail && recoveryIdentity.email !== verifiedEmail)) {
       if (claimedSetupTokenId) await releaseParentPortalSetupToken(claimedSetupTokenId);
       return NextResponse.json(

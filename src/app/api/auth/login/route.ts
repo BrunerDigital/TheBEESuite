@@ -1,3 +1,4 @@
+import { readApplicationAccess, restrictedFteNextPath } from "@/lib/application-access";
 import { isSchoolOwnerAccount } from "@/lib/school-owner-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -102,8 +103,12 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Your account security changed during sign-in. Please sign in again." }, { status: 409 });
   }
 
+  const applicationAccess = readApplicationAccess(user.customFields, user.role);
+  if (applicationAccess.mode === "blocked") {
+    return NextResponse.json({ ok: false, error: "Account access requires administrator review." }, { status: 403, headers: { "Cache-Control": "no-store" } });
+  }
   const nextPath = sessionMeetsMfaPolicy(user.role, verified.mfaVerified)
-    ? resolvePortalPostLoginPath({ role: user.role, requestedNext: isSchoolOwnerAccount(user.role, user.customFields) && (!body.next || body.next === "/dashboard") ? "/owner" : body.next, portal: body.loginPortal })
+    ? applicationAccess.mode === "fte_only" ? restrictedFteNextPath(body.next) : resolvePortalPostLoginPath({ role: user.role, requestedNext: isSchoolOwnerAccount(user.role, user.customFields) && (!body.next || body.next === "/dashboard") ? "/owner" : body.next, portal: body.loginPortal })
     : "/account/security";
   const userAgent = cleanUserAgent(request.headers.get("user-agent"));
   const appMode = normalizeDeviceAppMode(body.appMode, nextPath);

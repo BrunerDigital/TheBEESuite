@@ -96,3 +96,47 @@ test("unsubmitted ACH is resumable without provisional credit or a new payment",
   assert.equal(parentPaymentStatus(snapshot.payments).accountPaymentBlocker?.phase, "payment_pending");
   assert.ok(parentCheckoutResumeReceipt(snapshot, session));
 });
+
+for (const collectableCents of [0, 500]) test(`explicit advance checkout resumes above collectable ${collectableCents}`, async () => {
+  const { snapshot, session } = fixture(); snapshot.collectableCents = collectableCents;
+  (snapshot.payments[0].customFields as Record<string, unknown>).advancePayment = "true";
+  ((session.raw as Record<string, unknown>).metadata as Record<string, unknown>).advancePayment = "true";
+  let reads = 0;
+  assert.ok(await resumeParentCheckout({ read: async () => { reads++; return structuredClone(snapshot); }, retrieve: async () => ({ ok: true, session }) }));
+  assert.equal(reads, 2); assert.equal(snapshot.payments[0].status, "DRAFT");
+});
+for (const intent of [undefined, "false", true, "TRUE", 1]) test(`ordinary or malformed advance intent ${String(intent)} cannot exceed zero balance`, async () => {
+  const { snapshot } = fixture(); snapshot.collectableCents = 0;
+  (snapshot.payments[0].customFields as Record<string, unknown>).advancePayment = intent;
+  assert.equal(await resumeParentCheckout({ read: async () => snapshot, retrieve: async () => { throw Error("must not reach provider"); } }), null);
+});
+for (const providerIntent of [undefined, "false", true]) test(`advance checkout requires exact provider intent ${String(providerIntent)}`, () => {
+  const { snapshot, session } = fixture(); snapshot.collectableCents = 0;
+  (snapshot.payments[0].customFields as Record<string, unknown>).advancePayment = "true";
+  ((session.raw as Record<string, unknown>).metadata as Record<string, unknown>).advancePayment = providerIntent;
+  assert.equal(parentCheckoutResumeReceipt(snapshot, session), null);
+});
+test("advance intent removed during retrieval remains held", async () => {
+  const { snapshot, session } = fixture(); snapshot.collectableCents = 0;
+  (snapshot.payments[0].customFields as Record<string, unknown>).advancePayment = "true";
+  ((session.raw as Record<string, unknown>).metadata as Record<string, unknown>).advancePayment = "true";
+  let reads = 0;
+  assert.equal(await resumeParentCheckout({ read: async () => { const s = structuredClone(snapshot); if (++reads === 2) (s.payments[0].customFields as Record<string, unknown>).advancePayment = "false"; return s; }, retrieve: async () => ({ ok: true, session }) }), null);
+});
+for (const intent of ["true", undefined, "false", true]) test(`expanded advance intent requires exact proof ${String(intent)} (${typeof intent})`, () => {
+  const { snapshot, session } = fixture(); snapshot.collectableCents = 0;
+  (snapshot.payments[0].customFields as Record<string, unknown>).advancePayment = "true";
+  const raw = session.raw as Record<string, unknown>, metadata = raw.metadata as Record<string, unknown>;
+  metadata.advancePayment = "true";
+  session.paymentIntentId = "pi_test"; session.paymentIntentStatus = "requires_payment_method";
+  raw.payment_intent = { id: "pi_test", object: "payment_intent", currency: "usd", amount: 1000, customer: "cus_synthetic123", status: "requires_payment_method", metadata: { ...metadata, advancePayment: intent } };
+  assert.equal(Boolean(parentCheckoutResumeReceipt(snapshot, session)), intent === "true");
+});
+test("verified advance checkout preserves explicit intent when collectible balance falls to zero", async () => {
+  const { snapshot, session } = fixture(); snapshot.collectableCents = 500;
+  (snapshot.payments[0].customFields as Record<string, unknown>).advancePayment = "true";
+  ((session.raw as Record<string, unknown>).metadata as Record<string, unknown>).advancePayment = "true";
+  let reads = 0;
+  assert.ok(await resumeParentCheckout({ read: async () => { const s = structuredClone(snapshot); if (++reads === 2) s.collectableCents = 0; return s; }, retrieve: async () => ({ ok: true, session }) }));
+  assert.equal(reads, 2);
+});

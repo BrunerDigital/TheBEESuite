@@ -32,8 +32,8 @@ export function parentCheckoutResumeCandidate(snapshot: ParentCheckoutResumeSnap
     || !["ach", "card", "link"].includes(String(fields.requestedPaymentMethodCategory))
     || payment.billingAccountId !== snapshot.topology.billingAccountId
     || !Number.isSafeInteger(payment.amountCents) || payment.amountCents <= 0
-    // If the balance changed, require school review rather than an accidental overpayment.
-    || payment.amountCents > snapshot.collectableCents
+    // Only the original explicit advance-payment intent permits excess household credit.
+    || (fields.advancePayment !== "true" && payment.amountCents > snapshot.collectableCents)
     || fields.stripeCustomerId !== snapshot.customerId
     || fields.stripeConnectedAccountId !== snapshot.topology.connectedAccountId
     || fields.stripeCustomerConnectedAccountId !== snapshot.topology.connectedAccountId
@@ -52,6 +52,8 @@ export function parentCheckoutResumeReceipt(snapshot: ParentCheckoutResumeSnapsh
     || session.url !== raw.url || raw.status !== "open" || raw.payment_status !== "unpaid"
     || (session.paymentIntentId ? session.paymentIntentStatus !== "requires_payment_method" : Boolean(session.paymentIntentStatus))
     || Boolean(fields.stripePaymentIntentId) && fields.stripePaymentIntentId !== session.paymentIntentId
+    || fields.advancePayment === "true" && (metadata.advancePayment !== "true"
+      || session.paymentIntentId && jsonRecord(jsonRecord(raw.payment_intent).metadata).advancePayment !== "true")
     || typeof raw.expires_at !== "number" || !Number.isSafeInteger(raw.expires_at) || raw.expires_at * 1000 <= now.getTime()
     || !familyCheckoutSessionIdentityMatches({ session, sessionId, paymentId: payment.id, customerId: snapshot.customerId!,
       topology: snapshot.topology, originalPrincipalCents: payment.amountCents, invoiceNumber: `${snapshot.familyName} family payment` })

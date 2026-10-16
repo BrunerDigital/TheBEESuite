@@ -1,3 +1,4 @@
+import { applicationAccessPurposeAllowed, readApplicationAccess, restrictedFteCenterIds, isFteOnlyUser, type ApplicationAccessPurpose } from "@/lib/application-access";
 import { isSchoolOwnerAccount } from "@/lib/school-owner-access";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { sessionMeetsMfaPolicy } from "@/lib/mfa-policy";
@@ -53,6 +54,7 @@ export type CurrentUser = {
   accessScope: "platform" | "tenant" | "scoped" | "center" | "none";
   accessGrantCount: number;
   isSchoolOwner?: boolean;
+  applicationAccess?: "fte_only";
   profilePhotoUrl: string | null;
   branding: WorkspaceBranding;
   timeZone?: string;
@@ -124,6 +126,10 @@ type ActiveAccessGrant = {
   ownerGroupId: string | null;
   centerId: string | null;
   scopeType: string;
+  role?: UserRole;
+  isActive?: boolean;
+  startsAt?: Date | null;
+  endsAt?: Date | null;
 };
 
 function unique(values: string[]) {
@@ -270,7 +276,7 @@ async function sessionDeviceIsActive(session: AppSession, tenantId: string) {
   return true;
 }
 
-export async function getCurrentUser(options: { allowPasswordResetRequired?: boolean; allowMfaEnrollment?: boolean } = {}): Promise<CurrentUser | null> {
+export async function getCurrentUser(options: { allowPasswordResetRequired?: boolean; allowMfaEnrollment?: boolean; accessPurpose?: ApplicationAccessPurpose } = {}): Promise<CurrentUser | null> {
   const session = await getSession();
   if (!session) return null;
   const now = new Date();
@@ -321,12 +327,19 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
           ownerGroupId: true,
           centerId: true,
           scopeType: true,
+          role: true,
+          isActive: true,
+          startsAt: true,
+          endsAt: true,
         },
       },
     },
   });
 
   if (!user) return null;
+  const applicationAccess = readApplicationAccess(user.customFields, user.role);
+  // Purpose is a fixed server call-site capability, never request or session input.
+  if (!applicationAccessPurposeAllowed(applicationAccess, options.accessPurpose)) return null;
   if (!sessionMatchesCurrentVersion(session, user.sessionVersion)) return null;
   if (!options.allowMfaEnrollment && !sessionMeetsMfaPolicy(user.role, session.mfaVerified)) return null;
   if (!(await sessionDeviceIsActive(session, user.tenantId))) return null;
@@ -352,7 +365,10 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
   let accessScope: CurrentUser["accessScope"] = profileCenterIds.length ? "center" : "none";
   const activeGrants = user.accessGrants as ActiveAccessGrant[];
 
-  if (user.role === UserRole.PLATFORM_OWNER) {
+  if (applicationAccess.mode === "fte_only") {
+    centerIds = restrictedFteCenterIds(applicationAccess, user.tenantId, activeGrants, now);
+    accessScope = centerIds.length ? "scoped" : "none";
+  } else if (user.role === UserRole.PLATFORM_OWNER) {
     const allCenters = await prisma.center.findMany({ select: { id: true } });
     centerIds = allCenters.map((center) => center.id);
     accessScope = "platform";
@@ -382,14 +398,17 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     accessScope = "tenant";
   }
 
-  centerIds = hasProfileCenterAssignment
+  centerIds = applicationAccess.mode !== "fte_only" && hasProfileCenterAssignment
     ? [profileCenterIds[0], ...centerIds.filter((centerId) => centerId !== profileCenterIds[0]).sort()]
     : [...centerIds].sort();
   const authorizedCenterIds = [...centerIds];
 
   const authorizedCenters = authorizedCenterIds.length
     ? await prisma.center.findMany({
-        where: { id: { in: authorizedCenterIds } },
+        where: {
+          id: { in: authorizedCenterIds },
+          ...(applicationAccess.mode === "fte_only" ? { organization: { tenantId: user.tenantId }, status: { in: ["active", "trial_setup", "paused"] } } : {}),
+        },
         orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
         select: {
           id: true,
@@ -419,6 +438,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
         },
       })
     : [];
+  if (applicationAccess.mode === "fte_only" && options.accessPurpose !== "account_security" && !authorizedCenters.length) return null;
   const workspace = resolveWorkspaceState({
     role: user.role,
     authorizedCenters: authorizedCenters.map((center) => ({
@@ -432,7 +452,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
       status: center.status,
     })),
     requestedSelection: session.workspaceSelection,
-    schoolOwner: isSchoolOwnerAccount(user.role, user.customFields),
+    schoolOwner: applicationAccess.mode === "fte_only" || isSchoolOwnerAccount(user.role, user.customFields),
   });
   const selectableCenterIds = workspace.options.map((center) => center.id);
   centerIds = effectiveCenterIdsForWorkspace(workspace, selectableCenterIds);
@@ -472,7 +492,8 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     organizationId: effectiveOrganizationId,
     mustResetPassword: user.mustResetPassword,
     centerIds,
-    authorizedCenterIds,
+    authorizedCenterIds: applicationAccess.mode === "fte_only" ? authorizedCenters.map((center) => center.id) : authorizedCenterIds,
+    ...(applicationAccess.mode === "fte_only" ? { applicationAccess: "fte_only" as const } : {}),
     primaryCenterId: centerIds[0] ?? null,
     assignedClassroomId: user.staffProfile?.classroomId ?? null,
     deviceSessionId: session.deviceSessionId ?? null,
@@ -559,7 +580,8 @@ export async function requireCurrentUser() {
   return user;
 }
 
-export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "accessScope" | "workspace">>) {
+export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "accessScope" | "workspace" | "applicationAccess">>) {
+  if (isFteOnlyUser(user)) return false;
   if (user.workspace) {
     return user.workspace.mode === "all"
       && (user.accessScope === "platform" || user.accessScope === "tenant")
@@ -571,10 +593,11 @@ export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pi
 }
 
 export function canAdministerAllCenters(
-  user: Pick<CurrentUser, "role" | "centerIds"> & Partial<Pick<CurrentUser, "accessScope" | "authorizedCenterIds">> & {
+  user: Pick<CurrentUser, "role" | "centerIds"> & Partial<Pick<CurrentUser, "accessScope" | "authorizedCenterIds" | "applicationAccess">> & {
     workspace?: { mode?: WorkspaceState["mode"] };
   },
 ) {
+  if (isFteOnlyUser(user)) return false;
   const hasTenantAuthority = (user.accessScope === "platform" || user.accessScope === "tenant")
     && canUseTenantWideAccessRole(user.role);
   if (!hasTenantAuthority) return false;
@@ -633,47 +656,55 @@ export function canAccessCenter(user: Pick<CurrentUser, "role" | "accessScope" |
 }
 
 export function canAdministerCenter(
-  user: Pick<CurrentUser, "centerIds"> & Partial<Pick<CurrentUser, "authorizedCenterIds">> & {
+  user: Pick<CurrentUser, "centerIds"> & Partial<Pick<CurrentUser, "authorizedCenterIds" | "applicationAccess">> & {
     workspace?: { mode?: WorkspaceState["mode"] };
   },
   centerId: string,
 ) {
+  if (isFteOnlyUser(user)) return false;
   if (user.workspace?.mode === "center") {
     return user.centerIds.includes(centerId);
   }
   return (user.authorizedCenterIds ?? user.centerIds).includes(centerId);
 }
 
-export function canManageCrmLeads(user: Pick<CurrentUser, "role">) {
-  return leadWriteRoles.has(user.role);
+export function canManageCrmLeads(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "applicationAccess">>) {
+  return !isFteOnlyUser(user) && leadWriteRoles.has(user.role);
 }
 
-export function canViewCrmLeads(user: Pick<CurrentUser, "role">) {
-  return leadReadRoles.has(user.role);
+export function canViewCrmLeads(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "applicationAccess">>) {
+  return !isFteOnlyUser(user) && leadReadRoles.has(user.role);
 }
 
-export function canManageOperations(user: Pick<CurrentUser, "role">) {
-  return operationsWriteRoles.has(user.role);
+export function canManageOperations(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "applicationAccess">>) {
+  return !isFteOnlyUser(user) && operationsWriteRoles.has(user.role);
 }
 
-export function canManageStaffCompensation(user: Pick<CurrentUser, "role">) {
-  return operationsWriteRoles.has(user.role);
+export function canManageFteReporting(user: Pick<CurrentUser, "role" | "centerIds"> & Partial<Pick<CurrentUser, "applicationAccess">>) {
+  return isFteOnlyUser(user)
+    ? user.role === UserRole.CENTER_DIRECTOR && user.centerIds.length > 0
+    : canManageOperations(user);
 }
 
-export function canManageClassroomTasks(user: Pick<CurrentUser, "role">) {
-  return teacherWriteRoles.has(user.role);
+export function canManageStaffCompensation(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "applicationAccess">>) {
+  return !isFteOnlyUser(user) && operationsWriteRoles.has(user.role);
+}
+
+export function canManageClassroomTasks(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "applicationAccess">>) {
+  return !isFteOnlyUser(user) && teacherWriteRoles.has(user.role);
 }
 
 export function canManageChildInClassroom(
-  user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "assignedClassroomId">>,
+  user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "assignedClassroomId" | "applicationAccess">>,
   classroomId: string | null | undefined,
 ) {
+  if (isFteOnlyUser(user)) return false;
   if (user.role !== UserRole.TEACHER) return true;
   return Boolean(classroomId && user.assignedClassroomId === classroomId);
 }
 
-export function canManageBilling(user: Pick<CurrentUser, "role">) {
-  return billingWriteRoles.has(user.role);
+export function canManageBilling(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "applicationAccess">>) {
+  return !isFteOnlyUser(user) && billingWriteRoles.has(user.role);
 }
 
 export function canViewDemoFallbackData(user: Partial<Pick<CurrentUser, "email" | "role">>) {

@@ -1,3 +1,5 @@
+import { isFteOnlyUser } from "@/lib/application-access";
+import { FteOnlyShell } from "@/components/fte-only-shell";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { WorkspaceSelector } from "@/components/workspace-selector";
@@ -13,13 +15,18 @@ export default async function WorkspacePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const resolvedSearchParams = await searchParams;
-  const nextPath = safeWorkspaceNextPath(resolvedSearchParams.next);
-  const user = await getCurrentUser({ allowPasswordResetRequired: true });
-  if (!user) redirect(loginHrefForNextPath(nextPath));
+  const requestedNextPath = safeWorkspaceNextPath(resolvedSearchParams.next);
+  const user = await getCurrentUser({ allowPasswordResetRequired: true, accessPurpose: "workspace_selection" });
+  if (!user) redirect(loginHrefForNextPath(requestedNextPath));
+  const nextPath = isFteOnlyUser(user) ? "/fte-reports" : requestedNextPath;
   if (requiresPasswordResetGate(user)) {
     redirect(`/reset-password?force=1&next=${encodeURIComponent(`/workspace?next=${encodeURIComponent(nextPath)}`)}`);
   }
   if (!user.workspace?.canSwitch) redirect(nextPath);
+
+  if (isFteOnlyUser(user)) {
+    return <FteOnlyShell currentUser={user}><h1 className="text-2xl font-semibold">Choose a school for FTE reporting</h1><WorkspaceSelector workspace={user.workspace} nextPath="/fte-reports" restrictedFte /></FteOnlyShell>;
+  }
 
   return (
     <AppShell currentUser={user}>

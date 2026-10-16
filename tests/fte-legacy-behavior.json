@@ -1,0 +1,3222 @@
+{
+  "base": "52761c003f91788d873a8ae4afa076ac3f534204",
+  "results": [
+    {
+      "role": "PLATFORM_OWNER",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "PLATFORM_OWNER",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "platform",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake tenant · Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake tenant · Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake tenant · Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake tenant · Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": true,
+        "fte-reports": true,
+        "billing": true,
+        "families": true,
+        "children": true,
+        "staff": true,
+        "messages": true,
+        "crm": true,
+        "reports": true,
+        "settings": true,
+        "executive": true,
+        "permissions": true,
+        "classroom": true,
+        "unknown": true,
+        "fte-reports/../billing": true,
+        "FTE-REPORTS": true
+      }
+    },
+    {
+      "role": "PLATFORM_OWNER",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "PLATFORM_OWNER",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "platform",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "all",
+          "selection": "all",
+          "activeCenterId": null,
+          "label": "All locations",
+          "detail": "3 schools in your authorized workspace",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake tenant · Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake tenant · Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake tenant · Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": true,
+        "canAdministerAllCenters": true,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": true,
+        "fte-reports": true,
+        "billing": true,
+        "families": true,
+        "children": true,
+        "staff": true,
+        "messages": true,
+        "crm": true,
+        "reports": true,
+        "settings": true,
+        "executive": true,
+        "permissions": true,
+        "classroom": true,
+        "unknown": true,
+        "fte-reports/../billing": true,
+        "FTE-REPORTS": true
+      }
+    },
+    {
+      "role": "PLATFORM_OWNER",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "PLATFORM_OWNER",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "platform",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake tenant · Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake tenant · Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake tenant · Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake tenant · Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": true,
+        "fte-reports": true,
+        "billing": true,
+        "families": true,
+        "children": true,
+        "staff": true,
+        "messages": true,
+        "crm": true,
+        "reports": true,
+        "settings": true,
+        "executive": true,
+        "permissions": true,
+        "classroom": true,
+        "unknown": true,
+        "fte-reports/../billing": true,
+        "FTE-REPORTS": true
+      }
+    },
+    {
+      "role": "BRAND_ADMIN",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "BRAND_ADMIN",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "tenant",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": true,
+        "fte-reports": true,
+        "billing": true,
+        "families": true,
+        "children": true,
+        "staff": true,
+        "messages": true,
+        "crm": true,
+        "reports": true,
+        "settings": true,
+        "executive": true,
+        "permissions": true,
+        "classroom": true,
+        "unknown": true,
+        "fte-reports/../billing": true,
+        "FTE-REPORTS": true
+      }
+    },
+    {
+      "role": "BRAND_ADMIN",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "BRAND_ADMIN",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "tenant",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "all",
+          "selection": "all",
+          "activeCenterId": null,
+          "label": "All locations",
+          "detail": "3 schools in your authorized workspace",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": true,
+        "canAdministerAllCenters": true,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": true,
+        "fte-reports": true,
+        "billing": true,
+        "families": true,
+        "children": true,
+        "staff": true,
+        "messages": true,
+        "crm": true,
+        "reports": true,
+        "settings": true,
+        "executive": true,
+        "permissions": true,
+        "classroom": true,
+        "unknown": true,
+        "fte-reports/../billing": true,
+        "FTE-REPORTS": true
+      }
+    },
+    {
+      "role": "BRAND_ADMIN",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "BRAND_ADMIN",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "tenant",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": true,
+        "fte-reports": true,
+        "billing": true,
+        "families": true,
+        "children": true,
+        "staff": true,
+        "messages": true,
+        "crm": true,
+        "reports": true,
+        "settings": true,
+        "executive": true,
+        "permissions": true,
+        "classroom": true,
+        "unknown": true,
+        "fte-reports/../billing": true,
+        "FTE-REPORTS": true
+      }
+    },
+    {
+      "role": "REGIONAL_MANAGER",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "REGIONAL_MANAGER",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "tenant",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": true,
+        "fte-reports": true,
+        "billing": true,
+        "families": true,
+        "children": true,
+        "staff": true,
+        "messages": true,
+        "crm": true,
+        "reports": true,
+        "settings": true,
+        "executive": true,
+        "permissions": true,
+        "classroom": true,
+        "unknown": true,
+        "fte-reports/../billing": true,
+        "FTE-REPORTS": true
+      }
+    },
+    {
+      "role": "REGIONAL_MANAGER",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "REGIONAL_MANAGER",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "tenant",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "all",
+          "selection": "all",
+          "activeCenterId": null,
+          "label": "All locations",
+          "detail": "3 schools in your authorized workspace",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": true,
+        "canAdministerAllCenters": true,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": true,
+        "fte-reports": true,
+        "billing": true,
+        "families": true,
+        "children": true,
+        "staff": true,
+        "messages": true,
+        "crm": true,
+        "reports": true,
+        "settings": true,
+        "executive": true,
+        "permissions": true,
+        "classroom": true,
+        "unknown": true,
+        "fte-reports/../billing": true,
+        "FTE-REPORTS": true
+      }
+    },
+    {
+      "role": "REGIONAL_MANAGER",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "REGIONAL_MANAGER",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "tenant",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": true,
+        "fte-reports": true,
+        "billing": true,
+        "families": true,
+        "children": true,
+        "staff": true,
+        "messages": true,
+        "crm": true,
+        "reports": true,
+        "settings": true,
+        "executive": true,
+        "permissions": true,
+        "classroom": true,
+        "unknown": true,
+        "fte-reports/../billing": true,
+        "FTE-REPORTS": true
+      }
+    },
+    {
+      "role": "CENTER_DIRECTOR",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "CENTER_DIRECTOR",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": true,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": true,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": true,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "CENTER_DIRECTOR",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "CENTER_DIRECTOR",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": null,
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": true,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {},
+        "scopeContext": {},
+        "workspace": {
+          "mode": "pending",
+          "selection": null,
+          "activeCenterId": null,
+          "label": "Choose a workspace",
+          "detail": "3 schools available",
+          "companyLabel": "Fake tenant",
+          "required": true,
+          "canSwitch": true,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": true,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": true,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "CENTER_DIRECTOR",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "CENTER_DIRECTOR",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": true,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": true,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": true,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "ASSISTANT_DIRECTOR",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "ASSISTANT_DIRECTOR",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": true,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": true,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "ASSISTANT_DIRECTOR",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "ASSISTANT_DIRECTOR",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": true,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": true,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "ASSISTANT_DIRECTOR",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "ASSISTANT_DIRECTOR",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": true,
+        "canManageStaffCompensation": true,
+        "canManageClassroomTasks": true,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": true,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": true,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "TEACHER",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "TEACHER",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": false,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": true,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "TEACHER",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "TEACHER",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": false,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": true,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "TEACHER",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "TEACHER",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": false,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": true,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "BILLING_ADMIN",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "BILLING_ADMIN",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "BILLING_ADMIN",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "BILLING_ADMIN",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "BILLING_ADMIN",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "BILLING_ADMIN",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": true,
+        "canViewCrmLeads": true,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": true
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": true,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "PARENT_GUARDIAN",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "PARENT_GUARDIAN",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": false,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": false,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": false,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "PARENT_GUARDIAN",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "PARENT_GUARDIAN",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": false,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": false,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": false,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "PARENT_GUARDIAN",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "PARENT_GUARDIAN",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": false,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": false,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": false,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "AUTHORIZED_PICKUP",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "AUTHORIZED_PICKUP",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": false,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": false,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": false,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "AUTHORIZED_PICKUP",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "AUTHORIZED_PICKUP",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": false,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": false,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": false,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "AUTHORIZED_PICKUP",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "AUTHORIZED_PICKUP",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "fixed",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": false,
+          "canSelectAll": false,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": false,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": false,
+        "owner": false,
+        "fte-reports": false,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": false,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "READ_ONLY_AUDITOR",
+      "selection": "center:school-a",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "READ_ONLY_AUDITOR",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": true,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": true,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": false,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "READ_ONLY_AUDITOR",
+      "selection": "all",
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "READ_ONLY_AUDITOR",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York",
+          "school-b": "America/New_York",
+          "school-c": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "all",
+          "selection": "all",
+          "activeCenterId": null,
+          "label": "All locations",
+          "detail": "3 schools in your authorized workspace",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": true,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": true,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": false,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    },
+    {
+      "role": "READ_ONLY_AUDITOR",
+      "selection": null,
+      "user": {
+        "id": "fake-owner",
+        "identityTenantId": "tenant-a",
+        "sessionVersion": 4,
+        "tenantId": "tenant-a",
+        "email": "fake-owner@example.invalid",
+        "name": "Fake owner",
+        "role": "READ_ONLY_AUDITOR",
+        "organizationId": "org-a",
+        "mustResetPassword": false,
+        "centerIds": [
+          "school-a"
+        ],
+        "authorizedCenterIds": [
+          "school-a",
+          "school-b",
+          "school-c"
+        ],
+        "primaryCenterId": "school-a",
+        "assignedClassroomId": null,
+        "deviceSessionId": null,
+        "accessScope": "scoped",
+        "accessGrantCount": 2,
+        "isSchoolOwner": false,
+        "profilePhotoUrl": null,
+        "branding": {
+          "name": "Synthetic brand",
+          "kind": "synthetic"
+        },
+        "timeZone": "America/New_York",
+        "timeZonesByCenterId": {
+          "school-a": "America/New_York"
+        },
+        "scopeContext": {},
+        "workspace": {
+          "mode": "center",
+          "readOnlyHistory": false,
+          "selection": "center:school-a",
+          "activeCenterId": "school-a",
+          "label": "school-a",
+          "detail": "Fake city, FL",
+          "companyLabel": "Fake tenant",
+          "required": false,
+          "canSwitch": true,
+          "canSelectAll": true,
+          "invalidSelection": false,
+          "authorizedCenterCount": 3,
+          "options": [
+            {
+              "id": "school-a",
+              "name": "school-a",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-b",
+              "name": "school-b",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            },
+            {
+              "id": "school-c",
+              "name": "school-c",
+              "detail": "Fake city, FL",
+              "companyName": "Fake tenant",
+              "status": "active"
+            }
+          ]
+        }
+      },
+      "permissions": {
+        "canAccessAllCenters": false,
+        "canAdministerAllCenters": false,
+        "canManageCrmLeads": false,
+        "canViewCrmLeads": true,
+        "canManageOperations": false,
+        "canManageStaffCompensation": false,
+        "canManageClassroomTasks": false,
+        "canManageBilling": false
+      },
+      "modules": {
+        "dashboard": true,
+        "owner": false,
+        "fte-reports": true,
+        "billing": false,
+        "families": false,
+        "children": false,
+        "staff": false,
+        "messages": false,
+        "crm": false,
+        "reports": false,
+        "settings": false,
+        "executive": false,
+        "permissions": false,
+        "classroom": false,
+        "unknown": false,
+        "fte-reports/../billing": false,
+        "FTE-REPORTS": false
+      }
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { isFteOnlyUser, restrictedFteNextPath } from "@/lib/application-access";
 import { NextResponse } from "next/server";
 import {
   createSessionToken,
@@ -20,7 +21,7 @@ type WorkspaceSelectionBody = {
 export async function POST(request: Request) {
   const [session, user] = await Promise.all([
     getSession(),
-    getCurrentUser({ allowPasswordResetRequired: true }),
+    getCurrentUser({ allowPasswordResetRequired: true, accessPurpose: "workspace_selection" }),
   ]);
   if (!session || !user) {
     return NextResponse.json({ ok: false, error: "Your session has expired. Please sign in again." }, { status: 401 });
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "That workspace is no longer authorized for this account." }, { status: 403 });
   }
 
-  const nextPath = workspaceDestinationAfterSelection({
+  const nextPath = isFteOnlyUser(user) ? restrictedFteNextPath(undefined) : workspaceDestinationAfterSelection({
     nextPath: body.nextPath,
     selection: body.selection,
     previousSelection: session.workspaceSelection,

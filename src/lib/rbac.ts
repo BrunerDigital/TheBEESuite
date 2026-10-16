@@ -1,3 +1,4 @@
+import { isFteOnlyUser } from "@/lib/application-access";
 import type { ModuleSlug } from "@/lib/demo-data";
 import { terminalStoreEnabled } from "@/lib/feature-availability";
 
@@ -9,6 +10,7 @@ type AccessSubject =
   | undefined
   | {
       role?: string | null;
+      applicationAccess?: string | null;
       email?: string | null;
       accessScope?: string | null;
       centerIds?: string[] | null;
@@ -130,6 +132,7 @@ function hasTenantWideUiAccess(subject: AccessSubject) {
 export function canAccessModule(subject: AccessSubject, slug: string) {
   const role = getRole(subject);
   if (!role) return false;
+  if (isFteOnlyUser(subject)) return role === "CENTER_DIRECTOR" && slug === "fte-reports";
   if (slug === "login" || slug === "forgot-password" || slug === "onboarding") return true;
   if (slug === "parent-portal" && isExecutiveRole(role)) return true;
   if (role === "AUTHORIZED_PICKUP") return authorizedPickupModules.has(slug as ModuleSlug);

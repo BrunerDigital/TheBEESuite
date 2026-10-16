@@ -26,6 +26,7 @@ type ResetResponse = {
   error?: string;
   message?: string;
   recoveryRetryToken?: string;
+  nextPath?: string;
 };
 
 function safeNextPath(value: string | null) {
@@ -132,7 +133,7 @@ export function ResetPasswordForm() {
 
         setMessage(data?.message ?? (parentPortalFlow ? "Password updated. Sign in to open your parent portal." : "Password updated. You can now sign in."));
         const loginNext = `${loginHrefForNextPath(next)}&reset=complete`;
-        setTimeout(() => router.push(forceReset ? next : loginNext), 1200);
+        setTimeout(() => router.push(forceReset ? (data?.nextPath === "/fte-reports" ? data.nextPath : next) : loginNext), 1200);
       } catch {
         setError("We could not reach the password reset service. Check your connection and try again. Your entries are still here.");
       }

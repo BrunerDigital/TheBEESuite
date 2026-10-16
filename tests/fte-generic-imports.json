@@ -1,0 +1,1466 @@
+{
+  "next/server": [
+    "NextRequest",
+    "NextResponse"
+  ],
+  "@/lib/auth": [
+    "SESSION_COOKIE",
+    "canAccessAllCenters",
+    "canAccessCenter",
+    "canAdministerAllCenters",
+    "canAdministerCenter",
+    "canManageBilling",
+    "canManageChildInClassroom",
+    "canManageClassroomTasks",
+    "canManageCrmLeads",
+    "canManageOperations",
+    "canManageStaffCompensation",
+    "canViewCrmLeads",
+    "createSessionToken",
+    "deriveClassroomOfflineQueueCredentials",
+    "getCurrentUser",
+    "getLeadScopeWhere",
+    "getSession",
+    "isParentGuardian",
+    "messageCenterIdsForUser",
+    "requiresPasswordResetGate",
+    "sessionCookieOptions"
+  ],
+  "@/lib/audit": [
+    "writeAuditLog",
+    "writeSystemAuditLog"
+  ],
+  "@/lib/prisma": [
+    "prisma"
+  ],
+  "@/lib/request-response-logging": [
+    "logOperationalError",
+    "withApiLogging"
+  ],
+  "@/lib/team-permissions-scope": [
+    "teamAccessGrantWhere",
+    "teamDeviceSessionWhere"
+  ],
+  "@prisma/client": [
+    "DocumentStatus",
+    "EnrollmentStage",
+    "PaymentStatus",
+    "Prisma",
+    "UserRole"
+  ],
+  "@/lib/setup-checklists": [
+    "setupChecklistTasksForKey"
+  ],
+  "@/lib/integration-deliveries": [
+    "beginCommunicationSmsDeliveryAttempt",
+    "claimIntegrationDeliveryForRetry",
+    "computeIntegrationDeliveryState",
+    "finalizeCommunicationSmsDeliveryAttempt",
+    "nextIntegrationRetryAt",
+    "recordCommunicationSmsDeliveryAttempt",
+    "recordEmailDeliveryAttempt",
+    "retryPendingIntegrationDeliveries"
+  ],
+  "@/lib/integrations": [
+    "createStripeAccountLink",
+    "createStripeBillingPortalSession",
+    "createStripeConnectedAccount",
+    "createStripeCustomer",
+    "createStripePayoutBankSelectionLink",
+    "createStripeSetupCheckoutSession",
+    "createStripeSoftwareSubscription",
+    "createStripeTerminalLocation",
+    "createStripeTerminalPaymentIntent",
+    "ensureStripeSoftwareRecurringPrice",
+    "expireStripeCheckoutSession",
+    "externalProviderEmails",
+    "findStripeSchoolSoftwareCustomers",
+    "getStripeCheckoutAmounts",
+    "getStripePaymentMethodConfigurationId",
+    "getStripeProcessingRecoveryAmount",
+    "getStripeSecretKey",
+    "getStripeWebhookSecret",
+    "isEmail",
+    "listStripeBalanceTransactions",
+    "listStripeConnectedAccountPayoutBanks",
+    "listStripePayouts",
+    "listStripeTerminalReaders",
+    "processStripeTerminalPaymentIntent",
+    "readStripeConnectedAccountId",
+    "registerStripeTerminalReader",
+    "requiresStripePaymentMethodConfiguration",
+    "retrieveStripeConnectedAccount",
+    "retrieveStripePaymentIntent",
+    "retrieveStripePaymentMethod",
+    "retrieveStripeSetupIntent",
+    "retrieveStripeSucceededRefundTotal",
+    "retrieveStripeTerminalReader",
+    "sendEmail",
+    "sendSms",
+    "setStripeConnectedAccountDailyPayouts",
+    "setStripeCustomerDefaultPaymentMethod",
+    "shouldWaiveStripePaymentOperationsFee",
+    "stripeAccountCreationIdempotencyKey",
+    "stripeConnectedAccountPaysFeesDirectly",
+    "uniqueEmails",
+    "updateStripeSoftwareSubscription"
+  ],
+  "@/lib/location-users": [
+    "getCenterLeadershipUsers"
+  ],
+  "@/lib/registration-handoff": [
+    "registrationLeadLookupWhere"
+  ],
+  "@/lib/registration-packet": [
+    "asRecord",
+    "buildEnrollmentChecklist",
+    "buildRegistrationChildCustomFields",
+    "buildRegistrationDocumentRequests",
+    "buildRegistrationFamilyCustomFields",
+    "buildRegistrationGuardianCustomFields",
+    "cleanText",
+    "familyNameFromGuardian",
+    "kidCityRegistrationPacketSchema",
+    "markRegistrationPaymentChecklistPaid",
+    "normalizeEmailText",
+    "normalizeScheduleDays",
+    "parsePacketContactLines",
+    "registrationGuardianIsBillingContact",
+    "registrationReviewFromData",
+    "registrationReviewTransitionError",
+    "shouldInviteParentOnRegistrationApproval"
+  ],
+  "@/lib/workspace-selection": [
+    "centerIdFromWorkspaceSelection",
+    "isClosedSchoolHistoryWorkspace",
+    "isWorkspaceSelectionValue",
+    "schoolHistoryStatusWhere",
+    "workspaceDestinationAfterSelection"
+  ],
+  "@/lib/fte-report-guardrails": [
+    "ageGroupTotal",
+    "calculateFteCount",
+    "calculateScheduledDaysFte",
+    "defaultFteWeekEnd",
+    "fteExternalEscalationWindow",
+    "fteReminderCoverageWhere",
+    "getFteDueState",
+    "isExecutiveFteManager",
+    "isFteCenterInVisibleScope",
+    "normalizeFteStatus",
+    "resolveFteCenterId",
+    "scheduledDayBreakdownTotal",
+    "validateFtePeriod"
+  ],
+  "@/lib/google-sheets": [
+    "appendRowToGoogleSheet",
+    "spreadsheetIdFromUrl"
+  ],
+  "@/lib/integration-credentials": [
+    "credentialEnvValue",
+    "encryptIntegrationCredential",
+    "getTenantIntegrationCredentialMap",
+    "replaceTenantIntegrationCredentials",
+    "sanitizeCredentialInput",
+    "upsertTenantIntegrationCredentials"
+  ],
+  "@/lib/google-apps-script-webhook": [
+    "postJsonToGoogleAppsScriptWebhook",
+    "trustedGoogleAppsScriptWebhookUrl"
+  ],
+  "@/lib/app-review-targeting": [
+    "APP_REVIEW_PARENT_CONTACT",
+    "APP_REVIEW_RESERVED_EMAILS",
+    "APP_REVIEW_TEACHER_CONTACT",
+    "appReviewFamilyContainsReservedIdentity",
+    "appReviewReservedIdentityKind"
+  ],
+  "@/lib/onboarding-setup": [
+    "normalizeSchoolOnboardingSetup",
+    "schoolOnboardingSetupSections"
+  ],
+  "@/lib/school-data-setup": [
+    "assessSchoolDataSetup",
+    "normalizeSchoolDataSetupInput",
+    "readSchoolDataSetup",
+    "schoolDataImportVerificationRevision"
+  ],
+  "@/lib/onboarding-location-roster": [
+    "parseOnboardingLocationRoster"
+  ],
+  "@/lib/rate-limit": [
+    "checkPersistentRateLimit",
+    "checkRateLimit",
+    "requestIp",
+    "retryAfterSeconds"
+  ],
+  "@/lib/inquiry-embed": [
+    "getCenterInquiryEmbedCode"
+  ],
+  "@/lib/supabase-auth": [
+    "buildPasswordResetTokenUrl",
+    "deleteSupabaseAuthUserByEmail",
+    "ensureSupabaseAuthUser",
+    "generateSupabasePasswordRecoveryLink",
+    "getAppBaseUrl",
+    "getPasswordResetRedirectUrl",
+    "getSupabaseAuthConfig",
+    "getSupabaseAuthEmailForAccessToken",
+    "hasSupabaseAdminAuthConfig",
+    "requestSupabasePasswordReset",
+    "updateSupabaseAuthUserPasswordByEmail",
+    "updateSupabasePassword",
+    "upsertSupabaseAuthUserWithPassword",
+    "verifySupabaseLogin",
+    "verifySupabasePassword",
+    "verifySupabaseRecoveryTokenHash"
+  ],
+  "@/lib/crm": [
+    "crmStageApprovalBoundary",
+    "leadScore",
+    "parseLeadStage",
+    "stageNurtureTask"
+  ],
+  "@/lib/inquiry-integrations": [
+    "forwardInquiryToGoogleSheets",
+    "sendInquiryNotificationEmail"
+  ],
+  "@/lib/inquiry-notifications": [
+    "resolveInquiryLocationNotificationEmails"
+  ],
+  "@/lib/inquiry-programs": [
+    "normalizeInquiryProgram"
+  ],
+  "@/lib/inquiry-idempotency": [
+    "INQUIRY_DEDUPE_WINDOW_MS",
+    "inquirySubmissionIdempotencyKey",
+    "inquiryTurnstileIdempotencyKey"
+  ],
+  "@/lib/inquiry-origins": [
+    "inquiryCorsHeaders",
+    "isAllowedInquiryOrigin"
+  ],
+  "@/lib/inquiry-routing": [
+    "isEligiblePublicInquiryCenter",
+    "selectPreferredInquiryCenter"
+  ],
+  "@/lib/school-data-setup-server": [
+    "loadSchoolDataFingerprint",
+    "loadSchoolDataReviewEvidence"
+  ],
+  "@/lib/school-business-profile": [
+    "buildSchoolBusinessProfilePreparationReceipt",
+    "missingSchoolBusinessProfileFields",
+    "normalizeSchoolBusinessProfile",
+    "readSchoolBusinessProfileConfirmation",
+    "schoolBusinessProfileFieldLabel"
+  ],
+  "@/lib/school-tax-id": [
+    "isValidEinInput",
+    "normalizeEin",
+    "schoolEinCustomFields"
+  ],
+  "@/lib/data-readiness": [
+    "canBulkConfirmReadinessTask",
+    "dataReadinessCsv",
+    "summarizeDataReadiness"
+  ],
+  "@/lib/data-readiness-context": [
+    "filterDataReadinessTasksForContext",
+    "normalizeDataReadinessContext"
+  ],
+  "@/lib/data-readiness-server": [
+    "loadDataReadinessWorkspace"
+  ],
+  "@/lib/honeyglass": [
+    "dataReadinessCenterEnabled"
+  ],
+  "@/lib/rbac": [
+    "canAccessModule"
+  ],
+  "@/lib/zoned-date-time": [
+    "formatZonedDateTime",
+    "formatZonedTimestamp"
+  ],
+  "@/lib/invoice-due-date": [
+    "formatInvoiceDueDate"
+  ],
+  "@/lib/guardian-kiosk-pin": [
+    "defaultGuardianPinUpdate"
+  ],
+  "@/lib/kiosk": [
+    "createGuardianQrToken",
+    "hashGuardianPin",
+    "hashStaffPin",
+    "normalizeGuardianQrToken",
+    "normalizePin",
+    "parseGuardianQrToken",
+    "verifyGuardianPin",
+    "verifyGuardianQrToken"
+  ],
+  "@/lib/operations-notifications": [
+    "notifyOperationsRecordChange"
+  ],
+  "@/lib/parent-portal-logins": [
+    "changeParentPortalLoginEmail",
+    "disableParentPortalLoginForGuardian",
+    "ensureParentPortalLoginForGuardian",
+    "hasConflictingGuardianFamilyLinks",
+    "parentPortalAccessFields",
+    "parentPortalInvitationSentFields",
+    "parentPortalLinkedFields"
+  ],
+  "@/lib/enrollment-status": [
+    "currentlyEnrolledChildWhere",
+    "currentlyEnrolledStatusValues",
+    "enrollmentClassroomValidationError",
+    "isClosedEnrollmentStatus",
+    "isCurrentlyEnrolledChildRecord",
+    "isCurrentlyEnrolledStatus",
+    "isEnrollmentPipelineStatus"
+  ],
+  "@/lib/classroom-status": [
+    "activeClassroomWhere",
+    "classroomIsArchived"
+  ],
+  "@/lib/guardian-communication": [
+    "parseGuardianCommunicationPreference"
+  ],
+  "@/lib/expected-child-birth": [
+    "childBirthCustomFields",
+    "childBirthFormState",
+    "expectedChildPlaceholderDate",
+    "normalizeCalendarDateValue",
+    "normalizeChildBirthStatus"
+  ],
+  "@/lib/sendgrid-events": [
+    "processSendGridEventBatch",
+    "sendGridBlockedCurrentStatuses",
+    "verifySendGridEventSignature"
+  ],
+  "@/lib/marketing-connection": [
+    "getMarketingConnection"
+  ],
+  "@/lib/marketing-center-access": [
+    "resolveMarketingCenter"
+  ],
+  "@/lib/social-engagement": [
+    "fetchGoogleBusinessReviews",
+    "fetchMetaInbox",
+    "replyToGoogleBusinessReview"
+  ],
+  "@/lib/social-publishing": [
+    "SOCIAL_CHANNELS",
+    "providerForSocialChannel",
+    "publishSocialPost"
+  ],
+  "@/lib/integration-setup": [
+    "AD_INTEGRATION_PROVIDERS",
+    "SOCIAL_INTEGRATION_PROVIDERS",
+    "buildIntegrationSetupViews",
+    "getIntegrationRuntimeStatus",
+    "hasRequiredMarketingAccountConfig",
+    "integrationRecordConfig",
+    "isMarketingIntegrationProvider",
+    "normalizeIntegrationProvider",
+    "normalizeIntegrationSetupStatus",
+    "readIntegrationConfig",
+    "sanitizeIntegrationConfig"
+  ],
+  "@/lib/ad-campaign-analytics": [
+    "fetchAdCampaignAnalytics"
+  ],
+  "@/lib/integration-scope": [
+    "centerIntegrationScopeKey",
+    "integrationScopeForUser"
+  ],
+  "@/lib/executive-marketing": [
+    "canManageExecutiveMarketingPortfolio",
+    "isManagerAssignedMarketingConnection",
+    "normalizeExecutiveMarketingAssignments"
+  ],
+  "@/lib/ai-command": [
+    "AI_COMMAND_GUARDRAIL_NOTE",
+    "buildAiOperationsSummary"
+  ],
+  "@/lib/ai-suggestion-scope": [
+    "tenantIdsFromAiPromptContext"
+  ],
+  "@/lib/ai-command-mutations": [
+    "AI_COMMAND_MAX_BULK_RECORDS",
+    "AI_COMMAND_MODEL",
+    "AI_COMMAND_MUTATION_BOUNDARY",
+    "aiCommandMutationRoles",
+    "aiCommandRecordIds",
+    "childAiFields",
+    "cleanAiPatch",
+    "enrollmentAiFields",
+    "familyAiFields",
+    "guardianAiFields",
+    "invoiceAiFields",
+    "schoolAiFields",
+    "tuitionAiFields"
+  ],
+  "@/lib/billing-invoices": [
+    "createBillingInvoiceForFamily",
+    "lockBatchInvoiceAccounts"
+  ],
+  "@/lib/child-enrollment-bulk": [
+    "buildBulkEnrollmentChange"
+  ],
+  "@/lib/billing-workflows": [
+    "BIWEEKLY_TUITION_AUTOBILL_CADENCE",
+    "FOUR_WEEK_TUITION_AUTOBILL_CADENCE",
+    "WEEKLY_TUITION_AUTOBILL_CADENCE",
+    "WEEKLY_TUITION_AUTOBILL_DAY",
+    "addWeeksToBillingPeriod",
+    "billingDedupeKey",
+    "canSaveTuitionPlanAmount",
+    "defaultRecurringBillingPeriod",
+    "firstUncoveredTuitionBillingPeriod",
+    "isVoucherFundedTuitionAmount",
+    "normalizeBatchTarget",
+    "normalizeBillingCadence",
+    "normalizeBillingPeriod",
+    "normalizeRecurringBillingDay",
+    "normalizeRecurringBillingPeriod",
+    "normalizeTuitionInvoiceDelayWeeks",
+    "normalizeWeeklyBillingPeriod",
+    "parseCurrencyCents",
+    "recurringDueDateForPeriod",
+    "schoolTuitionBillingAllowed",
+    "shouldCreateRecurringTuitionInvoice",
+    "tuitionInvoiceBillingPeriod",
+    "tuitionInvoiceWeekCount",
+    "tuitionPlanRecordChanged",
+    "utcBillingWeekday",
+    "weeklyTuitionChargeDateForPeriod"
+  ],
+  "@/lib/attendance-state": [
+    "centerServiceDayWindow",
+    "isLatePickup",
+    "latestLogMap",
+    "normalizeCheckAction",
+    "readCenterLocationTimeZone",
+    "readCenterTimeZone",
+    "readLatePickupCutoff",
+    "validateNextCheckAction",
+    "validateSelectedChildren"
+  ],
+  "@/lib/enrollment-closeout": [
+    "closeEnrollmentAndDisableTuitionSql"
+  ],
+  "@/lib/staff-kiosk": [
+    "hasLegacyTruncatedStaffClockHistory",
+    "normalizeStaffClockAction",
+    "normalizeStaffClockEventEdits",
+    "readStaffClockState",
+    "readStaffKioskPinHash",
+    "resolveStaffKioskCredential",
+    "staffClockEditFields",
+    "staffClockFields",
+    "staffKioskPinFields",
+    "validateNextStaffClockAction"
+  ],
+  "@/lib/invoice-responsibility-separation": [
+    "allOpenInvoicesResponsibilitySeparated",
+    "invoiceResponsibilityReviewExempt",
+    "invoiceResponsibilitySeparation",
+    "responsibilitySeparationError"
+  ],
+  "@/lib/registration-sharing": [
+    "MAX_REGISTRATION_SHARE_RECIPIENTS",
+    "buildRegistrationLeadCustomFields",
+    "buildRegistrationLeadSuggestion",
+    "buildRegistrationShareEmail",
+    "buildRegistrationShareUrl",
+    "parseRegistrationShareRecipients",
+    "stageAfterRegistrationShare"
+  ],
+  "@/lib/custody-visibility": [
+    "custodyWarningSummary",
+    "hasCustodyWarning"
+  ],
+  "@/lib/date-guardrails": [
+    "parseCalendarDateOrTimestamp",
+    "parseOperationalDate"
+  ],
+  "@/lib/operations-guardrails": [
+    "centerScopedAccessGuard",
+    "classroomFamilyGuard",
+    "scopedUpdateGuard"
+  ],
+  "@/lib/teacher-incident": [
+    "normalizeTeacherIncidentPayload"
+  ],
+  "@/lib/request-origin": [
+    "hasTrustedMutationOrigin"
+  ],
+  "@/lib/teacher-profile-setup": [
+    "normalizeTeacherProfileSetupPayload",
+    "teacherProfileSetupCustomFields"
+  ],
+  "@/lib/teacher-daily-report": [
+    "parseTeacherDailyReportPayload"
+  ],
+  "node:crypto": [
+    "createHash",
+    "randomBytes",
+    "randomInt",
+    "randomUUID"
+  ],
+  "@/lib/daily-report-email": [
+    "sendCheckoutDailyReportEmail"
+  ],
+  "@/lib/portal-guardrails": [
+    "canAccessFamilyRecord",
+    "canAcknowledgeIncident",
+    "canCreateFamilyMessage",
+    "canInviteGuardianToPortal",
+    "canMessageClassroomFamily",
+    "canRequestAccountDeletion",
+    "canSubmitDocumentForReview",
+    "normalizeParentNotificationPreferences",
+    "parentPortalFamilyScopeWhere",
+    "validateDailyReportMediaLink",
+    "validateMediaUploadInput"
+  ],
+  "@/lib/supabase-storage": [
+    "ASSET_HUB_BUCKET",
+    "CHILD_MEDIA_BUCKET",
+    "contentTypeForDocumentFile",
+    "createAssetHubSignedUrl",
+    "createAssetHubUploadUrl",
+    "createChildMediaSignedUrl",
+    "deleteAssetHubObject",
+    "deleteChildMediaObject",
+    "deleteDocumentObject",
+    "deleteMessageAttachmentObject",
+    "getAssetHubObjectInfo",
+    "getSupabaseStorageClient",
+    "isSupabaseStorageConfigured",
+    "requireAssetHubBucket",
+    "uploadChildMediaBuffer",
+    "uploadDocumentBuffer",
+    "uploadMessageAttachmentBuffer",
+    "uploadProfilePhotoBuffer"
+  ],
+  "@/lib/teacher-media": [
+    "buildParentPhotoNotifications",
+    "resolveTeacherMediaShareState"
+  ],
+  "@/lib/guardian-change-requests": [
+    "formatGuardianChangeRequestBody",
+    "normalizeGuardianChangeData",
+    "normalizeGuardianChangeRequestStatus",
+    "parseGuardianChangeRequestNote"
+  ],
+  "@/lib/parent-portal-family-scope": [
+    "getParentPortalFamilyScope",
+    "getParentPortalPaymentFamilyScope",
+    "getParentPortalTenantCenterIds",
+    "parentPortalTenantFamilyWhere",
+    "selectParentPortalCurrentGuardians"
+  ],
+  "@/lib/parent-payment-status": [
+    "parentPaymentStatus"
+  ],
+  "@/lib/parent-payment-observation": [
+    "isDefinitivelyRejectedCheckout",
+    "isPaymentObservationId"
+  ],
+  "@/lib/billing-guardrails": [
+    "activeStripeAccountCreditReservationCents",
+    "checkoutApplicationGuard",
+    "isActiveStripeAutopayPayment",
+    "isActiveStripeCheckoutPayment",
+    "isStripeSubmissionUnknownPayment",
+    "jsonRecord",
+    "stripePaymentIntentFailureDisposition"
+  ],
+  "@/lib/ach-payment-lifecycle": [
+    "achFailurePresentation",
+    "isAchPaymentProcessing",
+    "isAchReturnReason",
+    "isReturnedStripePayment"
+  ],
+  "@/lib/parent-portal-invitations": [
+    "DIRECT_PARENT_PORTAL_INVITE_MODE",
+    "PARENT_PORTAL_INVITE_MODE",
+    "buildParentLoginSetupUrl",
+    "buildParentLoginUrl",
+    "buildParentPortalGuideHtml",
+    "buildParentPortalGuideText",
+    "buildParentPortalInvitationHtml",
+    "buildParentPortalInvitationText",
+    "buildParentPortalUrl"
+  ],
+  "@/lib/parent-portal-setup-links": [
+    "claimParentPortalSetupToken",
+    "completeParentPortalSetupToken",
+    "issueParentPortalSetupLink",
+    "recordParentPortalSetupLinkDelivery",
+    "releaseParentPortalSetupToken"
+  ],
+  "@/lib/parent-invitation-readiness": [
+    "evaluateParentInvitationReadiness"
+  ],
+  "@/lib/brand-assets": [
+    "BEE_SUITE_BRANDING",
+    "canUseKidCityCorporateBilling",
+    "isMissHoneysBrandText",
+    "resolveWorkspaceBranding"
+  ],
+  "@/lib/manual-email-copy": [
+    "buildManualEmailCopy"
+  ],
+  "@/lib/stripe-billing-approval": [
+    "stripeBillingApprovalCustomFieldPatch",
+    "stripeSchoolBillingApproval"
+  ],
+  "@/lib/kiosk-credentials": [
+    "buildGuardianKioskCredential"
+  ],
+  "@/lib/parent-document-query": [
+    "parentCurrentChildScope",
+    "parentDocumentScope"
+  ],
+  "@/lib/signature-capture": [
+    "INTERNAL_SIGNATURE_PENDING_KEY",
+    "SIGNATURE_CONSENT_TEXT",
+    "buildInternalSignatureCertificate",
+    "isInternalSignatureRequest",
+    "signatureEvidenceHash",
+    "validateSignatureCapture"
+  ],
+  "@/lib/parent-updates-query": [
+    "parentUpdatesView",
+    "readParentUpdatesContext",
+    "readParentUpdatesRows"
+  ],
+  "@/lib/parent-announcement-history": [
+    "parseParentAnnouncementRequest"
+  ],
+  "@/lib/parent-announcement-query": [
+    "readParentAnnouncementRows"
+  ],
+  "@/lib/parent-updates-history": [
+    "parseParentUpdatesRequest"
+  ],
+  "@/lib/parent-message-query": [
+    "parentMessageFamilyWhere",
+    "parentMessageViews",
+    "readParentMessageRows"
+  ],
+  "@/lib/parent-message-history": [
+    "isParentHistoryId"
+  ],
+  "@/lib/message-block-store": [
+    "MessageRecipientBlockChanged",
+    "createDirectMessage",
+    "createMessageNotification",
+    "createMessageNotificationInTransaction",
+    "messageRecipientsAllowed",
+    "readBlockedMessageSenderIds",
+    "setMessageSenderBlock",
+    "visibleReceivedMessage"
+  ],
+  "@/lib/message-block-policy": [
+    "messagesExcludingBlockedSenders"
+  ],
+  "@/lib/product-billing": [
+    "invoiceProductCheckoutBranding",
+    "invoiceProductStripeMetadata",
+    "normalizeProductPurchaseQuantity",
+    "productInvoiceFieldsForProduct",
+    "productItemSummary",
+    "productPurchaseTotals"
+  ],
+  "@/lib/parent-product-purchase-availability": [
+    "parentProductPurchasingEnabled"
+  ],
+  "@/lib/uniform-products": [
+    "studentUniformShirtVariantFromProduct"
+  ],
+  "@/lib/web-push": [
+    "dispatchPendingWebPush",
+    "getWebPushConfiguration",
+    "webPushEndpointHash",
+    "webPushUserAgentHash"
+  ],
+  "@/lib/web-push-policy": [
+    "safeWebPushPlatform"
+  ],
+  "@/lib/message-templates": [
+    "canonicalizeSystemMessageTemplate",
+    "defaultMessageTemplates",
+    "isVirtualMessageTemplateId",
+    "notificationPreferenceTypes",
+    "renderMessageTemplate"
+  ],
+  "@/lib/notification-preferences": [
+    "defaultNotificationPreferenceChannels",
+    "roleLabel"
+  ],
+  "@/lib/notification-policy": [
+    "notificationDedupeKey",
+    "notificationExpiresAt",
+    "visibleNotificationWhere"
+  ],
+  "@/lib/google-calendar-sync": [
+    "getGoogleCalendarConfiguration",
+    "googleEventToCalendarData",
+    "listGoogleCalendarEvents",
+    "syncCalendarEventToGoogle"
+  ],
+  "@/lib/calendar-events": [
+    "normalizeCalendarEventInput"
+  ],
+  "next/cache": [
+    "revalidatePath"
+  ],
+  "@/lib/automation-workflow-state": [
+    "normalizeAutomationDraft"
+  ],
+  "@/lib/automation-workflow-persistence": [
+    "AutomationConfigurationError",
+    "saveAutomationConfiguration"
+  ],
+  "@/lib/marketing-workflows": [
+    "buildReviewRequestCopy",
+    "draftReviewResponse",
+    "normalizeCampaignDraft",
+    "updateSurveyResults"
+  ],
+  "@/lib/tuition-plan-archive": [
+    "archivedTuitionAssignmentAllowed",
+    "tuitionPlanArchiveFields",
+    "tuitionPlanIsArchived"
+  ],
+  "@/lib/staff-scheduling": [
+    "buildWeeklyStaffScheduleRequests",
+    "normalizeWeekdayIndexes"
+  ],
+  "@/lib/staff-compensation": [
+    "hasStaffCompensationPayload",
+    "normalizeStaffCompensationPayload",
+    "readStaffCompensation",
+    "staffCompensationCustomFields"
+  ],
+  "@/lib/teacher-login": [
+    "generateTeacherLoginCredentials",
+    "isGeneratedTeacherLoginEmail"
+  ],
+  "@/lib/daily-report-email-settings": [
+    "DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY",
+    "dailyReportEmailRecipientCustomFields",
+    "dailyReportEmailRecipientGuardianIdsFromPayload"
+  ],
+  "@/lib/fte-scheduled-days": [
+    "normalizeScheduledDaysPerWeek"
+  ],
+  "@/lib/announcement-persistence": [
+    "AnnouncementWorkflowError",
+    "loadAnnouncementForActor",
+    "saveAnnouncement"
+  ],
+  "@/lib/required-document-checklist": [
+    "buildRequiredDocumentChecklist",
+    "findChecklistDefinition",
+    "matchesRequiredChecklistDefinition",
+    "requiresChecklistAction"
+  ],
+  "@/lib/parent-document-requests": [
+    "sendParentDocumentRequestEmailForDocument"
+  ],
+  "@/lib/licensing-config": [
+    "normalizeLicensingConfiguration",
+    "readCenterLicensingConfiguration"
+  ],
+  "@/lib/records-export-package": [
+    "buildRecordsExportPackage",
+    "recordsPackageFilename"
+  ],
+  "@/lib/kidcity-software-billing": [
+    "formatSchoolSoftwareFeeAmount",
+    "getKidCitySoftwareInvoiceSnapshot",
+    "getSchoolSoftwareBillingStartAt",
+    "getSchoolSoftwareFeePolicyForCenter"
+  ],
+  "@/lib/school-software-subscriptions": [
+    "record",
+    "saveSoftwareSubscriptionSnapshot",
+    "textField"
+  ],
+  "node:fs": [
+    "createReadStream",
+    "readFileSync"
+  ],
+  "node:fs/promises": [
+    "mkdtemp",
+    "open",
+    "readFile",
+    "rm"
+  ],
+  "node:os": [
+    "tmpdir"
+  ],
+  "node:path": [
+    "default",
+    "join"
+  ],
+  "node:stream": [
+    "Readable"
+  ],
+  "@/lib/agency-date-defaults": [
+    "agencyClaimServiceStartMin"
+  ],
+  "@/lib/agency-bulk-claims": [
+    "BULK_CLAIM_PREVIEW_LIMIT",
+    "BULK_CLAIM_WRITE_LIMIT",
+    "bulkClaimDate",
+    "bulkClaimInput",
+    "bulkClaimRequirements",
+    "prepareBulkClaim"
+  ],
+  "@/lib/agency-subsidy-billing": [
+    "AGENCY_LEDGER_SOURCE_SYSTEM",
+    "AGENCY_SUBMISSION_METHODS",
+    "activeRemittanceTotalCents",
+    "agencyClaimApprovalLedgerExternalId",
+    "agencyControlledLedgerSetupBlockers",
+    "agencyProgramSetupBlockers",
+    "agencyProgramStatus",
+    "agencyReconciliationActivationBlockers",
+    "agencyRemittanceLedgerExternalId",
+    "agencyRemittanceReversalLedgerExternalId",
+    "claimAmountCents",
+    "claimSubmissionBlockers",
+    "nextRemittanceStatus",
+    "normalizeAgencyRequirements",
+    "normalizeStateCode",
+    "subsidyClaimNumber"
+  ],
+  "@/lib/agency-reconciliation": [
+    "AGENCY_ADJUSTMENT_TYPES",
+    "agencyAdjustmentFingerprint",
+    "agencyAllocationFingerprint",
+    "agencyBatchFingerprint",
+    "agencyBatchStatus",
+    "agencyRemittanceReferenceKey",
+    "agencyReversalEffectiveAt",
+    "agencyUtcCalendarRange",
+    "canCloseAgencyAccountingPeriod",
+    "canReviewAgencyPosting",
+    "isFutureAgencyAccountingDate",
+    "normalizeAgencyPaymentReference",
+    "signedAgencyAdjustmentCents"
+  ],
+  "@/lib/parent-billing-visibility": [
+    "AGENCY_LEDGER_ENTRY_TYPES",
+    "AGENCY_LEDGER_SOURCE_SYSTEM",
+    "hasSubsidyResponsibilityEvidence",
+    "parentVisibleBillingBalanceCents",
+    "paymentCollectionResponsibilityHoldRequired",
+    "withoutConfirmedFamilyResponsibility"
+  ],
+  "@/lib/tuition-credits": [
+    "normalizeTuitionAdditionalCharges",
+    "normalizeTuitionCredits",
+    "totalTuitionAdditionalChargesCents",
+    "totalTuitionCreditsCents",
+    "tuitionInvoiceItems"
+  ],
+  "@/lib/prospective-family-billing": [
+    "billingFamilyAccountCategory",
+    "childTuitionEligibilityError",
+    "singleInvoiceFamilyEligibilityError"
+  ],
+  "@/lib/tuition-invoice-timing": [
+    "biweeklyCoveragePeriodBeforeRemovingDelay",
+    "resolveTuitionInvoiceDelay"
+  ],
+  "@/lib/payment-redirect-security": [
+    "getSecurePaymentAppBaseUrl"
+  ],
+  "@/lib/family-payment-refund": [
+    "applyFamilyPaymentRefund",
+    "supportedFamilyRefundProvider"
+  ],
+  "@/lib/family-refund-claim": [
+    "recordFamilyRefundClaim"
+  ],
+  "@/lib/payment-method-management": [
+    "canChargeSavedPaymentMethod",
+    "canCreatePaymentMethodManagementSession",
+    "canFinalizePendingAutopayConsentMigration",
+    "canPreserveAutopayConsentForPaymentMethodMigration",
+    "failedPendingPaymentMethodAutopayOutcome",
+    "paymentMethodAutopayCategory",
+    "paymentMethodManagementSummary",
+    "paymentMethodSetupAutopayOutcome",
+    "paymentMethodSetupExpirationPatch"
+  ],
+  "@/lib/payout-sms": [
+    "beeSuitePayoutSmsBody",
+    "payoutSmsRecipient",
+    "sendPayoutSmsSafely"
+  ],
+  "@/lib/stripe-connect-readiness": [
+    "stripeCheckoutReadiness",
+    "stripeConnectCustomFieldPatch",
+    "stripeConnectReadinessFromFields",
+    "stripeConnectReadinessFromSnapshot"
+  ],
+  "@/lib/stripe-connect-migration": [
+    "readStripeConnectMigration",
+    "stripeConnectMigrationTargetIsReady",
+    "stripeConnectSavedMethodAccount",
+    "stripeConnectSavedMethodManagementAccount",
+    "stripeConnectSavedMethodNeedsReauthorization"
+  ],
+  "@/lib/stripe-customer-scope": [
+    "stripeCustomerCustomFieldPatch",
+    "stripeCustomerIdForAccount"
+  ],
+  "@/lib/stripe-webhook-event-types": [
+    "isStripeWebhookAccountEvent",
+    "isStripeWebhookPaymentEvent",
+    "isStripeWebhookPayoutEvent",
+    "isStripeWebhookSoftwareBillingEvent",
+    "stripeSetupIntentTerminalEventTypeForStatus",
+    "stripeWebhookObjectForRouting"
+  ],
+  "@/lib/stripe-webhook-receipts": [
+    "isStripeWebhookReceiptUniqueConflict",
+    "reserveStripeWebhookDelivery",
+    "stripeWebhookDedupeKey"
+  ],
+  "@/lib/stripe-webhook-retry": [
+    "isStripeWebhookTransientDatabaseError",
+    "retryStripeWebhookTransaction"
+  ],
+  "@/lib/stripe-webhook-readiness": [
+    "matchStripeWebhookSecret"
+  ],
+  "@/lib/stripe-payment-application": [
+    "applyFamilyBalancePaymentToOpenInvoices",
+    "applySucceededStripeFamilyBalancePayment",
+    "applySucceededStripeInvoicePayment",
+    "succeededFamilyBalancePaymentClaim"
+  ],
+  "@/lib/twilio-messaging": [
+    "isTwilioWebhookReceiptUniqueConflict",
+    "parseTwilioWebhookParams",
+    "phoneMatchKey",
+    "twilioBlockedCurrentStatuses",
+    "twilioDeliveryStatus",
+    "twilioDeliveryTenantScope",
+    "twilioSmsCommand",
+    "twilioStatusCallbackUrl",
+    "twilioWebhookUrl",
+    "twimlResponse",
+    "uniqueSmsRecipients",
+    "validateTwilioSignatureAgainstConfiguredTokens"
+  ],
+  "@/lib/account-credit-autopay": [
+    "allocateAccountCreditToInvoice",
+    "availableAccountCreditCents"
+  ],
+  "@/lib/billing-actor-authorization": [
+    "authorizeBillingActorForTarget"
+  ],
+  "@/lib/payment-disclosures": [
+    "PAYMENT_PROCESSING_RECOVERY_DISCLOSURE",
+    "PAYMENT_PROCESSING_RECOVERY_VERSION"
+  ],
+  "@/lib/stripe-school-readiness-flow": [
+    "stripeSchoolReadinessFlowFromFields"
+  ],
+  "@/lib/invoice-checkout-attempt": [
+    "invoiceCheckoutTenant"
+  ],
+  "@/lib/invoice-checkout-service": [
+    "startInvoiceCheckout"
+  ],
+  "@/lib/parent-payment-errors": [
+    "PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE",
+    "PARENT_PAYMENT_UNAVAILABLE_MESSAGE",
+    "paymentServiceError"
+  ],
+  "@/lib/tuition-payment-reminders": [
+    "TUITION_PAYMENT_REMINDER_NOTIFICATION_RETENTION_DAYS",
+    "TUITION_PAYMENT_REMINDER_SETTINGS_KEY",
+    "TUITION_PAYMENT_REMINDER_VERSION",
+    "isCurrentFamilyBalanceReminderEligible",
+    "normalizeTuitionPaymentReminderSettings",
+    "tuitionPaymentReminderCopy",
+    "tuitionPaymentReminderDecision",
+    "tuitionPaymentReminderDedupeKey",
+    "tuitionPaymentReminderDeliveryDedupeKey",
+    "tuitionPaymentReminderSettingsFromCustomFields"
+  ],
+  "@/lib/agency-contract-report": [
+    "agencyContractReportRow",
+    "contractReportCsvCell",
+    "contractReportRange"
+  ],
+  "@/lib/payment-method-request-forms": [
+    "PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE",
+    "PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE",
+    "buildPaymentMethodRequestCheckoutBranding",
+    "buildPaymentMethodRequestEmailSubject",
+    "buildPaymentMethodRequestEmailText",
+    "buildPaymentMethodRequestFocusedFormUrl",
+    "buildPaymentMethodRequestFormUrl",
+    "buildPaymentMethodRequestNotificationBody",
+    "buildPaymentMethodRequestShortFormUrl",
+    "createPaymentMethodRequestToken",
+    "getPaymentMethodRequestAppBaseUrl",
+    "paymentMethodRequestBrandSender",
+    "paymentMethodRequestRecipientOptions",
+    "storePaymentMethodRequestShortLink",
+    "uniquePaymentRequestEmails",
+    "validatePaymentMethodRequestToken"
+  ],
+  "@/lib/family-refunds": [
+    "issueFamilyRefund",
+    "validateFamilyRefundAvailability"
+  ],
+  "@/lib/refund-approval": [
+    "isExecutiveRefundApproverRole",
+    "refundSubmissionMode",
+    "validateRefundDecisionInput"
+  ],
+  "@/lib/one-time-billing-adjustments": [
+    "normalizeOneTimeBillingAdjustmentEffectiveDate",
+    "oneTimeBillingAdjustmentDescription",
+    "oneTimeBillingAdjustmentNeedsNote",
+    "oneTimeBillingAdjustmentOption"
+  ],
+  "@/lib/invoice-void": [
+    "invoiceLedgerBalanceCents",
+    "invoiceVoidBlocker"
+  ],
+  "@/lib/pay-ahead": [
+    "payAheadDescription",
+    "payAheadMonthCount",
+    "payAheadTotalCents"
+  ],
+  "@/lib/autopay-processing": [
+    "processAutopayInvoices"
+  ],
+  "@/lib/stripe-payment-claims": [
+    "createStripePaymentClaim",
+    "reconcileIdempotentStripeSubmission"
+  ],
+  "@/lib/accounts-receivable": [
+    "accountBalanceCenterIds",
+    "accountsReceivableFamilySelect",
+    "buildAccountsReceivableSnapshot",
+    "canViewAccountBalances"
+  ],
+  "@/lib/corporate-view-scope": [
+    "visibleCenterIdFilter",
+    "visibleCurrentFamilyWhere",
+    "visibleFamilyWhere",
+    "visibleIncidentWhere"
+  ],
+  "@/lib/family-payment-preflight": [
+    "readAuthorizedFamilyPaymentTarget"
+  ],
+  "@/lib/family-payment-snapshot": [
+    "readFamilyPaymentSnapshot"
+  ],
+  "@/lib/family-payment-amount": [
+    "familyPaymentAmountError"
+  ],
+  "@/lib/family-payment-service": [
+    "FAMILY_PAYMENT_ID_TOKEN",
+    "startFamilyPayment"
+  ],
+  "@/lib/stripe-connect-setup": [
+    "STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE",
+    "normalizeStripeConnectSetupInput",
+    "stripeConnectSetupCustomFieldPatch",
+    "verifyStripeConnectAccountBinding"
+  ],
+  "@/lib/stripe-payout-reconciliation": [
+    "buildStripePayoutReconciliation"
+  ],
+  "@/lib/corporate-stripe-verification": [
+    "authorizeCorporateStripeVerificationCenter",
+    "corporateStripeConfirmedPayoutBank",
+    "corporateStripePayoutBankIsConfirmed",
+    "corporateStripeVerificationBindingIsValid",
+    "readCorporateStripeVerificationTarget",
+    "stripeVerificationState"
+  ],
+  "@/lib/school-owner-access": [
+    "isSchoolOwnerAccount",
+    "normalizeOwnerLoginInput"
+  ],
+  "@/lib/active-school-locations": [
+    "CRM_LOCATION_ID_EXAMPLE",
+    "comparePublicKidCityLocations",
+    "defaultCenterNameFromCrmLocationId",
+    "filterPublicKidCityLocations",
+    "isActivePublicSchoolCandidate",
+    "mergePublicKidCityLocations",
+    "normalizeCrmLocationId",
+    "parseCrmLocationId",
+    "toPublicKidCityLocation"
+  ],
+  "@/lib/access-grant-guardrails": [],
+  "@/lib/executive-bulk-import": [
+    "parseExecutiveBulkImportCsv"
+  ],
+  "@/lib/school-location-identifiers": [
+    "canonicalSchoolLocationId",
+    "locationAliasesFromCustomFields",
+    "locationIdentifierCandidates",
+    "normalizeLocationIdentifier"
+  ],
+  "@/lib/registration-billing": [
+    "formatRegistrationPaymentAmount",
+    "normalizeRegistrationPaymentPlan",
+    "registrationInvoiceExternalId",
+    "registrationInvoiceNumber",
+    "registrationLedgerExternalId"
+  ],
+  "@/lib/message-attachments": [
+    "messageAttachmentKind"
+  ],
+  "@/lib/message-attachment-notice": [
+    "messageEmailBodyWithAttachments"
+  ],
+  "@/lib/message-notification-recipients": [
+    "messageNotificationPreferenceRoles",
+    "shouldNotifyLeadershipOfFamilyMessage",
+    "uniqueMessageNotificationUsers"
+  ],
+  "@/lib/message-reply-routing": [
+    "appendInAppMessageReplyInstructions",
+    "buildAbsoluteMessageReplyUrl",
+    "replySubject"
+  ],
+  "@/lib/parent-message-commit": [
+    "ParentMessageScopeChanged",
+    "createParentFamilyMessage"
+  ],
+  "@/lib/parent-message-recipients": [
+    "currentParentMessageLeadership",
+    "currentParentMessageReplyRecipientWhere",
+    "currentParentMessageTeacherWhere",
+    "parentMessageCenterId"
+  ],
+  "@/lib/message-content-safety": [
+    "messageContentSafetyMetadata",
+    "screenMessageContent"
+  ],
+  "@/lib/message-segmentation": [
+    "broadcastSegmentIsEmpty",
+    "broadcastSegmentSummary",
+    "familyMatchesBroadcastSegment",
+    "normalizeMessageBroadcastSegment"
+  ],
+  "@/lib/notification-delivery": [
+    "collectNotificationEmailRecipients",
+    "deliverNotificationExternalChannels",
+    "resolveNotificationDeliveryRecipientChannels"
+  ],
+  "@/lib/announcement-email": [
+    "previewAnnouncementEmail",
+    "sendAnnouncementEmail"
+  ],
+  "@/lib/message-report-policy": [
+    "canReportVisibleMessage",
+    "resolveMessageReportLeaders"
+  ],
+  "@/lib/account-deletion-policy": [
+    "accountDeletionApprovalPhrase",
+    "accountDeletionExecutionPhrase",
+    "accountDeletionFingerprint",
+    "canExecuteAccountDeletion"
+  ],
+  "@/lib/account-deletion-notice": [
+    "accountDeletionCompletionDelivery"
+  ],
+  "@/lib/account-deletion-profile-photos": [
+    "deleteAccountProfilePhotos"
+  ],
+  "@/lib/twilio-inbound-scope": [
+    "resolveTwilioInboundGuardian"
+  ],
+  "@/lib/readiness-guardrails": [
+    "envPresent",
+    "hasDatabaseConfig",
+    "hasStripeBillingConfig",
+    "hasSupabaseAuthConfig"
+  ],
+  "@/lib/client-error-reporting": [
+    "clientErrorFingerprintParts",
+    "normalizeClientErrorReportPayload"
+  ],
+  "@/lib/telemetry-privacy": [
+    "isCredentialDiagnosticPath"
+  ],
+  "@/lib/child-location": [
+    "childLocationStatusForTarget",
+    "validateChildLocationTarget"
+  ],
+  "@/lib/profile-photo": [
+    "contentTypeForProfilePhotoFile",
+    "matchesProfilePhotoSignature",
+    "mergeProfilePhotoCustomFields",
+    "readProfilePhotoStorageKey",
+    "removeProfilePhotoCustomFields",
+    "validateProfilePhotoFile"
+  ],
+  "@supabase/supabase-js": [
+    "createClient"
+  ],
+  "@/lib/mfa-management": [
+    "manageMfa"
+  ],
+  "@/lib/fte-report-import": [
+    "normalizeFteCenterKey",
+    "parseFteImportCsv"
+  ],
+  "@/lib/document-guardrails": [
+    "resolveSignatureRecipient",
+    "validateSignatureChildTarget"
+  ],
+  "@/lib/notification-guardrails": [
+    "notificationTargetGuard"
+  ],
+  "@/lib/marketing-account-discovery": [
+    "discoverMarketingConnection"
+  ],
+  "@/lib/marketing-oauth": [
+    "buildMarketingAuthorization",
+    "createOAuthNonce",
+    "exchangeMarketingOAuthCode",
+    "marketingOAuthStatus",
+    "oauthCallbackUrl",
+    "signOAuthState",
+    "verifyOAuthState"
+  ],
+  "@/lib/dashboard-options": [
+    "DASHBOARD_OPTIONS_KEY",
+    "dashboardOptionsFromCustomFields",
+    "normalizeDashboardOptions"
+  ],
+  "@/lib/procare-import-fields": [
+    "PROCARE_FIELD_OPTIONS",
+    "analyzeProcareHeaders",
+    "applyProcareFieldMapping",
+    "buildProcareCorrelationReview",
+    "isActiveProcareEnrollmentStatus",
+    "isActiveProcareStaffStatus",
+    "normalizeProcareEnrollmentStatusWithEndDate",
+    "procareAgeGroup",
+    "procareAllergyRecords",
+    "procareChildFullName",
+    "procareChildPreferredName",
+    "procareClassroomName",
+    "procareFamilyName",
+    "procareSourceFields",
+    "procareStaffName",
+    "procareValue"
+  ],
+  "@/lib/procare-migration-review": [
+    "buildProcareMigrationReviewRow",
+    "finalizeProcareMigrationReview",
+    "summarizeProcareMigrationReview"
+  ],
+  "@/lib/import-center-mapping": [
+    "buildCenterAliasMap",
+    "resolveImportCenter"
+  ],
+  "@/lib/procare-duplicate-matching": [
+    "buildProcareDuplicateMatch",
+    "scoreProcareDuplicateCandidate"
+  ],
+  "@/lib/procare-import-review": [
+    "PROCARE_DUPLICATE_REVIEW_ROW_LIMIT",
+    "procareImportReviewFingerprint",
+    "procareSourceSha256"
+  ],
+  "@/lib/procare-migration-controls": [
+    "buildProcareReconciliationReport",
+    "procareRetentionReviewDue"
+  ],
+  "@/lib/procare-fleet-verification": [
+    "assessProcareFleetSourceCoverage",
+    "buildProcareFleetVerificationReport"
+  ],
+  "@/lib/procare-multi-report-import": [
+    "buildProcareMultiReportRowsFromFiles",
+    "decodeProcareTabularBuffer",
+    "expandProcareSourceEntries"
+  ],
+  "@/lib/procare-rendered-report-import": [
+    "buildRenderedProcareReportRowsFromFiles",
+    "preparedRenderedProcareDatasetCoverage"
+  ],
+  "@/lib/procare-guardian-merge": [
+    "mergeProcareGuardianImports"
+  ],
+  "@/lib/procare-upload-limits": [
+    "MAX_PROCARE_SOURCE_BYTES",
+    "MAX_PROCARE_SOURCE_FILES",
+    "MAX_PROCARE_SOURCE_LABEL",
+    "MAX_PROCARE_STAGED_BYTES",
+    "procareTextSizeBytes"
+  ],
+  "@/lib/procare-staged-source-server": [
+    "readArchivedSourceFiles",
+    "readStagedSourceFiles"
+  ],
+  "@/lib/procare-staged-source": [
+    "makeStagedSourceManifest",
+    "signStagedSourceManifest",
+    "verifyStagedSourceManifest"
+  ],
+  "@/lib/procare-source-cache": [
+    "persistVerifiedImportSource",
+    "readVerifiedImportSource",
+    "removeConsumedImportStaging",
+    "stagedDescriptorsMatch"
+  ],
+  "@/lib/procare-import-counters": [
+    "IMPORT_COUNTER_CHECKPOINT",
+    "importCounterDelta",
+    "recoveredImportCounters"
+  ],
+  "@/lib/procare-import-lease": [
+    "acquireProcareImportLeases"
+  ],
+  "${rowCenterValue || ": [
+    "message: importWarning",
+    "warnings.push({ rowNumber"
+  ],
+  "@/lib/mfa-policy": [
+    "sessionMeetsMfaPolicy"
+  ],
+  "@/lib/device-sessions": [
+    "buildDeviceSessionLabel",
+    "cleanDeviceLabel",
+    "cleanUserAgent",
+    "inferDeviceType",
+    "normalizeDeviceAppMode"
+  ],
+  "@/lib/demo-accounts": [
+    "resolveLoginIdentifier"
+  ],
+  "@/lib/login-routing": [
+    "resolvePortalPostLoginPath"
+  ],
+  "@/lib/password-reset-provider-response": [
+    "passwordResetEmailCooldownKey",
+    "passwordResetIpVolumeKey"
+  ],
+  "@/lib/password-recovery-retry": [
+    "passwordUpdateFailure",
+    "readPasswordRecoveryRetry",
+    "sealPasswordRecoveryRetry"
+  ],
+  "@/lib/procare-staging-cleanup": [
+    "cleanupExpiredImportStaging"
+  ],
+  "@/lib/autopay-queue": [
+    "processAutopayQueue"
+  ],
+  "@/lib/fte-escalations": [
+    "fteEscalationCopy",
+    "fteReminderCenterIdsForUser",
+    "resolveFteEscalationChannels",
+    "shouldSendExternalFteEscalation"
+  ],
+  "@/lib/payment-dunning": [
+    "PAYMENT_DUNNING_MAX_ATTEMPTS",
+    "PAYMENT_DUNNING_NOTIFICATION_RETENTION_DAYS",
+    "nextPaymentDunningAt",
+    "paymentDunningCopy",
+    "paymentDunningDedupeKey",
+    "paymentDunningFailureMessage",
+    "paymentDunningSummary"
+  ],
+  "@/lib/document-expiration-reminders": [
+    "DOCUMENT_EXPIRATION_LOOKAHEAD_DAYS",
+    "DOCUMENT_EXPIRATION_NOTIFICATION_RETENTION_DAYS",
+    "certificationReminderCopy",
+    "documentExpirationWindow",
+    "documentReminderCopy",
+    "reminderDedupeKey"
+  ],
+  "@/lib/agency-balance-summary": [
+    "loadAgencyBalanceSummary"
+  ],
+  "@/lib/dashboard-widgets": [
+    "dashboardWidgetPreferencesForStorage",
+    "dashboardWidgetPreferencesKey",
+    "getDashboardWidgetPreferenceValue",
+    "normalizeDashboardWidgetPreferences"
+  ],
+  "@/lib/kiosk-billing-reminders": [
+    "buildKioskTuitionBalanceSummary",
+    "buildKioskTuitionBalanceWarning"
+  ],
+  "@/lib/compliance-workflows": [
+    "complianceTaskStatuses",
+    "normalizeComplianceTaskInput",
+    "normalizeEmergencyDrillInput"
+  ],
+  "@/lib/asset-hub": [
+    "ASSET_HUB_MAX_PENDING_UPLOADS",
+    "ASSET_HUB_TENANT_UPLOADS_PER_HOUR",
+    "ASSET_HUB_UPLOADS_PER_HOUR",
+    "CORPORATE_ASSET_TYPE",
+    "buildAssetStorageKey",
+    "canManageAssetHub",
+    "canReadAssetHub",
+    "normalizeAssetCategory",
+    "readAssetMetadata",
+    "validateAssetHubUpload"
+  ],
+  "@/lib/audit-history": [
+    "AuditHistoryError",
+    "parseAuditHistoryFilters"
+  ],
+  "@/lib/audit-history-query": [
+    "readAuditHistoryCsv"
+  ],
+  "@/lib/reporting-analytics": [
+    "buildAnalyticsReportData",
+    "normalizeReportFilters",
+    "reportRowsToCsv",
+    "reportRowsToPdf",
+    "rowsForReportKind"
+  ],
+  "@/lib/reporting-analytics-shared": [
+    "REPORT_KINDS"
+  ],
+  "@/lib/survey-responses": [
+    "publicSurveyResponsePayload"
+  ],
+  "@/lib/terminal-store": [
+    "canAccessTerminalStore",
+    "createTerminalStoreCheckoutSession",
+    "terminalStoreOrderTotals"
+  ],
+  "@/lib/tuition-mutation": [
+    "TuitionMutationError",
+    "lockTuitionCenter",
+    "runTuitionMutation",
+    "saveTuitionPlanInTransaction",
+    "tuitionMutationFailure"
+  ],
+  "@/lib/offline-payment-request": [
+    "offlinePaymentExternalId",
+    "offlinePaymentPaidAt",
+    "offlinePaymentRequestId",
+    "offlinePaymentRequestIdentity"
+  ]
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { isParentPaymentObservation, isPaymentObservationId, type ParentPaymentObservationTarget } from "@/lib/parent-payment-observation";
+import { isParentPaymentObservation, isPaymentObservationId, isServerCheckoutReceipt, type ParentPaymentObservationTarget } from "@/lib/parent-payment-observation";
 import { mergeParentAccountPaymentBlockers, mergeParentPaymentPhases, type ParentAccountPaymentBlocker, type ParentPendingPayment } from "@/lib/parent-payment-status";
 
 type Attempt = { familyId: string; invoiceId: string | null; method: "ach" | "card" | "link_bank"; sequence: number };
@@ -9,8 +9,10 @@ type Hold = Attempt & { paymentId: string | null; summary: ParentPendingPayment;
 type Request = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 /** Local uncertainty survives portal tabs until an exact receipt resolves it. */
-export function useParentPaymentRecovery(familyId: string, request: Request, refreshPage: () => void, serverBlocker?: ParentAccountPaymentBlocker | null) {
+export function useParentPaymentRecovery(familyId: string, request: Request, refreshPage: () => void, serverBlocker?: ParentAccountPaymentBlocker | null, resumeNavigationKey = familyId) {
   const [holds, setHolds] = useState<Hold[]>([]);
+  const resumeInFlight = useRef<AbortController | null>(null);
+  const [isResuming, setResuming] = useState(false);
   const [isRefreshing, setRefreshing] = useState(false);
   const [refreshNotice, setRefreshNotice] = useState({ familyId, message: "" });
   const setRefreshMessage = (message: string) => setRefreshNotice({ familyId, message });
@@ -18,6 +20,7 @@ export function useParentPaymentRecovery(familyId: string, request: Request, ref
   const [latestAccount, setLatestAccount] = useState<{ familyId: string; blocker: ParentAccountPaymentBlocker | null; invoices: Map<string, ParentPendingPayment> } | null>(null);
   const latestAccountRef = useRef(latestAccount);
   const activeFamily = useRef(familyId);
+  const activeResumeNavigation = useRef(resumeNavigationKey);
   const sequence = useRef(0);
   const inFlight = useRef<Attempt | null>(null);
   const held = useRef(holds);
@@ -25,12 +28,13 @@ export function useParentPaymentRecovery(familyId: string, request: Request, ref
   const mounted = useRef(true);
   useLayoutEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; observation.current?.abort(); };
+    return () => { mounted.current = false; observation.current?.abort(); resumeInFlight.current?.abort(); };
   }, []);
-  useLayoutEffect(() => { activeFamily.current = familyId; observation.current?.abort(); }, [familyId]);
+  useLayoutEffect(() => { activeFamily.current = familyId; observation.current?.abort(); resumeInFlight.current?.abort(); }, [familyId]);
+  useLayoutEffect(() => { activeResumeNavigation.current = resumeNavigationKey; resumeInFlight.current?.abort(); }, [resumeNavigationKey]);
 
   function begin(invoiceId: string | null, method: Attempt["method"]) {
-    if (inFlight.current || held.current.some(hold => hold.familyId === familyId && (!invoiceId || !hold.invoiceId || hold.invoiceId === invoiceId))) return null;
+    if (resumeInFlight.current || inFlight.current || held.current.some(hold => hold.familyId === familyId && (!invoiceId || !hold.invoiceId || hold.invoiceId === invoiceId))) return null;
     const observed = latestAccountRef.current?.familyId === familyId ? latestAccountRef.current : null;
     if (observed?.blocker && (!invoiceId || observed.blocker.blocksInvoicePayments || observed.invoices.has(invoiceId))) return null;
     observation.current?.abort();
@@ -52,7 +56,7 @@ export function useParentPaymentRecovery(familyId: string, request: Request, ref
     held.current = updated; setHolds(updated); finish(attempt);
   }
   async function refresh() {
-    if (!isPaymentObservationId(familyId) || inFlight.current) return;
+    if (!isPaymentObservationId(familyId) || inFlight.current || resumeInFlight.current) return;
     observation.current?.abort();
     const controller = new AbortController(); observation.current = controller;
     const capturedSequence = sequence.current, capturedFamily = familyId;
@@ -97,6 +101,36 @@ export function useParentPaymentRecovery(familyId: string, request: Request, ref
       if (mounted.current && observation.current === controller) setRefreshing(false);
     }
   }
+  async function resumeCheckout() {
+    if (!isPaymentObservationId(familyId) || inFlight.current || resumeInFlight.current) return;
+    const controller = new AbortController(); resumeInFlight.current = controller;
+    observation.current?.abort();
+    const capturedFamily = familyId, capturedSequence = sequence.current, requestNonce = crypto.randomUUID();
+    const capturedNavigation = resumeNavigationKey, capturedLocation = window.location.href;
+    const abandon = () => controller.abort();
+    window.addEventListener("pagehide", abandon); window.addEventListener("popstate", abandon);
+    setResuming(true); setRefreshMessage("");
+    const current = () => mounted.current && !controller.signal.aborted && activeFamily.current === capturedFamily
+      && sequence.current === capturedSequence && resumeInFlight.current === controller
+      && activeResumeNavigation.current === capturedNavigation && window.location.href === capturedLocation;
+    try {
+      const response = await request("/api/parent/resume-checkout", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ familyId: capturedFamily, requestNonce }), cache: "no-store", signal: controller.signal });
+      const body: unknown = await response.json().catch(() => null);
+      if (!current()) return;
+      if (!response.ok || !isServerCheckoutReceipt(body)
+        || (body as { familyId?: unknown }).familyId !== capturedFamily || (body as { requestNonce?: unknown }).requestNonce !== requestNonce) {
+        setRefreshMessage("This checkout cannot be safely reopened. The payment remains paused. Refresh its status or contact your school."); return;
+      }
+      // No new checkout was created and no existing hold is cleared.
+      window.location.href = body.url;
+    } catch {
+      if (current()) setRefreshMessage("We could not verify the existing checkout. The payment remains paused. Please check your connection and try again.");
+    } finally {
+      window.removeEventListener("pagehide", abandon); window.removeEventListener("popstate", abandon);
+      if (resumeInFlight.current === controller) { resumeInFlight.current = null; if (mounted.current) setResuming(false); }
+    }
+  }
   const currentHolds = holds.filter(item => item.familyId === familyId);
   const observedBlocker = latestAccount?.familyId === familyId ? latestAccount.blocker : null;
   const activeBlockers = [serverBlocker, observedBlocker].filter((item): item is ParentAccountPaymentBlocker => Boolean(item));
@@ -105,7 +139,7 @@ export function useParentPaymentRecovery(familyId: string, request: Request, ref
     count: Math.max(currentHolds.filter(item => !item.settled).length, ...activeBlockers.map(item => item.count)),
     blocksInvoicePayments: currentHolds.some(item => !item.invoiceId) || activeBlockers.some(item => item.blocksInvoicePayments),
   } : null]);
-  return { begin, finish, hold, refresh, isRefreshing, isSubmitting, refreshMessage: refreshNotice.familyId === familyId ? refreshNotice.message : "", blocker,
+  return { begin, finish, hold, refresh, resumeCheckout, isResuming, isRefreshing, isSubmitting, refreshMessage: refreshNotice.familyId === familyId ? refreshNotice.message : "", blocker,
     canNavigate: (attempt: Attempt) => mounted.current && activeFamily.current === attempt.familyId && inFlight.current === attempt && sequence.current === attempt.sequence,
     hasHolds: currentHolds.length > 0, allSettled: currentHolds.length > 0 && currentHolds.every(item => item.settled) && activeBlockers.length === 0,
     pendingInvoice: (invoiceId: string) => mergeParentPaymentPhases([
@@ -117,3 +151,4 @@ export function useParentPaymentRecovery(familyId: string, request: Request, ref
 }
 
 export type ParentPaymentRecovery = ReturnType<typeof useParentPaymentRecovery>;
+

@@ -89,6 +89,7 @@
     "readStripeConnectedAccountId",
     "registerStripeTerminalReader",
     "requiresStripePaymentMethodConfiguration",
+    "retrieveStripeCheckoutSession",
     "retrieveStripeConnectedAccount",
     "retrieveStripePaymentIntent",
     "retrieveStripePaymentMethod",
@@ -1462,5 +1463,9 @@
     "offlinePaymentPaidAt",
     "offlinePaymentRequestId",
     "offlinePaymentRequestIdentity"
+  ],
+  "@/lib/parent-checkout-resume": [
+    "parentCheckoutResumeCandidate",
+    "resumeParentCheckout"
   ]
 }

@@ -10,7 +10,7 @@ const reference=fileURLToPath(new URL('../../reference/',import.meta.url));
 function walk(dir){return readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(dir,e.name)):[path.join(dir,e.name)]);}
 const localPaths=walk(path.join(root,'src/app/api')).filter(p=>p.endsWith('/route.ts'));
 // The review bundle is sparse; a complete checkout uses its own route tree.
-const inventoryRoot=localPaths.length>=167?root:reference;
+const inventoryRoot=localPaths.length>=168?root:reference;
 const paths=walk(path.join(inventoryRoot,'src/app/api')).filter(p=>p.endsWith('/route.ts'));
 const allowed=new Set(['src/app/api/fte-reports/route.ts','src/app/api/workspace/selection/route.ts','src/app/api/profile/password/route.ts','src/app/api/profile/mfa/route.ts','src/app/api/auth/force-password-reset/route.ts','src/app/api/device-sessions/route.ts']);
 const results=[];
@@ -32,7 +32,7 @@ for(const file of paths){
  });
 }
 test.after(()=>{if(process.env.FTE_TEST_RESULTS_PATH)writeFileSync(process.env.FTE_TEST_RESULTS_PATH,JSON.stringify(results,null,2)+'\n')});
-test('API inventory covers all 167 routes with 138 getCurrentUser surfaces and fixed opt-ins',()=>{
- assert.equal(paths.length,167);assert.equal(paths.filter(p=>readFileSync(p,'utf8').includes('getCurrentUser')).length,138);
+test('API inventory covers all 168 routes with 139 getCurrentUser surfaces and fixed opt-ins',()=>{
+ assert.equal(paths.length,168);assert.equal(paths.filter(p=>readFileSync(p,'utf8').includes('getCurrentUser')).length,139);
  for(const file of paths){const relative=path.relative(inventoryRoot,file),candidate=existsSync(path.join(root,relative))?path.join(root,relative):file;const source=readFileSync(candidate,'utf8');if(source.includes('accessPurpose:'))assert.ok(allowed.has(relative),relative);}
 });

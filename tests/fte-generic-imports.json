@@ -1467,5 +1467,9 @@
   "@/lib/parent-checkout-resume": [
     "parentCheckoutResumeCandidate",
     "resumeParentCheckout"
+  ],
+  "@/lib/agency-service-register": [
+    "AGENCY_REGISTER_LIMIT",
+    "agencyServiceRegister"
   ]
 }

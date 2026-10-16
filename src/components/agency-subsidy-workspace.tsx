@@ -16,6 +16,7 @@ import { CollapsibleCard } from "@/components/workspace-preferences";
 import { AgencyReconciliationControls } from "@/components/agency-reconciliation-controls";
 import { AgencyBulkClaims } from "@/components/agency-bulk-claims";
 import { AgencyContractReport } from "@/components/agency-contract-report";
+import { AgencyServiceRegister } from "@/components/agency-service-register";
 import { AGENCY_RETRY_STORAGE_ERROR, agencyRetryStorageKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "@/lib/agency-retry-key";
 import { agencyProgramSetupBlockers } from "@/lib/agency-subsidy-billing";
 import { isCurrentlyEnrolledChildRecord, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
@@ -54,6 +55,7 @@ export function AgencySubsidyWorkspace({ centers, initialCenterId }: { centers: 
   const [centerId, setCenterId] = useState(initialSelection);
   const selectedTimeZone = centers.find((center) => center.id === centerId)?.timezone || "America/New_York";
   const [data, setData] = useState<Workspace | null>(null);
+  const [registerRevision, setRegisterRevision] = useState(0);
   const [pending, setPending] = useState(Boolean(initialSelection));
   const [message, setMessage] = useState("");
   const [error, setError] = useState(initialCenterId && !initialSelection ? "The requested school is unavailable. Choose an authorized school to view its agency billing." : "");
@@ -94,6 +96,7 @@ export function AgencySubsidyWorkspace({ centers, initialCenterId }: { centers: 
   const load = useCallback(async (requestedClaimPage = claimPage, requestedClaimCursor = claimCursor, requestedLedgerCursor = ledgerCursor, requestedBatchPage = batchPage, requestedBatchCursor = batchCursor, requestedAdjustmentPage = adjustmentPage, requestedAdjustmentCursor = adjustmentCursor) => {
     const requestCenterId = centerId;
     if (!requestCenterId) return;
+    setRegisterRevision(revision => revision + 1);
     setPending(true); setError("");
     try {
       const centerParam = requestCenterId === "all" ? "" : `centerId=${encodeURIComponent(requestCenterId)}&`;
@@ -118,7 +121,7 @@ export function AgencySubsidyWorkspace({ centers, initialCenterId }: { centers: 
       .then(({ response, body }) => {
         if (!active) return;
         if (!response.ok) setError(body.error || "Agency billing workspace could not be loaded.");
-        else setData(body);
+        else { setData(body); setRegisterRevision(revision => revision + 1); }
       })
       .catch(() => { if (active) setError("Agency billing workspace could not be loaded."); })
       .finally(() => { if (active) setPending(false); });
@@ -128,6 +131,8 @@ export function AgencySubsidyWorkspace({ centers, initialCenterId }: { centers: 
   async function post(action: string, fields: Record<string, unknown>, callbacks: { onError?: (message: string) => void; onSuccess?: (body: Record<string, unknown>) => void; reloadClaimPage?: number } = {}) {
     const requestCenterId = centerId;
     if (requestCenterId === "all" || data?.capabilities.canManageAgencyBilling !== true) { setError("Choose one authorized school with agency billing write access before creating or changing records."); return false; }
+    // Invalidate even for an uncertain mutation outcome; never retain stale payment totals.
+    setRegisterRevision(revision => revision + 1);
     setPending(true); setError(""); setMessage("");
     try {
       const response = await fetch("/api/billing/agency-claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, centerId: requestCenterId, ...fields }) });
@@ -160,7 +165,7 @@ export function AgencySubsidyWorkspace({ centers, initialCenterId }: { centers: 
       }
       return false;
     } finally {
-      if (centerIdRef.current === requestCenterId) setPending(false);
+      if (centerIdRef.current === requestCenterId) { setPending(false); setRegisterRevision(revision => revision + 1); }
     }
   }
 
@@ -419,6 +424,7 @@ export function AgencySubsidyWorkspace({ centers, initialCenterId }: { centers: 
 
   return (
     <section id="agency-subsidy-billing" className="space-y-4 scroll-mt-24">
+      {centerId && centerId !== "all" ? <AgencyServiceRegister key={`${centerId}:${registerRevision}`} centerId={centerId} today={agencyDateDefault(selectedTimeZone)} canManage={canManageAgencyBilling} /> : null}
       {centerId && centerId !== "all" ? <AgencyContractReport key={centerId} centerId={centerId} today={agencyDateDefault(selectedTimeZone)} /> : null}
       <Card className="glass-panel border-sky-500/30">
         <CardHeader>

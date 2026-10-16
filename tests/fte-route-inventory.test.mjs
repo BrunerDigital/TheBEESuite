@@ -20,11 +20,11 @@ for(const file of paths){
  const source=readFileSync(candidate,'utf8');
  if(!source.includes('getCurrentUser')||allowed.has(relative)||optionalAuth.has(relative))continue;
  test('default-deny route '+relative,async()=>{
-  let f=fixture();f.phase='import';const module=await import(pathToFileURL(candidate));
-  const methods=['GET','POST','PUT','PATCH','DELETE'].filter(m=>typeof module[m]==='function');assert.ok(methods.length);
+  let f=fixture();f.phase='import';const routeModule=await import(pathToFileURL(candidate));
+  const methods=['GET','POST','PUT','PATCH','DELETE'].filter(m=>typeof routeModule[m]==='function');assert.ok(methods.length);
   for(const method of methods){
    f=fixture();signIn(auth,f,'center:school-a');f.phase='request';
-   const res=await module[method](request('/'+relative.replace('src/app/','').replace('/route.ts','').replace(/\[[^\]]+\]/g,'synthetic-id')+'?centerId=school-c&userId=other',method==='GET'?undefined:{action:relative.includes('/terminal-payment/')?'process_payment':'revoke',centerId:'school-c',userId:'other',email:'other@example.invalid',applicationAccess:null,accessPurpose:'fte_reporting'},method),{params:Promise.resolve({id:'synthetic-id',requestId:'synthetic-id',reportId:'synthetic-id',provider:'google_ads',childId:'synthetic-id',centerId:'school-c',token:'synthetic-token'})});
+   const res=await routeModule[method](request('/'+relative.replace('src/app/','').replace('/route.ts','').replace(/\[[^\]]+\]/g,'synthetic-id')+'?centerId=school-c&userId=other',method==='GET'?undefined:{action:relative.includes('/terminal-payment/')?'process_payment':'revoke',centerId:'school-c',userId:'other',email:'other@example.invalid',applicationAccess:null,accessPurpose:'fte_reporting'},method),{params:Promise.resolve({id:'synthetic-id',requestId:'synthetic-id',reportId:'synthetic-id',provider:'google_ads',childId:'synthetic-id',centerId:'school-c',token:'synthetic-token'})});
    assert.ok([401,403,307].includes(res.status),method+' unexpected '+res.status);if(res.status===307)assert.ok(['/directors','/billing-settings','/login'].includes(new URL(res.headers.get('location')).pathname));
    assert.ok(f.dbCalls.every(c=>c.name==='user.findFirst'),JSON.stringify(f.dbCalls));assert.equal(f.writes.length,0);assert.equal(f.provider.length,0);assert.equal(f.audit.length,0);
    results.push({relative,method,status:res.status});

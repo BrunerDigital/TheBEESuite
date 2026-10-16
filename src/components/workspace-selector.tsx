@@ -17,12 +17,14 @@ export function WorkspaceSelector({
   compact = false,
   onSelected,
   previewMode = false,
+  restrictedFte = false,
 }: {
   workspace: WorkspaceState;
   nextPath: string;
   compact?: boolean;
   onSelected?: () => void;
   previewMode?: boolean;
+  restrictedFte?: boolean;
 }) {
   const router = useRouter();
   const [pendingSelection, setPendingSelection] = useState<WorkspaceSelectionValue | null>(null);
@@ -160,6 +162,7 @@ export function WorkspaceSelector({
           ? "Preview selection updated. No session or data changed."
           : pendingSelection
           ? "Changing workspace…"
+          : restrictedFte ? "Your selection controls which approved school you report FTE for."
           : "Your selection controls the school data shown across dashboards, reports, billing, communications, and other authorized areas."}
       </p>
     </div>

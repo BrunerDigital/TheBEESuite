@@ -30,7 +30,7 @@
     "work:tree": "node scripts/start-work.mjs worktree",
     "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
     "cloud:validate": "npm run clean:next && node scripts/audit-production-dependencies.mjs && npm run vercel-build",
-    "test": "node --import tsx --test tests/*.test.ts && npm run test:cron",
+    "test": "node --import tsx --test tests/*.test.ts && npm run test:cron && npm run test:fte-access",
     "test:cron": "node --import tsx --experimental-test-module-mocks --test tests/tuition-cron-billing-gates.test.mjs tests/tuition-cron-concurrent-invoices.test.mjs",
     "test:api": "tsx scripts/api-route-smoke.ts",
     "test:smoke": "tsx scripts/playwright-smoke.ts",
@@ -122,7 +122,8 @@
     "parents:prepare-payer-portals": "tsx -r tsconfig-paths/register scripts/prepare-payer-portal-accounts.ts",
     "stripe:reconcile-school-processing-fees": "tsx scripts/reconcile-stripe-school-processing-fees.ts",
     "cloud:release:check": "node scripts/release-production.mjs --check",
-    "cloud:release": "node scripts/release-production.mjs"
+    "cloud:release": "node scripts/release-production.mjs",
+    "test:fte-access": "node --experimental-transform-types --import ./tests/fte-access-runtime.mjs --test ./tests/fte-access.test.mjs ./tests/fte-route-inventory.test.mjs ./tests/fte-ui-contract.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

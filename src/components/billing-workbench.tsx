@@ -1245,7 +1245,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       if (payload.mode === "manualCheckPayment") {
-        if (!completeOfflineOperation(payload)) return;
+        if (!completeOfflineOperation(payload, json)) return;
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
         const appliedCount = json?.appliedInvoiceIds?.length ?? 0;
         setStatusMessage(json?.alreadyRecorded
@@ -1259,7 +1259,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       if (payload.mode === "manualCashPayment") {
-        if (!completeOfflineOperation(payload)) return;
+        if (!completeOfflineOperation(payload, json)) return;
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
         const appliedCount = json?.appliedInvoiceIds?.length ?? 0;
         setStatusMessage(json?.alreadyRecorded
@@ -1512,13 +1512,20 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     return true;
   }
 
-  function completeOfflineOperation(payload: Record<string, unknown>) {
+  function completeOfflineOperation(payload: Record<string, unknown>, successfulReceipt?: unknown) {
     if (typeof payload.familyId !== "string" || typeof payload.requestId !== "string") return false;
     try {
-      const cleared = clearConfirmedOfflinePaymentOperation(window.sessionStorage, offlineOperationScope(payload.familyId), {
+      const scope = offlineOperationScope(payload.familyId);
+      const cleared = clearConfirmedOfflinePaymentOperation(window.sessionStorage, scope, {
         requestId: payload.requestId, receiptConfirmed: true,
       });
-      if (!cleared) throw new Error("Payment recorded, but its browser recovery marker changed. Review the existing receipt before another payment.");
+      // Another mounted view may already have completed this exact receipt.
+      // Only a validated server success can accept a genuinely absent marker;
+      // a newer, corrupted, or inaccessible operation must still fail closed.
+      const alreadyCompleted = !cleared
+        && isConfirmedOfflinePaymentReceipt(successfulReceipt, payload)
+        && readOfflinePaymentOperation(window.sessionStorage, scope) === null;
+      if (!cleared && !alreadyCompleted) throw new Error("Payment recorded, but its browser recovery marker changed. Review the existing receipt before another payment.");
       setOfflineReceiptReview(null);
       return true;
     } catch (error) {

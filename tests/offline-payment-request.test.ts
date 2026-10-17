@@ -49,7 +49,7 @@ test("reusing a request with changed receipt details keeps key but changes finge
 test("client preserves pending request identity and rotates only after a successful receipt", () => {
   const ui = readFileSync("src/components/billing-workbench.tsx", "utf8");
   assert.match(ui, /getOrCreateOfflinePaymentOperation\(window\.sessionStorage, offlineOperationScope\(selectedFamilyId\)\)/);
-  assert.equal((ui.match(/if \(!completeOfflineOperation\(payload\)\) return/g) ?? []).length, 2);
+  assert.equal((ui.match(/if \(!completeOfflineOperation\(payload, json\)\) return/g) ?? []).length, 2);
   assert.equal((ui.match(/const requestId = offlinePaymentRequestIdFor\(selectedFamily\.id\)/g) ?? []).length, 2);
   assert.match(readFileSync("src/app/[slug]/page.tsx", "utf8"), /currentUserId: user\.id/);
   assert.match(ui, /No duplicate payment was posted/);

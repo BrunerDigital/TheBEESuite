@@ -16,7 +16,7 @@ function fixture(storage=memoryStorage()){
     checkAmountDollars:'100.00',checkNumber:'fixture-reference',checkPaidAt:'2026-10-13T12:00',checkNotes:'',cashAmountDollars:'100.00',cashReference:'receipt-fixture',cashNotes:'',cashPaidAt:'2026-10-16T17:32',confirmBillingAction:()=>!state.cancelled,
     offlinePaymentOperationInFlight:{current:false},state, families:[family,{id:'other-family',centerId:'school-fixture'}], currentUserId:'user-fixture',selectedFamily:family,timeZone:'UTC',
     window:{sessionStorage:storage,confirm:()=>confirmed},
-    fetch:async(url,init)=>{state.requests.push(JSON.parse(init.body));if(response.throws)throw new Error('interrupted');return {ok:response.status<400,json:async()=>{if(response.malformed)throw new Error('truncated JSON');return typeof response.body==='function'?response.body(state.requests.at(-1)):response.body;}};},
+    fetch:async(url,init)=>{state.requests.push(JSON.parse(init.body));if(response.wait)await response.wait;if(response.throws)throw new Error('interrupted');return {ok:response.status<400,json:async()=>{if(response.malformed)throw new Error('truncated JSON');return typeof response.body==='function'?response.body(state.requests.at(-1)):response.body;}};},
     setErrorMessage:v=>state.errors.push(v),setStatusMessage:v=>state.messages.push(v),
     setCashAmountDollars:()=>state.resets++,setCashReference:()=>state.resets++,setCashNotes:()=>state.resets++,setCashPaidAt:()=>state.resets++,
     setCheckAmountDollars:()=>state.resets++,setCheckNumber:()=>state.resets++,setCheckNotes:()=>state.resets++,setCheckPaidAt:()=>state.resets++,
@@ -146,6 +146,23 @@ await check('failed receipt lookup releases operation guard and retains identity
   for(const outcome of [{throws:true},{status:500,body:null},{status:200,malformed:true},{status:200,body:{ok:true,found:false}}]) {
     const f=fixture();const id=f.handlers.getId(family.id);f.respond(outcome);f.handlers.recover();await f.settle();f.respond({status:200,body:p=>receipt(p.requestId)});f.handlers.cash();await f.settle();assert.equal(f.state.requests.length,2);assert.equal(f.state.requests[1].requestId,id);assert.equal(f.state.resets,4);
   }
+});
+
+
+for(const method of ['cash','check']) for(const first of ['old','fresh']) await check(`${method} remount ${first}-first duplicate success completes without a false warning`,async()=>{
+  const old=fixture(),fresh=fixture(old.storage);let releaseOld,releaseFresh;
+  const receiptFor=p=>{const r=receipt(p.requestId);if(p.mode==='manualCheckPayment')r.payment.provider='manual_check';return r;};
+  old.respond({status:200,wait:new Promise(r=>{releaseOld=r;}),body:receiptFor});fresh.respond({status:200,wait:new Promise(r=>{releaseFresh=r;}),body:receiptFor});
+  old.handlers[method]();fresh.handlers[method]();await Promise.resolve();
+  assert.equal(old.state.requests[0].requestId,fresh.state.requests[0].requestId);
+  if(first==='old'){releaseOld();await old.settle();releaseFresh();await fresh.settle();}else{releaseFresh();await fresh.settle();releaseOld();await old.settle();}
+  assert.deepEqual(old.state.errors.filter(Boolean),[]);assert.deepEqual(fresh.state.errors.filter(Boolean),[]);assert.equal(old.state.resets,4);assert.equal(fresh.state.resets,4);assert.equal(old.storage.values.size,0);
+});
+await check('old remount success never clears a newer request marker',async()=>{
+  const old=fixture(),fresh=fixture(old.storage);let releaseOld;
+  old.respond({status:200,wait:new Promise(r=>{releaseOld=r;}),body:p=>receipt(p.requestId)});fresh.respond({status:200,body:p=>receipt(p.requestId)});
+  old.handlers.cash();fresh.handlers.cash();await fresh.settle();const next=fresh.handlers.getId(family.id);assert.notEqual(next,old.state.requests[0].requestId);releaseOld();await old.settle();
+  assert.equal(fresh.handlers.getId(family.id),next);assert.equal(old.state.resets,0);assert.match(old.state.errors.at(-1),/marker changed/);
 });
 
 console.log(JSON.stringify({results},null,2));if(results.some(x=>x.status!=='passed'))process.exitCode=1;

@@ -518,6 +518,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
   const [paymentReviewMethod, setPaymentReviewMethod] = useState<DirectorPaymentMethod | null>(null);
   const [isPending, startTransition] = useTransition();
+  const offlinePaymentOperationInFlight = useRef(false);
 
   function runBillingTransition(action: () => Promise<void>) {
     startTransition(async () => {
@@ -1136,7 +1137,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function handleCenterChange(value: string | null) {
-    if (isPending || !value || !centers.some((center) => center.id === value) || value === centerId || !confirmDiscardBillingInput()) return;
+    if (offlinePaymentOperationInFlight.current || isPending || !value || !centers.some((center) => center.id === value) || value === centerId || !confirmDiscardBillingInput()) return;
     const nextPlans = tuitionPlans.filter((plan) => plan.centerId === value);
     const nextFamily = families.find((family) => family.centerId === value) ?? null;
     resetFamilyBoundBillingDrafts(nextFamily, value);
@@ -1148,7 +1149,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function handleFamilyChange(value: string | null) {
-    if (isPending || !value || value === effectiveFamilyId || !filteredFamilies.some((family) => family.id === value) || !confirmDiscardBillingInput()) return;
+    if (offlinePaymentOperationInFlight.current || isPending || !value || value === effectiveFamilyId || !filteredFamilies.some((family) => family.id === value) || !confirmDiscardBillingInput()) return;
     const nextFamily = filteredFamilies.find((family) => family.id === value) ?? null;
     resetFamilyBoundBillingDrafts(nextFamily, centerId);
     if (nextFamily) setFamilyListMode(billingFamilyAccountCategory(nextFamily));
@@ -1206,7 +1207,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function submit(payload: Record<string, unknown>) {
-    runBillingTransition(async () => {
+    const isOfflinePayment = payload.mode === "manualCashPayment" || payload.mode === "manualCheckPayment";
+    // React's pending state is rendered asynchronously. Keep rapid repeated
+    // submissions from racing to clear the same confirmed recovery marker.
+    if (isOfflinePayment && offlinePaymentOperationInFlight.current) return;
+    if (isOfflinePayment) offlinePaymentOperationInFlight.current = true;
+    const submitRequest = async () => {
       setStatusMessage("");
       setErrorMessage("");
       const response = await fetch("/api/billing/invoices", {
@@ -1305,6 +1311,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       const skipped = json?.skipped ?? 0;
       const total = typeof json?.totalCents === "number" ? ` Total posted: ${money(json.totalCents)}.` : "";
       setStatusMessage(`${created} invoice${created === 1 ? "" : "s"} created. ${skipped} duplicate${skipped === 1 ? "" : "s"} skipped.${total}`);
+    };
+    runBillingTransition(async () => {
+      try {
+        await submitRequest();
+      } finally {
+        if (isOfflinePayment) offlinePaymentOperationInFlight.current = false;
+      }
     });
   }
 
@@ -1515,9 +1528,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function recoverOfflineReceipt() {
-    if (!selectedFamily) return;
+    if (offlinePaymentOperationInFlight.current || !selectedFamily) return;
+    offlinePaymentOperationInFlight.current = true;
     const family = selectedFamily;
-    runBillingTransition(async () => {
+    const lookupReceipt = async () => {
       setStatusMessage(""); setErrorMessage(""); setOfflineReceiptReview(null);
       const scope = offlineOperationScope(family.id);
       const operation = readOfflinePaymentOperation(window.sessionStorage, scope);
@@ -1533,6 +1547,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       if (!response.ok || result?.ok !== true) { setErrorMessage(result?.error || "The receipt could not be checked. The saved request identity is retained."); return; }
       if (result.found === true && reviewOfflineReceipt(result.receipt, operation)) return;
       setErrorMessage("No confirmed receipt is available yet. The saved request identity is retained. No payment was submitted; re-enter the intended payment details to retry safely.");
+    };
+    runBillingTransition(async () => {
+      try {
+        await lookupReceipt();
+      } finally {
+        offlinePaymentOperationInFlight.current = false;
+      }
     });
   }
 
@@ -1546,6 +1567,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function acknowledgeOfflineReceipt() {
+    if (offlinePaymentOperationInFlight.current) return;
     const currentReview = currentOfflineReceiptReview();
     if (!currentReview) return;
     const { receipt, requestId, scope } = currentReview;
@@ -2155,10 +2177,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           <AlertTitle>Interrupted cash or check payment?</AlertTitle>
           <AlertDescription className="space-y-2">
             <p>Review the saved request after a reload or interrupted response. This only checks for an existing receipt and never submits a payment.</p>
-            <Button type="button" variant="outline" onClick={recoverOfflineReceipt}>Review unresolved payment</Button>
+            <Button type="button" variant="outline" disabled={isPending} onClick={recoverOfflineReceipt}>Review unresolved payment</Button>
             {currentOfflineReview ? <div className="space-y-2">
               <p>Recorded {currentOfflineReview.receipt.provider === "manual_cash" ? "cash" : "check"} payment: {money(currentOfflineReview.receipt.amountCents)}. Receipt {currentOfflineReview.receipt.paymentId}. No additional payment was posted.</p>
-              <Button type="button" variant="outline" onClick={acknowledgeOfflineReceipt}>I reviewed this receipt; start a new payment</Button>
+              <Button type="button" variant="outline" disabled={isPending} onClick={acknowledgeOfflineReceipt}>I reviewed this receipt; start a new payment</Button>
             </div> : null}
           </AlertDescription>
         </Alert> : null}
@@ -2271,7 +2293,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   variant={effectiveFamilyListMode === mode ? "default" : "outline"}
                   disabled={isPending || familyCounts[mode] === 0}
                   onClick={() => {
-                    if (mode === effectiveFamilyListMode || !familyCounts[mode] || !confirmDiscardBillingInput()) return;
+                    if (offlinePaymentOperationInFlight.current || isPending || mode === effectiveFamilyListMode || !familyCounts[mode] || !confirmDiscardBillingInput()) return;
                     const nextFamily = scopedFamilies.find((family) => billingFamilyAccountCategory(family) === mode) ?? null;
                     resetFamilyBoundBillingDrafts(nextFamily, centerId);
                     setFamilyListMode(mode);

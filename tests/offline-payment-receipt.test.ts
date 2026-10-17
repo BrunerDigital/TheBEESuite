@@ -39,6 +39,6 @@ test("wrong account, request, method, amount and ledger receipts fail closed", (
 test("receipt validation precedes token rotation and draft reset", () => {
   const ui = readFileSync("src/components/billing-workbench.tsx", "utf8");
   const guard = ui.indexOf("!isConfirmedOfflinePaymentReceipt(json, payload)");
-  assert.ok(guard > 0 && guard < ui.indexOf("if (!completeOfflineOperation(payload))"));
-  assert.match(ui.slice(guard, ui.indexOf("if (!completeOfflineOperation(payload))")), /setErrorMessage\([\s\S]*return;/);
+  assert.ok(guard > 0 && guard < ui.indexOf("if (!completeOfflineOperation(payload, json))"));
+  assert.match(ui.slice(guard, ui.indexOf("if (!completeOfflineOperation(payload, json))")), /setErrorMessage\([\s\S]*return;/);
 });

@@ -4,7 +4,7 @@ Evidence captured October 17 Eastern / October 18 UTC. Scope: the existing web p
 
 ## Current production and preserved work
 
-Canonical production is `024cbb83c736205f8f7716b1ac28892502a6f440`, Vercel `dpl_DYdTQPxMcZH9xzKJXS76wVM6bohr`, READY with apex, www, beta, project and main-branch aliases. The public health endpoint returned HTTP 200, `ok: true`, `database: connected`. Current-main GitHub CI and unsigned iOS verification succeeded. Vercel's 24-hour runtime-error query returned no clusters; error/fatal logs for that deployment were empty in the queried window. These bounded observations do not prove every authenticated workflow.
+At initial inspection, canonical production was `024cbb83c736205f8f7716b1ac28892502a6f440`, Vercel `dpl_DYdTQPxMcZH9xzKJXS76wVM6bohr`, READY with apex, www, beta, project and main-branch aliases. The public health endpoint returned HTTP 200, `ok: true`, `database: connected`. That main revision's GitHub CI and unsigned iOS verification succeeded. Vercel's 24-hour runtime-error query returned no clusters; error/fatal logs for that deployment were empty in the queried window. These bounded observations do not prove every authenticated workflow. The scoped completion release and final receipts are tracked in [PR #490](https://github.com/BrunerDigital/TheBEESuite/pull/490).
 
 The shared main checkout contains unrelated dirty work and is behind current remote main. It and its running processes were preserved. This work uses an isolated current-main worktree. There were no open PRs at the start. Older worktrees remain retained until their dirty files, branch ancestry, financial archives and active ownership are reviewed; a merged branch alone does not authorize deleting its working files.
 
@@ -27,7 +27,7 @@ The shared main checkout contains unrelated dirty work and is behind current rem
 - The existing synthetic Director passed four API checks: concurrent own-school import history 200, Kokomo 403, Centennial 403, then old-cookie replay after logout 401. These establish negative access boundaries, not positive real-school workflow acceptance.
 - Credentialed QA now records the sanitized login HTTP status and fails promptly on a rejected credential. An exact designated executive rerun recorded 401 with no unexpected writes. Credentials/provider response bodies remain omitted; no account was reset or provisioned.
 
-Full-gate results are recorded in the final validation section after completion. Never infer a pass from a running command.
+Use the final validation receipts below for the full gate. Never infer a pass from a running command.
 
 ## Fresh school-readiness evidence
 
@@ -85,4 +85,6 @@ The [remaining-task queue](REMAINING_TASKS.md) carries acceptance requirements. 
 
 ## Final validation
 
-Pending completion of the final full gate and current credentialed role run. Local evidence is under `output/audit/completion-20261017/`; it is ignored and is not supplied by a fresh clone. The source correction and this redacted checkpoint can be reviewed through the protected PR.
+The full build and protected validation receipts, intended commit, deployment binding and release closeout are recorded in [PR #490](https://github.com/BrunerDigital/TheBEESuite/pull/490). Its live checks distinguish pending, failed and successful runs; only successful receipts establish those checks. The canonical multi-role QA aggregate remains failed for the credential reasons documented above, independently of build status.
+
+Local evidence is under `output/audit/completion-20261017/`, including `vercel-build-final.log`, the canonical role report, teacher and Director isolation reports, browser-fixture results, both dependency audits and the stopped disposable PostgreSQL rehearsal. These ignored files are retained in this task's managed worktree and are not supplied by a fresh clone. No credentials or session-cookie values were saved in those reports. The source correction and redacted checkpoint are reviewable through the protected PR.

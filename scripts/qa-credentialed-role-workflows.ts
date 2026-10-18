@@ -389,6 +389,7 @@ async function main() {
         }
         await route.continue();
       });
+      let loginStatus: number | undefined;
       try {
       if (["127.0.0.1", "localhost"].includes(new URL(baseUrl).hostname)) {
         await context.route("**/_vercel/**/script.js", (route) => route.fulfill({ status: 204, contentType: "application/javascript" }));
@@ -419,7 +420,12 @@ async function main() {
       await visit(page, account.loginPath);
       await page.locator("#email").fill(account.email);
       await page.locator("#password").fill(password);
+      const loginResponse = page.waitForResponse((response) => response.request().method() === "POST"
+        && new URL(response.url()).origin === new URL(baseUrl).origin
+        && new URL(response.url()).pathname === "/api/auth/login");
       await page.locator("button[type='submit']").click();
+      loginStatus = (await loginResponse).status();
+      if (loginStatus !== 200) throw new Error("Designated QA credential was not accepted.");
       await page.waitForURL((url) => !["/login", "/parents", "/teachers", "/directors", "/executives"].includes(url.pathname), { timeout: 45_000 });
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
       if (/Login failed|Invalid email or password|not active/i.test(await page.locator("body").innerText())) {
@@ -504,7 +510,7 @@ async function main() {
       }
 
       } catch {
-        results.push({ role: account.key, passed: false, failure: "Workflow did not complete; no provider or credential error payload retained." });
+        results.push({ role: account.key, passed: false, ...(loginStatus === undefined ? {} : { loginStatus }), failure: "Workflow did not complete; no provider or credential error payload retained." });
       } finally {
         try {
           const logout = await context.request.post(`${baseUrl}/api/auth/logout`, { maxRedirects: 0 });

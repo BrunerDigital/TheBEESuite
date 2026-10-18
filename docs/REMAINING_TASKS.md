@@ -1,8 +1,32 @@
 # BEE Suite remaining tasks
 
-Reconciled September 28, 2026, after merged PRs #430, #431 and #432, from Git/PR/worktree state and the September 28 execution, recovery and provisioning reports. This is the working completion queue. Older checklists remain historical inventories; their unchecked boxes are not automatically missing features. Counts below are dated review evidence and must be refreshed before any targeted action.
+Current reconciliation: October 17, 2026, against production/main `024cbb83`, protected PR history through #489, canonical school readiness and fresh technical verification. Use [the execution checkpoint](COMPLETION_EXECUTION_2026-10-17.md) for complete results/limits and [the 45-school worklist](COMPLETION_SCHOOL_GATES_2026-10-17.csv) for current module gaps. Existing approved operations remain live.
 
-## Finish in this order
+## Current execution queue
+
+| Priority / owner | Concrete remaining action | Evidence needed to close |
+| --- | --- | --- |
+| P0 — recovery/operations owners | Select company vault/account, second human owner, independent key custody, retention, restricted runner and alert destinations; refresh the matched database/private-file inventory | Exact configuration preview, independent recovery, retained bytes, tested schedule/failure alerts and owner acceptance; September's drill remains bounded historical evidence |
+| P0 — school owners | Confirm Kokomo/Centennial business profiles and source review; classify contact/PIN exceptions and Centennial's 14 unmatched active staff; expand by the 45-school worklist | Named source reviewers and exact dispositions, positive school/device tests and separate setup/access/invitation/kiosk/billing/payment/communication/cutover decisions; all 180 fleet module gates remain blocked |
+| P0 — security/identity owners | Complete primary/backup MFA enrollment, lost-device rehearsal and approved required-role policy; classify 44 active application/Auth email mismatches | Human enrollment/recovery, exact identity/grant decisions and old-session rejection; zero verified factors observed; no bulk provisioning |
+| P0 — finance/provider owners | Reconcile 45 pending and nine manual-review historical webhook receipts, current payout requirements and any still-open exact-family cases | Exact Stripe account/event/object/payment/invoice/ledger evidence and approved per-record hold/replay/correction decisions; receipt counts are not failed-payment counts |
+| P0/P1 — communication owners | Review 107 failed SendGrid deliveries, 52 failed payout SMS and two pending SMS in the rolling 14-day inventory; resolve sender/recipient causes | Exact recipient/template/consent/dedupe previews and actual delivery/reply outcomes; no implicit resend or provider/suppression change |
+| P1 — QA/operations owners | Supply current secure synthetic credentials, finish positive two-school role/device workflows, alert/escalation drills, repaired-worker schedule observation and degraded-provider/concurrency checks | Dated workflow/isolation/logout/device results, alert receipt and rollback ownership; public smoke/static checks do not close operational acceptance |
+| P1 — school/training owners | Review the released narrated library/overview, finish school-specific parent/support training, select reviewed import or intentional empty start and approved waves | Named reviewers, reconciliations, cutover windows, support and module GO/HOLD records; archive source reports recoverably after approval |
+| P1 — Apple/device owner | Test current Parent/Teacher builds on a physical iPhone; finish source-matched signing/disclosures/TestFlight/submission decisions | Authenticated physical-device and authorized Apple receipts; static repository and unsigned native CI are already verified |
+| P2/P3 — product/business owners | Explicitly include or defer commercial/legal/public-launch extras and expansion modules | Named scope/acceptance; Android, native push, universal links and new modules remain separately scoped |
+
+## Released since the September queue
+
+Director resources, narrated training and overview (#471/#472/#473/#478); owner setup access and safer source imports (#468/#469/#477); closed-school history/payment and FTE access (#474/#486); child tuition persistence, cadence/coverage/timing (#475/#476/#479/#483); reviewed family/payment access (#480); atomic offline/history/Checkout/client recovery (#481/#485/#487/#489); school-bound payout setup (#470); agency service-period register (#488); and bounded Supabase worker repair (#482) are shipped implementation. Do not reopen these as missing features from unchecked historical boxes. Operational approvals and current acceptance remain distinct.
+
+Exact household, identity and payment evidence stays private. The execution checkpoint records the current full-gate and credentialed-QA results. Every closed operational task needs a dated scope, result and owner.
+
+## Historical September 28 checkpoint — superseded inventory
+
+The remainder preserves the earlier queue and its provenance. Counts, credentials, unresolved-family assumptions, provider state and release IDs below are historical, not current operational instructions. Use the current queue above before any action.
+
+### September 28 order
 
 | ID | Priority / state | Remaining work | Evidence required to close |
 | --- | --- | --- | --- |

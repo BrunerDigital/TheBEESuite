@@ -1,5 +1,9 @@
 # BEE Suite coordinated production rollout
 
+## Current completion reconciliation — October 17, 2026
+
+The October 7 candidate and prior task ownership/checkpoints below are historical. PR #462 and subsequent technical changes through #489 have merged. Canonical production is READY on `024cbb83c736205f8f7716b1ac28892502a6f440`; public health/smoke and the bounded runtime log review passed. Use [the refreshed completion execution](../docs/COMPLETION_EXECUTION_2026-10-17.md), [school module worklist](../docs/COMPLETION_SCHOOL_GATES_2026-10-17.csv) and [remaining-task queue](../docs/REMAINING_TASKS.md) for current evidence and independent business gates. This completion pass corrects verification tooling and records current results; it does not activate schools, mutate money/access, send messages or publish apps.
+
 Updated: 2026-10-07 14:15 UTC. Lane: release, with discover/build/verify/operate/artifact workstreams. Task 1 owns this manifest. The September 29 checkpoint and bootstrap tables below are historical; use the current checkpoint for release decisions.
 
 ## Current checkpoint — October 7

@@ -2,15 +2,17 @@
 
 The release boundary is the existing BEE Suite web product and Parent/Teacher iOS apps. Android, native push, universal links and new expansion modules remain outside this pass unless explicitly added by the product owner. A live web release does not establish school activation or Apple approval.
 
+Current evidence and exact remaining handoffs: [October 17 completion execution](COMPLETION_EXECUTION_2026-10-17.md), [school module worklist](COMPLETION_SCHOOL_GATES_2026-10-17.csv), and [remaining tasks](REMAINING_TASKS.md). Earlier dated results below are historical where newer evidence exists. Existing approved operations remain live while readiness reviews are outstanding.
+
 ## Work and acceptance
 
 | Workstream | Concrete acceptance | Current evidence / next action |
 | --- | --- | --- |
-| Existing web product | Required role workflows, responsive UI, isolation and full build pass on the released commit | September 15 prior release evidence covers nine designated roles. Recheck changed flows on the final source. |
+| Existing web product | Required role workflows, responsive UI, isolation and full build pass on the released commit | Current-main CI/public smoke, focused browser checks and real local tuition concurrency are verified October 17. Full-gate and current credentialed-role results are in the execution checkpoint; school-specific positive/device acceptance remains separate. |
 | Account security | Self-service primary/backup authenticator setup, protected removal, fresh login after changes, session-aware required-role policy | Implementation in this pass; provider enrollment/recovery rehearsal and approved role rollout remain required. |
 | Recovery | Encrypted off-platform DB/Storage backups, verified destination copy, retained restore keys, monitored schedule and isolated full restore | The September 28 combined database/Auth/private-file/application rehearsal and exact lab cleanup are verified; see [evidence and limits](COMBINED_RECOVERY_DRILL_2026-09-28.md). Independent vault/key custody, monitored schedule, alerts and owner acceptance remain outstanding. Regenerated Storage IDs/timestamps still need a real-recovery metadata disposition. |
 | School readiness | Source-backed owner confirmations for every school included in this version's rollout | Private 69-school worklist exists; missing entries cannot be invented or counted as confirmed. Product completion and school activation are separate. |
-| Financial/access exceptions | Review source evidence, approve exact corrections, verify current ledger and access results | Three private exceptions remain; no repair has been applied. |
+| Financial/access exceptions | Review source evidence, approve exact corrections, verify current ledger and access results | Refresh exact private cases rather than carrying forward the historical three-case count. October 17 receipt inventory has 45 pending and nine manual-review webhooks; Centennial has 14 staff/Auth mismatches to classify. No blanket repair or replay is authorized. |
 | Operations | Named responders, delivery/reply evidence, payroll/report reconciliation, physical-device/kiosk verification | Requires selected school, school representative, devices and safe test recipient details. |
 | iOS | Signed source-matched Parent/Teacher archives, authenticated device evidence, TestFlight and approved pilot/public release | Unsigned native verification exists. App Store Connect sign-in and signed/device evidence remain outstanding. |
 

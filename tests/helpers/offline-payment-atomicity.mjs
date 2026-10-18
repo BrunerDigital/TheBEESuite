@@ -13,7 +13,7 @@ function section(source, start, end) {
   assert.ok(source.includes(start) && source.includes(end));
   return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 }
-const request = readFileSync(root + 'src/lib/offline-payment-request.ts', 'utf8').replace(/^import.*\n/, '').replaceAll('export ', '');
+const request = readFileSync(root + 'src/lib/offline-payment-request.ts', 'utf8').replace(/^import[^\r\n]*\r?\n/, '').replaceAll('export ', '');
 const source = [request,
   section(audit, 'export async function writeAuditLog(', 'export async function writeSystemAuditLog').replace('export ', ''),
   section(application, 'export async function applyFamilyBalancePaymentToOpenInvoices', 'export type StripePaymentApplicationResult').replace('export ', ''),

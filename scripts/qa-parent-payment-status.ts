@@ -125,7 +125,8 @@ async function main() {
           }
           if (scenario === "family") {
             assert.equal(await page.getByRole("button", { name: "Buy with card", exact: true }).isDisabled(), true);
-            assert.equal(await page.getByRole("button", { name: "Buy with Link", exact: true }).isDisabled(), true);
+            const uniformCheckout = page.getByRole("button", { name: "Buy with card", exact: true }).locator("..");
+            assert.equal(await uniformCheckout.getByRole("button", { name: "Link or card", exact: true }).isDisabled(), true);
           }
           assert.equal(await page.getByRole("link", { name: /Billing settings/ }).count(), 1);
         } else {

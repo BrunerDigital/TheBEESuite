@@ -10,7 +10,10 @@
     "deepmerge-ts": "8.0.1",
     "esbuild": "^0.28.1",
     "postcss": "^8.5.18",
-    "sharp": "$sharp"
+    "sharp": "$sharp",
+    "xcode": {
+      "uuid": "11.1.1"
+    }
   },
   "scripts": {
     "dev": "next dev",

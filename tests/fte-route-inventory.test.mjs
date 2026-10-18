@@ -8,15 +8,15 @@ import * as auth from '../src/lib/auth.ts';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const reference=fileURLToPath(new URL('../../reference/',import.meta.url));
 function walk(dir){return readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(dir,e.name)):[path.join(dir,e.name)]);}
-const localPaths=walk(path.join(root,'src/app/api')).filter(p=>p.endsWith('/route.ts'));
+const localPaths=walk(path.join(root,'src/app/api')).filter(p=>path.basename(p)==='route.ts');
 // The review bundle is sparse; a complete checkout uses its own route tree.
 const inventoryRoot=localPaths.length>=168?root:reference;
-const paths=walk(path.join(inventoryRoot,'src/app/api')).filter(p=>p.endsWith('/route.ts'));
+const paths=walk(path.join(inventoryRoot,'src/app/api')).filter(p=>path.basename(p)==='route.ts');
 const allowed=new Set(['src/app/api/fte-reports/route.ts','src/app/api/workspace/selection/route.ts','src/app/api/profile/password/route.ts','src/app/api/profile/mfa/route.ts','src/app/api/auth/force-password-reset/route.ts','src/app/api/device-sessions/route.ts']);
 const results=[];
 const optionalAuth=new Set(['src/app/api/system/client-error-reports/route.ts']);
 for(const file of paths){
- const relative=path.relative(inventoryRoot,file),candidate=existsSync(path.join(root,relative))?path.join(root,relative):file;
+ const relative=path.relative(inventoryRoot,file).split(path.sep).join('/'),candidate=existsSync(path.join(root,relative))?path.join(root,relative):file;
  const source=readFileSync(candidate,'utf8');
  if(!source.includes('getCurrentUser')||allowed.has(relative)||optionalAuth.has(relative))continue;
  test('default-deny route '+relative,async()=>{
@@ -34,5 +34,5 @@ for(const file of paths){
 test.after(()=>{if(process.env.FTE_TEST_RESULTS_PATH)writeFileSync(process.env.FTE_TEST_RESULTS_PATH,JSON.stringify(results,null,2)+'\n')});
 test('API inventory covers all 169 routes with 140 getCurrentUser surfaces and fixed opt-ins',()=>{
  assert.equal(paths.length,169);assert.equal(paths.filter(p=>readFileSync(p,'utf8').includes('getCurrentUser')).length,140);
- for(const file of paths){const relative=path.relative(inventoryRoot,file),candidate=existsSync(path.join(root,relative))?path.join(root,relative):file;const source=readFileSync(candidate,'utf8');if(source.includes('accessPurpose:'))assert.ok(allowed.has(relative),relative);}
+ for(const file of paths){const relative=path.relative(inventoryRoot,file).split(path.sep).join('/'),candidate=existsSync(path.join(root,relative))?path.join(root,relative):file;const source=readFileSync(candidate,'utf8');if(source.includes('accessPurpose:'))assert.ok(allowed.has(relative),relative);}
 });

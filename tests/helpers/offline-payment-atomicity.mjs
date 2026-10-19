@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { createHash, randomUUID } from 'node:crypto';
+import { AGENCY_LEDGER_ENTRY_TYPES, AGENCY_LEDGER_SOURCE_SYSTEM, parentVisibleBillingBalanceCents } from '../../src/lib/parent-billing-visibility.ts';
 
 // Executes the checked-out production handlers against an in-memory transactional adapter.
 // This is not database, provider, or browser integration verification.
@@ -17,11 +18,12 @@ const request = readFileSync(root + 'src/lib/offline-payment-request.ts', 'utf8'
 const source = [request,
   section(audit, 'export async function writeAuditLog(', 'export async function writeSystemAuditLog').replace('export ', ''),
   section(application, 'export async function applyFamilyBalancePaymentToOpenInvoices', 'export type StripePaymentApplicationResult').replace('export ', ''),
+  section(route, 'async function manualFamilyPaymentExceedsVisibleBalance', 'async function settleOpenInvoicesForOfflinePayment'),
   section(route, 'async function settleOpenInvoicesForOfflinePayment', 'class PayrollReferenceConflictError'),
 ].join('\n');
 const js = stripTypeScriptTypes(source);
-function fixture({ balance=10000, invoiceAmounts=[10000], allowed=true, agencyBlocked=false, auditFails=false, centerFails=false }={}) {
-  let state={balance,payments:[],entries:[],invoices:invoiceAmounts.map((totalCents,i)=>({id:'invoice-'+i,totalCents,status:'OPEN',customFields:{}})),audits:0,centerUpdates:0};
+function fixture({ balance=10000, invoiceAmounts=[10000], allowed=true, agencyLedgerEntries=[], auditFails=false, centerFails=false }={}) {
+  let state={balance,agencyLedgerEntries:structuredClone(agencyLedgerEntries),payments:[],entries:[],invoices:invoiceAmounts.map((totalCents,i)=>({id:'invoice-'+i,totalCents,status:'OPEN',customFields:{}})),audits:0,centerUpdates:0};
   let transactionQueue = Promise.resolve();
   const tx={
     $queryRaw:async()=>[],
@@ -29,7 +31,7 @@ function fixture({ balance=10000, invoiceAmounts=[10000], allowed=true, agencyBl
     center:{update:async()=>{if(centerFails)throw new Error('simulated center version failure');state.centerUpdates++;}},
     billingAccount:{
       upsert:async()=>({id:'account-fixture',balanceCents:state.balance}),
-      findUnique:async()=>({id:'account-fixture'}),
+      findUnique:async()=>({id:'account-fixture',balanceCents:state.balance,ledgerEntries:state.agencyLedgerEntries}),
       update:async({data})=>({id:'account-fixture',balanceCents:state.balance-=data.balanceCents.decrement}),
     },
     payment:{
@@ -50,13 +52,13 @@ function fixture({ balance=10000, invoiceAmounts=[10000], allowed=true, agencyBl
     PaymentStatus:{PAID:'PAID',OPEN:'OPEN'},
     Prisma:{sql:(strings,...values)=>({strings,values})},
     createHash,
+    AGENCY_LEDGER_ENTRY_TYPES, AGENCY_LEDGER_SOURCE_SYSTEM, parentVisibleBillingBalanceCents,
     clean:v=>typeof v==='string'?v.trim():'',
     jsonRecord:v=>v&&typeof v==='object'?v:{},
     jsonObject:v=>v&&typeof v==='object'?v:{},
     inputJson:v=>v,
     assertFamilyAccess:async()=>allowed?{ok:true,family:{id:'family-fixture'},centerId:'school-fixture'}:{ok:false,error:'No access',status:403},
     amountCentsFromBody:b=>b.amountCents??Math.round(Number(b.amountDollars)*100),
-    manualFamilyPaymentExceedsVisibleBalance:async()=>typeof agencyBlocked==='function'?agencyBlocked(state):agencyBlocked,
     parseDate:v=>new Date(v),randomUUID,
     prisma:{
       ...tx,
@@ -80,7 +82,34 @@ await check('check posts and settles only fully covered oldest invoice',async()=
 await check('check rejects missing reference before any writes',async()=>{const f=fixture();assert.equal((await f.handlers.check(user,body)).status,400);assert.equal(f.state().payments.length,0);});
 await check('cash rejects zero amount before any writes',async()=>{const f=fixture();assert.equal((await f.handlers.cash(user,{...body,amountCents:0})).status,400);assert.equal(f.state().payments.length,0);});
 await check('cash rejects unauthorized family before any writes',async()=>{const f=fixture({allowed:false});assert.equal((await f.handlers.cash(user,body)).status,403);assert.equal(f.state().payments.length,0);});
-await check('cash preserves agency responsibility collection guard',async()=>{const f=fixture({agencyBlocked:true});assert.equal((await f.handlers.cash(user,body)).status,409);assert.equal(f.state().payments.length,0);});
+await check('check preserves agency responsibility collection guard',async()=>{const f=fixture({balance:0,agencyLedgerEntries:[{type:'agency_receivable',amountCents:0}]});assert.equal((await f.handlers.check(user,{...body,checkNumber:'fixture-1042'})).status,409);assert.equal(f.state().payments.length,0);});
+for (const scenario of [
+  {name:'cash overpayment with agency history leaves family credit',balance:64000,invoiceAmounts:[44000],amountCents:50000,agencyLedgerEntries:[{type:'agency_receivable',amountCents:20000}],expectedCredit:6000},
+  {name:'cash at zero family balance with agency history leaves family credit',balance:20000,invoiceAmounts:[],amountCents:10000,agencyLedgerEntries:[{type:'agency_receivable',amountCents:20000}],expectedCredit:10000},
+  {name:'cash adds to an existing family credit with agency history',balance:15000,invoiceAmounts:[],amountCents:10000,agencyLedgerEntries:[{type:'agency_receivable',amountCents:20000}],expectedCredit:15000},
+  {name:'cash overpayment without agency history leaves family credit',balance:44000,invoiceAmounts:[44000],amountCents:50000,agencyLedgerEntries:[],expectedCredit:6000},
+  {name:'cash at zero account balance leaves family credit',balance:0,invoiceAmounts:[],amountCents:10000,agencyLedgerEntries:[],expectedCredit:10000},
+  {name:'cash preserves historical agency credits while leaving family credit',balance:44000,invoiceAmounts:[44000],amountCents:50000,agencyLedgerEntries:[{type:'agency_payment',amountCents:-20000}],expectedCredit:6000},
+]) {
+  await check(scenario.name,async()=>{
+    const f=fixture(scenario);
+    const request={...body,amountCents:scenario.amountCents};
+    const responses=await Promise.all([f.handlers.cash(user,request),f.handlers.cash(user,request)]);
+    assert.deepEqual(responses.map(r=>r.status),[200,200]);
+    assert.equal(responses.filter(r=>r.body.alreadyRecorded).length,1);
+    assert.equal(f.state().balance,scenario.balance-scenario.amountCents);
+    assert.equal(parentVisibleBillingBalanceCents({accountBalanceCents:f.state().balance,agencyLedgerEntries:f.state().agencyLedgerEntries}),-scenario.expectedCredit);
+    assert.equal(f.state().payments.length,1);
+    assert.equal(f.state().payments[0].amountCents,scenario.amountCents);
+    assert.equal(f.state().entries.length,1);
+    assert.equal(f.state().entries[0].amountCents,-scenario.amountCents);
+    assert.equal(f.state().entries[0].balanceAfterCents,f.state().balance);
+    assert.equal(f.state().audits,1);
+    assert.deepEqual(f.state().invoices.map(i=>i.status),scenario.invoiceAmounts.map(()=>'PAID'));
+    assert.deepEqual(f.state().agencyLedgerEntries,scenario.agencyLedgerEntries);
+    assert.deepEqual(responses[0].body.appliedInvoiceIds,scenario.invoiceAmounts.map((_,i)=>'invoice-'+i));
+  });
+}
 await check('separate partial payments close invoice only after fully covered',async()=>{const f=fixture();await f.handlers.cash(user,{...body,amountCents:5000});assert.equal(f.state().invoices[0].status,'OPEN');await f.handlers.cash(user,{...body,requestId:randomUUID(),amountCents:5000,reference:'second-receipt'});assert.equal(f.state().balance,0);assert.equal(f.state().invoices[0].status,'PAID');});
 for (const method of ['cash','check']) {
   for (const failure of ['auditFails','centerFails']) {
@@ -116,7 +145,7 @@ for (const method of ['cash','check']) {
     assert.equal(f.state().payments.length,2);assert.equal(f.state().balance,0);
   });
   await check(`${method}: replay succeeds before a now-zero agency balance guard`,async()=>{
-    const f=fixture({agencyBlocked:s=>s.balance<=0});
+    const f=fixture({agencyLedgerEntries:[{type:'agency_receivable',amountCents:0}]});
     await f.handlers[method](user,request);
     assert.equal((await f.handlers[method](user,request)).status,200);assert.equal(f.state().payments.length,1);
   });

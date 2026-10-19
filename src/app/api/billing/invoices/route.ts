@@ -831,9 +831,8 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
     });
     const replay = await offlinePaymentReplay(tx, { billingAccountId: account.id, ...identity });
     if (replay) return replay;
-    if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents, tx)) {
-      throw new OfflinePaymentRequestConflictError("Cash payment cannot exceed the family-responsibility balance.");
-    }
+    // Record the full cash receipt, including advance payments. Any excess stays
+    // on the family ledger as credit; agency ledger entries remain unchanged.
     const payment = await tx.payment.create({
       data: {
         billingAccountId: account.id,

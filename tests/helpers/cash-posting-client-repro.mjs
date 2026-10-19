@@ -106,7 +106,7 @@ await check('cash interrupted handler retries same request and unchanged payment
   const f=fixture();f.respond({throws:true});f.handlers.cash();await f.settle();const original=f.state.requests[0];f.respond({status:200,body:p=>receipt(p.requestId)});f.handlers.cash();await f.settle();assert.deepEqual(f.state.requests[1],original);assert.equal(f.state.resets,4);
 });
 await check('cash validation rejection preserves operation and allows corrected input without duplicate identity',async()=>{
-  const f=fixture();f.respond({status:409,body:{error:'Cash payment cannot exceed the family-responsibility balance.'}});f.handlers.cash();await f.settle();const original=f.state.requests[0].requestId;assert.equal(f.state.resets,0);assert.match(f.state.errors.at(-1),/family-responsibility/);f.handlers.setCashInput('50');f.handlers.cash();await f.settle();assert.equal(f.state.requests[1].requestId,original);
+  const f=fixture();f.respond({status:400,body:{error:'Cash payment amount is required.'}});f.handlers.cash();await f.settle();const original=f.state.requests[0].requestId;assert.equal(f.state.resets,0);assert.match(f.state.errors.at(-1),/amount/);f.handlers.setCashInput('50');f.handlers.cash();await f.settle();assert.equal(f.state.requests[1].requestId,original);
 });
 await check('cash duplicated handler invocation starts only one POST',async()=>{
   const f=fixture();f.respond({throws:true});f.handlers.cash();f.handlers.cash();await f.settle();assert.equal(f.state.requests.length,1);

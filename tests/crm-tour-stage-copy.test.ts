@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { stripTypeScriptTypes } from "node:module";
+import * as nodeModule from "node:module";
 import test from "node:test";
+
+// CI runs Node 24; the repository's older Node declarations omit this runtime API.
+const { stripTypeScriptTypes } = nodeModule as typeof nodeModule & {
+  stripTypeScriptTypes: (code: string) => string;
+};
+assert.equal(typeof stripTypeScriptTypes, "function", "The handler harness requires Node 24 type stripping.");
 
 const source = readFileSync("src/components/crm/crm-workspace.tsx", "utf8");
 const crm = readFileSync("src/lib/crm.ts", "utf8");

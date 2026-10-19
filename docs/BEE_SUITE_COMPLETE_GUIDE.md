@@ -1,6 +1,6 @@
 # The BEE Suite: Complete Product, User, and Technical Guide
 
-**Documentation snapshot:** August 11, 2026
+**Documentation snapshot:** October 19, 2026
 **Purpose:** A single, narration-friendly explanation of what The BEE Suite is, what is included, who uses it, how information moves through it, and how the software is built.  
 **Audience:** School owners, executives, directors, teachers, billing staff, parents, implementation teams, support staff, developers, and AI assistants asked to explain the system aloud.
 
@@ -209,7 +209,7 @@ Child location records and transitions provide a current-location and movement h
 
 The **Parent Portal** is the family's unified view. It can show linked children, today's activity, daily reports, approved photos, messages, announcements, calendar information, invoices, payments, documents, incident acknowledgements, authorized pickups, kiosk credentials, preferences, and change requests.
 
-Parent invitations establish the relationship among the authentication user, guardian record, family, and children. The approved invitation supplies the secure parent URL, guardian email, and password from the school invitation. The parent may change that password later from settings. Portal queries are family-scoped. A guardian should never be able to change a URL or identifier and retrieve another family's information.
+Parent invitations establish the relationship among the authentication user, guardian record, family, and children. The approved invitation supplies the secure parent URL and guardian email. If it includes a private setup link, the parent chooses a password there before signing in. Existing parents use their current password; a legacy issued password works only while still current. The parent may change the password later from settings. Portal queries are family-scoped. A guardian should never be able to change a URL or identifier and retrieve another family's information.
 
 The portal supports responsive web and progressive-web-app use. Install guides cover phones, tablets, and desktops. A Capacitor iOS parent shell and app-store assets exist, but the product notes distinguish the current web/PWA experience from a future fully native mobile product with native push and offline sync.
 

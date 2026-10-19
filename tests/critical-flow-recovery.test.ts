@@ -73,7 +73,9 @@ test("parent sign-in and setup use invitation-specific credentials and current i
   const webPush = readFileSync("src/components/web-push-control.tsx", "utf8");
   const parentTrustSurfaces = [login, parentSetup, forgot, reset, webPush].join("\n");
 
-  assert.match(login, /password from your school invitation/i);
+  assert.match(login, /guardian email and current password/i);
+  assert.match(login, /private setup link/i);
+  assert.doesNotMatch(login, /Use the password in your school invitation/i);
   assert.match(parentSetup, /Review Your Family/i);
   assert.doesNotMatch(parentSetup, /Use Your School Invitation/i);
   assert.match(login, /Forgot password/i);

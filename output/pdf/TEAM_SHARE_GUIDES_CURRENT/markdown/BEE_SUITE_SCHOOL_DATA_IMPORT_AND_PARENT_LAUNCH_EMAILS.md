@@ -1,6 +1,6 @@
 # The BEE Suite School Data Import and Parent Launch Email Kit
 
-**Updated:** October 7, 2026
+**Updated:** October 19, 2026
 
 **Purpose:** Ready-to-send emails that guide a school from ProCare export through BEE Suite import, school setup, payment readiness, and parent portal launch.
 
@@ -454,11 +454,11 @@ Your school is inviting you to The BEE Suite parent portal. The portal gives you
 
 1. Open **https://thebeesuite.io/parents**.
 2. Confirm the address starts with `https://thebeesuite.io`. In Safari, stop and contact the school if the address bar says **Not Secure**.
-3. Sign in with your guardian email address and the password included in your invitation.
+3. Follow your invitation's setup instructions. If it includes a private setup link, choose your password there first. Then sign in with your guardian email address and current password.
 4. Confirm that you see the correct family and child or children.
 5. If any family or child information is wrong, stop and contact your school.
 
-You may keep the invitation password or change it later under **Family → Profile & Security**. The invitation and password belong only to you and should not be forwarded.
+You may change your current password later under **Family → Profile & Security**. Your private setup link and password belong only to you and should not be forwarded.
 
 ## Review your portal
 

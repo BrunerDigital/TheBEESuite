@@ -93,7 +93,7 @@ Before the guides are sent broadly, the school should confirm:
 - Teachers can log in and see the correct classroom rosters.
 - Parent guardian emails are accurate on family profiles.
 - Parent portal login is available from `https://thebeesuite.io/parents`; role-specific staff entry points are `/directors`, `/teachers`, and `/executives`.
-- Parent invitations use the verified guardian email, secure parent URL, and password from the school invitation. Parents may change the password later; staff must never ask for it to be sent back.
+- Parent invitations use the verified guardian email and secure parent URL. If the invitation includes a private setup link, parents choose a password there before signing in. Existing parents use their current password; staff must never ask for it to be sent back.
 - Kiosk PIN or QR credentials are ready before lobby check-in is used.
 - Stripe payout and checkout readiness are complete before parents are asked to pay online.
 - Billing and document workflows have been tested with one low-risk family record.

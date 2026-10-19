@@ -1,0 +1,124 @@
+{
+  "date": "2026-10-19",
+  "base": "a1dbc96f144e3625b86d499ffd7521e208656eed",
+  "sourceHashEncoding": "UTF-8 with LF newlines, matching canonical Git blobs",
+  "scope": "Parent private-setup/current-password guidance refreshed in six source-matched guides. Other PDFs retain their October 7 editions. Existing synthetic visuals retained; no school, delivery or launch approval.",
+  "refreshedSources": [
+    {
+      "file": "docs/sops/DIRECTOR_SOP.md",
+      "sha256": "d7aed972d5a4905dff8b14df4cc74adc54348f6802c1caa7a4b16c050d048a07"
+    },
+    {
+      "file": "docs/sops/PARENT_PORTAL_SOP.md",
+      "sha256": "edba7307457edfd0816e741c0cbdadc7ace2dc8c4921095d3521312ad965fa8c"
+    },
+    {
+      "file": "docs/sops/PARENT_PORTAL_INSTALL_GUIDE.md",
+      "sha256": "64c8daffd2c73e08f105d57d1416955ddb10b5cd4eb2941b18e9c9f6febfde53"
+    },
+    {
+      "file": "docs/sops/SCHOOL_SYSTEM_OPERATING_MANUAL.md",
+      "sha256": "b2a0805b27b1a92a9307f84f3a5c3cf7f7abc980863071ac1ede876a0dc0cbd5"
+    },
+    {
+      "file": "docs/BEE_SUITE_COMPLETE_GUIDE.md",
+      "sha256": "39edbf5ee916d47c94a4540a7831c4a8e9692333d507d7ee69fa903d47eac407"
+    },
+    {
+      "file": "docs/BEE_SUITE_SCHOOL_DATA_IMPORT_AND_PARENT_LAUNCH_EMAILS.md",
+      "sha256": "431e431b3cf9ef2bebcb7f49575940dcd6c50da819bd8041a6398daf59e7597c"
+    }
+  ],
+  "pdfs": [
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/AGENCY_SUBSIDY_BILLING_OPERATIONS.pdf",
+      "pages": 5,
+      "sha256": "5509eb06e69656e27316f7c0be82c491705fad740b6c7bd920c52af508e67a32",
+      "editionDate": "2026-10-07"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/BEE_SUITE_COMPLETE_GUIDE.pdf",
+      "pages": 16,
+      "sha256": "a7b70ec03eab0f515270abd0681678bb11b96565c0c9df9e8cc5c00706bfe841",
+      "editionDate": "2026-10-19"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/BEE_SUITE_SCHOOL_DATA_IMPORT_AND_PARENT_LAUNCH_EMAILS.pdf",
+      "pages": 12,
+      "sha256": "e15fca3bcd9692806868543c758447571c599c23a615f4e99895b1f789880355",
+      "editionDate": "2026-10-19"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/BILLING_ADMIN_SOP.pdf",
+      "pages": 11,
+      "sha256": "718a297cdc5b5de1ca25cc87cfbdf7202ec31e6255a9279bb081b3e776ef6431",
+      "editionDate": "2026-10-07"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.pdf",
+      "pages": 7,
+      "sha256": "1b6b5ae965c63e7bc9341496652bb3a7866fdf6ddfd05e5ac4b05dbf1d75dc0c",
+      "editionDate": "2026-10-07"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/DIRECTOR_SOP.pdf",
+      "pages": 9,
+      "sha256": "de7930f42ac13bf81ae6bc63dd0a5d73e5fc746a1fcf1ed4f4ed86f78ac68cea",
+      "editionDate": "2026-10-19"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/EXECUTIVE_ADMIN_SOP.pdf",
+      "pages": 7,
+      "sha256": "61a6e3a32a2ec397d36321354335fe12e3e8277dfc570fa43cb909ce109c0dea",
+      "editionDate": "2026-10-07"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.pdf",
+      "pages": 4,
+      "sha256": "7c2f9e26028727716c2f4bd10eb1e56a18683add9a0d372cd76c51c6ab78cccc",
+      "editionDate": "2026-10-07"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/PARENT_ACH_PAYMENT_GUIDE.pdf",
+      "pages": 3,
+      "sha256": "921d5cb6cf870394a10835fb34a3dcce4e62abec827e29f95a162fb4689c29ae",
+      "editionDate": "2026-10-07"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/PARENT_PORTAL_INSTALL_GUIDE.pdf",
+      "pages": 6,
+      "sha256": "c5b8c10de08b6b277132c66fed875a40e9f8c30c1a4fe319ef80c77634a44cbd",
+      "editionDate": "2026-10-19"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/PARENT_PORTAL_SOP.pdf",
+      "pages": 7,
+      "sha256": "eb5040e7f044aa3ced7a74365c7b0cf6cdaf1094557c41b9782ad254672d83a8",
+      "editionDate": "2026-10-19"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/SCHOOL_SYSTEM_OPERATING_MANUAL.pdf",
+      "pages": 8,
+      "sha256": "b2fd9c2c6b8c2a97b214815b5fa17f4093c3d9c3cc52419f093a0047fce32bb1",
+      "editionDate": "2026-10-19"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/SUPPORT_ESCALATION_GUIDE.pdf",
+      "pages": 2,
+      "sha256": "97fd74b18fe70220b3ad3134963e80cfa387af88dccfad4159be956590297df7",
+      "editionDate": "2026-10-07"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/pdf/TEACHER_SOP.pdf",
+      "pages": 5,
+      "sha256": "6199c8c61235d0451d8ea8d24aa2d64b754ea2840f917b718f18d181a061d17c",
+      "editionDate": "2026-10-07"
+    },
+    {
+      "file": "output/pdf/TEAM_SHARE_GUIDES_CURRENT/TEAM_SHARE_GUIDES_INDEX.pdf",
+      "pages": 1,
+      "sha256": "532c0da40a6e8f6459a2d3995abdc6e7ec64e87427669552fe7735dafb8dbcbd",
+      "editionDate": "2026-10-07"
+    }
+  ]
+}

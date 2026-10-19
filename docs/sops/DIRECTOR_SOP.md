@@ -1,6 +1,6 @@
 # Director SOP - The BEE Suite
 
-Last updated: September 8, 2026
+Last updated: October 19, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
@@ -170,8 +170,8 @@ https://thebeesuite.io/login
 Parent login rules:
 
 - Username/email: the parent's personal email address on the guardian profile.
-- First access: the approved parent invitation includes the secure parent URL, guardian email, and password from the school invitation.
-- The parent may keep that password or choose a private password later from Parent Portal settings.
+- First access: the approved parent invitation includes the secure parent URL and guardian email. If it includes a private setup link, the parent uses that link to choose a password before signing in.
+- An existing parent uses their current password. A legacy invitation may contain an issued password; the parent can use it if it is still current or choose a private password later from Parent Portal settings.
 - If the parent cannot log in, confirm the guardian email and family link, then use the approved resend/reset workflow. Never ask the parent to send a password back to the school.
 
 Director steps:
@@ -180,7 +180,7 @@ Director steps:
 2. Confirm the guardian email is present and spelled correctly.
 3. Confirm the guardian is connected to the correct family.
 4. Confirm the parent portal access action has been completed or send the parent portal invite.
-5. Tell the parent to use the guardian email and password from the invitation at `https://thebeesuite.io/parents`. The parent may change the password later from settings.
+5. Tell the parent to follow the invitation's setup instructions, then sign in with their guardian email and current password at `https://thebeesuite.io/parents`. A private setup link lets them choose a password first.
 6. If the parent sees no family after login, verify the guardian-to-family link.
 
 Never give one guardian another guardian's login.

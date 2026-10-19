@@ -24,10 +24,12 @@ const currentGuides = [
 test("current guides carry an approved revision and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /(?:August (?:11|24)|September (?:2|3|8|9|11|23)), 2026/, path);
+    assert.match(content, /(?:August (?:11|24)|September (?:2|3|8|9|11|23)|October 19), 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
+    assert.doesNotMatch(content, /password (?:from|included in) (?:the |your |approved |parent |school )*invitation|email and password in their welcome email/i, path);
+    assert.doesNotMatch(content, /keep the invitation password/, path);
   }
 });
 
@@ -56,7 +58,9 @@ test("school transition announcement preserves per-school launch and billing gat
 test("public resources describe current parent, tuition, FTE, and launch flows", () => {
   const resources = readFileSync("src/app/resources/page.tsx", "utf8");
 
-  assert.match(resources, /password from your school invitation/);
+  assert.match(resources, /private setup link/);
+  assert.match(resources, /guardian email and your current password/);
+  assert.doesNotMatch(resources, /invitation password/);
   assert.doesNotMatch(resources, /school-issued first-login password/);
   assert.match(resources, /id: "director-parent-invites"/);
   assert.match(resources, /Add Family, Parent \+ Child/);
@@ -232,7 +236,7 @@ test("role SOPs cover the current August UI and workflow baseline", () => {
   const inviteUi = readFileSync("src/components/parent-portal-invite-button.tsx", "utf8");
 
   for (const [name, content] of Object.entries({ director, billing, parent, teacher, executive, manual })) {
-    assert.match(content, /(?:August (?:11|24)|September (?:2|8)), 2026/, name);
+    assert.match(content, /(?:August (?:11|24)|September (?:2|8)|October 19), 2026/, name);
   }
 
   assert.match(director, /Add Family, Parent \+ Child/);

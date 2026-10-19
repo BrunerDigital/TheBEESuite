@@ -63,7 +63,8 @@ test("support keeps family help specific while also serving school and company r
   assert.match(support, /Family → Profile &amp; Security/);
   assert.match(support, /flex w-full flex-wrap items-center gap-2/);
   assert.match(resources, /Add the Parent Portal to Your Device/);
-  assert.match(resources, /password from your school invitation/);
+  assert.match(resources, /private setup link/);
+  assert.match(resources, /guardian email and your current password/);
   assert.doesNotMatch(resources, /school-issued first-login password/);
   assert.doesNotMatch(communicationsKit, /THE BEE SUITE • HUMAN-REVIEWED WORKFLOW|Profile Settings/);
   assert.match(communicationsKit, /THE BEE SUITE • STEP-BY-STEP GUIDE/);

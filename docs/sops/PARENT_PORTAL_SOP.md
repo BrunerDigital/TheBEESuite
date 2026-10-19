@@ -1,6 +1,6 @@
 # Parent Portal SOP - The BEE Suite
 
-Last updated: August 11, 2026
+Last updated: October 19, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite parent portal.
 
@@ -31,7 +31,7 @@ The BEE Suite parent portal gives families one place to view child updates, mess
 ## Current Invitation, Setup, And Access Flow
 
 1. Open the secure invitation from the school or go to `https://thebeesuite.io/parents`.
-2. Sign in with the exact personal guardian email stored by the school. A new account uses the password from the invitation; an existing account keeps its current password.
+2. Follow the invitation's setup instructions first. If it includes a private setup link, choose your password there. Then sign in with the exact personal guardian email stored by the school and your current password.
 3. On the setup screen, confirm the displayed school, family, guardian name, phone, and linked children before continuing.
 4. Choose or confirm a private 4 digit kiosk PIN that only authorized adults know.
 5. Select `Finish setup and open portal`.
@@ -47,8 +47,8 @@ Current payment policy: the school absorbs Stripe processing costs, and no proce
 
 1. Go to `https://thebeesuite.io/parents`.
 2. Enter the personal email address that is on your guardian profile with the school.
-3. On first access, enter the password included in the approved parent invitation.
-4. You may keep that password or choose a private password later from Parent Portal settings.
+3. On first access, follow the approved invitation. If it includes a private setup link, choose your password there before signing in.
+4. If you already have access, use your current password. A legacy issued password works only while it is still current. You can change your password later from Parent Portal settings.
 5. If you forgot your current password, select **Forgot password** and follow the recovery instructions.
 6. After login, open the parent portal.
 
@@ -136,8 +136,8 @@ Do not use messages for emergencies. Call the school directly for urgent safety,
 
 Use these rules:
 
-- If you have never used the parent portal, use the guardian email and password from the approved school invitation.
-- You may change the issued password later from Parent Portal settings.
+- If you have never used the parent portal, follow the approved school invitation. If it includes a private setup link, use that link to choose your password before signing in with your guardian email.
+- Use your current password if you already have access. A legacy invitation may contain an issued password; use it only if it is still current. You may change your password later from Parent Portal settings.
 - If you forgot your password, use the password reset option or ask the school for help.
 - If the app says your account cannot be found, ask the school to confirm your guardian email.
 

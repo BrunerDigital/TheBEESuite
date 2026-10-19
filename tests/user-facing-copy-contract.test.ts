@@ -153,18 +153,18 @@ test("delivery and account-scope copy explains outcomes in plain language", () =
   assert.match(login, /only shows locations assigned to your account/);
 });
 
-test("the current parent invitation guide sources match the existing invitation password policy", () => {
+test("the current parent invitation guide sources support private setup and current passwords", () => {
   const guideGraphicSources = [
     source("scripts/render-current-instruction-graphics.mjs"),
     source("public/brand/the-bee-suite/explainers/current/parent-access-install.svg"),
     source("public/brand/the-bee-suite/explainers/current/director-daily-flow.svg"),
   ].join("\n");
 
-  assert.match(guideGraphicSources, /password from the invitation/);
-  assert.match(guideGraphicSources, /email, and password/);
+  assert.match(guideGraphicSources, /private setup link/);
+  assert.match(guideGraphicSources, /guardian email and your current password/);
   assert.doesNotMatch(
     guideGraphicSources,
-    /temporary password|first-login password|human-reviewed/i,
+    /password from the invitation|email, and password|issued password|temporary password|first-login password|human-reviewed/i,
   );
   assert.match(guideGraphicSources, /School staff must review custody, pickup, medical, incident, billing, and compliance decisions/);
 });

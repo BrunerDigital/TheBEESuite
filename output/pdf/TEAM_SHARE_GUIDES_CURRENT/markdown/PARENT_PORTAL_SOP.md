@@ -1,6 +1,6 @@
 # Parent Portal SOP - The BEE Suite
 
-Last updated: October 7, 2026
+Last updated: October 19, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite parent portal.
 
@@ -140,8 +140,8 @@ Do not use messages for emergencies. Call the school directly for urgent safety,
 
 Use these rules:
 
-- If you have never used the parent portal, use the guardian email and password from the approved school invitation.
-- You may change the issued password later from Parent Portal settings.
+- If you have never used the parent portal, follow the approved school invitation. If it includes a private setup link, use that link to choose your password before signing in with your guardian email.
+- Use your current password if you already have access. A legacy invitation may contain an issued password; use it only if it is still current. You may change your password later from Parent Portal settings.
 - If you forgot your password, use the password reset option or ask the school for help.
 - If the app says your account cannot be found, ask the school to confirm your guardian email.
 

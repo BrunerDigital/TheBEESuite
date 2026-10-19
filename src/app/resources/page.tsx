@@ -82,7 +82,7 @@ const guides: ResourceGuide[] = [
     icon: Smartphone,
     steps: [
       "Open https://thebeesuite.io/parents and confirm the address starts with https://thebeesuite.io. In Safari, stop if the address bar says Not Secure.",
-      "Sign in with the guardian email and password from your school invitation. If you already changed that password, use your current one.",
+      "If your invitation includes a private setup link, use it to choose your password first. Then sign in with the guardian email and your current password.",
       "Confirm the correct family and child records before continuing.",
       "On iPhone or iPad, use Safari Share > Add to Home Screen. On Android or Fire, use the Chrome or Silk menu > Install app or Add to Home screen.",
       "Open the new BEE Suite icon and sign in again if the device asks.",

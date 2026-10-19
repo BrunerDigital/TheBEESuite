@@ -57,11 +57,11 @@ const loginCopy: Record<LoginPortal, {
     heroFooter: "Your school controls which family records are connected to your account.",
     heroItems: ["Updates", "Messages", "Documents & Billing"],
     cardTitle: "Parent and guardian sign-in",
-    cardDescription: "Use the email and password from your school invitation. If you already changed that password, use your current one.",
+    cardDescription: "Sign in with your guardian email and current password. If your invitation includes a private setup link, choose your password there first.",
     emailLabel: "Parent or guardian email",
     emailPlaceholder: "parent@example.com",
     passwordPlaceholder: "Your password",
-    helpText: "First time here? Use the password in your school invitation. If you do not have it, choose Forgot password.",
+    helpText: "First time here? Follow the setup instructions in your school invitation. Need a new password? Choose Forgot password.",
   },
   teachers: {
     heroTitle: "Your teacher workspace",

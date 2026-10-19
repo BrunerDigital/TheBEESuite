@@ -37,6 +37,7 @@ final class KeyboardUITests: XCTestCase {
     }
 
     private func unobscured(_ element: XCUIElement) -> Bool {
+        guard element.exists else { return false }
         let frame = element.frame
         // WebKit can report a hit point even underneath fixed app navigation.
         #if TEACHER
@@ -55,16 +56,29 @@ final class KeyboardUITests: XCTestCase {
     private func reveal(_ element: XCUIElement) {
         XCTAssertTrue(element.waitForExistence(timeout: 60))
         for _ in 0..<16 {
+            guard element.exists else {
+                XCTFail("Requested editor or action disappeared while revealing it")
+                return
+            }
             if unobscured(element) { return }
             #if !TEACHER
-            // Scroll the document from outside the independently scrolling history.
-            let anchors = [app.staticTexts["Send to"].firstMatch,
-                           app.staticTexts["Blocked senders"].firstMatch,
-                           app.staticTexts["Sunshine Academy"].firstMatch]
-            if let anchor = anchors.first(where: { $0.exists && $0.frame.midY > app.frame.height * 0.23 && $0.frame.midY < app.frame.height * 0.88 }) {
-                anchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-                    .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.17)))
-            } else { app.swipeUp() }
+            // Keep gestures in the outer document gutter, clear of both the
+            // independently scrolling history and the fixed navigation buttons.
+            let navigation = app.otherElements["Family portal navigation, navigation"]
+            guard navigation.exists else {
+                XCTFail("Parent navigation boundary is unavailable")
+                return
+            }
+            let top = app.frame.height * 0.2
+            let bottom = navigation.frame.minY - 8
+            let frame = element.frame
+            let scrollDown = frame.minY < top
+            let distance = min(app.frame.height * 0.18, max(48, scrollDown ? top - frame.minY : frame.maxY - bottom))
+            let startY = scrollDown ? top + 24 : bottom - 24
+            let endY = scrollDown ? startY + distance : startY - distance
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: startY / app.frame.height))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: endY / app.frame.height))
+            start.press(forDuration: 0.1, thenDragTo: end)
             #else
             let lower = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
             let upper = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))

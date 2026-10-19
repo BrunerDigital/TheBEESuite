@@ -42,6 +42,16 @@ A separate live Mailchimp “Sitewide Email Capture | Schedule A Tour” popup a
 
 Before release, run the focused Daytona tests plus the full `npm run vercel-build` gate. Mocked tests do not prove live delivery or browser rendering. Do not submit real public leads or send emails to test this change. After separately approved deployment, use read-only rendered form/catalog checks and runtime logs. Roll back only the scoped commits/files if needed; no database restore or migration is involved. A rollback restores Daytona inquiry acceptance and requires an explicit decision.
 
+### Vero Beach inquiry-only enforcement
+
+The Vero Beach inquiry restriction uses the same bounded public-inquiry policy. Fully qualified `Kid City USA - FL | Vero Beach` and `Kid City USA - Vero Beach` identities are rejected after punctuation/case normalization. Unbranded `FL | Vero Beach` and `Vero Beach` names require resolved identity: verified Kid City Vero and unresolved ambiguous requests are rejected, while a center with an explicit other-brand canonical Vero Beach CRM identifier remains eligible (with matching FL state when the request specifies FL). A submitted `brandName` is not identity proof, and ambiguous requests cannot create or use a generic fallback.
+
+Both hosted scripts filter stale/custom catalogs and defer ambiguous opaque-center labels to the read-only availability query. Only a positive result for that fixed target permits the form; the server independently rechecks submitted identity. The tracked inquiry-only Avada template excludes Vero. Rejected requests produce no lead, recipient, queue, email or Sheets effects. Opaque/alias/default requests may verify an anti-bot token before center rejection.
+
+This scope does not alter the default directory feed, the static registration/directory catalog, registration routes, school status, access, email accounts, finance selectors, or historical data. Lewisburg and Pulaski remain unchanged pending a separate decision; closing plans and absence from a later directory are not proof of completed closure. This does not publish WordPress database content or configure Mailchimp, Facebook, or Google Maps.
+
+Validate with `tests/vero-inquiry-scope.test.ts`, `tests/vero-inquiry-identity.test.ts`, and the existing Daytona, public-inquiry eligibility and active-school-location suites, then the full production gate. Never create live test inquiries. A Vero-only rollback removes its policy aliases and restores its tracked inquiry option while keeping the existing Daytona restriction intact; no data migration is involved.
+
 ## What Happens
 
 1. The BEE Suite validates the form payload.

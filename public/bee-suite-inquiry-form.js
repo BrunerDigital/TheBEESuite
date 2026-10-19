@@ -46,13 +46,32 @@
   function isBlockedInquiryIdentifier(value) {
     const key = String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     return ["kid city usa fl daytona beach east", "fl daytona beach east",
-      "kid city usa daytona beach east", "daytona beach east"].includes(key);
+      "kid city usa daytona beach east", "daytona beach east",
+      "kid city usa fl vero beach", "kid city usa vero beach"].includes(key);
+  }
+
+  function isAmbiguousInquiryIdentifier(value) {
+    const key = String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return key === "vero beach" || key === "fl vero beach";
+  }
+
+  function hasExplicitOtherBrandIdentity(value, identifiers = []) {
+    const match = String(value || "").trim().match(/^(.+?)\s+-\s+([A-Za-z]{2})\s*\|\s*(.+)$/);
+    const normalize = (item) => String(item || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const requiresFlorida = identifiers.some((item) => normalize(item) === "fl vero beach");
+    return Boolean(match && normalize(match[1]) !== "kid city usa" && normalize(match[3]) === "vero beach"
+      && (!requiresFlorida || match[2].toUpperCase() === "FL"));
   }
 
   function availableInquiryLocations(locations) {
-    return locations.filter((location) => ![location.crmLocationId, location.locationId, location.name]
-      .some(isBlockedInquiryIdentifier));
+    return locations.filter((location) => {
+      const identifiers = [location.crmLocationId, location.locationId, location.name];
+      return !identifiers.some(isBlockedInquiryIdentifier)
+        && (!identifiers.some(isAmbiguousInquiryIdentifier) || hasExplicitOtherBrandIdentity(location.crmLocationId, identifiers));
+    });
   }
+
+  let fixedCenterInquiryEligible = false;
 
   function showUnavailable() {
     target.innerHTML = '<p class="bee-suite-status" data-state="error" role="status">This location is not accepting website inquiries. Please choose another location or contact corporate.</p>';
@@ -190,8 +209,11 @@
         turnstileToken: String(formData.get("cf-turnstile-response") || "").trim(),
       };
 
-      if ([payload.centerId, payload.locationId, payload.publicLocationId, payload.locationName]
-        .some(isBlockedInquiryIdentifier)) {
+      const submittedIdentifiers = [payload.centerId, payload.locationId, payload.publicLocationId, payload.locationName];
+      if (submittedIdentifiers.some(isBlockedInquiryIdentifier)
+        || (submittedIdentifiers.some(isAmbiguousInquiryIdentifier)
+          && !hasExplicitOtherBrandIdentity(payload.locationId, submittedIdentifiers)
+          && !(fixedCenterInquiryEligible && payload.centerId === centerId))) {
         status.dataset.state = "error";
         status.textContent = "This location is not accepting website inquiries. Please choose another location.";
         return;
@@ -239,6 +261,7 @@
           showUnavailable();
           return;
         }
+        fixedCenterInquiryEligible = true;
         loadTurnstile();
         render([]);
       })

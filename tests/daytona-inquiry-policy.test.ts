@@ -28,7 +28,7 @@ test("Daytona directory, registration catalog and financial eligibility stay unc
 });
 
 test("Douglas and unrelated locations/families are not blocked", () => {
-  for (const id of [douglas, "FL | Altamonte - Douglas", "FL | Daytona Beach West", "Daytona Beach", "IN | Kokomo", "FL | Longwood - Wekiva", "FL | Vero Beach", "Other Brand - FL | Daytona Beach East"]) {
+  for (const id of [douglas, "FL | Altamonte - Douglas", "FL | Daytona Beach West", "Daytona Beach", "IN | Kokomo", "FL | Longwood - Wekiva", "TN | Lewisburg", "TN | Pulaski", "Other Brand - FL | Daytona Beach East"]) {
     assert.equal(isBlockedPublicInquiryIdentifier(id), false, id);
     assert.equal(isEligiblePublicInquiryCenter(center(id), true), true, id);
   }
@@ -39,11 +39,12 @@ test("conflicting center identity cannot hide Daytona behind an eligible alias",
   assert.equal(isEligiblePublicInquiryCenter({ ...center(douglas), name: "Kid City USA - Daytona Beach East" }, false), false);
 });
 
-test("inquiry filter removes only Daytona from the unchanged static directory catalog", () => {
+test("inquiry filter removes Daytona and Vero from the unchanged static directory catalog", () => {
   const locations = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")).locations;
   const filtered = filterPublicInquiryLocations(locations);
-  assert.equal(locations.length - filtered.length, 1);
+  assert.equal(locations.length - filtered.length, 2);
   assert.equal(filtered.some((item) => item.crmLocationId === daytona), false);
+  assert.equal(filtered.some((item) => item.crmLocationId === "Kid City USA - FL | Vero Beach"), false);
   assert.equal(filtered.some((item) => item.crmLocationId === douglas), true);
   const html = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
   assert.doesNotMatch(html, /<option[^>]*Daytona Beach East/);

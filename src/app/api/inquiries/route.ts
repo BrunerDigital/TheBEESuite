@@ -17,7 +17,7 @@ import {
   computeIntegrationDeliveryState,
 } from "@/lib/integration-deliveries";
 import { isEligiblePublicInquiryCenter, selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
-import { isBlockedPublicInquiryIdentifier } from "@/lib/public-inquiry-policy";
+import { hasExplicitOtherBrandInquiryIdentity, isAmbiguousPublicInquiryIdentifier, isBlockedPublicInquiryIdentifier } from "@/lib/public-inquiry-policy";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
@@ -308,18 +308,23 @@ async function getFallbackIntakeCenter(): Promise<IntakeCenter> {
 async function getIntakeCenter({
   locationId,
   publicLocationId,
+  locationName,
   centerId,
   strictLocationRouting,
   brandName,
 }: {
   locationId: string;
   publicLocationId?: string;
+  locationName?: string;
   centerId?: string;
   strictLocationRouting: boolean;
   brandName?: string;
 }): Promise<IntakeCenter> {
+  const requestedIdentifiers = [centerId, locationId, publicLocationId, locationName];
+  const ambiguousLocationRequested = requestedIdentifiers.some(isAmbiguousPublicInquiryIdentifier);
   function eligible(center: IntakeCenterRecord | IntakeCenter) {
-    if (!isEligiblePublicInquiryCenter(center, strictLocationRouting)) {
+    if (!isEligiblePublicInquiryCenter(center, strictLocationRouting)
+      || (ambiguousLocationRequested && !hasExplicitOtherBrandInquiryIdentity(center, requestedIdentifiers))) {
       throw new InquiryRoutingError("The selected school is not accepting public inquiries. Please choose another location or contact corporate.", "ineligible_public_location");
     }
     return "organization" in center ? toIntakeCenter(center) : center;
@@ -367,6 +372,9 @@ async function getIntakeCenter({
     const aliasCenter = selectPreferredInquiryCenter(aliasCandidates, locationIds);
     if (aliasCenter) return eligible(aliasCenter);
 
+    if (ambiguousLocationRequested) {
+      throw new InquiryRoutingError("The selected school is not accepting public inquiries. Please choose another location or contact corporate.", "ineligible_public_location");
+    }
     if (strictLocationRouting) {
       throw new InquiryRoutingError(
         "The selected school is not currently mapped in The BEE Suite. Please choose another location or contact the center.",
@@ -375,6 +383,11 @@ async function getIntakeCenter({
     }
   }
 
+  // An unqualified place name must resolve to an explicit eligible identity.
+  // Never create or use a generic fallback for an ambiguous restricted place.
+  if (ambiguousLocationRequested) {
+    throw new InquiryRoutingError("The selected school is not accepting public inquiries. Please choose another location or contact corporate.", "ineligible_public_location");
+  }
   return eligible(await getFallbackIntakeCenter());
 }
 
@@ -534,6 +547,7 @@ async function POSTHandler(request: NextRequest) {
     const center = await getIntakeCenter({
       locationId: payload.locationId,
       publicLocationId: payload.publicLocationId,
+      locationName: payload.locationName,
       centerId: payload.centerId,
       strictLocationRouting: isKidCityInquiry(payload),
       brandName: payload.brandName,

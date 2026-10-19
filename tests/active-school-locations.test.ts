@@ -259,12 +259,12 @@ test("green-X school removals cannot return through fallback or Avada options", 
   }
 });
 
-test("retained Vero Beach and both Jasper schools remain in fallback and Avada", () => {
+test("Vero stays in the default catalog while both Jasper schools remain in inquiry options", () => {
   const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
   const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
   for (const id of ["Kid City USA - FL | Vero Beach", "Kid City USA - IN | Jasper - Truman", "Kid City USA - IN | Jasper - Baden Strasse"]) {
     assert.equal(file.locations.some((item) => item.crmLocationId === id), true, id);
-    assert.equal(snippet.includes(`value="${id}"`), true, id);
+    assert.equal(snippet.includes(`value="${id}"`), id !== "Kid City USA - FL | Vero Beach", id);
   }
 });
 

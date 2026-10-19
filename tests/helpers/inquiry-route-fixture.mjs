@@ -8,6 +8,8 @@ import * as origins from '../../src/lib/inquiry-origins.ts';
 import * as idempotency from '../../src/lib/inquiry-idempotency.ts';
 import { normalizeInquiryProgram } from '../../src/lib/inquiry-programs.ts';
 
+/** @typedef {{ id: string, name: string, crmLocationId: string | null, locationId: string | null, status: string, email: string | null, organization: { tenantId: string }, tenantId?: string, customFields?: unknown }} InquiryFixtureCenter */
+
 const daytona = 'Kid City USA - FL | Daytona Beach East';
 const douglas = 'Kid City USA - FL | Altamonte - Douglas';
 function school(id, location, aliases = []) {
@@ -25,7 +27,7 @@ function compile(relativePath, dependencies, exports) {
 
 // Runs complete checked-out handlers with memory-only storage and delivery spies.
 // No Prisma client, provider transport, network call, or real family is used.
-export function inquiryFixture({ defaultCenterId = '', lookupFails = false, liveFails = false, emptyLive = false, genericTrial = false, additionalCenters = [] } = {}) {
+export function inquiryFixture({ defaultCenterId = '', lookupFails = false, liveFails = false, emptyLive = false, genericTrial = false, additionalCenters = /** @type {InquiryFixtureCenter[]} */ ([]) } = {}) {
   const centers = [school('center_daytona_fixture', daytona, ['old-daytona-form']), school('center_douglas_fixture', douglas), ...additionalCenters];
   if (genericTrial) centers.push({ ...school('center_trial_fixture', 'Example Learning Center'), crmLocationId: null, locationId: 'trial_fixture', status: 'trial' });
   const effects = { leads: /** @type {Array<{ centerId: string }>} */ ([]), deliveries: [], emails: 0, sheets: 0, writes: 0, notificationLookups: 0, unexpectedNetwork: 0 };

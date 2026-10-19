@@ -3,7 +3,7 @@ import vm from 'node:vm';
 
 const daytona = 'Kid City USA - FL | Daytona Beach East';
 const douglas = 'Kid City USA - FL | Altamonte - Douglas';
-export async function embedFixture(script, { dataset = {}, fields = {}, eligibility = true, loadFails = false, responseOk = true, omitEligibility = false, additionalLocations = [], additionalLocationRecords = [] } = {}) {
+export async function embedFixture(script, { dataset = {}, fields = {}, eligibility = true, loadFails = false, responseOk = true, omitEligibility = false, additionalLocations = /** @type {string[]} */ ([]), additionalLocationRecords = /** @type {Array<{ crmLocationId?: string | null, locationId?: string | null, name?: string | null, state?: string }>} */ ([]) } = {}) {
   const calls = [];
   let submitHandler;
   const status = { textContent: '', dataset: {}, removeAttribute() {} };

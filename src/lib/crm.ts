@@ -31,7 +31,7 @@ export const stageLabels: Record<EnrollmentStage, string> = {
 };
 
 export const crmPipelineStageDisclosure =
-  "CRM stages track follow-up progress only. They do not create or approve family, child, guardian, or enrollment records.";
+  "CRM stages track follow-up progress only. They do not create or approve family, child, guardian, or enrollment records. Changing a stage does not create a calendar appointment. To add a tour appointment, enter its date and time and choose Schedule tour.";
 
 export function crmStageApprovalBoundary(stage: EnrollmentStage, approvedEnrollmentRecordCount: number) {
   const approvedRecordExists = approvedEnrollmentRecordCount > 0;

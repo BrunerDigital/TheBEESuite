@@ -785,7 +785,9 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
       const json = (await response.json()) as { lead: CrmLead };
       setLeads((current) => current.map((lead) => (lead.id === leadId ? json.lead : lead)));
       setLeadDetailsRefreshKey((current) => current + 1);
-      showStatus("Pipeline stage updated and logged.");
+      showStatus(stage === "TOUR_SCHEDULED"
+        ? "Pipeline stage updated and logged. To add a tour appointment, enter its date and time and choose Schedule tour."
+        : "Pipeline stage updated and logged.");
     });
   }
 

@@ -80,4 +80,6 @@ test("CRM Enrolled stage requires a linked director-approved enrollment record",
   assert.equal(allowed.approvedRecordExists, true);
   assert.match(allowed.disclosure, /do not create or approve/i);
   assert.equal(crmPipelineStageDisclosure, allowed.disclosure);
+  assert.match(allowed.disclosure, /Changing a stage does not create a calendar appointment\./);
+  assert.match(allowed.disclosure, /enter its date and time and choose Schedule tour\./);
 });

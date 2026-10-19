@@ -62,8 +62,8 @@ final class KeyboardUITests: XCTestCase {
             }
             if unobscured(element) { return }
             #if !TEACHER
-            // Keep gestures in the outer document gutter, clear of both the
-            // independently scrolling history and the fixed navigation buttons.
+            // Start on visible document labels, outside the independently
+            // scrolling history and strictly above fixed navigation.
             let navigation = app.otherElements["Family portal navigation, navigation"]
             guard navigation.exists else {
                 XCTFail("Parent navigation boundary is unavailable")
@@ -74,10 +74,19 @@ final class KeyboardUITests: XCTestCase {
             let frame = element.frame
             let scrollDown = frame.minY < top
             let distance = min(app.frame.height * 0.18, max(48, scrollDown ? top - frame.minY : frame.maxY - bottom))
-            let startY = scrollDown ? top + 24 : bottom - 24
-            let endY = scrollDown ? startY + distance : startY - distance
-            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: startY / app.frame.height))
-            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: endY / app.frame.height))
+            let anchors = [app.staticTexts["Send to"].firstMatch,
+                           app.buttons["Blocked senders"].firstMatch,
+                           app.staticTexts["Sunshine Academy"].firstMatch]
+            guard let anchor = anchors.first(where: {
+                $0.exists && $0.frame.midY > top + 24 && $0.frame.midY < bottom - 24
+            }) else {
+                XCTFail("No visible document label is clear of history and navigation")
+                return
+            }
+            let startY = anchor.frame.midY
+            let endY = scrollDown ? min(bottom - 8, startY + distance) : max(top + 8, startY - distance)
+            let start = anchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: anchor.frame.midX / app.frame.width, dy: endY / app.frame.height))
             start.press(forDuration: 0.1, thenDragTo: end)
             #else
             let lower = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))

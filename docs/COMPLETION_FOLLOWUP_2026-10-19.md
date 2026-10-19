@@ -14,7 +14,7 @@ Production was freshly verified READY on `a1dbc96f144e3625b86d499ffd7521e208656e
 
 - Parent sign-in and Resources guidance for private invitation setup links and current passwords.
 - Source-matched Director, Parent Portal, Parent Install, combined product, school operating and launch-email guides, including the legacy issued-password option only while current. These six PDFs were refreshed; the other nine retain their October 7 editions. The guide index and transition SOP use the same instructions. The [dated source/hash manifest](../output/pdf/TEAM_SHARE_GUIDES_CURRENT/SOURCE_REFRESH_MANIFEST_2026-10-19.json) identifies each edition.
-- Native Parent editor-reveal gestures bounded above fixed navigation and outside the independently scrolling message history, with an explicit failure if the target disappears. Real keyboard, retained-draft, rotation and visible-action assertions remain in place.
+- Native Parent editor-reveal gestures start on visible document labels, bounded above fixed navigation and outside the independently scrolling message history, with an explicit failure if the target disappears or no safe label is visible. Real keyboard, retained-draft, rotation and visible-action assertions remain in place. An initial gutter-only correction still scrolled the full-width history and failed; that result is retained in run [39305769183](https://github.com/BrunerDigital/TheBEESuite/actions/runs/39305769183).
 
 The parent access infographic and its generator use the same setup/current-password instructions. Other synthetic visuals remain. The changed PDF pages were rendered and visually checked. Focused tests pass. Full-gate, native and final-release receipts are recorded below only when completed.
 

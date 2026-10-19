@@ -86,7 +86,7 @@ const guides: ResourceGuide[] = [
       "Confirm the correct family and child records before continuing.",
       "On iPhone or iPad, use Safari Share > Add to Home Screen. On Android or Fire, use the Chrome or Silk menu > Install app or Add to Home screen.",
       "Open the new BEE Suite icon and sign in again if the device asks.",
-      "Use Forgot password if you no longer have the invitation password. Never share or forward invitation credentials.",
+      "Use Forgot password if you forgot your current password. Never share or forward a private setup link or password.",
     ],
     visual: [
       { label: "Open", detail: "Use Safari, Chrome, or Silk", icon: MonitorSmartphone },

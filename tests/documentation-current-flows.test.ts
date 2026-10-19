@@ -28,6 +28,8 @@ test("current guides carry an approved revision and exclude superseded workflow 
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
+    assert.doesNotMatch(content, /password (?:from|included in) (?:the |your |approved |parent |school )*invitation|email and password in their welcome email/i, path);
+    assert.doesNotMatch(content, /keep the invitation password/, path);
   }
 });
 
@@ -58,6 +60,7 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
 
   assert.match(resources, /private setup link/);
   assert.match(resources, /guardian email and your current password/);
+  assert.doesNotMatch(resources, /invitation password/);
   assert.doesNotMatch(resources, /school-issued first-login password/);
   assert.match(resources, /id: "director-parent-invites"/);
   assert.match(resources, /Add Family, Parent \+ Child/);

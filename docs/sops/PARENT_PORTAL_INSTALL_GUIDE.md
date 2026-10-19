@@ -7,7 +7,7 @@ Audience: parents and guardians whose school uses The BEE Suite.
 ## What You Need
 
 - The guardian email address your school has on file.
-- The password included in the approved parent invitation from your school.
+- Your current password, or the approved school invitation with instructions to set up first access.
 - A phone, tablet, or computer with internet access.
 
 ## Visual Preview

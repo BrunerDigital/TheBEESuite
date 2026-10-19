@@ -184,7 +184,7 @@ Director steps:
 2. Confirm the guardian email is present and spelled correctly.
 3. Confirm the guardian is connected to the correct family.
 4. Confirm the parent portal access action has been completed or send the parent portal invite.
-5. Tell the parent to use the guardian email and password from the invitation at `https://thebeesuite.io/parents`. The parent may change the password later from settings.
+5. Tell the parent to follow the invitation's setup instructions, then sign in with their guardian email and current password at `https://thebeesuite.io/parents`. A private setup link lets them choose a password first.
 6. If the parent sees no family after login, verify the guardian-to-family link.
 
 Never give one guardian another guardian's login.

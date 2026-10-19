@@ -1,6 +1,6 @@
 # School Transition Setup And Cutover SOP - The BEE Suite
 
-**Updated:** September 23, 2026
+**Updated:** October 19, 2026
 **Audience:** owners, directors, billing owners, and BEE Suite implementation support  
 **Purpose:** prepare one school in The BEE Suite through either a guarded existing-record import or a clean start, without inventing data, duplicating tuition, skipping safety validation, or treating technical setup as launch approval.
 
@@ -126,7 +126,7 @@ Parent invitations are a separate gate even when family data has been imported.
 5. Do not send a broad invitation wave without the named school's approval.
 6. If invitations were already sent, review the completion record and any delivery failures or manual-copy fallbacks.
 7. Have an approved test parent and an approved authorized-pickup account sign in; verify each sees only the intended family and role-appropriate child information before launch.
-8. Tell parents to use the email and password in their welcome email. If they changed or forgot the password, they should use `Forgot password`.
+8. Tell parents to follow their welcome email's setup instructions. If it includes a private setup link, they choose a password there first, then sign in with their guardian email and current password. If they forgot the current password, they should use `Forgot password`.
 9. Describe the Parent Portal as browser-installed: Safari `Add to Home Screen` on iPhone or iPad, Chrome `Install app` or `Add to Home screen` on Android, and the browser install option on desktop.
 
 Stop if a parent sees another family or child, if a guardian email belongs to the wrong person, or if a missing child would require creating a duplicate record.

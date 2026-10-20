@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { stripTypeScriptTypes } from "node:module";
+import ts from "typescript";
 import { join } from "node:path";
 import { canonicalSchoolLocationId, locationAliasesFromCustomFields } from "../src/lib/school-location-identifiers";
 import { isLeesSummitInquiryIdentifier, leesSummitInquiryRestoration as binding } from "../src/lib/public-inquiry-restoration";
@@ -35,7 +35,8 @@ async function runSync(locations: Location[], centers: Center[] = [], customFile
     process: { env: { KIDCITY_ORGANIZATION_ID: "synthetic_org", ...(customFile ? { KIDCITY_OPEN_SCHOOLS_FILE: "/synthetic/custom.json" } : {}) }, cwd: () => "/synthetic" },
     console: { log: () => undefined },
   };
-  const main = Function(...Object.keys(dependencies), stripTypeScriptTypes(declarations, { mode: "transform" }) + "\nreturn main;")(...Object.values(dependencies));
+  const compiled = ts.transpileModule(declarations, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
+  const main = Function(...Object.keys(dependencies), compiled + "\nreturn main;")(...Object.values(dependencies));
   await main();
   return effects;
 }

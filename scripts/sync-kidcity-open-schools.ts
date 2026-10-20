@@ -6,6 +6,7 @@ import {
   canonicalSchoolLocationId,
   locationAliasesFromCustomFields,
 } from "@/lib/school-location-identifiers";
+import { isLeesSummitInquiryIdentifier, leesSummitInquiryRestoration } from "@/lib/public-inquiry-restoration";
 
 type PublicLocation = {
   crmLocationId: string;
@@ -51,7 +52,10 @@ async function main() {
   const inputPath = process.env.KIDCITY_OPEN_SCHOOLS_FILE || join(process.cwd(), "public", "kidcity-locations.json");
   const organizationId = await getOrganizationId();
   const file = JSON.parse(readFileSync(inputPath, "utf8")) as PublicLocationFile;
-  const locations = file.locations.filter((location) => clean(location.crmLocationId) && clean(location.locationId));
+  // This public catalog also contains an inquiry-only, operationally closed school.
+  // Public visibility must never authorize reopening it through this operational sync.
+  const locations = file.locations.filter((location) => clean(location.crmLocationId) && clean(location.locationId)
+    && ![location.crmLocationId, location.locationId, location.name].some(isLeesSummitInquiryIdentifier));
 
   let created = 0;
   let updated = 0;
@@ -85,6 +89,8 @@ async function main() {
       throw new Error(`${location.crmLocationId} matches multiple school profiles; reconcile them before syncing.`);
     }
     const existing = activeMatches[0] ?? matches[0] ?? null;
+    // Also protect the persisted identity when an old alias or address matched it.
+    if (existing?.id === leesSummitInquiryRestoration.centerId) continue;
     const locationAliases = Array.from(new Set([
       ...locationAliasesFromCustomFields(existing?.customFields),
       clean(existing?.crmLocationId),

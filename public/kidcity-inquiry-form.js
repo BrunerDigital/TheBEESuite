@@ -53,7 +53,9 @@
   function isBlockedInquiryIdentifier(value) {
     const key = String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     return ["kid city usa fl daytona beach east", "fl daytona beach east",
-      "kid city usa daytona beach east", "daytona beach east"].includes(key);
+      "kid city usa daytona beach east", "daytona beach east",
+      "kid city usa in whitestown", "in whitestown", "kid city usa whitestown",
+      "kid city usa tn pulaski", "tn pulaski", "kid city usa pulaski tn"].includes(key);
   }
 
   function availableInquiryLocations(locations) {

@@ -546,7 +546,7 @@
       <option value="Kid City USA - IN | Westfield" data-location-id="Kid City USA - IN | Westfield" data-location-name="Kid City USA - Westfield" data-city="Westfield" data-state="IN" data-address="1769 W Tournament Trail" data-postal-code="46074" data-location-phone="855-543-2489">Kid City USA - IN | Westfield</option>
     </optgroup>
     <optgroup label="MO">
-      <option value="Kid City USA - MO | Lees Summit" data-location-id="Kid City USA - MO | Lees Summit" data-location-name="Kid City USA - Lees Summit" data-city="Lee's Summit" data-state="MO" data-address="850 NE Swann Rd" data-postal-code="64086" data-location-phone="816-875-3363">Kid City USA - MO | Lees Summit</option>
+      <option disabled hidden value="Kid City USA - MO | Lees Summit" data-location-id="Kid City USA - MO | Lees Summit" data-location-name="Kid City USA - Lees Summit" data-city="Lee's Summit" data-state="MO" data-address="850 NE Swann Rd" data-postal-code="64086" data-location-phone="816-875-3363">Kid City USA - MO | Lees Summit</option>
     </optgroup>
     <optgroup label="NC">
       <option value="Kid City USA - NC | Canton" data-location-id="Kid City USA - NC | Canton" data-location-name="Kid City USA - Canton" data-city="Canton" data-state="NC" data-address="43 Crestview Street" data-postal-code="28716" data-location-phone="828-648-2775">Kid City USA - NC | Canton</option>
@@ -577,6 +577,39 @@
 
 <script>
 (function () {
+  // Keep the inquiry-only option unavailable until the backend verifies its binding.
+  function initializeRestoredOptions() {
+    document.querySelectorAll(".kcusa-inquiry-form").forEach(function (form) {
+      var identifier = "Kid City USA - MO | Lees Summit";
+      var option = form.querySelector('option[value="' + identifier + '"]');
+      if (!option) return;
+      option.disabled = true;
+      option.hidden = true;
+      var availability;
+      try {
+        availability = new URL("/api/public/kidcity-locations", form.getAttribute("data-crm-endpoint"));
+      } catch (error) {
+        return;
+      }
+      availability.searchParams.set("purpose", "inquiry");
+      availability.searchParams.set("centerId", "cmp4ewfzn004g6alwqbqrzcql");
+      fetch(availability.href, { cache: "no-store" }).then(function (response) {
+        if (!response.ok) throw new Error("Inquiry availability could not be checked");
+        return response.json();
+      }).then(function (data) {
+        if (data.inquiryCenterEligible === true && Array.isArray(data.locations)
+          && data.locations.some(function (location) {
+            return location.crmLocationId === identifier || location.locationId === identifier;
+          })) {
+          option.disabled = false;
+          option.hidden = false;
+        }
+      }).catch(function () {
+        // Leave only this option hidden; other schools retain their existing flow.
+      });
+    });
+  }
+
   function getSelectedLocation(select) {
     var option = select && select.options[select.selectedIndex];
 
@@ -676,5 +709,11 @@
       if (button) button.disabled = false;
     });
   });
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeRestoredOptions);
+  } else {
+    initializeRestoredOptions();
+  }
 })();
 </script>

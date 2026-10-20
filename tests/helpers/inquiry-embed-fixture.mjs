@@ -3,7 +3,7 @@ import vm from 'node:vm';
 
 const daytona = 'Kid City USA - FL | Daytona Beach East';
 const douglas = 'Kid City USA - FL | Altamonte - Douglas';
-export async function embedFixture(script, { dataset = {}, fields = {}, eligibility = true, loadFails = false, responseOk = true, omitEligibility = false } = {}) {
+export async function embedFixture(script, { dataset = {}, fields = {}, eligibility = true, loadFails = false, responseOk = true, omitEligibility = false, additionalLocations = /** @type {string[]} */ ([]) } = {}) {
   const calls = [];
   let submitHandler;
   const status = { textContent: '', dataset: {}, removeAttribute() {} };
@@ -25,7 +25,7 @@ export async function embedFixture(script, { dataset = {}, fields = {}, eligibil
       if (options?.method === 'POST') return { ok: true };
       if (loadFails) throw new Error('synthetic catalog outage');
       return { ok: responseOk, json: async () => ({ ...(omitEligibility ? {} : { inquiryCenterEligible: eligibility }),
-        locations: [daytona, douglas].map((id) => ({ crmLocationId: id, locationId: id, name: id, state: 'FL' })) }) };
+        locations: [daytona, douglas, ...additionalLocations].map((id) => ({ crmLocationId: id, locationId: id, name: id, state: 'FL' })) }) };
     },
   });
   await new Promise((resolve) => setImmediate(resolve));

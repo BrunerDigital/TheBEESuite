@@ -14,6 +14,10 @@
       fixedPublicLocationId ||
       fixedLocationName
   );
+  const restoredLocationRequested = [fixedLocationId, fixedPublicLocationId, fixedLocationName]
+    .some(isLeesSummitInquiryIdentifier);
+  const restoredCenterId = "cmp4ewfzn004g6alwqbqrzcql";
+  const availabilityCenterId = fixedCenterId || (restoredLocationRequested ? restoredCenterId : "");
   const target = document.getElementById(targetId);
 
   if (!target) return;
@@ -63,6 +67,11 @@
       .some(isBlockedInquiryIdentifier));
   }
 
+  function isLeesSummitInquiryIdentifier(value) {
+    const key = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+    return ["kid city usa - mo | lees summit", "mo | lees summit", "kid city usa - lees summit"].includes(key);
+  }
+
   function showUnavailable() {
     target.innerHTML = '<p class="bee-suite-status" data-state="error" role="status">This location is not accepting website inquiries. Please choose another location or contact corporate.</p>';
   }
@@ -84,6 +93,10 @@
   }
 
   function findFixedLocation(locations) {
+    if (restoredLocationRequested) {
+      return locations.find((location) => [location.crmLocationId, location.locationId, location.name]
+        .some(isLeesSummitInquiryIdentifier)) || null;
+    }
     const keys = [
       fixedLocationId,
       fixedPublicLocationId,
@@ -322,11 +335,17 @@
     return;
   }
 
+  if (restoredLocationRequested && ((fixedCenterId && fixedCenterId !== restoredCenterId)
+    || [fixedLocationId, fixedPublicLocationId].filter(Boolean).some((value) => !isLeesSummitInquiryIdentifier(value)))) {
+    showUnavailable();
+    return;
+  }
+
   loadTurnstile();
 
   const inquiryLocationsUrl = new URL(`${baseUrl}/api/public/kidcity-locations`);
   inquiryLocationsUrl.searchParams.set("purpose", "inquiry");
-  if (fixedCenterId) inquiryLocationsUrl.searchParams.set("centerId", fixedCenterId);
+  if (availabilityCenterId) inquiryLocationsUrl.searchParams.set("centerId", availabilityCenterId);
 
   fetch(inquiryLocationsUrl.href)
     .then((response) => {
@@ -334,14 +353,14 @@
       return response.json();
     })
     .then((data) => {
-      if (fixedCenterId && data.inquiryCenterEligible !== true) {
+      if (availabilityCenterId && data.inquiryCenterEligible !== true) {
         showUnavailable();
         return;
       }
       render(data.locations || []);
     })
     .catch(() => {
-      if (fixedLocationRequested && !fixedCenterId) {
+      if (fixedLocationRequested && !availabilityCenterId) {
         render([]);
         return;
       }

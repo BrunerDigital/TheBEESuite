@@ -25,7 +25,7 @@ test("actual teacher preview cannot initialize, replay, upload or mutate product
   for (const [start, end] of [["async function postJsonOrQueue", "function flushOfflineQueue"], ["function flushOfflineQueue", "function attendanceFor"], ["function saveTeacherProfile", "function submitAttendance"], ["function submitPhoto", "const activeDailyReportChildren"]]) {
     const block = teacher.slice(teacher.indexOf(start), teacher.indexOf(end));
     assert.ok(block.indexOf("if (previewMode)") >= 0, start);
-    const requestIndex = block.search(/(?:fetch|requestWithNetworkRecovery)\(/);
+    const requestIndex = block.search(/(?:fetch|requestWithNetworkRecovery|shareTeacherPhoto)\(/);
     assert.ok(requestIndex > block.indexOf("if (previewMode)"), start);
   }
   assert.match(teacher, /!appReviewMode && !previewMode \? \([\s\S]*<SetupChecklistPanel/);

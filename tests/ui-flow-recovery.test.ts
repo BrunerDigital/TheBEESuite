@@ -87,12 +87,15 @@ test("teacher profile and media recovery retain drafts on uncertain outcomes", (
   const source = readFileSync("src/components/teacher-mobile-workspace.tsx", "utf8");
   const profile = source.slice(source.indexOf("function saveTeacherProfile"), source.indexOf("function updateMeal"));
   const photo = source.slice(source.indexOf("function submitPhoto"), source.indexOf("const activeDailyReportChildren"));
-  for (const action of [profile, photo]) {
-    assert.match(action, /await requestWithNetworkRecovery/);
-    assert.ok(action.indexOf("if (previewMode)") < action.indexOf("await requestWithNetworkRecovery"));
-    assert.match(action, /could not confirm whether/);
-  }
+  assert.match(profile, /await requestWithNetworkRecovery/);
+  assert.ok(profile.indexOf("if (previewMode)") < profile.indexOf("await requestWithNetworkRecovery"));
+  assert.match(profile, /could not confirm whether/);
   assert.ok(profile.indexOf("if (!response.ok)") < profile.indexOf('setProfileKioskPin("")'));
-  assert.ok(photo.indexOf("if (!response.ok)") < photo.indexOf("setPhoto(null)"));
-  assert.match(photo, /before uploading again to avoid a duplicate/);
+  assert.match(photo, /await shareTeacherPhoto/);
+  assert.ok(photo.indexOf("if (previewMode)") < photo.indexOf("await shareTeacherPhoto"));
+  assert.doesNotMatch(photo, /setPhoto\(null\)|setPhotoCaption\(""\)/);
+  assert.match(photo, /current.filter\(id => !result.savedChildIds.includes\(id\)\)/);
+  const sharing = readFileSync("src/lib/teacher-photo-sharing.ts", "utf8");
+  assert.match(sharing, /await requestWithNetworkRecovery/);
+  assert.match(sharing, /Check this child's photos before trying again to avoid a duplicate/);
 });

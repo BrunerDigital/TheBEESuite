@@ -21,6 +21,7 @@ import { CollapsibleCard } from "@/components/workspace-preferences";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import { requestWithNetworkRecovery } from "@/lib/client-request-recovery";
+import { shareTeacherPhoto } from "@/lib/teacher-photo-sharing";
 import { normalizeTeacherProfileSetupPayload, readTeacherProfileSaveReceipt, teacherProfileDraftFromReceipt, teacherProfileDraftSignature } from "@/lib/teacher-profile-setup";
 import { sameTeacherDraftTargets, teacherReportDraftSignature, validateTeacherDraftTargets } from "@/lib/teacher-draft-targets";
 import { MAX_CHILDREN_PER_REPORT_BATCH } from "@/lib/teacher-daily-report";
@@ -305,6 +306,8 @@ export function TeacherMobileWorkspace({
   const [activityRows, setActivityRows] = useState<ActivityDraft[]>(() => [createActivityDraft()]);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoCaption, setPhotoCaption] = useState("");
+  const [selectedPhotoChildIds, setSelectedPhotoChildIds] = useState<string[]>(() => firstChild ? [firstChild] : []);
+  const [savedPhotoChildIds, setSavedPhotoChildIds] = useState<string[]>([]);
   const [suppliesNeeded, setSuppliesNeeded] = useState("");
   const [incidentType, setIncidentType] = useState("Minor injury");
   const [incidentDescription, setIncidentDescription] = useState("");
@@ -317,8 +320,9 @@ export function TeacherMobileWorkspace({
   const dailyReportDraft = { reportDate, mood, teacherNote, sendToParent, mealRows, napRows, noNap, diaperRows, activityRows, suppliesNeeded };
   const [reportDraftBaseline, setReportDraftBaseline] = useState(() => teacherReportDraftSignature(dailyReportDraft));
   const hasReportDraft = teacherReportDraftSignature(dailyReportDraft) !== reportDraftBaseline;
-  const hasSingleChildDraft = Boolean(photo || photoCaption || incidentDescription || actionTaken || incidentType !== "Minor injury" || locationReason || locationTarget !== "area:Playground");
-  useUnsavedChangesGuard((!previewMode || (process.env.NODE_ENV === "development" && previewHistoryGuard)) && (hasReportDraft || hasSingleChildDraft || hasProfileDraft), "Leave this page and discard your unsaved profile or classroom drafts?");
+  const hasPhotoDraft = Boolean(photo || photoCaption);
+  const hasSingleChildDraft = Boolean(incidentDescription || actionTaken || incidentType !== "Minor injury" || locationReason || locationTarget !== "area:Playground");
+  useUnsavedChangesGuard((!previewMode || (process.env.NODE_ENV === "development" && previewHistoryGuard)) && (hasReportDraft || hasPhotoDraft || hasSingleChildDraft || hasProfileDraft), "Leave this page and discard your unsaved profile or classroom drafts?");
   const offlineCredentialsRef = useRef<{ key: string; scopeId: string } | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isPending, startTransition] = useTransition();
@@ -521,7 +525,7 @@ export function TeacherMobileWorkspace({
     const changesChild = childId !== selectedChildId;
     const changesReports = !sameTeacherDraftTargets(nextTargets, selectedDailyReportChildIds);
     if (((changesChild && hasSingleChildDraft) || (changesReports && hasReportDraft))
-      && !window.confirm("Changing children will discard the affected unsaved photo, incident, location, or daily-report drafts. Cancel to finish them for the current children, or confirm to discard and switch.")) return;
+      && !window.confirm("Changing children will discard the affected unsaved incident, location, or daily-report drafts. Cancel to finish them for the current children, or confirm to discard and switch.")) return;
     if (changesChild) clearSingleChildDrafts();
     if (changesReports) resetDailyReportDrafts({ preserveSettings: true });
     setSelectedChildId(childId);
@@ -544,10 +548,14 @@ export function TeacherMobileWorkspace({
       : [...selectedDailyReportChildIds, childId]);
   }
 
-  function clearSingleChildDrafts() {
+  function clearPhotoDraft() {
     setPhoto(null);
     if (photoInputRef.current) photoInputRef.current.value = "";
     setPhotoCaption("");
+    setSavedPhotoChildIds([]);
+  }
+
+  function clearSingleChildDrafts() {
     setIncidentType("Minor injury");
     setIncidentDescription("");
     setActionTaken("");
@@ -925,25 +933,21 @@ export function TeacherMobileWorkspace({
       showStatus("Preview only — no photo was uploaded.");
       return;
     }
-    if (!selectedChild?.id || !photo) return;
+    if (isPending || !photo || !selectedPhotoChildIds.length) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       showError("Photo uploads need an active connection. Attendance, daily reports, and incidents can still be queued offline.");
       return;
     }
     startTransition(async () => {
-      const formData = new FormData();
-      formData.set("childId", selectedChild.id);
-      formData.set("caption", photoCaption);
-      formData.set("photo", photo);
-      formData.set("sharedWithParents", "true");
-      const response = await requestWithNetworkRecovery("/api/teacher/media", { method: "POST", body: formData },
-        "We could not confirm whether the photo was shared. Your photo and caption are still selected. Reconnect and check the child's photos before uploading again to avoid a duplicate.");
-      const json = await response.json().catch(() => null) as { error?: string; warning?: string } | null;
-      if (!response.ok) return showError(json?.error || "Photo could not be shared.");
-      setPhoto(null);
-      if (photoInputRef.current) photoInputRef.current.value = "";
-      setPhotoCaption("");
-      showStatus(json?.warning || "Photo shared to the parent portal.");
+      const result = await shareTeacherPhoto({ childIds: selectedPhotoChildIds, rosterIds: roster.map(child => child.id), photo, caption: photoCaption });
+      setSavedPhotoChildIds(current => [...new Set([...current, ...result.savedChildIds])]);
+      setSelectedPhotoChildIds(current => current.filter(id => !result.savedChildIds.includes(id)));
+      const receipt = result.savedChildIds.length ? `Photo saved for ${result.savedChildIds.length} child${result.savedChildIds.length === 1 ? "" : "ren"}. ` : "";
+      if (result.error) {
+        const stoppedChild = roster.find(child => child.id === selectedPhotoChildIds[result.savedChildIds.length]);
+        return showError(`${receipt}${result.warnings.length ? "Some photos are held for permission review. " : ""}${stoppedChild ? `${stoppedChild.fullName}: ` : ""}${result.error}`);
+      }
+      showStatus(`${receipt}${result.warnings.length ? "Some photos are held for permission review. " : "Shared to the selected parent portals. "}Choose more children to reuse this photo, or clear it when finished.`);
     });
   }
 
@@ -959,7 +963,7 @@ export function TeacherMobileWorkspace({
       aria-busy={isPending}
     >
       {(selectedChildId && !selectedChild) || selectedDailyReportChildIds.some((id) => !roster.some((child) => child.id === id)) ? <Alert variant="destructive"><AlertTitle>Review selected children</AlertTitle><AlertDescription>A selected child is no longer in this roster. Your drafts are retained; choose current recipients before continuing. Nothing will be reassigned automatically.</AlertDescription></Alert> : null}
-      {hasReportDraft || hasSingleChildDraft ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-3 text-sm"><span>Unsaved classroom drafts stay with their selected children.</span><Button type="button" variant="outline" size="sm" onClick={() => { if (window.confirm("Discard all unsaved photo, incident, location, and daily-report drafts?")) { clearSingleChildDrafts(); resetDailyReportDrafts(); } }}>Discard classroom drafts</Button></div> : null}
+      {hasReportDraft || hasPhotoDraft || hasSingleChildDraft ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-3 text-sm"><span>Unsaved classroom drafts stay with their selected children.</span><Button type="button" variant="outline" size="sm" onClick={() => { if (window.confirm("Discard all unsaved photo, incident, location, and daily-report drafts?")) { clearPhotoDraft(); clearSingleChildDrafts(); resetDailyReportDrafts(); } }}>Discard classroom drafts</Button></div> : null}
       {appReviewMode ? (
         <details className="group rounded-xl border bg-card px-3 text-sm" data-teacher-review-notice>
           <summary className="flex min-h-11 min-w-0 cursor-pointer list-none items-center gap-2 py-2 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
@@ -1357,29 +1361,41 @@ export function TeacherMobileWorkspace({
             </Button>
         </CollapsibleCard>
 
-        <CollapsibleCard id="teacher-photo" compactHeader title="Photo" collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${selectedChild.photoVideoPermission ? "Sharing allowed" : "Permission required"}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
-            <TeacherChildPicker id="photo-child" label="Child for photo" groups={byClassroom} selectedChildId={selectedChildId} disabled={isPending} onChildChange={chooseChild} />
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={selectedChild?.photoVideoPermission ? "default" : "secondary"}>
-                {selectedChild?.photoVideoPermission ? "Shares with parents now" : "Permission review required"}
-              </Badge>
-              <Badge variant="outline">Private storage</Badge>
-            </div>
+        <CollapsibleCard id="teacher-photo" compactHeader title="Photo" collapsedSummary={`${selectedPhotoChildIds.length} ${selectedPhotoChildIds.length === 1 ? "child" : "children"} selected · Gallery or camera`} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
+            <fieldset className="space-y-2" disabled={isPending}>
+              <legend className="text-sm font-medium">Children for this photo</legend>
+              <p className="text-sm text-muted-foreground">Choose each child whose family should receive the same photo. Photos without permission are held for director review.</p>
+              {byClassroom.map(group => <div key={group.id ?? "unassigned"} className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">{group.name}</p>
+                {group.children.map(child => <label key={child.id} className="flex min-h-11 items-center gap-3 rounded-lg border p-3 text-sm">
+                  <input type="checkbox" className="size-5 shrink-0" checked={selectedPhotoChildIds.includes(child.id)} disabled={savedPhotoChildIds.includes(child.id)} onChange={event => setSelectedPhotoChildIds(current => event.target.checked ? [...new Set([...current, child.id])] : current.filter(id => id !== child.id))} />
+                  <span className="min-w-0 break-words">{child.fullName}{savedPhotoChildIds.includes(child.id) ? " · Photo saved" : !child.photoVideoPermission ? " · Permission review required" : ""}</span>
+                </label>)}
+              </div>)}
+              {!roster.length ? <p className="text-sm text-muted-foreground">No children are on your roster.</p> : null}
+              {selectedPhotoChildIds.some(id => !roster.some(child => child.id === id)) ? <p role="alert" className="text-sm text-destructive">A selected child is no longer in your roster. <button type="button" className="underline" onClick={() => setSelectedPhotoChildIds(current => current.filter(id => roster.some(child => child.id === id)))}>Remove unavailable recipients</button> before sharing.</p> : null}
+            </fieldset>
+            {roster.filter(child => selectedPhotoChildIds.includes(child.id) && hasCustodyWarning(child.family)).map(child => <Alert key={child.id}>
+              <AlertTitle>{CUSTODY_WARNING_LABEL}: {child.fullName}</AlertTitle>
+              <AlertDescription>{custodyWarningSummary(child.family)}</AlertDescription>
+            </Alert>)}
+            <Badge variant="outline">Private storage</Badge>
             <div className="space-y-1">
-              <Label htmlFor="teacher-child-photo">Take or upload photo</Label>
+              <Label htmlFor="teacher-child-photo">Choose photo from gallery or camera</Label>
               <Input
                 id="teacher-child-photo"
                 ref={photoInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
-                onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
+                onChange={(event) => { const file = event.target.files?.[0]; if (file) { setPhoto(file); setSavedPhotoChildIds([]); } }}
               />
+              <p className="text-xs text-muted-foreground">Select an existing photo from your photo library or take a new one.</p>
             </div>
+            {photo ? <div className="flex flex-wrap items-center gap-2 text-sm"><span className="min-w-0 break-all">Selected: {photo.name}</span><Button type="button" size="sm" variant="outline" onClick={clearPhotoDraft}>Clear photo</Button></div> : null}
             <Textarea aria-label="Photo caption for parents" value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption for parents" />
-            <Button disabled={isPending || !selectedChild || !photo} className="w-full" onClick={submitPhoto}>
+            <Button disabled={isPending || !selectedPhotoChildIds.length || !photo} className="w-full" onClick={submitPhoto}>
               <Camera data-icon="inline-start" />
-              Share Photo
+              Share Photo{selectedPhotoChildIds.length ? ` · ${selectedPhotoChildIds.length} selected` : ""}
             </Button>
         </CollapsibleCard>
 

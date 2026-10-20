@@ -544,7 +544,9 @@
       <option value="Kid City USA - IN | Petersburg" data-location-id="Kid City USA - IN | Petersburg" data-location-name="Kid City USA - Petersburg" data-city="Petersburg" data-state="IN" data-address="106 West Pike Avenue" data-postal-code="47567" data-location-phone="812-380-9100">Kid City USA - IN | Petersburg</option>
       <option value="Kid City USA - IN | Southpointe" data-location-id="Kid City USA - IN | Southpointe" data-location-name="Kid City USA - Southpointe" data-city="Indianapolis" data-state="IN" data-address="8830 Southpointe Drive" data-postal-code="46227" data-location-phone="463-634-4044">Kid City USA - IN | Southpointe</option>
       <option value="Kid City USA - IN | Westfield" data-location-id="Kid City USA - IN | Westfield" data-location-name="Kid City USA - Westfield" data-city="Westfield" data-state="IN" data-address="1769 W Tournament Trail" data-postal-code="46074" data-location-phone="855-543-2489">Kid City USA - IN | Westfield</option>
-      <option value="Kid City USA - IN | Whitestown" data-location-id="Kid City USA - IN | Whitestown" data-location-name="Kid City USA - Whitestown" data-city="Whitestown" data-state="IN" data-address="5650 E 550 S Whitestown" data-postal-code="46075" data-location-phone="855-543-2490">Kid City USA - IN | Whitestown</option>
+    </optgroup>
+    <optgroup label="MO">
+      <option disabled hidden value="Kid City USA - MO | Lees Summit" data-location-id="Kid City USA - MO | Lees Summit" data-location-name="Kid City USA - Lees Summit" data-city="Lee's Summit" data-state="MO" data-address="850 NE Swann Rd" data-postal-code="64086" data-location-phone="816-875-3363">Kid City USA - MO | Lees Summit</option>
     </optgroup>
     <optgroup label="NC">
       <option value="Kid City USA - NC | Canton" data-location-id="Kid City USA - NC | Canton" data-location-name="Kid City USA - Canton" data-city="Canton" data-state="NC" data-address="43 Crestview Street" data-postal-code="28716" data-location-phone="828-648-2775">Kid City USA - NC | Canton</option>
@@ -553,7 +555,6 @@
     <optgroup label="TN">
       <option value="Kid City USA - TN | Columbia" data-location-id="Kid City USA - TN | Columbia" data-location-name="Kid City USA - Columbia" data-city="Columbia" data-state="TN" data-address="300 E. James Campbell Blvd" data-postal-code="38401" data-location-phone="931-655-0723">Kid City USA - TN | Columbia</option>
       <option value="Kid City USA - TN | Lewisburg" data-location-id="Kid City USA - TN | Lewisburg" data-location-name="Kid City USA - Lewisburg" data-city="Lewisburg" data-state="TN" data-address="964 N. Ellington Pkwy" data-postal-code="37091" data-location-phone="931-422-5276">Kid City USA - TN | Lewisburg</option>
-      <option value="Kid City USA - TN | Pulaski" data-location-id="Kid City USA - TN | Pulaski" data-location-name="Kid City USA - Pulaski TN" data-city="Pulaski" data-state="TN" data-address="110 N 8th Street" data-postal-code="38478" data-location-phone="931-292-6059">Kid City USA - TN | Pulaski</option>
       <option value="Kid City USA - TN | Soddy Daisy" data-location-id="Kid City USA - TN | Soddy Daisy" data-location-name="Kid City USA - Soddy Daisy" data-city="Soddy Daisy" data-state="TN" data-address="9834 Dayton Pike" data-postal-code="37379" data-location-phone="423-654-4049">Kid City USA - TN | Soddy Daisy</option>
     </optgroup>
     <optgroup label="TX">
@@ -576,6 +577,39 @@
 
 <script>
 (function () {
+  // Keep the inquiry-only option unavailable until the backend verifies its binding.
+  function initializeRestoredOptions() {
+    document.querySelectorAll(".kcusa-inquiry-form").forEach(function (form) {
+      var identifier = "Kid City USA - MO | Lees Summit";
+      var option = form.querySelector('option[value="' + identifier + '"]');
+      if (!option) return;
+      option.disabled = true;
+      option.hidden = true;
+      var availability;
+      try {
+        availability = new URL("/api/public/kidcity-locations", form.getAttribute("data-crm-endpoint"));
+      } catch (error) {
+        return;
+      }
+      availability.searchParams.set("purpose", "inquiry");
+      availability.searchParams.set("centerId", "cmp4ewfzn004g6alwqbqrzcql");
+      fetch(availability.href, { cache: "no-store" }).then(function (response) {
+        if (!response.ok) throw new Error("Inquiry availability could not be checked");
+        return response.json();
+      }).then(function (data) {
+        if (data.inquiryCenterEligible === true && Array.isArray(data.locations)
+          && data.locations.some(function (location) {
+            return location.crmLocationId === identifier || location.locationId === identifier;
+          })) {
+          option.disabled = false;
+          option.hidden = false;
+        }
+      }).catch(function () {
+        // Leave only this option hidden; other schools retain their existing flow.
+      });
+    });
+  }
+
   function getSelectedLocation(select) {
     var option = select && select.options[select.selectedIndex];
 
@@ -675,5 +709,11 @@
       if (button) button.disabled = false;
     });
   });
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeRestoredOptions);
+  } else {
+    initializeRestoredOptions();
+  }
 })();
 </script>

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isEligiblePublicInquiryCenter } from "../src/lib/inquiry-routing";
+import { filterPublicWebsiteLocations } from "../src/lib/public-inquiry-policy";
 import { filterPublicKidCityLocations, isActivePublicSchoolCandidate, isActiveSchoolFinanceOperationsCandidate, mergePublicKidCityLocations, toPublicKidCityLocation } from "../src/lib/active-school-locations";
 
 test("suspended schools cannot return through active records, legacy IDs, merged lists, or stale form routing", () => {
@@ -25,7 +26,7 @@ test("Centennial and eligible Kid City locations retain routing without altering
 });
 
 test("retained-school instructions preserve active feeds and inquiry routing", () => {
-  for (const id of ["FL | Altamonte - Douglas", "FL | Longwood - Wekiva", "FL | Vero Beach", "IN | Jasper", "IN | Jasper - Truman", "IN | Jasper - Baden Strasse", "IN | Whitestown"]) {
+  for (const id of ["FL | Altamonte - Douglas", "FL | Longwood - Wekiva", "FL | Vero Beach", "IN | Jasper", "IN | Jasper - Truman", "IN | Jasper - Baden Strasse", "TN | Lewisburg"]) {
     const center = { status: "active", crmLocationId: id, locationId: id, name: id };
     assert.equal(isActivePublicSchoolCandidate(center), true, id);
     assert.equal(isEligiblePublicInquiryCenter(center, true), true, id);
@@ -33,6 +34,18 @@ test("retained-school instructions preserve active feeds and inquiry routing", (
     assert.deepEqual(filterPublicKidCityLocations([location]), [location], id);
     assert.deepEqual(mergePublicKidCityLocations([location], [location]), [location], id);
     assert.equal(isEligiblePublicInquiryCenter({ ...center, status: "closed" }, true), false, id);
+  }
+});
+
+test("later Whitestown and Pulaski public removal preserves active operational and finance status", () => {
+  for (const id of ["IN | Whitestown", "Kid City USA - IN | Whitestown", "TN | Pulaski", "Kid City USA - TN | Pulaski"]) {
+    const center = { status: "active", crmLocationId: id, locationId: id, name: id };
+    assert.equal(isActivePublicSchoolCandidate(center), true, id);
+    assert.equal(isActiveSchoolFinanceOperationsCandidate(center), true, id);
+    assert.equal(isEligiblePublicInquiryCenter(center, true), false, id);
+    assert.equal(isEligiblePublicInquiryCenter(center, false), false, id);
+    assert.deepEqual(filterPublicWebsiteLocations([toPublicKidCityLocation(center)]), [], id);
+    assert.equal(center.status, "active");
   }
 });
 

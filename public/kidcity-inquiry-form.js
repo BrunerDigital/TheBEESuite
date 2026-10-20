@@ -14,6 +14,10 @@
       fixedPublicLocationId ||
       fixedLocationName
   );
+  const restoredLocationRequested = [fixedLocationId, fixedPublicLocationId, fixedLocationName]
+    .some(isLeesSummitInquiryIdentifier);
+  const restoredCenterId = "cmp4ewfzn004g6alwqbqrzcql";
+  const availabilityCenterId = fixedCenterId || (restoredLocationRequested ? restoredCenterId : "");
   const target = document.getElementById(targetId);
 
   if (!target) return;
@@ -53,12 +57,19 @@
   function isBlockedInquiryIdentifier(value) {
     const key = String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     return ["kid city usa fl daytona beach east", "fl daytona beach east",
-      "kid city usa daytona beach east", "daytona beach east"].includes(key);
+      "kid city usa daytona beach east", "daytona beach east",
+      "kid city usa in whitestown", "in whitestown", "kid city usa whitestown",
+      "kid city usa tn pulaski", "tn pulaski", "kid city usa pulaski tn"].includes(key);
   }
 
   function availableInquiryLocations(locations) {
     return locations.filter((location) => ![location.crmLocationId, location.locationId, location.name]
       .some(isBlockedInquiryIdentifier));
+  }
+
+  function isLeesSummitInquiryIdentifier(value) {
+    const key = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+    return ["kid city usa - mo | lees summit", "mo | lees summit", "kid city usa - lees summit"].includes(key);
   }
 
   function showUnavailable() {
@@ -82,6 +93,10 @@
   }
 
   function findFixedLocation(locations) {
+    if (restoredLocationRequested) {
+      return locations.find((location) => [location.crmLocationId, location.locationId, location.name]
+        .some(isLeesSummitInquiryIdentifier)) || null;
+    }
     const keys = [
       fixedLocationId,
       fixedPublicLocationId,
@@ -320,11 +335,17 @@
     return;
   }
 
+  if (restoredLocationRequested && ((fixedCenterId && fixedCenterId !== restoredCenterId)
+    || [fixedLocationId, fixedPublicLocationId].filter(Boolean).some((value) => !isLeesSummitInquiryIdentifier(value)))) {
+    showUnavailable();
+    return;
+  }
+
   loadTurnstile();
 
   const inquiryLocationsUrl = new URL(`${baseUrl}/api/public/kidcity-locations`);
   inquiryLocationsUrl.searchParams.set("purpose", "inquiry");
-  if (fixedCenterId) inquiryLocationsUrl.searchParams.set("centerId", fixedCenterId);
+  if (availabilityCenterId) inquiryLocationsUrl.searchParams.set("centerId", availabilityCenterId);
 
   fetch(inquiryLocationsUrl.href)
     .then((response) => {
@@ -332,14 +353,14 @@
       return response.json();
     })
     .then((data) => {
-      if (fixedCenterId && data.inquiryCenterEligible !== true) {
+      if (availabilityCenterId && data.inquiryCenterEligible !== true) {
         showUnavailable();
         return;
       }
       render(data.locations || []);
     })
     .catch(() => {
-      if (fixedLocationRequested && !fixedCenterId) {
+      if (fixedLocationRequested && !availabilityCenterId) {
         render([]);
         return;
       }

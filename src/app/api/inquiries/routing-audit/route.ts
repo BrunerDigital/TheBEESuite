@@ -5,6 +5,7 @@ import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { isEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
+import { isLeesSummitInquiryIdentifier, isRestoredPublicInquiryCenter, leesSummitInquiryRestoration } from "@/lib/public-inquiry-restoration";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -47,9 +48,13 @@ async function GETHandler() {
   const locations = loadPublicLocations();
   const rows = await Promise.all(
     locations.map(async (location) => {
+      const restorationRequested = isLeesSummitInquiryIdentifier(location.locationId);
       const center = await prisma.center.findFirst({
         where: {
-          status: { not: "closed" },
+          ...(restorationRequested ? {
+            id: leesSummitInquiryRestoration.centerId,
+            organization: { tenant: { slug: leesSummitInquiryRestoration.tenantSlug } },
+          } : { status: { not: "closed" } }),
           OR: [
             { crmLocationId: location.crmLocationId },
             { locationId: location.locationId },
@@ -63,13 +68,18 @@ async function GETHandler() {
           crmLocationId: true,
           locationId: true,
           email: true,
+          status: true,
+          organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
         },
       });
 
-      const fallbackLocationUsers = center
+      const eligibleCenter = restorationRequested
+        ? (isRestoredPublicInquiryCenter(center, process.env.INQUIRY_LEES_SUMMIT_ENABLED === "true") ? center : null)
+        : center;
+      const fallbackLocationUsers = eligibleCenter && !restorationRequested
         ? await prisma.userAccessGrant.count({
             where: {
-              centerId: center.id,
+              centerId: eligibleCenter.id,
               isActive: true,
               role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
               user: {
@@ -79,10 +89,10 @@ async function GETHandler() {
             },
           })
         : 0;
-      const legacyDirectorProfiles = center
+      const legacyDirectorProfiles = eligibleCenter && !restorationRequested
         ? await prisma.staffProfile.count({
             where: {
-              centerId: center.id,
+              centerId: eligibleCenter.id,
               user: {
                 isActive: true,
                 email: { endsWith: "@kidcityusa.com" },
@@ -93,17 +103,17 @@ async function GETHandler() {
         : 0;
       const fallbackLocationUserTargets = fallbackLocationUsers + legacyDirectorProfiles;
 
-      const hasCenterEmail = Boolean(center?.email && isEmail(center.email));
+      const hasCenterEmail = Boolean(eligibleCenter?.email && isEmail(eligibleCenter.email));
       return {
         publicLocationId: location.locationId,
         crmLocationId: location.crmLocationId,
         name: location.name,
         city: location.city ?? "",
         state: location.state ?? "",
-        centerId: center?.id ?? null,
-        centerName: center?.name ?? null,
-        matchedByCrmLocationId: center?.crmLocationId === location.crmLocationId,
-        matchedByPublicLocationId: center?.locationId === location.locationId,
+        centerId: eligibleCenter?.id ?? null,
+        centerName: eligibleCenter?.name ?? null,
+        matchedByCrmLocationId: eligibleCenter?.crmLocationId === location.crmLocationId,
+        matchedByPublicLocationId: eligibleCenter?.locationId === location.locationId,
         hasNotificationTarget: hasCenterEmail || fallbackLocationUserTargets > 0,
         notificationTargetType: hasCenterEmail ? "center_email" : fallbackLocationUserTargets > 0 ? "location_user_fallback" : "none",
         fallbackLocationUserTargets,

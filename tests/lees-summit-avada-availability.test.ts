@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
 const html = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
-const source = html.match(/<script>([\s\S]*?)<\/script>/)![1];
+const source = html.match(/<script>([\s\S]*?)<\/script>/i)![1];
 const identifier = "Kid City USA - MO | Lees Summit";
 
 async function runTemplate({ eligible = true, includeLocation = true, responseOk = true, loadFails = false, loading = false } = {}) {

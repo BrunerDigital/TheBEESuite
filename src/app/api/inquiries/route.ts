@@ -332,8 +332,11 @@ async function getIntakeCenter({
     || [locationId, publicLocationId].some(isLeesSummitInquiryIdentifier);
   if (restorationRequested) {
     const enabled = process.env.INQUIRY_LEES_SUMMIT_ENABLED === "true";
+    // Generic fixed-center embeds repeat the selected Center.id as locationId.
+    const routedLocationId = requestedCenterId === leesSummitInquiryRestoration.centerId
+      && locationId === requestedCenterId ? "" : locationId;
     if (!enabled || (requestedCenterId && requestedCenterId !== leesSummitInquiryRestoration.centerId)
-      || [locationId, publicLocationId].filter(Boolean).some((value) => !isLeesSummitInquiryIdentifier(value))) {
+      || [routedLocationId, publicLocationId].filter(Boolean).some((value) => !isLeesSummitInquiryIdentifier(value))) {
       throw new InquiryRoutingError("This school is not currently accepting public inquiries.", "ineligible_public_location");
     }
     const restored = await prisma.center.findFirst({

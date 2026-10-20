@@ -191,3 +191,37 @@ test("default and inquiry catalogs gate restored Lee consistently across live an
     }
   }
 });
+
+test("generic fixed-center duplicate ID routes only the verified restored Lee binding", async () => {
+  for (const form of [false, true]) {
+    for (const publicLocationId of ["", binding.publicLocationId]) {
+      const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
+      const result = await fixture.post({ centerId: binding.centerId, locationId: binding.centerId, publicLocationId }, { form });
+      assert.equal(result.status, 201);
+      assert.equal(fixture.effects.leads[0].centerId, binding.centerId);
+      assert.deepEqual(fixture.effects.deliveries[1].payload.locationRecipients, [binding.notificationEmail]);
+      assert.equal(fixture.centers.find((center: { id: string }) => center.id === binding.centerId)?.status, "closed");
+    }
+  }
+  for (const options of [
+    { restored: true },
+    { restored: true, restorationEnabled: true, restorationTenant: "another-brand" },
+    { restored: true, restorationEnabled: true, restorationEmail: "unverified@example.invalid" },
+  ]) {
+    const fixture = inquiryFixture(options);
+    assert.equal((await fixture.post({ centerId: binding.centerId, locationId: binding.centerId })).status, 400);
+    assert.equal(fixture.effects.writes, 0);
+    assert.equal(fixture.effects.emails, 0);
+  }
+  for (const fields of [
+    { centerId: binding.centerId, locationId: "other_opaque_center" },
+    { centerId: binding.centerId, locationId: binding.centerId, publicLocationId: "Kid City USA - FL | Altamonte - Douglas" },
+    { centerId: binding.centerId, locationId: binding.centerId, publicLocationId: binding.centerId },
+    { centerId: "other_opaque_center", locationId: "other_opaque_center", publicLocationId: binding.publicLocationId },
+  ]) {
+    const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
+    assert.equal((await fixture.post(fields)).status, 400);
+    assert.equal(fixture.effects.writes, 0);
+    assert.equal(fixture.effects.emails, 0);
+  }
+});

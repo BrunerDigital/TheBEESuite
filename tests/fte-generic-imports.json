@@ -1471,5 +1471,10 @@
   "@/lib/agency-service-register": [
     "AGENCY_REGISTER_LIMIT",
     "agencyServiceRegister"
+  ],
+  "@/lib/public-inquiry-restoration": [
+    "isLeesSummitInquiryIdentifier",
+    "isRestoredPublicInquiryCenter",
+    "leesSummitInquiryRestoration"
   ]
 }

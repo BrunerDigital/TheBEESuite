@@ -10,6 +10,7 @@ import {
   type PublicKidCityLocation,
 } from "@/lib/active-school-locations";
 import { prisma } from "@/lib/prisma";
+import { isLeesSummitInquiryIdentifier, isRestoredPublicInquiryCenter, leesSummitInquiryRestoration } from "@/lib/public-inquiry-restoration";
 import { filterPublicInquiryLocations } from "@/lib/public-inquiry-policy";
 import { isEligiblePublicInquiryCenter } from "@/lib/inquiry-routing";
 
@@ -90,10 +91,26 @@ async function GETHandler(request: Request) {
   const inquiryOnly = params.get("purpose") === "inquiry";
   const requestedCenterId = inquiryOnly ? (params.get("centerId") ?? "").trim() : "";
   let inquiryCenterEligible: boolean | undefined;
+  let restoredInquiryEligible = false;
+  if (inquiryOnly && process.env.INQUIRY_LEES_SUMMIT_ENABLED === "true") {
+    try {
+      const center = await prisma.center.findFirst({
+        where: { id: leesSummitInquiryRestoration.centerId, organization: { tenant: { slug: leesSummitInquiryRestoration.tenantSlug } } },
+        select: { id: true, name: true, status: true, email: true, crmLocationId: true, locationId: true,
+          organization: { select: { tenantId: true, tenant: { select: { slug: true } } } } },
+      });
+      restoredInquiryEligible = isRestoredPublicInquiryCenter(center, true);
+    } catch (error) {
+      logOperationalError("public.kidcity_locations.restored_inquiry_lookup_failed", error);
+      // A failed binding check must never advertise this school for intake.
+    }
+  }
 
   // Opaque fixed-center embeds need a read-only decision before rendering.
   // Never expose center records or use the intake fallback (which can write).
-  if (requestedCenterId) {
+  if (requestedCenterId === leesSummitInquiryRestoration.centerId) {
+    inquiryCenterEligible = restoredInquiryEligible;
+  } else if (requestedCenterId) {
     try {
       const center = requestedCenterId.length <= 200
         ? await prisma.center.findFirst({
@@ -110,7 +127,8 @@ async function GETHandler(request: Request) {
 
   function respond(locations: PublicKidCityLocation[]) {
     return NextResponse.json({
-      locations: inquiryOnly ? filterPublicInquiryLocations(locations) : locations,
+      locations: inquiryOnly ? filterPublicInquiryLocations(locations).filter((location) =>
+        restoredInquiryEligible || ![location.crmLocationId, location.locationId, location.name].some(isLeesSummitInquiryIdentifier)) : locations,
       ...(inquiryCenterEligible === undefined ? {} : { inquiryCenterEligible }),
     }, { headers: responseHeaders });
   }

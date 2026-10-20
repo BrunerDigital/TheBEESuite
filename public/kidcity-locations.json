@@ -311,6 +311,16 @@
       "phone": "855-543-2490"
     },
     {
+      "crmLocationId": "Kid City USA - MO | Lees Summit",
+      "locationId": "Kid City USA - MO | Lees Summit",
+      "name": "Kid City USA - Lees Summit",
+      "address": "850 NE Swann Rd",
+      "city": "Lee's Summit",
+      "state": "MO",
+      "postalCode": "64086",
+      "phone": "816-875-3363"
+    },
+    {
       "crmLocationId": "Kid City USA - NC | Canton",
       "locationId": "Kid City USA - NC | Canton",
       "name": "Kid City USA - Canton",

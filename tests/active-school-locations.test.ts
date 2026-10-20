@@ -254,7 +254,16 @@ test("green-X school removals cannot return through fallback or Avada options", 
     "Kid City USA - TX | Tyler",
   ]) {
     assert.equal(ids.has(id), false, `${id} must not return through the fallback`);
-    assert.equal(snippet.includes(`value="${id}"`), false, `${id} must not return through Avada`);
+    if (id === "Kid City USA - FL | Deland - Orange") {
+      // The new directory approves this one school for inquiry-only restoration.
+      // Its prospective option stays unusable until the exact backend gate passes;
+      // it remains absent from the raw operational/static school file above.
+      const option = snippet.split("<option").find((tag) => tag.includes(`value="${id}"`))?.split(">")[0] ?? "";
+      assert.match(option, /\bdisabled\b/, "Orange must start disabled");
+      assert.match(option, /\bhidden\b/, "Orange must start hidden");
+    } else {
+      assert.equal(snippet.includes(`value="${id}"`), false, `${id} must not return through Avada`);
+    }
   }
 });
 

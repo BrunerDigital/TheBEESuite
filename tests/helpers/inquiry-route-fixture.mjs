@@ -30,6 +30,8 @@ export function inquiryFixture({ defaultCenterId = '', lookupFails = false, live
   const centers = [school('center_daytona_fixture', daytona, ['old-daytona-form']), school('center_douglas_fixture', douglas)];
   if (genericTrial) centers.push({ ...school('center_trial_fixture', 'Example Learning Center'), crmLocationId: null, locationId: 'trial_fixture', status: 'trial' });
   if (restored) centers.push({ ...school(restorations.leesSummitInquiryRestoration.centerId, restorations.leesSummitInquiryRestoration.name), crmLocationId: restorations.leesSummitInquiryRestoration.publicLocationId, locationId: 'MO | Lees Summit', status: 'closed', email: restorationEmail, organization: { tenantId: 'tenant_fixture', tenant: { slug: restorationTenant } } });
+  // Static WordPress/catalog data remains unchanged when tests mutate persisted records.
+  const staticLocations = centers.map(locations.toPublicKidCityLocation);
   const effects = { leads: /** @type {Array<{ centerId: string }>} */ ([]), deliveries: /** @type {Array<{ id: string, payload: { locationRecipients: string[] } }>} */ ([]), emails: 0, sheets: 0, writes: 0, notificationLookups: 0, unexpectedNetwork: 0 };
   const prisma = {
     tenant: { findUnique: async () => ({ id: 'tenant_fixture' }) },
@@ -67,7 +69,7 @@ export function inquiryFixture({ defaultCenterId = '', lookupFails = false, live
   }
   const dependencies = {
     NextResponse, prisma, path, join: path.join,
-    readFileSync: () => JSON.stringify({ locations: centers.map(locations.toPublicKidCityLocation) }),
+    readFileSync: () => JSON.stringify({ locations: staticLocations }),
     getCurrentUser: async () => ({ role: "BRAND_ADMIN" }), isEmail: (email) => email.includes("@"),
     ...locations, ...origins, ...idempotency, ...restorations,
     filterPublicInquiryLocations, isBlockedPublicInquiryIdentifier,
@@ -76,7 +78,7 @@ export function inquiryFixture({ defaultCenterId = '', lookupFails = false, live
     UserRole: { PLATFORM_OWNER: 'PLATFORM_OWNER', BRAND_ADMIN: 'BRAND_ADMIN', REGIONAL_MANAGER: 'REGIONAL_MANAGER', CENTER_DIRECTOR: 'CENTER_DIRECTOR', ASSISTANT_DIRECTOR: 'ASSISTANT_DIRECTOR', BILLING_ADMIN: 'BILLING_ADMIN' },
     Prisma: { PrismaClientKnownRequestError: class extends Error {} },
     process: { env: { INQUIRY_DEFAULT_CENTER_ID: defaultCenterId, INQUIRY_LEES_SUMMIT_ENABLED: restorationEnabled ? 'true' : 'false' }, cwd: () => process.cwd() },
-    readFile: async () => JSON.stringify({ locations: centers.map(locations.toPublicKidCityLocation) }),
+    readFile: async () => JSON.stringify({ locations: staticLocations }),
     fetch: async () => { effects.unexpectedNetwork++; throw new Error('network is forbidden in fixture'); },
     resolveInquiryLocationNotificationEmails: ({ centerEmail }) => { effects.notificationLookups++; return centerEmail ? [centerEmail] : []; },
     claimIntegrationDeliveryForRetry: async () => ({ claimed: true, attempts: 1 }),

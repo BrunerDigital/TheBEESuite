@@ -126,3 +126,45 @@ test("routing audit uses the same exact binding and cannot use staff recipient f
     assert.equal(fixture.effects.writes, 0);
   }
 });
+
+
+for (const field of ["crmLocationId", "locationId"] as const) {
+  test(`conflicting persisted ${field} rejects catalog eligibility and POST despite the other expected identifier`, async () => {
+    const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
+    const center = fixture.centers.find((row: { id: string }) => row.id === binding.centerId)!;
+    center[field] = "Kid City USA - FL | Altamonte - Douglas";
+    assert.equal(isRestoredPublicInquiryCenter({ ...closed, [field]: center[field] }, true), false);
+    const catalog = await fixture.get("?purpose=inquiry&centerId=" + binding.centerId);
+    assert.equal(catalog.body.inquiryCenterEligible, false);
+    assert.equal(catalog.body.locations.some((row: { name: string }) => row.name === binding.name), false);
+    assert.equal((await fixture.post({ centerId: binding.centerId })).status, 400);
+    assert.equal(fixture.effects.writes, 0);
+    assert.equal(fixture.effects.notificationLookups, 0);
+    assert.equal(fixture.effects.emails, 0);
+    const audit = await fixture.audit();
+    assert.equal(audit.body.missingCenter.some((row: { publicLocationId: string }) => row.publicLocationId === binding.publicLocationId), true);
+  });
+}
+
+test("empty identifiers require at least one expected stored identifier in catalog and POST", async () => {
+  for (const [crmLocationId, locationId, expected] of [
+    [binding.publicLocationId, null, true],
+    ["", "MO | Lees Summit", true],
+    [binding.publicLocationId, "  ", true],
+    [null, null, false],
+    ["", "  ", false],
+    [binding.publicLocationId, "MO | Lees Summit", true],
+  ] as const) {
+    const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
+    const center = fixture.centers.find((row: { id: string }) => row.id === binding.centerId)!;
+    center.crmLocationId = crmLocationId;
+    center.locationId = locationId;
+    assert.equal(isRestoredPublicInquiryCenter({ ...closed, crmLocationId, locationId }, true), expected);
+    const catalog = await fixture.get("?purpose=inquiry&centerId=" + binding.centerId);
+    assert.equal(catalog.body.inquiryCenterEligible, expected);
+    assert.equal(catalog.body.locations.some((row: { name: string }) => row.name === binding.name), expected);
+    assert.equal((await fixture.post({ centerId: binding.centerId })).status, expected ? 201 : 400);
+    assert.equal(center.status, "closed");
+    if (!expected) assert.equal(fixture.effects.writes, 0);
+  }
+});

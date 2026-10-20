@@ -45,6 +45,7 @@ export function isRestoredPublicInquiryCenter(center: RestoredInquiryCenter | nu
     && center.organization.tenant.slug === leesSummitInquiryRestoration.tenantSlug
     && key(center.email) === leesSummitInquiryRestoration.notificationEmail
     && [center.crmLocationId, center.locationId].some(isLeesSummitInquiryIdentifier)
+    && [center.crmLocationId, center.locationId].every((value) => !key(value) || isLeesSummitInquiryIdentifier(value))
     && !isBlockedPublicInquiryLocation(center)
     && !isRetiredPublicKidCityLocation(center.crmLocationId)
     && !isRetiredPublicKidCityLocation(center.locationId));

@@ -62,3 +62,14 @@ test("three standalone options are hidden by default and independently gated wit
   }
   assert.doesNotMatch(html, /<option[^>]*value="Kid City USA - (?:IN \| Whitestown|TN \| Pulaski|FL \| Deland - Amelia)"/);
 });
+
+
+test("standalone restoration choices are in their exact state optgroups", () => {
+  const html = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
+  for (const binding of bindings) {
+    const groups = [...html.matchAll(/<optgroup label="([A-Z]{2})">([\s\S]*?)<\/optgroup>/g)]
+      .filter((match) => match[2].includes('value="' + binding.publicLocationId + '"'));
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0][1], binding.state);
+  }
+});

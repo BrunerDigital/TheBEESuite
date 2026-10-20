@@ -1,4 +1,4 @@
-import { directoryInquiryBinding, directoryInquiryEnabled, isDirectoryInquiryIdentifier, isVerifiedDirectoryInquiryCenter } from "@/lib/directory-inquiry-restoration";
+import { directoryInquiryRestorations, directoryInquiryBinding, directoryInquiryEnabled, isDirectoryInquiryIdentifier, isVerifiedDirectoryInquiryCenter } from "@/lib/directory-inquiry-restoration";
 import { NextRequest, NextResponse } from "next/server";
 import { EnrollmentStage, Prisma, UserRole } from "@prisma/client";
 import {
@@ -326,7 +326,24 @@ async function getIntakeCenter({
   strictLocationRouting: boolean;
   brandName?: string;
 }): Promise<IntakeCenter> {
-  function eligible(center: IntakeCenterRecord | IntakeCenter) {
+  async function eligible(center: IntakeCenterRecord | IntakeCenter) {
+    // Aliases and the configured generic default can resolve a protected school
+    // without a recognized public selector. Recheck its full persisted binding
+    // before ordinary routing can use the resolved identity or its mailbox.
+    const binding = directoryInquiryRestorations.find((item) => item.centerId === center.id);
+    if (binding) {
+      if (!directoryInquiryEnabled(binding, process.env)) {
+        throw new InquiryRoutingError("This school is not currently accepting public inquiries.", "ineligible_public_location");
+      }
+      const restored = await prisma.center.findFirst({
+        where: { id: binding.centerId, organization: { tenant: { slug: "kid-city-usa" } } },
+        select: intakeCenterSelect,
+      });
+      if (!isVerifiedDirectoryInquiryCenter(restored, binding, true)) {
+        throw new InquiryRoutingError("This school's inquiry routing needs verification.", "ineligible_public_location");
+      }
+      return toIntakeCenter(restored!);
+    }
     if (!isEligiblePublicInquiryCenter(center, strictLocationRouting)) {
       throw new InquiryRoutingError("The selected school is not accepting public inquiries. Please choose another location or contact corporate.", "ineligible_public_location");
     }

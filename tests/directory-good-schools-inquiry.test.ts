@@ -123,3 +123,38 @@ test("protected public schools and approved Lee remain unchanged by the new inde
   for (const id of ["Kid City USA - FL | Vero Beach", "Kid City USA - TN | Lewisburg", "Kid City USA - FL | Lake City", "Kid City USA - MO | Lees Summit"]) assert.equal(rowPresent(result, id), true);
   for (const path of ["src/app/api/registration/route.ts", "src/app/api/cron/tuition-billing/route.ts", "src/app/api/cron/fte-reminders/route.ts", "src/app/api/cron/tuition-payment-reminders/route.ts", "src/lib/workspace-selection.ts", "src/lib/active-school-locations.ts"]) assert.doesNotMatch(readFileSync(path, "utf8"), /directory-inquiry-restoration|INQUIRY_DELAND_ORANGE_ENABLED|INQUIRY_LAKE_CITY_2_ENABLED|INQUIRY_BARDSTOWN_ENABLED/);
 });
+
+
+test("generic alias and configured-default resolution cannot bypass Lake City2 enablement or full binding", async () => {
+  const binding = bindings.find((item) => item.status === "trial_setup")!;
+  for (const path of ["alias", "default"]) for (const form of [false, true]) {
+    for (const scenario of [
+      { flags: {}, mutation: {}, expected: 400 },
+      { flags: enabledFlags, mutation: { email: "unverified@example.invalid" }, expected: 400 },
+      { flags: enabledFlags, mutation: { organization: { tenantId: "wrong_tenant", tenant: { slug: "other-brand" } } }, expected: 400 },
+      { flags: enabledFlags, mutation: { organizationId: "wrong_org" }, expected: 400 },
+      { flags: enabledFlags, mutation: { status: "active" }, expected: 400 },
+      { flags: enabledFlags, mutation: {}, expected: 201 },
+    ]) {
+      const fixture = inquiryFixture({ directorySchools: true, directoryFlags: scenario.flags,
+        defaultCenterId: path === "default" ? binding.centerId : "" });
+      const center = fixture.centers.find((row: { id: string }) => row.id === binding.centerId)!;
+      center.customFields.locationAliases.push("synthetic-turner-legacy-selector");
+      Object.assign(center, scenario.mutation);
+      const before = JSON.stringify(fixture.centers);
+      const result = await fixture.post({ locationId: path === "alias" ? "synthetic-turner-legacy-selector" : "generic-unmatched-website-queue",
+        brandName: "Synthetic generic brand", leadSource: "Generic Website Inquiry" }, { form });
+      assert.equal(result.status, scenario.expected, path + " " + JSON.stringify(scenario));
+      assert.equal(JSON.stringify(fixture.centers), before);
+      if (scenario.expected === 400) {
+        assert.equal(fixture.effects.writes, 0);
+        assert.equal(fixture.effects.emails, 0);
+        assert.equal(fixture.effects.notificationLookups, 0);
+      } else {
+        assert.equal(fixture.effects.leads[0].centerId, binding.centerId);
+        assert.deepEqual(fixture.effects.deliveries[1].payload.locationRecipients, [binding.notificationEmail]);
+      }
+      assert.equal(fixture.effects.unexpectedNetwork, 0);
+    }
+  }
+});

@@ -1,3 +1,4 @@
+import { directoryInquiryRestorations, directoryInquiryBinding, directoryInquiryEnabled, directoryInquiryPublicLocation, isVerifiedDirectoryInquiryCenter } from "@/lib/directory-inquiry-restoration";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
@@ -106,9 +107,31 @@ async function GETHandler(request: Request) {
     }
   }
 
+  const directoryEligibility = new Map<string, boolean>();
+  await Promise.all(directoryInquiryRestorations.map(async (binding) => {
+    let eligible = false;
+    if (directoryInquiryEnabled(binding, process.env)) {
+      try {
+        const center = await prisma.center.findFirst({
+          where: { id: binding.centerId, organization: { tenant: { slug: "kid-city-usa" } } },
+          select: { id: true, organizationId: true, name: true, status: true, email: true,
+            crmLocationId: true, locationId: true,
+            organization: { select: { tenantId: true, tenant: { select: { slug: true } } } } },
+        });
+        eligible = isVerifiedDirectoryInquiryCenter(center, binding, true);
+      } catch (error) {
+        logOperationalError("public.kidcity_locations.directory_inquiry_lookup_failed", error);
+      }
+    }
+    directoryEligibility.set(binding.centerId, eligible);
+  }));
+
   // Opaque fixed-center embeds need a read-only decision before rendering.
   // Never expose center records or use the intake fallback (which can write).
-  if (requestedCenterId === leesSummitInquiryRestoration.centerId) {
+  const directoryBinding = directoryInquiryRestorations.find((binding) => binding.centerId === requestedCenterId);
+  if (directoryBinding) {
+    inquiryCenterEligible = directoryEligibility.get(directoryBinding.centerId) === true;
+  } else if (requestedCenterId === leesSummitInquiryRestoration.centerId) {
     inquiryCenterEligible = restoredInquiryEligible;
   } else if (requestedCenterId) {
     try {
@@ -126,6 +149,12 @@ async function GETHandler(request: Request) {
   }
 
   function respond(locations: PublicKidCityLocation[]) {
+    // Never trust live/static rows for these special bindings. Reconstruct only
+    // independently verified public records, including static/outage responses.
+    locations = locations.filter((location) => ![location.crmLocationId, location.locationId, location.name].some(directoryInquiryBinding));
+    locations.push(...directoryInquiryRestorations.filter((binding) => directoryEligibility.get(binding.centerId))
+      .map(directoryInquiryPublicLocation));
+    locations.sort(comparePublicKidCityLocations);
     locations = filterPublicWebsiteLocations(locations).filter((location) =>
       restoredInquiryEligible || ![location.crmLocationId, location.locationId, location.name].some(isLeesSummitInquiryIdentifier));
     return NextResponse.json({

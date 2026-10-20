@@ -4,6 +4,56 @@
   const targetId = currentScript.dataset.target || "bee-suite-inquiry-form";
   const endpoint =
     currentScript.dataset.endpoint || `${baseUrl}/api/inquiries`;
+
+  // These three prospective restorations require the canonical availability gate.
+  const directoryBindings = [
+  {
+    "centerId": "cmp4ew7tp000w6alw8ep0mi0d",
+    "identifier": "Kid City USA - FL | Deland - Orange",
+    "name": "Kid City USA - DeLand - Orange"
+  },
+  {
+    "centerId": "f9fd9005-a81f-400f-b72e-f95d60d5e550",
+    "identifier": "Kid City USA - FL | Lake City 2",
+    "name": "Kid City USA - Lake City 2"
+  },
+  {
+    "centerId": "cmp4ewfv2004e6alw9mg7zlwb",
+    "identifier": "Kid City USA - KY | Bardstown",
+    "name": "Kid City USA - Bardstown"
+  }
+];
+  const verifiedDirectoryCenterIds = new Set();
+  function directoryBindingFor(value) {
+    const key = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+    return directoryBindings.find((binding) => [binding.centerId, binding.identifier,
+      binding.identifier.replace("Kid City USA - ", ""), binding.name]
+      .some((identifier) => identifier.toLowerCase() === key));
+  }
+  function directorySelectorMatches(value, binding) {
+    return directoryBindingFor(value)?.centerId === binding.centerId;
+  }
+  async function verifyDirectoryLocations(locations) {
+    const checked = await Promise.all(locations.map(async (location) => {
+      const binding = [location.crmLocationId, location.locationId, location.name].map(directoryBindingFor).find(Boolean);
+      if (!binding) return location;
+      try {
+        const url = new URL(`${baseUrl}/api/public/kidcity-locations`);
+        url.searchParams.set("purpose", "inquiry");
+        url.searchParams.set("centerId", binding.centerId);
+        const response = await fetch(url.href, { cache: "no-store" });
+        if (!response.ok) return null;
+        const data = await response.json();
+        const verified = Array.isArray(data.locations) && data.locations.find((row) =>
+          row.crmLocationId === binding.identifier && row.locationId === binding.identifier);
+        if (data.inquiryCenterEligible !== true || !verified) return null;
+        verifiedDirectoryCenterIds.add(binding.centerId);
+        return verified;
+      } catch { return null; }
+    }));
+    return checked.filter(Boolean);
+  }
+
   const fixedCenterId = (currentScript.dataset.centerId || "").trim();
   const fixedLocationId = (currentScript.dataset.locationId || "").trim();
   const fixedPublicLocationId = (currentScript.dataset.publicLocationId || "").trim();
@@ -14,10 +64,12 @@
       fixedPublicLocationId ||
       fixedLocationName
   );
+  const requestedDirectoryBinding = [fixedCenterId, fixedLocationId, fixedPublicLocationId, fixedLocationName]
+    .map(directoryBindingFor).find(Boolean);
   const restoredLocationRequested = [fixedLocationId, fixedPublicLocationId, fixedLocationName]
     .some(isLeesSummitInquiryIdentifier);
   const restoredCenterId = "cmp4ewfzn004g6alwqbqrzcql";
-  const availabilityCenterId = fixedCenterId || (restoredLocationRequested ? restoredCenterId : "");
+  const availabilityCenterId = fixedCenterId || requestedDirectoryBinding?.centerId || (restoredLocationRequested ? restoredCenterId : "");
   const target = document.getElementById(targetId);
 
   if (!target) return;
@@ -93,6 +145,7 @@
   }
 
   function findFixedLocation(locations) {
+    if (requestedDirectoryBinding) return locations.find((location) => location.crmLocationId === requestedDirectoryBinding.identifier && location.locationId === requestedDirectoryBinding.identifier) || null;
     if (restoredLocationRequested) {
       return locations.find((location) => [location.crmLocationId, location.locationId, location.name]
         .some(isLeesSummitInquiryIdentifier)) || null;
@@ -305,6 +358,14 @@
         return;
       }
 
+      const submittedDirectoryBinding = [payload.centerId, payload.locationId, payload.publicLocationId, payload.locationName]
+        .map(directoryBindingFor).find(Boolean);
+      if (submittedDirectoryBinding && !verifiedDirectoryCenterIds.has(submittedDirectoryBinding.centerId)) {
+        status.dataset.state = "error";
+        status.textContent = "This location is not accepting website inquiries. Please choose another location.";
+        return;
+      }
+
       button.disabled = true;
       button.textContent = "Submitting...";
       try {
@@ -341,6 +402,13 @@
     return;
   }
 
+  if (requestedDirectoryBinding && ((fixedCenterId && fixedCenterId !== requestedDirectoryBinding.centerId)
+    || [fixedLocationId, fixedPublicLocationId, fixedLocationName].filter(Boolean)
+      .some((value) => !directorySelectorMatches(value, requestedDirectoryBinding)))) {
+    showUnavailable();
+    return;
+  }
+
   loadTurnstile();
 
   const inquiryLocationsUrl = new URL(`${baseUrl}/api/public/kidcity-locations`);
@@ -352,12 +420,17 @@
       if (!response.ok) throw new Error("Inquiry availability could not be checked");
       return response.json();
     })
-    .then((data) => {
+    .then(async (data) => {
       if (availabilityCenterId && data.inquiryCenterEligible !== true) {
         showUnavailable();
         return;
       }
-      render(data.locations || []);
+      const locations = await verifyDirectoryLocations(data.locations || []);
+      if (requestedDirectoryBinding && !findFixedLocation(locations)) {
+        showUnavailable();
+        return;
+      }
+      render(locations);
     })
     .catch(() => {
       if (fixedLocationRequested && !availabilityCenterId) {

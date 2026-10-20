@@ -1,3 +1,4 @@
+import * as directoryRestorations from '../../src/lib/directory-inquiry-restoration.ts';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import path from 'node:path';
@@ -12,9 +13,9 @@ import { normalizeInquiryProgram } from '../../src/lib/inquiry-programs.ts';
 const daytona = 'Kid City USA - FL | Daytona Beach East';
 const douglas = 'Kid City USA - FL | Altamonte - Douglas';
 function school(id, location, aliases = []) {
-  return { id, name: location, crmLocationId: location, locationId: location,
+  return { id, organizationId: 'synthetic_org', name: location, crmLocationId: location, locationId: location,
     status: 'active', email: 'fixture@example.invalid', tenantId: 'tenant_fixture',
-    organization: { tenantId: 'tenant_fixture' }, customFields: { locationAliases: aliases } };
+    organization: { tenantId: 'tenant_fixture', tenant: { slug: 'synthetic' } }, customFields: { locationAliases: aliases } };
 }
 
 function compile(relativePath, dependencies, exports) {
@@ -26,11 +27,17 @@ function compile(relativePath, dependencies, exports) {
 
 // Runs complete checked-out handlers with memory-only storage and delivery spies.
 // No Prisma client, provider transport, network call, or real family is used.
-export function inquiryFixture({ defaultCenterId = '', lookupFails = false, liveFails = false, emptyLive = false, genericTrial = false, restored = false, restorationEnabled = false, restorationTenant = 'kid-city-usa', restorationEmail = 'leessummit@kidcityusa.com', additionalLocations = /** @type {string[]} */ ([]) } = {}) {
+export function inquiryFixture({ defaultCenterId = '', lookupFails = false, liveFails = false, emptyLive = false, genericTrial = false, restored = false, restorationEnabled = false, restorationTenant = 'kid-city-usa', restorationEmail = 'leessummit@kidcityusa.com', directorySchools = false, directoryFlags = {}, additionalLocations = /** @type {string[]} */ ([]) } = {}) {
   const centers = [school('center_daytona_fixture', daytona, ['old-daytona-form']), school('center_douglas_fixture', douglas)];
   for (const location of additionalLocations) centers.push(school('synthetic_' + location, location, ['legacy_' + location]));
   if (genericTrial) centers.push({ ...school('center_trial_fixture', 'Example Learning Center'), crmLocationId: null, locationId: 'trial_fixture', status: 'trial' });
   if (restored) centers.push({ ...school(restorations.leesSummitInquiryRestoration.centerId, restorations.leesSummitInquiryRestoration.name), crmLocationId: restorations.leesSummitInquiryRestoration.publicLocationId, locationId: 'MO | Lees Summit', status: 'closed', email: restorationEmail, organization: { tenantId: 'tenant_fixture', tenant: { slug: restorationTenant } } });
+  if (directorySchools) for (const binding of directoryRestorations.directoryInquiryRestorations) centers.push({
+    ...school(binding.centerId, binding.name), organizationId: 'cmp4evliu00046arsseizap58',
+    crmLocationId: binding.publicLocationId, locationId: binding.publicLocationId, status: binding.status,
+    email: binding.notificationEmail,
+    organization: { tenantId: 'cmp4evl4v00006arspz79fggn', tenant: { slug: 'kid-city-usa' } },
+  });
   // Static WordPress/catalog data remains unchanged when tests mutate persisted records.
   const staticLocations = centers.map(locations.toPublicKidCityLocation);
   const effects = { leads: /** @type {Array<{ centerId: string }>} */ ([]), deliveries: /** @type {Array<{ id: string, payload: { locationRecipients: string[] } }>} */ ([]), emails: 0, sheets: 0, writes: 0, notificationLookups: 0, unexpectedNetwork: 0 };
@@ -72,13 +79,13 @@ export function inquiryFixture({ defaultCenterId = '', lookupFails = false, live
     NextResponse, prisma, path, join: path.join,
     readFileSync: () => JSON.stringify({ locations: staticLocations }),
     getCurrentUser: async () => ({ role: "BRAND_ADMIN" }), isEmail: (email) => email.includes("@"),
-    ...locations, ...origins, ...idempotency, ...restorations,
+    ...locations, ...origins, ...idempotency, ...restorations, ...directoryRestorations,
     filterPublicInquiryLocations, filterPublicWebsiteLocations, isBlockedPublicInquiryIdentifier,
     isEligiblePublicInquiryCenter, selectPreferredInquiryCenter, normalizeInquiryProgram,
     EnrollmentStage: { NEW_INQUIRY: 'NEW_INQUIRY' },
     UserRole: { PLATFORM_OWNER: 'PLATFORM_OWNER', BRAND_ADMIN: 'BRAND_ADMIN', REGIONAL_MANAGER: 'REGIONAL_MANAGER', CENTER_DIRECTOR: 'CENTER_DIRECTOR', ASSISTANT_DIRECTOR: 'ASSISTANT_DIRECTOR', BILLING_ADMIN: 'BILLING_ADMIN' },
     Prisma: { PrismaClientKnownRequestError: class extends Error {} },
-    process: { env: { INQUIRY_DEFAULT_CENTER_ID: defaultCenterId, INQUIRY_LEES_SUMMIT_ENABLED: restorationEnabled ? 'true' : 'false' }, cwd: () => process.cwd() },
+    process: { env: { INQUIRY_DEFAULT_CENTER_ID: defaultCenterId, INQUIRY_LEES_SUMMIT_ENABLED: restorationEnabled ? 'true' : 'false', ...directoryFlags }, cwd: () => process.cwd() },
     readFile: async () => JSON.stringify({ locations: staticLocations }),
     fetch: async () => { effects.unexpectedNetwork++; throw new Error('network is forbidden in fixture'); },
     resolveInquiryLocationNotificationEmails: ({ centerEmail }) => { effects.notificationLookups++; return centerEmail ? [centerEmail] : []; },

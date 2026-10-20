@@ -1,3 +1,4 @@
+import { directoryInquiryBinding, isProtectedDirectoryInquiryCenterId } from "@/lib/directory-inquiry-restoration";
 import "./load-env";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -55,7 +56,8 @@ async function main() {
   // This public catalog also contains an inquiry-only, operationally closed school.
   // Public visibility must never authorize reopening it through this operational sync.
   const locations = file.locations.filter((location) => clean(location.crmLocationId) && clean(location.locationId)
-    && ![location.crmLocationId, location.locationId, location.name].some(isLeesSummitInquiryIdentifier));
+    && ![location.crmLocationId, location.locationId, location.name].some(isLeesSummitInquiryIdentifier)
+    && ![location.crmLocationId, location.locationId, location.name].some(directoryInquiryBinding));
 
   let created = 0;
   let updated = 0;
@@ -90,7 +92,7 @@ async function main() {
     }
     const existing = activeMatches[0] ?? matches[0] ?? null;
     // Also protect the persisted identity when an old alias or address matched it.
-    if (existing?.id === leesSummitInquiryRestoration.centerId) continue;
+    if (existing?.id === leesSummitInquiryRestoration.centerId || isProtectedDirectoryInquiryCenterId(existing?.id)) continue;
     const locationAliases = Array.from(new Set([
       ...locationAliasesFromCustomFields(existing?.customFields),
       clean(existing?.crmLocationId),

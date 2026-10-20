@@ -546,6 +546,9 @@
       <option value="Kid City USA - IN | Westfield" data-location-id="Kid City USA - IN | Westfield" data-location-name="Kid City USA - Westfield" data-city="Westfield" data-state="IN" data-address="1769 W Tournament Trail" data-postal-code="46074" data-location-phone="855-543-2489">Kid City USA - IN | Westfield</option>
     </optgroup>
     <optgroup label="MO">
+      <option disabled hidden value="Kid City USA - FL | Deland - Orange" data-location-id="Kid City USA - FL | Deland - Orange" data-location-name="Kid City USA - DeLand - Orange" data-city="Deland" data-state="FL" data-address="404 N. Orange Ave." data-postal-code="32720" data-location-phone="386-736-0000">Kid City USA - FL | Deland - Orange</option>
+      <option disabled hidden value="Kid City USA - FL | Lake City 2" data-location-id="Kid City USA - FL | Lake City 2" data-location-name="Kid City USA - Lake City 2" data-city="Lake City" data-state="FL" data-address="522 NW Turner Ave." data-postal-code="32055" data-location-phone="386-752-4411">Kid City USA - FL | Lake City 2</option>
+      <option disabled hidden value="Kid City USA - KY | Bardstown" data-location-id="Kid City USA - KY | Bardstown" data-location-name="Kid City USA - Bardstown" data-city="Bardstown" data-state="KY" data-address="104 Keystone Ave" data-postal-code="40004" data-location-phone="502-348-4444">Kid City USA - KY | Bardstown</option>
       <option disabled hidden value="Kid City USA - MO | Lees Summit" data-location-id="Kid City USA - MO | Lees Summit" data-location-name="Kid City USA - Lees Summit" data-city="Lee's Summit" data-state="MO" data-address="850 NE Swann Rd" data-postal-code="64086" data-location-phone="816-875-3363">Kid City USA - MO | Lees Summit</option>
     </optgroup>
     <optgroup label="NC">
@@ -580,7 +583,13 @@
   // Keep the inquiry-only option unavailable until the backend verifies its binding.
   function initializeRestoredOptions() {
     document.querySelectorAll(".kcusa-inquiry-form").forEach(function (form) {
-      var identifier = "Kid City USA - MO | Lees Summit";
+      [
+        { identifier: "Kid City USA - MO | Lees Summit", centerId: "cmp4ewfzn004g6alwqbqrzcql" },
+        { identifier: "Kid City USA - FL | Deland - Orange", centerId: "cmp4ew7tp000w6alw8ep0mi0d" },
+        { identifier: "Kid City USA - FL | Lake City 2", centerId: "f9fd9005-a81f-400f-b72e-f95d60d5e550" },
+        { identifier: "Kid City USA - KY | Bardstown", centerId: "cmp4ewfv2004e6alw9mg7zlwb" }
+      ].forEach(function (binding) {
+      var identifier = binding.identifier;
       var option = form.querySelector('option[value="' + identifier + '"]');
       if (!option) return;
       option.disabled = true;
@@ -592,7 +601,7 @@
         return;
       }
       availability.searchParams.set("purpose", "inquiry");
-      availability.searchParams.set("centerId", "cmp4ewfzn004g6alwqbqrzcql");
+      availability.searchParams.set("centerId", binding.centerId);
       fetch(availability.href, { cache: "no-store" }).then(function (response) {
         if (!response.ok) throw new Error("Inquiry availability could not be checked");
         return response.json();
@@ -606,6 +615,7 @@
         }
       }).catch(function () {
         // Leave only this option hidden; other schools retain their existing flow.
+      });
       });
     });
   }

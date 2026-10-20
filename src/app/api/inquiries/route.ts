@@ -19,6 +19,7 @@ import {
 import { isEligiblePublicInquiryCenter, selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
 import { isBlockedPublicInquiryIdentifier } from "@/lib/public-inquiry-policy";
 import { prisma } from "@/lib/prisma";
+import { isLeesSummitInquiryIdentifier, isRestoredPublicInquiryCenter, leesSummitInquiryRestoration } from "@/lib/public-inquiry-restoration";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
@@ -92,6 +93,7 @@ type IntakeCenterRecord = {
   customFields: unknown;
   organization: {
     tenantId: string;
+    tenant: { slug: string };
   };
 };
 
@@ -116,6 +118,7 @@ const intakeCenterSelect = {
   organization: {
     select: {
       tenantId: true,
+      tenant: { select: { slug: true } },
     },
   },
 } as const;
@@ -325,6 +328,27 @@ async function getIntakeCenter({
     return "organization" in center ? toIntakeCenter(center) : center;
   }
   const requestedCenterId = clean(centerId);
+  const restorationRequested = requestedCenterId === leesSummitInquiryRestoration.centerId
+    || [locationId, publicLocationId].some(isLeesSummitInquiryIdentifier);
+  if (restorationRequested) {
+    const enabled = process.env.INQUIRY_LEES_SUMMIT_ENABLED === "true";
+    if (!enabled || (requestedCenterId && requestedCenterId !== leesSummitInquiryRestoration.centerId)
+      || [locationId, publicLocationId].filter(Boolean).some((value) => !isLeesSummitInquiryIdentifier(value))) {
+      throw new InquiryRoutingError("This school is not currently accepting public inquiries.", "ineligible_public_location");
+    }
+    const restored = await prisma.center.findFirst({
+      where: {
+        id: leesSummitInquiryRestoration.centerId,
+        organization: { tenant: { slug: leesSummitInquiryRestoration.tenantSlug } },
+      },
+      select: intakeCenterSelect,
+    });
+    if (!isRestoredPublicInquiryCenter(restored, enabled)) {
+      throw new InquiryRoutingError("This school's inquiry routing needs verification.", "ineligible_public_location");
+    }
+    // This does not update the school, identities, grants or any operational flags.
+    return toIntakeCenter(restored!);
+  }
   if (requestedCenterId) {
     const center = await findCenterById(requestedCenterId);
 

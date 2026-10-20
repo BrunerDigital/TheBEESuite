@@ -30,6 +30,8 @@ const reviewedLocationDataFiles = new Set([
   "src/lib/kidcity-corporate-rollout.ts",
   "src/lib/kidcity-legacy-center-aliases.ts",
   "src/lib/parent-billing-visibility.ts",
+  // Exact center/tenant/mailbox binding for explicitly authorized public intake only.
+  "src/lib/public-inquiry-restoration.ts",
   "src/lib/stripe-billing-approval.ts",
 ]);
 

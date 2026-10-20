@@ -92,7 +92,7 @@ async function GETHandler(request: Request) {
   const requestedCenterId = inquiryOnly ? (params.get("centerId") ?? "").trim() : "";
   let inquiryCenterEligible: boolean | undefined;
   let restoredInquiryEligible = false;
-  if (inquiryOnly && process.env.INQUIRY_LEES_SUMMIT_ENABLED === "true") {
+  if (process.env.INQUIRY_LEES_SUMMIT_ENABLED === "true") {
     try {
       const center = await prisma.center.findFirst({
         where: { id: leesSummitInquiryRestoration.centerId, organization: { tenant: { slug: leesSummitInquiryRestoration.tenantSlug } } },
@@ -126,10 +126,10 @@ async function GETHandler(request: Request) {
   }
 
   function respond(locations: PublicKidCityLocation[]) {
-    locations = filterPublicWebsiteLocations(locations);
+    locations = filterPublicWebsiteLocations(locations).filter((location) =>
+      restoredInquiryEligible || ![location.crmLocationId, location.locationId, location.name].some(isLeesSummitInquiryIdentifier));
     return NextResponse.json({
-      locations: inquiryOnly ? filterPublicInquiryLocations(locations).filter((location) =>
-        restoredInquiryEligible || ![location.crmLocationId, location.locationId, location.name].some(isLeesSummitInquiryIdentifier)) : locations,
+      locations: inquiryOnly ? filterPublicInquiryLocations(locations) : locations,
       ...(inquiryCenterEligible === undefined ? {} : { inquiryCenterEligible }),
     }, { headers: responseHeaders });
   }

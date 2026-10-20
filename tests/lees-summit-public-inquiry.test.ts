@@ -168,3 +168,26 @@ test("empty identifiers require at least one expected stored identifier in catal
     if (!expected) assert.equal(fixture.effects.writes, 0);
   }
 });
+
+test("default and inquiry catalogs gate restored Lee consistently across live and static fallback paths", async () => {
+  for (const path of [{}, { liveFails: true }, { emptyLive: true }]) {
+    for (const scenario of [
+      { restorationEnabled: false, expected: false },
+      { restorationEnabled: true, expected: true },
+      { restorationEnabled: true, restorationTenant: "other-brand", expected: false },
+      { restorationEnabled: true, restorationEmail: "unverified@example.invalid", expected: false },
+      { restorationEnabled: true, lookupFails: true, expected: false },
+    ]) {
+      const { expected, ...options } = scenario;
+      for (const query of ["", "?purpose=inquiry"]) {
+        const fixture = inquiryFixture({ restored: true, ...path, ...options });
+        const result = await fixture.get(query);
+        assert.equal(result.status, 200);
+        assert.equal(result.body.locations.some((row: { crmLocationId: string }) => row.crmLocationId === binding.publicLocationId), expected);
+        assert.equal(result.body.locations.some((row: { crmLocationId: string }) => row.crmLocationId === "Kid City USA - FL | Altamonte - Douglas"), true);
+        assert.equal(fixture.effects.writes, 0);
+        assert.equal(fixture.effects.emails, 0);
+      }
+    }
+  }
+});

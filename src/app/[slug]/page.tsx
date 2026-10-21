@@ -13,6 +13,10 @@ import { FteOnlyShell } from "@/components/fte-only-shell";
 import { AppShell } from "@/components/app-shell";
 import { AppReviewScopeBlocked } from "@/components/app-review-scope-blocked";
 import { ConsolidatedWorkspaceNav } from "@/components/consolidated-workspace-nav";
+import { ClassroomPresencePanel } from "@/components/classroom-presence-panel";
+import { ClassroomMoveUpsPanel } from "@/components/classroom-move-ups-panel";
+import { readClassroomPresence, readClassroomMoveUps } from "@/lib/school-operations-data";
+import { presenceWindow, schoolLocalDateTime } from "@/lib/classroom-presence";
 import {
   AgencyAdminPage,
   AiCommandPage,
@@ -280,7 +284,7 @@ import {
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
 import { createAssetHubSignedUrl, createChildMediaSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
-import { centerServiceDayWindow, latestLogMap, readCenterLocationTimeZone, serviceDayWindowInTimeZone } from "@/lib/attendance-state";
+import { centerServiceDayWindow, latestLogMap, readCenterLocationTimeZone, readCenterTimeZone, serviceDayWindowInTimeZone } from "@/lib/attendance-state";
 import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { estimatedHourlyGrossPayCents, readStaffCompensation } from "@/lib/staff-compensation";
@@ -1025,6 +1029,27 @@ async function renderLivePage(
   const teacherAssignedClassroomId = user.role === UserRole.TEACHER
     ? user.assignedClassroomId ?? "__no_assigned_teacher_classroom__"
     : null;
+  if (slug === "attendance" && firstSearchParam(searchParams.view) === "presence") {
+    const date = firstSearchParam(searchParams.date) ?? "";
+    const time = firstSearchParam(searchParams.time) ?? "";
+    const now = new Date();
+    const local = schoolLocalDateTime(now, readCenterTimeZone(centers[0]));
+    // Validate filters separately so database failures retain the app's error handling.
+    let filterError: string | undefined;
+    try {
+      for (const center of centers) presenceWindow(date, time, readCenterTimeZone(center), now);
+    } catch (error) {
+      filterError = error instanceof Error ? error.message : "Choose a valid date and time.";
+    }
+    const data = filterError
+      ? { live: false, refreshedAt: now.toISOString(), schools: [] }
+      : await readClassroomPresence(prisma, centers.map(center => ({ ...center, name: formatCenterName(center) })), { date, time, teacherClassroomId: teacherAssignedClassroomId, now });
+    return <ClassroomPresencePanel key={`${teacherAssignedClassroomId ?? ""}:${visibleCenterIds.join(",")}:${date}-${time}`} data={data} error={filterError} selectedDate={date || local.date} selectedTime={time || local.time} />;
+  }
+  if (slug === "classroom-dashboard" && firstSearchParam(searchParams.view) === "move-ups") {
+    const data = await readClassroomMoveUps(prisma, centers.map(center => ({ ...center, name: formatCenterName(center) })), teacherAssignedClassroomId);
+    return <ClassroomMoveUpsPanel key={`${teacherAssignedClassroomId ?? ""}:${visibleCenterIds.join(",")}`} data={data} canManageClassrooms={canManageOperations(user)} />;
+  }
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
   const today = new Date();
   const thirtyDays = new Date(today);
@@ -7365,7 +7390,7 @@ export async function renderAuthenticatedModulePage(
         ? "waitlist"
         : "leads";
   const growthView: "campaigns" | "automations" = slug === "campaigns" && requestedView === "automations" ? "automations" : "campaigns";
-  const operationsView = slug === "classroom-dashboard" && ["attendance", "reports", "incidents"].includes(requestedView ?? "") ? requestedView! : "classrooms";
+  const operationsView = slug === "classroom-dashboard" && ["presence", "move-ups", "attendance", "reports", "incidents"].includes(requestedView ?? "") ? requestedView! : "classrooms";
   const familiesView = slug === "family-detail" && ["children", "messages", "media"].includes(requestedView ?? "") ? requestedView! : "families";
   const billingView = slug === "billing-invoices" && requestedView === "payments" ? "payments" : "billing";
   const recordsView = slug === "forms" && ["documents", "compliance"].includes(requestedView ?? "") ? requestedView! : "forms";
@@ -7379,7 +7404,7 @@ export async function renderAuthenticatedModulePage(
   const effectiveSlug = slug === "crm-leads"
     ? enrollmentView === "leads" ? "crm-leads" : enrollmentView === "pipeline" ? "enrollment-pipeline" : enrollmentView
     : slug === "campaigns" && growthView === "automations" ? "automations"
-      : slug === "classroom-dashboard" ? operationsView === "reports" ? "daily-reports" : operationsView === "incidents" ? "incident-reports" : operationsView === "attendance" ? "attendance" : slug
+      : slug === "classroom-dashboard" ? operationsView === "reports" ? "daily-reports" : operationsView === "incidents" ? "incident-reports" : ["attendance", "presence"].includes(operationsView) ? "attendance" : slug
         : slug === "family-detail" ? familiesView === "children" ? "child-profile" : familiesView === "messages" ? "messages" : familiesView === "media" ? "parent-media-review" : slug
           : slug === "billing-invoices" && billingView === "payments" ? "payments"
             : slug === "forms" ? recordsView === "documents" ? "documents" : recordsView === "compliance" ? "compliance" : slug
@@ -7403,7 +7428,7 @@ export async function renderAuthenticatedModulePage(
     return <AppShell currentUser={user}>
       {slug === "crm-leads" ? <ConsolidatedWorkspaceNav workspace="enrollment" activeView={enrollmentView} /> : null}
       {slug === "campaigns" ? <ConsolidatedWorkspaceNav workspace="growth" activeView={growthView} /> : null}
-      {slug === "classroom-dashboard" ? <ConsolidatedWorkspaceNav workspace="operations" activeView={operationsView} allowedViews={allowedViews([["enrollment", "analytics"], ["classrooms", "classroom-dashboard"], ["attendance", "attendance"], ["reports", "daily-reports"], ["incidents", "incident-reports"]])} /> : null}
+      {slug === "classroom-dashboard" ? <ConsolidatedWorkspaceNav workspace="operations" activeView={operationsView} allowedViews={allowedViews([["enrollment", "analytics"], ["classrooms", "classroom-dashboard"], ["presence", "attendance"], ["move-ups", "classroom-dashboard"], ["attendance", "attendance"], ["reports", "daily-reports"], ["incidents", "incident-reports"]])} /> : null}
       {slug === "family-detail" ? <ConsolidatedWorkspaceNav workspace="families" activeView={familiesView} allowedViews={allowedViews([["families", "family-detail"], ["children", "child-profile"], ["messages", "messages"], ["media", "parent-media-review"]])} /> : null}
       {slug === "billing-invoices" ? <ConsolidatedWorkspaceNav workspace="billing" activeView={billingView} allowedViews={allowedViews([["billing", "billing-invoices"], ["payments", "payments"]])} /> : null}
       {slug === "forms" ? <ConsolidatedWorkspaceNav workspace="records" activeView={recordsView} allowedViews={allowedViews([["forms", "forms"], ["documents", "documents"], ["compliance", "compliance"]])} /> : null}

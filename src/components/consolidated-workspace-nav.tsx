@@ -52,12 +52,14 @@ const workspaceConfig = {
   operations: {
     brandAlias: beeWebWorkspaceAliases.operations.brandLabel,
     title: beeWebWorkspaceAliases.operations.functionalLabel,
-    description: "Review enrollment, classrooms, attendance, daily reports, and incident follow-up.",
+    description: "Review enrollment, classroom presence, move-ups, attendance, daily reports, and incidents.",
     note: "Daily school tasks",
-    columns: "sm:grid-cols-2 xl:grid-cols-5",
+    columns: "grid-flow-col auto-cols-[minmax(11rem,1fr)] overflow-x-auto sm:grid-flow-row sm:auto-cols-auto sm:grid-cols-2 xl:grid-cols-4",
     views: [
       ["enrollment", "Enrollment status", "Current roster and exports", "/analytics?report=enrollment_status", ClipboardList],
       ["classrooms", "Classrooms", "Rooms, ratios, and activity", "/classroom-dashboard", Activity],
+      ["presence", "Classroom presence", "Live counts and historical lookups", "/classroom-dashboard?view=presence", Users],
+      ["move-ups", "Move-ups", "Six-month reviews and year-long programs", "/classroom-dashboard?view=move-ups", CalendarDays],
       ["attendance", "Attendance", "Check-in and live status", "/classroom-dashboard?view=attendance", ClipboardCheck],
       ["reports", "Daily reports", "Care notes and family updates", "/classroom-dashboard?view=reports", BookOpen],
       ["incidents", "Incidents", "Safety records and review", "/classroom-dashboard?view=incidents", ShieldCheck],

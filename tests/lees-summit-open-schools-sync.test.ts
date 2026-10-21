@@ -50,7 +50,7 @@ test("default public fallback cannot reopen or recreate inquiry-only Lee during 
   assert.ok(locations.some((location) => location.crmLocationId === binding.publicLocationId));
   const lee = closedLee();
   const effects = await runSync(locations, [lee]);
-  assert.equal(effects.inputPath, "/synthetic/public/kidcity-locations.json");
+  assert.equal(effects.inputPath, join("/synthetic", "public", "kidcity-locations.json"));
   assert.equal(lee.status, "closed");
   assert.deepEqual(effects.updates, []);
   assert.equal(effects.creates.includes(binding.publicLocationId), false);

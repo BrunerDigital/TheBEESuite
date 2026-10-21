@@ -1,11 +1,12 @@
-export type MoveUpProgram = "six_month" | "year_long" | "other";
+export type MoveUpProgram = "six_month" | "year_long" | "other" | "unmapped";
 
 export function moveUpProgram(ageGroup: string): MoveUpProgram {
   const value = ageGroup.toLowerCase().replace(/[’']/g, "");
   if (/pre[\s-]?k|preschool|three|\b3(?:s|\b)|four|\b4(?:s|\b)/.test(value))
     return "year_long";
   if (/toddler|two|\b2(?:s|\b)|\b1(?:s|\b)/.test(value)) return "six_month";
-  return "other";
+  if (/infant|baby|school[\s-]?age/.test(value)) return "other";
+  return "unmapped";
 }
 
 function addMonthsClamped(date: Date, months: number) {
@@ -95,15 +96,17 @@ export function buildMoveUpRows(children: MoveUpChild[], today: string) {
           ? "Check birth date"
           : program === "year_long"
             ? "Year-long program"
-            : program === "other"
-              ? "Review program"
-              : daysUntil! < 0
-                ? "Overdue review"
-                : daysUntil === 0
-                  ? "Review today"
-                  : daysUntil! <= 30
-                    ? "Due within 30 days"
-                    : "Upcoming",
+            : program === "unmapped"
+              ? "Set classroom age group"
+              : program === "other"
+                ? "Outside six-month program"
+                : daysUntil! < 0
+                  ? "Overdue review"
+                  : daysUntil === 0
+                    ? "Review today"
+                    : daysUntil! <= 30
+                      ? "Due within 30 days"
+                      : "Upcoming",
       };
     })
     .sort(

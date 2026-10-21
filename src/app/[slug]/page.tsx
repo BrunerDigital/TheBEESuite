@@ -1048,7 +1048,7 @@ async function renderLivePage(
   }
   if (slug === "classroom-dashboard" && firstSearchParam(searchParams.view) === "move-ups") {
     const data = await readClassroomMoveUps(prisma, centers.map(center => ({ ...center, name: formatCenterName(center) })), teacherAssignedClassroomId);
-    return <ClassroomMoveUpsPanel key={`${teacherAssignedClassroomId ?? ""}:${visibleCenterIds.join(",")}`} data={data} />;
+    return <ClassroomMoveUpsPanel key={`${teacherAssignedClassroomId ?? ""}:${visibleCenterIds.join(",")}`} data={data} canManageClassrooms={canManageOperations(user)} />;
   }
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
   const today = new Date();

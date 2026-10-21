@@ -125,3 +125,42 @@ test("ProCare placeholder and missing-DOB marker produce birth-date review inste
     assert.equal(JSON.stringify(row).includes("do-not-serialize"), false);
   }
 });
+
+test("themed imported rooms need explicit age-group setup and use the configured mapping", () => {
+  for (const name of ["Fireflies", "Ladybugs", "Dragonflies"]) {
+    const [unmapped] = buildMoveUpRows(
+      [
+        {
+          ...child("2025-05-01", name),
+          classroom: { name, ageGroup: name, centerId: "school" },
+        },
+      ],
+      "2026-10-21",
+    );
+    assert.equal(unmapped.program, "unmapped");
+    assert.equal(unmapped.dueDate, null);
+    assert.equal(unmapped.status, "Set classroom age group");
+    const [toddler] = buildMoveUpRows(
+      [
+        {
+          ...child("2025-05-01"),
+          classroom: { name, ageGroup: "Toddler", centerId: "school" },
+        },
+      ],
+      "2026-10-21",
+    );
+    assert.equal(toddler.program, "six_month");
+    assert.equal(toddler.dueDate, "2026-11-01");
+    const [yearLong] = buildMoveUpRows(
+      [
+        {
+          ...child("2024-05-01"),
+          classroom: { name, ageGroup: "Preschool", centerId: "school" },
+        },
+      ],
+      "2026-10-21",
+    );
+    assert.equal(yearLong.program, "year_long");
+    assert.equal(yearLong.dueDate, null);
+  }
+});

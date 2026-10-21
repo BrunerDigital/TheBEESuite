@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -17,8 +18,10 @@ import type { ClassroomMoveUpsData } from "@/lib/school-operations-data";
 
 export function ClassroomMoveUpsPanel({
   data,
+  canManageClassrooms = false,
 }: {
   data: ClassroomMoveUpsData;
+  canManageClassrooms?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [program, setProgram] = useState("six_month");
@@ -26,7 +29,9 @@ export function ClassroomMoveUpsPanel({
   const [room, setRoom] = useState("all");
   const rows = data.rows.filter(
     (row) =>
-      (program === "all" || row.program === program) &&
+      (program === "all" ||
+        row.program === program ||
+        (program === "six_month" && row.program === "unmapped")) &&
       (room === "all" || row.classroomId === room) &&
       (!row.daysUntil ||
         horizon === "all" ||
@@ -38,6 +43,7 @@ export function ClassroomMoveUpsPanel({
   const rooms = [
     ...new Map(data.rows.map((row) => [row.classroomId, row])).values(),
   ];
+  const unmappedRooms = rooms.filter((row) => row.program === "unmapped");
   const dueSoon = data.rows.filter(
     (row) =>
       row.program === "six_month" &&
@@ -77,7 +83,13 @@ export function ClassroomMoveUpsPanel({
                 row.name,
                 row.classroom,
                 row.ageMonths ?? "",
-                row.program,
+                row.program === "six_month"
+                  ? "Six-month reviews"
+                  : row.program === "year_long"
+                    ? "Year-long program"
+                    : row.program === "unmapped"
+                      ? "Needs age-group setup"
+                      : "Other program",
                 row.milestone ?? "",
                 row.previousMilestoneDate ?? "",
                 row.dueDate ?? "",
@@ -90,7 +102,7 @@ export function ClassroomMoveUpsPanel({
           Export CSV
         </Button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
           [
             "Six-month program",
@@ -98,6 +110,7 @@ export function ClassroomMoveUpsPanel({
           ],
           ["Reviews within 30 days or overdue", dueSoon],
           ["Year-long program", yearLong],
+          ["Classrooms needing setup", unmappedRooms.length],
         ].map(([label, value]) => (
           <div key={label} className="rounded-xl border bg-card p-4">
             <p className="text-sm text-muted-foreground">{label}</p>
@@ -105,6 +118,38 @@ export function ClassroomMoveUpsPanel({
           </div>
         ))}
       </div>
+      {unmappedRooms.length ? (
+        <div
+          className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 text-sm"
+          role="status"
+        >
+          <p>
+            <strong>
+              {unmappedRooms.length} classroom(s) need an age-group mapping:
+            </strong>{" "}
+            {unmappedRooms
+              .map((row) => `${schoolName(row.centerId)} · ${row.classroom}`)
+              .join(", ")}
+            . Their students remain visible below without a guessed review date.
+          </p>
+          <p>
+            The director can set each room’s “Age group served” in Classrooms:
+            Toddler for 18/24-month reviews, 2 Y/O for 30/36-month reviews, or
+            Preschool / 3’s / Pre-K for a year-long program. The room’s themed
+            name can stay the same.
+          </p>
+          {canManageClassrooms ? (
+            <Link
+              href="/classroom-dashboard#classroom-editor"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Set classroom age groups
+            </Link>
+          ) : (
+            <p>Ask your director to confirm the classroom age groups.</p>
+          )}
+        </div>
+      ) : null}
       <p className="rounded-xl border bg-muted/30 p-4 text-sm">
         Review dates use birth dates and age milestones at 18, 24, 30, and 36
         months. The classroom’s age group determines its program. These are
@@ -128,8 +173,9 @@ export function ClassroomMoveUpsPanel({
             value={program}
             onChange={(event) => setProgram(event.target.value)}
           >
-            <option value="six_month">Toddlers and 2’s</option>
+            <option value="six_month">Toddlers / 2’s + needs setup</option>
             <option value="year_long">3’s and pre-K · year-long</option>
+            <option value="unmapped">Needs age-group setup</option>
             <option value="all">All programs</option>
           </select>
         </div>

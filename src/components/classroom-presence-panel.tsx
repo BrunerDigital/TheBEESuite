@@ -231,9 +231,9 @@ export function ClassroomPresencePanel({
               ) : null}
               {school.dailyOnly ? (
                 <p className="text-sm text-muted-foreground">
-                  {school.dailyOnly} student(s) have daily attendance without
-                  check-in/out events through this time. Daily status does not
-                  establish an exact headcount.
+                  {school.dailyOnly} student(s) have daily attendance for this
+                  date without check-in/out events through the selected time.
+                  Daily status does not establish an exact headcount.
                 </p>
               ) : null}
               {school.unknown ? (

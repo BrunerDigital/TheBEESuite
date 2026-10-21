@@ -23,6 +23,7 @@ export type MoveUpChild = {
   id: string;
   fullName: string;
   dateOfBirth: Date;
+  customFields?: unknown;
   classroomId: string | null;
   classroom: { name: string; ageGroup: string; centerId: string } | null;
 };
@@ -33,7 +34,17 @@ export function buildMoveUpRows(children: MoveUpChild[], today: string) {
     .map((child) => {
       const program = moveUpProgram(child.classroom?.ageGroup ?? "");
       const dob = child.dateOfBirth;
-      const validDob = Number.isFinite(dob.getTime()) && dob <= asOf;
+      const fields =
+        child.customFields &&
+        typeof child.customFields === "object" &&
+        !Array.isArray(child.customFields)
+          ? (child.customFields as Record<string, unknown>)
+          : {};
+      const validDob =
+        Number.isFinite(dob.getTime()) &&
+        dob <= asOf &&
+        dob.getUTCFullYear() > 1900 &&
+        fields.dateOfBirthMissing !== true;
       const calendarMonths =
         (asOf.getUTCFullYear() - dob.getUTCFullYear()) * 12 +
         asOf.getUTCMonth() -

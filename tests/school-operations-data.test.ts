@@ -86,14 +86,30 @@ test("presence queries only authorized schools with per-school day bounds and no
   );
   const attendanceWhere = calls.find(
     (call) => call.model === "attendanceRecord",
-  )?.args.where as { OR: { date: { gte: Date; lte: Date } }[] };
+  )?.args.where as {
+    OR: {
+      OR: { date: { gte: Date; lte?: Date; lt?: Date }; OR?: unknown[] }[];
+    }[];
+  };
   assert.equal(
-    attendanceWhere.OR[0].date.lte.toISOString(),
+    attendanceWhere.OR[0].OR[0].date.lte!.toISOString(),
     "2026-09-15T14:00:00.000Z",
   );
   assert.equal(
-    attendanceWhere.OR[1].date.lte.toISOString(),
+    attendanceWhere.OR[1].OR[0].date.lte!.toISOString(),
     "2026-09-15T16:00:00.000Z",
+  );
+  assert.equal(
+    attendanceWhere.OR[0].OR[1].date.gte.toISOString(),
+    "2026-09-15T00:00:00.000Z",
+  );
+  assert.equal(
+    attendanceWhere.OR[0].OR[1].date.lt!.toISOString(),
+    "2026-09-16T00:00:00.000Z",
+  );
+  assert.match(
+    JSON.stringify(attendanceWhere.OR[0].OR[1].OR),
+    /procare_import/,
   );
   for (const call of calls) assert.equal("take" in call.args, false);
 });
@@ -148,8 +164,22 @@ test("school payloads do not combine check-ins and distinguish daily-only record
       },
     ],
     attendanceRecord: [
-      { childId: "daily-only", classroom: { centerId: "school-a" } },
-      { childId: "student-a", classroom: { centerId: "school-a" } },
+      {
+        childId: "daily-only",
+        date: new Date("2026-09-15T00:00:00Z"),
+        sourceSystem: "procare",
+        classroom: { centerId: "school-a" },
+      },
+      {
+        childId: "student-a",
+        date: new Date("2026-09-15T12:00:00Z"),
+        classroom: { centerId: "school-a" },
+      },
+      {
+        childId: "future-status",
+        date: new Date("2026-09-15T17:00:00Z"),
+        classroom: { centerId: "school-a" },
+      },
     ],
   });
   const result = await readClassroomPresence(db, centers, {

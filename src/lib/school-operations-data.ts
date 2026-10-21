@@ -1,7 +1,8 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { readCenterTimeZone } from "./attendance-state";
 import {
   buildClassroomPresence,
+  dailyAttendanceMatchesSnapshot,
   presenceWindow,
   schoolLocalDateTime,
 } from "./classroom-presence";
@@ -39,10 +40,23 @@ export async function readClassroomPresence(
   const now = input.now ?? new Date();
   const windows = centers
     .map((center) => ({ center, timeZone: readCenterTimeZone(center) }))
-    .map((item) => ({
-      ...item,
-      window: presenceWindow(input.date, input.time, item.timeZone, now),
-    }));
+    .map((item) => {
+      const window = presenceWindow(input.date, input.time, item.timeZone, now);
+      const calendarStart = new Date(
+        `${schoolLocalDateTime(window.at, item.timeZone).date}T00:00:00Z`,
+      );
+      return {
+        ...item,
+        window,
+        calendarStart,
+        calendarEnd: new Date(calendarStart.getTime() + 86_400_000),
+      };
+    });
+  const importedDailyWhere: Prisma.AttendanceRecordWhereInput[] = [
+    { sourceSystem: { in: ["procare", "bee_flat_file_v1"] } },
+    { metadata: { path: ["source"], equals: "procare_import" } },
+    { metadata: { path: ["source"], equals: "bee_flat_file_import" } },
+  ];
   const scope = { in: centers.map((center) => center.id) };
   // Four queries per workspace, including an all-schools workspace. Never cap
   // event rows: a truncated event stream can produce a false headcount.
@@ -101,19 +115,33 @@ export async function readClassroomPresence(
         }),
         db.attendanceRecord.findMany({
           where: {
-            OR: windows.map(({ center, window }) => ({
-              date: { gte: window.start, lte: window.at },
-              classroom: {
-                is: {
-                  centerId: center.id,
-                  ...(input.teacherClassroomId
-                    ? { id: input.teacherClassroomId }
-                    : {}),
+            OR: windows.map(
+              ({ center, window, calendarStart, calendarEnd }) => ({
+                OR: [
+                  { date: { gte: window.start, lte: window.at } },
+                  {
+                    date: { gte: calendarStart, lt: calendarEnd },
+                    OR: importedDailyWhere,
+                  },
+                ],
+                classroom: {
+                  is: {
+                    centerId: center.id,
+                    ...(input.teacherClassroomId
+                      ? { id: input.teacherClassroomId }
+                      : {}),
+                  },
                 },
-              },
-            })),
+              }),
+            ),
           },
-          select: { childId: true, classroom: { select: { centerId: true } } },
+          select: {
+            childId: true,
+            date: true,
+            sourceSystem: true,
+            metadata: true,
+            classroom: { select: { centerId: true } },
+          },
         }),
       ])
     : [[], [], [], []];
@@ -124,7 +152,13 @@ export async function readClassroomPresence(
       (move) => move.centerId === center.id,
     );
     const attendance = allAttendance.filter(
-      (record) => record.classroom?.centerId === center.id,
+      (record) =>
+        record.classroom?.centerId === center.id &&
+        dailyAttendanceMatchesSnapshot(record, {
+          start: window.start,
+          at: window.at,
+          timeZone,
+        }),
     );
     const teacherChildren = new Set([
       ...logs
@@ -201,6 +235,7 @@ export async function readClassroomMoveUps(
       id: true,
       fullName: true,
       dateOfBirth: true,
+      customFields: true,
       classroomId: true,
       classroom: { select: { name: true, ageGroup: true, centerId: true } },
     },

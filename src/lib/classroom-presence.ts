@@ -67,6 +67,30 @@ export type PresenceRoom = {
   capacity: number;
   archived: boolean;
 };
+
+/** Imported daily status is a calendar date, never proof of presence at a time. */
+export function dailyAttendanceMatchesSnapshot(
+  record: { date: Date; sourceSystem?: string | null; metadata?: unknown },
+  input: { start: Date; at: Date; timeZone: string },
+) {
+  const metadata =
+    record.metadata &&
+    typeof record.metadata === "object" &&
+    !Array.isArray(record.metadata)
+      ? (record.metadata as Record<string, unknown>)
+      : {};
+  const imported =
+    ["procare", "bee_flat_file_v1"].includes(record.sourceSystem ?? "") ||
+    ["procare_import", "bee_flat_file_import"].includes(
+      String(metadata.source ?? ""),
+    );
+  if (imported)
+    return (
+      record.date.toISOString().slice(0, 10) ===
+      schoolLocalDateTime(input.at, input.timeZone).date
+    );
+  return record.date >= input.start && record.date <= input.at;
+}
 export type PresenceLog = {
   id: string;
   childId: string;

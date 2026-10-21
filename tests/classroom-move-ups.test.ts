@@ -105,3 +105,23 @@ test("toddlers past the two-year transition retain an overdue review", () => {
   assert.equal(row.dueDate, "2026-09-01");
   assert.equal(row.status, "Overdue review");
 });
+
+test("ProCare placeholder and missing-DOB marker produce birth-date review instead of overdue move-ups", () => {
+  for (const record of [
+    child("1900-01-01T12:00:00Z"),
+    {
+      ...child("2024-04-01"),
+      customFields: {
+        dateOfBirthMissing: true,
+        privateImportDetail: "do-not-serialize",
+      },
+    },
+  ]) {
+    const [row] = buildMoveUpRows([record], "2026-10-21");
+    assert.equal(row.ageMonths, null);
+    assert.equal(row.dueDate, null);
+    assert.equal(row.previousMilestoneDate, null);
+    assert.equal(row.status, "Check birth date");
+    assert.equal(JSON.stringify(row).includes("do-not-serialize"), false);
+  }
+});

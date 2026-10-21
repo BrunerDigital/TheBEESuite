@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildClassroomPresence,
+  dailyAttendanceMatchesSnapshot,
   presenceWindow,
   schoolLocalDateTime,
   type PresenceLog,
@@ -11,6 +12,57 @@ import {
 const now = new Date("2026-10-21T19:00:00Z");
 const start = new Date("2026-09-15T04:00:00Z");
 const at = new Date("2026-09-15T15:00:00Z");
+
+test("imported calendar-day attendance survives UTC midnight without becoming timed presence", () => {
+  const window = { start, at, timeZone: "America/New_York" };
+  for (const sourceSystem of ["procare", "bee_flat_file_v1"]) {
+    assert.equal(
+      dailyAttendanceMatchesSnapshot(
+        { sourceSystem, date: new Date("2026-09-15T00:00:00Z") },
+        window,
+      ),
+      true,
+    );
+    assert.equal(
+      dailyAttendanceMatchesSnapshot(
+        { sourceSystem, date: new Date("2026-09-14T00:00:00Z") },
+        window,
+      ),
+      false,
+    );
+  }
+  assert.equal(
+    dailyAttendanceMatchesSnapshot(
+      {
+        metadata: { source: "procare_import" },
+        date: new Date("2026-09-15T00:00:00Z"),
+      },
+      window,
+    ),
+    true,
+  );
+  assert.equal(
+    dailyAttendanceMatchesSnapshot(
+      { date: new Date("2026-09-15T00:00:00Z") },
+      window,
+    ),
+    false,
+  );
+  assert.equal(
+    dailyAttendanceMatchesSnapshot(
+      { date: new Date("2026-09-15T16:00:00Z") },
+      window,
+    ),
+    false,
+  );
+  assert.equal(
+    dailyAttendanceMatchesSnapshot(
+      { date: new Date("2026-09-15T12:00:00Z") },
+      window,
+    ),
+    true,
+  );
+});
 const rooms = [
   { id: "a", name: "Toddlers", capacity: 12, archived: false },
   { id: "b", name: "Twos", capacity: 14, archived: false },

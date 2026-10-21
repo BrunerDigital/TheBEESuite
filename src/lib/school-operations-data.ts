@@ -117,21 +117,41 @@ export async function readClassroomPresence(
           where: {
             OR: windows.map(
               ({ center, window, calendarStart, calendarEnd }) => ({
-                OR: [
-                  { date: { gte: window.start, lte: window.at } },
+                AND: [
                   {
-                    date: { gte: calendarStart, lt: calendarEnd },
-                    OR: importedDailyWhere,
+                    OR: [
+                      { date: { gte: window.start, lte: window.at } },
+                      {
+                        date: { gte: calendarStart, lt: calendarEnd },
+                        OR: importedDailyWhere,
+                      },
+                    ],
+                  },
+                  {
+                    OR: [
+                      {
+                        classroom: {
+                          is: {
+                            centerId: center.id,
+                            ...(input.teacherClassroomId
+                              ? { id: input.teacherClassroomId }
+                              : {}),
+                          },
+                        },
+                      },
+                      ...(!input.teacherClassroomId
+                        ? [
+                            {
+                              classroomId: null,
+                              child: {
+                                is: { family: { is: { centerId: center.id } } },
+                              },
+                            },
+                          ]
+                        : []),
+                    ],
                   },
                 ],
-                classroom: {
-                  is: {
-                    centerId: center.id,
-                    ...(input.teacherClassroomId
-                      ? { id: input.teacherClassroomId }
-                      : {}),
-                  },
-                },
               }),
             ),
           },
@@ -141,6 +161,7 @@ export async function readClassroomPresence(
             sourceSystem: true,
             metadata: true,
             classroom: { select: { centerId: true } },
+            child: { select: { family: { select: { centerId: true } } } },
           },
         }),
       ])
@@ -153,7 +174,10 @@ export async function readClassroomPresence(
     );
     const attendance = allAttendance.filter(
       (record) =>
-        record.classroom?.centerId === center.id &&
+        (record.classroom
+          ? record.classroom.centerId === center.id
+          : !input.teacherClassroomId &&
+            record.child?.family.centerId === center.id) &&
         dailyAttendanceMatchesSnapshot(record, {
           start: window.start,
           at: window.at,

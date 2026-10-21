@@ -99,3 +99,9 @@ test("the previous milestone remains visible after its date passes", () => {
   assert.equal(row.previousMilestoneDate, "2026-10-01");
   assert.equal(row.dueDate, "2027-04-01");
 });
+
+test("toddlers past the two-year transition retain an overdue review", () => {
+  const [row] = buildMoveUpRows([child("2024-09-01", "Toddler")], "2026-10-21");
+  assert.equal(row.dueDate, "2026-09-01");
+  assert.equal(row.status, "Overdue review");
+});

@@ -1044,11 +1044,11 @@ async function renderLivePage(
     const data = filterError
       ? { live: false, refreshedAt: now.toISOString(), schools: [] }
       : await readClassroomPresence(prisma, centers.map(center => ({ ...center, name: formatCenterName(center) })), { date, time, teacherClassroomId: teacherAssignedClassroomId, now });
-    return <ClassroomPresencePanel key={`${date}-${time}`} data={data} error={filterError} selectedDate={date || local.date} selectedTime={time || local.time} />;
+    return <ClassroomPresencePanel key={`${teacherAssignedClassroomId ?? ""}:${visibleCenterIds.join(",")}:${date}-${time}`} data={data} error={filterError} selectedDate={date || local.date} selectedTime={time || local.time} />;
   }
   if (slug === "classroom-dashboard" && firstSearchParam(searchParams.view) === "move-ups") {
     const data = await readClassroomMoveUps(prisma, centers.map(center => ({ ...center, name: formatCenterName(center) })), teacherAssignedClassroomId);
-    return <ClassroomMoveUpsPanel data={data} />;
+    return <ClassroomMoveUpsPanel key={`${teacherAssignedClassroomId ?? ""}:${visibleCenterIds.join(",")}`} data={data} />;
   }
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
   const today = new Date();

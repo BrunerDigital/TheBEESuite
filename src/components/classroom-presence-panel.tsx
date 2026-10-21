@@ -62,6 +62,13 @@ export function ClassroomPresencePanel({
           .filter(
             (group) => room === "all" || room === `${school.id}:${group.id}`,
           )
+          .filter(
+            (group) =>
+              !query ||
+              group.children.some((child) =>
+                child.name.toLowerCase().includes(query.toLowerCase()),
+              ),
+          )
           .flatMap((group) => {
             const prefix = [
               school.name,

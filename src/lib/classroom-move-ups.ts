@@ -48,9 +48,10 @@ export function buildMoveUpRows(children: MoveUpChild[], today: string) {
       const twoYearRoom = /two|\b2(?:s|\b)/.test(
         (child.classroom?.ageGroup ?? "").toLowerCase().replace(/[’']/g, ""),
       );
-      const milestones = twoYearRoom ? [30, 36] : [18, 24, 30, 36];
+      const milestones = twoYearRoom ? [30, 36] : [18, 24];
       const milestone =
-        milestones.find((month) => addMonthsClamped(dob, month) >= asOf) ?? 36;
+        milestones.find((month) => addMonthsClamped(dob, month) >= asOf) ??
+        milestones[milestones.length - 1];
       const due =
         program === "six_month" && validDob
           ? addMonthsClamped(dob, milestone)

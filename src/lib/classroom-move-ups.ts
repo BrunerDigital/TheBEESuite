@@ -1,6 +1,6 @@
 export type MoveUpProgram = "six_month" | "year_long" | "other" | "unmapped";
 
-const sixMonthGroups = new Set([
+const toddlerGroups = new Set([
   "toddler",
   "toddlers",
   "one",
@@ -12,6 +12,8 @@ const sixMonthGroups = new Set([
   "1yo",
   "1yearold",
   "1yearolds",
+]);
+const twoYearGroups = new Set([
   "two",
   "twos",
   "twoyearold",
@@ -68,13 +70,17 @@ const otherGroups = new Set([
   "afterschool",
 ]);
 
+function normalizedAgeGroup(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export function moveUpProgram(ageGroup: string): MoveUpProgram {
   // Age group served is the persisted program mapping, independent of room name.
   // Unknown imported labels stay visible for setup instead of guessing from a
   // themed name, a room number, or the current ages of its students.
-  const value = ageGroup.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const value = normalizedAgeGroup(ageGroup);
   if (yearLongGroups.has(value)) return "year_long";
-  if (sixMonthGroups.has(value)) return "six_month";
+  if (toddlerGroups.has(value) || twoYearGroups.has(value)) return "six_month";
   if (otherGroups.has(value)) return "other";
   return "unmapped";
 }
@@ -127,8 +133,8 @@ export function buildMoveUpRows(children: MoveUpChild[], today: string) {
               Number(addMonthsClamped(dob, calendarMonths) > asOf),
           )
         : null;
-      const twoYearRoom = /two|\b2(?:s|\b)/.test(
-        (child.classroom?.ageGroup ?? "").toLowerCase().replace(/[’']/g, ""),
+      const twoYearRoom = twoYearGroups.has(
+        normalizedAgeGroup(child.classroom?.ageGroup ?? ""),
       );
       const milestones = twoYearRoom ? [30, 36] : [18, 24];
       const milestone =
@@ -140,9 +146,7 @@ export function buildMoveUpRows(children: MoveUpChild[], today: string) {
           : null;
       const previousMilestone =
         validDob && program === "six_month"
-          ? milestones
-              .filter((month) => addMonthsClamped(dob, month) < asOf)
-              .at(-1)
+          ? milestones[milestones.indexOf(milestone) - 1]
           : undefined;
       const daysUntil = due
         ? Math.round((due.getTime() - asOf.getTime()) / 86_400_000)

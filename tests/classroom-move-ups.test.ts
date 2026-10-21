@@ -170,3 +170,33 @@ test("themed imported rooms need explicit age-group setup and use the configured
     assert.equal(yearLong.dueDate, null);
   }
 });
+
+test("all supported two-year aliases share the 30/36-month cadence", () => {
+  for (const group of [
+    "2yo",
+    "2yr",
+    "2yrs",
+    "2yearold",
+    "2yrolds",
+    "2 years",
+    "Twos",
+    "2 Y/O",
+  ]) {
+    const [row] = buildMoveUpRows([child("2024-05-01", group)], "2026-10-21");
+    assert.equal(row.milestone, 30, group);
+    assert.equal(row.dueDate, "2026-11-01", group);
+    assert.equal(row.status, "Due within 30 days", group);
+  }
+});
+
+test("overdue final reviews keep the preceding milestone in the previous column", () => {
+  const [twos] = buildMoveUpRows([child("2023-09-01", "2 Y/O")], "2026-10-21");
+  assert.equal(twos.dueDate, "2026-09-01");
+  assert.equal(twos.previousMilestoneDate, "2026-03-01");
+  const [toddler] = buildMoveUpRows(
+    [child("2024-09-01", "Toddler")],
+    "2026-10-21",
+  );
+  assert.equal(toddler.dueDate, "2026-09-01");
+  assert.equal(toddler.previousMilestoneDate, "2026-03-01");
+});

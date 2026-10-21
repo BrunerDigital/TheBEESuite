@@ -102,7 +102,7 @@ export async function readClassroomPresence(
         db.attendanceRecord.findMany({
           where: {
             OR: windows.map(({ center, window }) => ({
-              date: { gte: window.start, lt: window.end },
+              date: { gte: window.start, lte: window.at },
               classroom: {
                 is: {
                   centerId: center.id,

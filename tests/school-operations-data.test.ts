@@ -15,7 +15,7 @@ const centers: OperationsCenter[] = [
     timezone: "America/New_York",
     city: null,
     state: "NY",
-          customFields: { privateImportDetail: "do-not-serialize" },
+    customFields: { privateImportDetail: "do-not-serialize" },
   },
   {
     id: "school-b",
@@ -83,6 +83,17 @@ test("presence queries only authorized schools with per-school day bounds and no
   assert.equal(
     where.OR[1].occurredAt.gte.toISOString(),
     "2026-09-15T06:00:00.000Z",
+  );
+  const attendanceWhere = calls.find(
+    (call) => call.model === "attendanceRecord",
+  )?.args.where as { OR: { date: { gte: Date; lte: Date } }[] };
+  assert.equal(
+    attendanceWhere.OR[0].date.lte.toISOString(),
+    "2026-09-15T14:00:00.000Z",
+  );
+  assert.equal(
+    attendanceWhere.OR[1].date.lte.toISOString(),
+    "2026-09-15T16:00:00.000Z",
   );
   for (const call of calls) assert.equal("take" in call.args, false);
 });

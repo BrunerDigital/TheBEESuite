@@ -127,7 +127,13 @@ test("ProCare placeholder and missing-DOB marker produce birth-date review inste
 });
 
 test("themed imported rooms need explicit age-group setup and use the configured mapping", () => {
-  for (const name of ["Fireflies", "Ladybugs", "Dragonflies"]) {
+  for (const name of [
+    "Fireflies",
+    "Ladybugs",
+    "Dragonflies",
+    "Fireflies 2",
+    "Three Bears",
+  ]) {
     const [unmapped] = buildMoveUpRows(
       [
         {

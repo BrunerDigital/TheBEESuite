@@ -1,11 +1,81 @@
 export type MoveUpProgram = "six_month" | "year_long" | "other" | "unmapped";
 
+const sixMonthGroups = new Set([
+  "toddler",
+  "toddlers",
+  "one",
+  "ones",
+  "oneyearold",
+  "oneyearolds",
+  "1",
+  "1s",
+  "1yo",
+  "1yearold",
+  "1yearolds",
+  "two",
+  "twos",
+  "twoyearold",
+  "twoyearolds",
+  "2",
+  "2s",
+  "2yo",
+  "2yr",
+  "2yrs",
+  "2year",
+  "2years",
+  "2yrold",
+  "2yrolds",
+  "2yearold",
+  "2yearolds",
+]);
+const yearLongGroups = new Set([
+  "preschool",
+  "prek",
+  "prekindergarten",
+  "three",
+  "threes",
+  "threeyearold",
+  "threeyearolds",
+  "3",
+  "3s",
+  "3yo",
+  "3yr",
+  "3yrs",
+  "3year",
+  "3years",
+  "3yrold",
+  "3yrolds",
+  "3yearold",
+  "3yearolds",
+  "four",
+  "fours",
+  "fouryearold",
+  "fouryearolds",
+  "4",
+  "4s",
+  "4yo",
+  "4yearold",
+  "4yearolds",
+]);
+const otherGroups = new Set([
+  "infant",
+  "infants",
+  "baby",
+  "babies",
+  "schoolage",
+  "schoolaged",
+  "schoolagedchildren",
+  "afterschool",
+]);
+
 export function moveUpProgram(ageGroup: string): MoveUpProgram {
-  const value = ageGroup.toLowerCase().replace(/[’']/g, "");
-  if (/pre[\s-]?k|preschool|three|\b3(?:s|\b)|four|\b4(?:s|\b)/.test(value))
-    return "year_long";
-  if (/toddler|two|\b2(?:s|\b)|\b1(?:s|\b)/.test(value)) return "six_month";
-  if (/infant|baby|school[\s-]?age/.test(value)) return "other";
+  // Age group served is the persisted program mapping, independent of room name.
+  // Unknown imported labels stay visible for setup instead of guessing from a
+  // themed name, a room number, or the current ages of its students.
+  const value = ageGroup.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (yearLongGroups.has(value)) return "year_long";
+  if (sixMonthGroups.has(value)) return "six_month";
+  if (otherGroups.has(value)) return "other";
   return "unmapped";
 }
 

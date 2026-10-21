@@ -1,3 +1,4 @@
+import { directoryInquiryRestorations, directoryInquiryBinding, directoryInquiryEnabled, directoryInquiryPublicLocation, isVerifiedDirectoryInquiryCenter } from "@/lib/directory-inquiry-restoration";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
@@ -45,13 +46,15 @@ async function GETHandler() {
     return NextResponse.json({ ok: false, error: "Brand, regional, or platform access required." }, { status: 403 });
   }
 
-  const locations = loadPublicLocations();
+  const locations = [...loadPublicLocations().filter((location) => ![location.crmLocationId, location.locationId, location.name].some(directoryInquiryBinding)),
+    ...directoryInquiryRestorations.filter((binding) => directoryInquiryEnabled(binding, process.env)).map(directoryInquiryPublicLocation)];
   const rows = await Promise.all(
     locations.map(async (location) => {
       const restorationRequested = isLeesSummitInquiryIdentifier(location.locationId);
+      const directoryBinding = directoryInquiryBinding(location.locationId);
       const center = await prisma.center.findFirst({
         where: {
-          ...(restorationRequested ? {
+          ...(directoryBinding ? { id: directoryBinding.centerId, organization: { tenant: { slug: "kid-city-usa" } } } : restorationRequested ? {
             id: leesSummitInquiryRestoration.centerId,
             organization: { tenant: { slug: leesSummitInquiryRestoration.tenantSlug } },
           } : { status: { not: "closed" } }),
@@ -64,6 +67,7 @@ async function GETHandler() {
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
+          organizationId: true,
           name: true,
           crmLocationId: true,
           locationId: true,
@@ -73,10 +77,12 @@ async function GETHandler() {
         },
       });
 
-      const eligibleCenter = restorationRequested
+      const eligibleCenter = directoryBinding
+        ? (isVerifiedDirectoryInquiryCenter(center, directoryBinding, directoryInquiryEnabled(directoryBinding, process.env)) ? center : null)
+        : restorationRequested
         ? (isRestoredPublicInquiryCenter(center, process.env.INQUIRY_LEES_SUMMIT_ENABLED === "true") ? center : null)
         : center;
-      const fallbackLocationUsers = eligibleCenter && !restorationRequested
+      const fallbackLocationUsers = eligibleCenter && !restorationRequested && !directoryBinding
         ? await prisma.userAccessGrant.count({
             where: {
               centerId: eligibleCenter.id,
@@ -89,7 +95,7 @@ async function GETHandler() {
             },
           })
         : 0;
-      const legacyDirectorProfiles = eligibleCenter && !restorationRequested
+      const legacyDirectorProfiles = eligibleCenter && !restorationRequested && !directoryBinding
         ? await prisma.staffProfile.count({
             where: {
               centerId: eligibleCenter.id,

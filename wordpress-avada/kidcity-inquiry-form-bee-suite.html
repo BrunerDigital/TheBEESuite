@@ -515,6 +515,8 @@
       <option value="Kid City USA - CO | Woodland Park - East Midland" data-location-id="Kid City USA - CO | Woodland Park - East Midland" data-location-name="Kid City USA - Woodland Park - East Midland" data-city="Woodland Park" data-state="CO" data-address="520 E. Midland Ave" data-postal-code="80863" data-location-phone="719-687-8123">Kid City USA - CO | Woodland Park - East Midland</option>
     </optgroup>
     <optgroup label="FL">
+      <option disabled hidden value="Kid City USA - FL | Deland - Orange" data-location-id="Kid City USA - FL | Deland - Orange" data-location-name="Kid City USA - DeLand - Orange" data-city="Deland" data-state="FL" data-address="404 N. Orange Ave." data-postal-code="32720" data-location-phone="386-736-0000">Kid City USA - FL | Deland - Orange</option>
+      <option disabled hidden value="Kid City USA - FL | Lake City 2" data-location-id="Kid City USA - FL | Lake City 2" data-location-name="Kid City USA - Lake City 2" data-city="Lake City" data-state="FL" data-address="522 NW Turner Ave." data-postal-code="32055" data-location-phone="386-752-4411">Kid City USA - FL | Lake City 2</option>
       <option value="Kid City USA - FL | Vero Beach" data-location-id="Kid City USA - FL | Vero Beach" data-location-name="Kid City USA - Vero Beach" data-city="Vero Beach" data-state="FL" data-address="760 20th Avenue" data-postal-code="32962" data-location-phone="772-778-2262">Kid City USA - FL | Vero Beach</option>
       <option value="Kid City USA - FL | Altamonte - Douglas" data-location-id="Kid City USA - FL | Altamonte - Douglas" data-location-name="Kid City USA - Altamonte - Douglas" data-city="Altamonte Springs" data-state="FL" data-address="841 Douglas Ave." data-postal-code="32714" data-location-phone="407-682-5437">Kid City USA - FL | Altamonte - Douglas</option>
       <option value="Kid City USA - FL | Altamonte - Maitland" data-location-id="Kid City USA - FL | Altamonte - Maitland" data-location-name="Kid City USA - Altamonte - Maitland" data-city="Altamonte Springs" data-state="FL" data-address="290 Maitland Ave." data-postal-code="32701" data-location-phone="407-767-5437">Kid City USA - FL | Altamonte - Maitland</option>
@@ -544,6 +546,9 @@
       <option value="Kid City USA - IN | Petersburg" data-location-id="Kid City USA - IN | Petersburg" data-location-name="Kid City USA - Petersburg" data-city="Petersburg" data-state="IN" data-address="106 West Pike Avenue" data-postal-code="47567" data-location-phone="812-380-9100">Kid City USA - IN | Petersburg</option>
       <option value="Kid City USA - IN | Southpointe" data-location-id="Kid City USA - IN | Southpointe" data-location-name="Kid City USA - Southpointe" data-city="Indianapolis" data-state="IN" data-address="8830 Southpointe Drive" data-postal-code="46227" data-location-phone="463-634-4044">Kid City USA - IN | Southpointe</option>
       <option value="Kid City USA - IN | Westfield" data-location-id="Kid City USA - IN | Westfield" data-location-name="Kid City USA - Westfield" data-city="Westfield" data-state="IN" data-address="1769 W Tournament Trail" data-postal-code="46074" data-location-phone="855-543-2489">Kid City USA - IN | Westfield</option>
+    </optgroup>
+    <optgroup label="KY">
+      <option disabled hidden value="Kid City USA - KY | Bardstown" data-location-id="Kid City USA - KY | Bardstown" data-location-name="Kid City USA - Bardstown" data-city="Bardstown" data-state="KY" data-address="104 Keystone Ave" data-postal-code="40004" data-location-phone="502-348-4444">Kid City USA - KY | Bardstown</option>
     </optgroup>
     <optgroup label="MO">
       <option disabled hidden value="Kid City USA - MO | Lees Summit" data-location-id="Kid City USA - MO | Lees Summit" data-location-name="Kid City USA - Lees Summit" data-city="Lee's Summit" data-state="MO" data-address="850 NE Swann Rd" data-postal-code="64086" data-location-phone="816-875-3363">Kid City USA - MO | Lees Summit</option>
@@ -580,7 +585,13 @@
   // Keep the inquiry-only option unavailable until the backend verifies its binding.
   function initializeRestoredOptions() {
     document.querySelectorAll(".kcusa-inquiry-form").forEach(function (form) {
-      var identifier = "Kid City USA - MO | Lees Summit";
+      [
+        { identifier: "Kid City USA - MO | Lees Summit", centerId: "cmp4ewfzn004g6alwqbqrzcql" },
+        { identifier: "Kid City USA - FL | Deland - Orange", centerId: "cmp4ew7tp000w6alw8ep0mi0d" },
+        { identifier: "Kid City USA - FL | Lake City 2", centerId: "f9fd9005-a81f-400f-b72e-f95d60d5e550" },
+        { identifier: "Kid City USA - KY | Bardstown", centerId: "cmp4ewfv2004e6alw9mg7zlwb" }
+      ].forEach(function (binding) {
+      var identifier = binding.identifier;
       var option = form.querySelector('option[value="' + identifier + '"]');
       if (!option) return;
       option.disabled = true;
@@ -592,7 +603,7 @@
         return;
       }
       availability.searchParams.set("purpose", "inquiry");
-      availability.searchParams.set("centerId", "cmp4ewfzn004g6alwqbqrzcql");
+      availability.searchParams.set("centerId", binding.centerId);
       fetch(availability.href, { cache: "no-store" }).then(function (response) {
         if (!response.ok) throw new Error("Inquiry availability could not be checked");
         return response.json();
@@ -606,6 +617,7 @@
         }
       }).catch(function () {
         // Leave only this option hidden; other schools retain their existing flow.
+      });
       });
     });
   }

@@ -7,8 +7,62 @@
 
   if (!target) return;
 
+
+  // These three prospective restorations require the canonical availability gate.
+  const directoryBindings = [
+  {
+    "centerId": "cmp4ew7tp000w6alw8ep0mi0d",
+    "identifier": "Kid City USA - FL | Deland - Orange",
+    "name": "Kid City USA - DeLand - Orange"
+  },
+  {
+    "centerId": "f9fd9005-a81f-400f-b72e-f95d60d5e550",
+    "identifier": "Kid City USA - FL | Lake City 2",
+    "name": "Kid City USA - Lake City 2"
+  },
+  {
+    "centerId": "cmp4ewfv2004e6alw9mg7zlwb",
+    "identifier": "Kid City USA - KY | Bardstown",
+    "name": "Kid City USA - Bardstown"
+  }
+];
+  const verifiedDirectoryCenterIds = new Set();
+  function directoryBindingFor(value) {
+    const key = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+    return directoryBindings.find((binding) => [binding.centerId, binding.identifier,
+      binding.identifier.replace("Kid City USA - ", ""), binding.name]
+      .some((identifier) => identifier.toLowerCase() === key));
+  }
+  function directorySelectorMatches(value, binding) {
+    return directoryBindingFor(value)?.centerId === binding.centerId;
+  }
+  async function verifyDirectoryLocations(locations) {
+    const checked = await Promise.all(locations.map(async (location) => {
+      const binding = [location.crmLocationId, location.locationId, location.name].map(directoryBindingFor).find(Boolean);
+      if (!binding) return location;
+      try {
+        const url = new URL(`${baseUrl}/api/public/kidcity-locations`);
+        url.searchParams.set("purpose", "inquiry");
+        url.searchParams.set("centerId", binding.centerId);
+        const response = await fetch(url.href, { cache: "no-store" });
+        if (!response.ok) return null;
+        const data = await response.json();
+        const verified = Array.isArray(data.locations) && data.locations.find((row) =>
+          row.crmLocationId === binding.identifier && row.locationId === binding.identifier);
+        if (data.inquiryCenterEligible !== true || !verified) return null;
+        verifiedDirectoryCenterIds.add(binding.centerId);
+        return verified;
+      } catch { return null; }
+    }));
+    return checked.filter(Boolean);
+  }
+
   const brandName = currentScript.dataset.brandName || "The BEE Suite";
-  const centerId = currentScript.dataset.centerId || "";
+  const suppliedCenterId = (currentScript.dataset.centerId || "").trim();
+  const requestedDirectoryBinding = [suppliedCenterId, currentScript.dataset.locationId,
+    currentScript.dataset.publicLocationId, currentScript.dataset.locationName, currentScript.dataset.centerName]
+    .map(directoryBindingFor).find(Boolean);
+  const centerId = suppliedCenterId || requestedDirectoryBinding?.centerId || "";
   const locationName = currentScript.dataset.locationName || currentScript.dataset.centerName || "";
   const locationsUrl = currentScript.dataset.locationsUrl || "";
   const preset = currentScript.dataset.preset || "";
@@ -199,6 +253,14 @@
         return;
       }
 
+      const submittedDirectoryBinding = [payload.centerId, payload.locationId, payload.publicLocationId, payload.locationName]
+        .map(directoryBindingFor).find(Boolean);
+      if (submittedDirectoryBinding && !verifiedDirectoryCenterIds.has(submittedDirectoryBinding.centerId)) {
+        status.dataset.state = "error";
+        status.textContent = "This location is not accepting website inquiries. Please choose another location.";
+        return;
+      }
+
       button.disabled = true;
       button.textContent = "Submitting...";
       try {
@@ -227,6 +289,13 @@
     return;
   }
 
+  if (requestedDirectoryBinding && ((suppliedCenterId && suppliedCenterId !== requestedDirectoryBinding.centerId)
+    || [currentScript.dataset.locationId, currentScript.dataset.publicLocationId, locationName].filter(Boolean)
+      .some((value) => !directorySelectorMatches(value, requestedDirectoryBinding)))) {
+    showUnavailable();
+    return;
+  }
+
   if (centerId) {
     const eligibilityUrl = new URL(`${baseUrl}/api/public/kidcity-locations`);
     eligibilityUrl.searchParams.set("purpose", "inquiry");
@@ -240,6 +309,12 @@
         if (data.inquiryCenterEligible !== true) {
           showUnavailable();
           return;
+        }
+        if (requestedDirectoryBinding) {
+          const verified = Array.isArray(data.locations) && data.locations.some((row) =>
+            row.crmLocationId === requestedDirectoryBinding.identifier && row.locationId === requestedDirectoryBinding.identifier);
+          if (!verified) { showUnavailable(); return; }
+          verifiedDirectoryCenterIds.add(requestedDirectoryBinding.centerId);
         }
         loadTurnstile();
         render([]);
@@ -256,7 +331,7 @@
   if (resolvedLocationsUrl) {
     fetch(resolvedLocationsUrl)
       .then((response) => response.json())
-      .then((data) => render(data.locations || []))
+      .then(async (data) => render(await verifyDirectoryLocations(data.locations || [])))
       .catch(() => {
         target.innerHTML =
           '<p class="bee-suite-status" data-state="error">The inquiry form could not load. Please refresh the page.</p>';

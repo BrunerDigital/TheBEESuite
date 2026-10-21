@@ -1,3 +1,4 @@
+import { directoryInquiryBinding, isProtectedDirectoryInquiryCenterId } from "../src/lib/directory-inquiry-restoration";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -11,7 +12,7 @@ type Center = { id: string; status: string; crmLocationId: string; locationId: s
 
 // Execute the actual script main with memory-only storage; never construct a real
 // Prisma client, load environment files, connect to a database or run a live sync.
-async function runSync(locations: Location[], centers: Center[] = [], customFile = false) {
+export async function runSync(locations: Location[], centers: Center[] = [], customFile = false) {
   const effects = { lookups: 0, updates: [] as string[], creates: [] as string[], inputPath: "" };
   const prisma = { center: {
     findMany: async ({ where }: { where: { OR: Record<string, string>[] } }) => {
@@ -31,7 +32,7 @@ async function runSync(locations: Location[], centers: Center[] = [], customFile
     PrismaClient: class { constructor() { return prisma; } },
     readFileSync: (file: string) => { effects.inputPath = file; return JSON.stringify({ locations }); },
     join, canonicalSchoolLocationId, locationAliasesFromCustomFields,
-    isLeesSummitInquiryIdentifier, leesSummitInquiryRestoration: binding,
+    isLeesSummitInquiryIdentifier, leesSummitInquiryRestoration: binding, directoryInquiryBinding, isProtectedDirectoryInquiryCenterId,
     process: { env: { KIDCITY_ORGANIZATION_ID: "synthetic_org", ...(customFile ? { KIDCITY_OPEN_SCHOOLS_FILE: "/synthetic/custom.json" } : {}) }, cwd: () => "/synthetic" },
     console: { log: () => undefined },
   };
@@ -89,4 +90,29 @@ test("unrelated school sync continues updating its matched record", async () => 
   assert.deepEqual(effects.updates, ["synthetic_other"]);
   assert.deepEqual(effects.creates, []);
   assert.equal(other.status, "active");
+});
+
+test("three prospective directory schools cannot be activated by canonical, alias, name or address sync matches", async () => {
+  const { directoryInquiryRestorations } = await import("../src/lib/directory-inquiry-restoration");
+  for (const directoryBinding of directoryInquiryRestorations) {
+    const other = "Kid City USA - FL | Synthetic Other";
+    for (const location of [
+      { crmLocationId: directoryBinding.publicLocationId, locationId: other, name: "Synthetic" },
+      { crmLocationId: other, locationId: directoryBinding.publicLocationId.replace("Kid City USA - ", ""), name: "Synthetic" },
+      { crmLocationId: other, locationId: other, name: directoryBinding.name },
+    ]) {
+      const effects = await runSync([location], [], true);
+      assert.equal(effects.lookups, 0);
+      assert.deepEqual(effects.updates, []);
+      assert.deepEqual(effects.creates, []);
+    }
+    const center: Center = { id: directoryBinding.centerId, status: directoryBinding.status,
+      crmLocationId: directoryBinding.publicLocationId, locationId: directoryBinding.publicLocationId,
+      address: directoryBinding.address, customFields: {} };
+    const effects = await runSync([{ crmLocationId: other, locationId: other, name: "Synthetic legacy", address: center.address }], [center]);
+    assert.equal(effects.lookups, 1);
+    assert.deepEqual(effects.updates, []);
+    assert.deepEqual(effects.creates, []);
+    assert.equal(center.status, directoryBinding.status);
+  }
 });

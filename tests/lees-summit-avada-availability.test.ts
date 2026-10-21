@@ -14,8 +14,7 @@ async function runTemplate({ eligible = true, includeLocation = true, responseOk
   const form = {
     getAttribute: () => "https://fixture.invalid/api/inquiries",
     querySelector: (selector: string) => {
-      assert.equal(selector, 'option[value="' + identifier + '"]', "Availability must touch only the restored option");
-      return option;
+      return selector === 'option[value="' + identifier + '"]' ? option : null;
     },
   };
   vm.runInNewContext(source, {

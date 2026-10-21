@@ -1,3 +1,4 @@
+import { directoryInquiryRestorations, directoryInquiryBinding, directoryInquiryEnabled, isDirectoryInquiryIdentifier, isVerifiedDirectoryInquiryCenter } from "@/lib/directory-inquiry-restoration";
 import { NextRequest, NextResponse } from "next/server";
 import { EnrollmentStage, Prisma, UserRole } from "@prisma/client";
 import {
@@ -85,6 +86,7 @@ type IntakeCenter = {
 
 type IntakeCenterRecord = {
   id: string;
+  organizationId: string;
   name: string;
   crmLocationId: string | null;
   locationId: string | null;
@@ -109,6 +111,7 @@ class InquiryRoutingError extends Error {
 
 const intakeCenterSelect = {
   id: true,
+  organizationId: true,
   name: true,
   crmLocationId: true,
   locationId: true,
@@ -311,23 +314,61 @@ async function getFallbackIntakeCenter(): Promise<IntakeCenter> {
 async function getIntakeCenter({
   locationId,
   publicLocationId,
+  locationName,
   centerId,
   strictLocationRouting,
   brandName,
 }: {
   locationId: string;
   publicLocationId?: string;
+  locationName?: string;
   centerId?: string;
   strictLocationRouting: boolean;
   brandName?: string;
 }): Promise<IntakeCenter> {
-  function eligible(center: IntakeCenterRecord | IntakeCenter) {
+  async function eligible(center: IntakeCenterRecord | IntakeCenter) {
+    // Aliases and the configured generic default can resolve a protected school
+    // without a recognized public selector. Recheck its full persisted binding
+    // before ordinary routing can use the resolved identity or its mailbox.
+    const binding = directoryInquiryRestorations.find((item) => item.centerId === center.id);
+    if (binding) {
+      if (!directoryInquiryEnabled(binding, process.env)) {
+        throw new InquiryRoutingError("This school is not currently accepting public inquiries.", "ineligible_public_location");
+      }
+      const restored = await prisma.center.findFirst({
+        where: { id: binding.centerId, organization: { tenant: { slug: "kid-city-usa" } } },
+        select: intakeCenterSelect,
+      });
+      if (!isVerifiedDirectoryInquiryCenter(restored, binding, true)) {
+        throw new InquiryRoutingError("This school's inquiry routing needs verification.", "ineligible_public_location");
+      }
+      return toIntakeCenter(restored!);
+    }
     if (!isEligiblePublicInquiryCenter(center, strictLocationRouting)) {
       throw new InquiryRoutingError("The selected school is not accepting public inquiries. Please choose another location or contact corporate.", "ineligible_public_location");
     }
     return "organization" in center ? toIntakeCenter(center) : center;
   }
   const requestedCenterId = clean(centerId);
+  const directoryBinding = [requestedCenterId, locationId, publicLocationId, locationName]
+    .map(directoryInquiryBinding).find(Boolean);
+  if (directoryBinding) {
+    const routedLocationId = requestedCenterId === directoryBinding.centerId && locationId === requestedCenterId ? "" : locationId;
+    if (!directoryInquiryEnabled(directoryBinding, process.env)
+      || (requestedCenterId && requestedCenterId !== directoryBinding.centerId)
+      || [routedLocationId, publicLocationId, locationName].filter(Boolean)
+        .some((value) => !isDirectoryInquiryIdentifier(value, directoryBinding))) {
+      throw new InquiryRoutingError("This school is not currently accepting public inquiries.", "ineligible_public_location");
+    }
+    const restored = await prisma.center.findFirst({
+      where: { id: directoryBinding.centerId, organization: { tenant: { slug: "kid-city-usa" } } },
+      select: intakeCenterSelect,
+    });
+    if (!isVerifiedDirectoryInquiryCenter(restored, directoryBinding, true)) {
+      throw new InquiryRoutingError("This school's inquiry routing needs verification.", "ineligible_public_location");
+    }
+    return toIntakeCenter(restored!);
+  }
   const restorationRequested = requestedCenterId === leesSummitInquiryRestoration.centerId
     || [locationId, publicLocationId].some(isLeesSummitInquiryIdentifier);
   if (restorationRequested) {
@@ -561,6 +602,7 @@ async function POSTHandler(request: NextRequest) {
     const center = await getIntakeCenter({
       locationId: payload.locationId,
       publicLocationId: payload.publicLocationId,
+      locationName: payload.locationName,
       centerId: payload.centerId,
       strictLocationRouting: isKidCityInquiry(payload),
       brandName: payload.brandName,

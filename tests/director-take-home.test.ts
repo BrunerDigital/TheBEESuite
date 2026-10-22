@@ -47,9 +47,16 @@ test("take-home navigation and current registration guidance agree", () => {
   assert.match(guide, /Parent Portal invitations are separate/);
   const embedded = html.match(/<details id="guide-46"[\s\S]*?<div class="body">([\s\S]*?)<\/div><\/details>/)?.[1];
   assert.ok(embedded);
-  const plain = (text: string) => text.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/\*\*/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").trim();
-  const writtenSteps = [...guide.matchAll(/^\d+\. (.+)$/gm)].map(match => plain(match[1]));
-  const embeddedSteps = [...embedded.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(match => plain(match[1]));
+  const writtenSteps = [...guide.matchAll(/^\d+\. (.+)$/gm)].map(match => match[1]
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>'));
+  const embeddedSteps = [...embedded.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(match => match[1]);
+  const searchIndex = html.match(/<details id="guide-46" data-search="([\s\S]*?)">/)?.[1];
+  assert.ok(searchIndex);
+  for (const term of ["copy registration link", "preview form", "application submitted", "registration packets", "referred family"]) {
+    assert.ok(searchIndex.includes(term), `Current guide must be discoverable by ${term}`);
+  }
   assert.equal(writtenSteps.length, 7);
   assert.deepEqual(embeddedSteps, writtenSteps, "Expanded guide must match the downloadable current procedure");
 });

@@ -133,6 +133,11 @@ export default function Home() {
                 >
                   Help &amp; Guides
                 </Link>
+                {/* Full document navigation opens the existing static training destination. */}
+                {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                <a href="/resources/director-training" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-600">
+                  Director take-home
+                </a>
               </div>
               <PublicThemeToggle />
               <Link

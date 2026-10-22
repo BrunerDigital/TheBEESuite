@@ -45,4 +45,11 @@ test("take-home navigation and current registration guidance agree", () => {
   }
   assert.match(html, /Every lead, whatever its source, enters BEE Suite/);
   assert.match(guide, /Parent Portal invitations are separate/);
+  const embedded = html.match(/<details id="guide-46"[\s\S]*?<div class="body">([\s\S]*?)<\/div><\/details>/)?.[1];
+  assert.ok(embedded);
+  const plain = (text: string) => text.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/\*\*/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").trim();
+  const writtenSteps = [...guide.matchAll(/^\d+\. (.+)$/gm)].map(match => plain(match[1]));
+  const embeddedSteps = [...embedded.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(match => plain(match[1]));
+  assert.equal(writtenSteps.length, 7);
+  assert.deepEqual(embeddedSteps, writtenSteps, "Expanded guide must match the downloadable current procedure");
 });

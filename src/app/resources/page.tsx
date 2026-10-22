@@ -293,9 +293,9 @@ const guides: ResourceGuide[] = [
     icon: Mail,
     steps: [
       "Registration and parent app access are separate: send the school registration form when paperwork is still needed; send a Parent App Invite after the family, guardian, and child are saved and verified.",
-      "From Enrollment CRM > Leads, select the lead and choose Send registration form. To copy the direct school link, use Dashboard > Explore dashboard details > Registration and enrollment forms > Copy registration link.",
-      "Open Families & Communication, choose Families, and use Add Family, Parent + Child for a new enrollment.",
-      "Confirm School / center. Enter the family, guardian, and child; leave Prior balance owed at cutover blank or 0 unless a verified pre-BEE Suite debt exists.",
+      "From Enrollment CRM > Leads, select the lead and choose Send registration form. To copy the direct school link, use Dashboard > Explore dashboard details > Registration and enrollment forms > the correct school card > Copy registration link. Confirm the school in Preview form before sharing.",
+      "Review the submitted packet in CRM Application Submitted and Registration Packets > Forms. Reconcile the existing lead, packet and saved family before creating anything new; a submitted form is not a completed enrollment.",
+      "Only when no existing record matches and manual entry is the approved next step, use Families & Communication > Families > Add Family, Parent + Child. Confirm School / center and verified guardian/child details. Leave Prior balance owed at cutover blank or 0 unless verified debt exists.",
       "Save, reopen the family, and confirm the sticky school/family context, guardian relationship, personal email, phone, linked children, active or pending enrollment, classroom, and safety notes.",
       "If the family is already enrolled and its record is complete, skip the registration form. Scroll to Parent Portal Access, select the exact guardian, and choose Send Parent App Invite. A safely entered current family does not require a prior import batch.",
       "Read the invitation result: Accepted means the email service received it for delivery; Delivered confirms it reached the recipient; Failed or Expired needs follow-up.",
@@ -679,11 +679,11 @@ export default function ResourcesPage() {
           </div>
 
           <section aria-labelledby="director-training-heading" className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-6">
-            <h2 id="director-training-heading" className="text-2xl font-semibold text-white">Director video tutorials</h2>
-            <p className="mt-3 text-slate-200">Watch narrated lessons, follow step-by-step task guides, and practice with the director checklist. Examples use synthetic records; each lesson explains what it demonstrates.</p>
+            <h2 id="director-training-heading" className="text-2xl font-semibold text-white">Director take-home hub</h2>
+            <p className="mt-3 text-slate-200">One destination for 36 captioned tutorials, 50 task guides, the suite overview, marketing downloads, the parent referral program and enrollment-form help. School downloads require an authorized sign-in; tutorials use synthetic examples.</p>
             {/* Static HTML requires a full document load rather than an App Router transition. */}
             {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-            <a href="/training/directors/current/index.html" className="mt-4 inline-block rounded-lg bg-amber-300 px-5 py-3 font-semibold text-slate-950 underline-offset-4 hover:underline">Open the director training library</a>
+            <a href="/resources/director-training" className="mt-4 inline-block rounded-lg bg-amber-300 px-5 py-3 font-semibold text-slate-950 underline-offset-4 hover:underline">Open the director take-home hub</a>
           </section>
 
           {guides.map((guide) => (

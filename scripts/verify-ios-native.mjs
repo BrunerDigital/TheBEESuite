@@ -11,6 +11,7 @@ import { verifyIOSKeyboard } from "./verify-ios-keyboard.mjs";
 
 // A fresh iOS 26 simulator performs OS data migration before SpringBoard is ready.
 export const SIMULATOR_BOOT_TIMEOUT_MS = 12 * 60 * 1000;
+export const SIMULATOR_LAUNCH_TIMEOUT_MS = 5 * 60 * 1000;
 export const VERIFICATION_TIMEOUT_MS = 45 * 60 * 1000;
 
 export function launchProcessId(output, target) {
@@ -198,7 +199,8 @@ export async function verifyNative(role) {
     run("xcrun", ["simctl", "install", createdDevice, simulatorApp]);
     check("Unsigned Release installed on isolated iPhone simulator");
     for (const launch of ["cold", "relaunch"]) {
-      const result = run("xcrun", ["simctl", "launch", "--terminate-running-process", createdDevice, target.bundleId]);
+      const result = run("xcrun", ["simctl", "launch", "--terminate-running-process", createdDevice, target.bundleId],
+        { timeout: SIMULATOR_LAUNCH_TIMEOUT_MS });
       const pid = launchProcessId(result, target);
       report.launchedProcess = { launch, pid };
       let loginVisible = false;

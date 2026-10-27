@@ -1398,6 +1398,7 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
         reason: clean(body.reason) || "Director invoice edit",
       },
     } });
+    await tx.center.update({ where: { id: target.centerId }, data: { updatedAt: new Date() } });
 
     return { updated: true, invoice: updatedInvoice, deltaCents: amountDeltaCents, balanceAfterCents, ledgerEntryId };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })).catch((error: unknown) => {

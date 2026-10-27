@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { NextRequest } from "next/server";
 
-let state, actor, authorized, failSerialization, failAfterTransaction, failAudit, locks, gate = Promise.resolve();
+let state, actor, authorized, failSerialization, failAfterTransaction, failAudit, failRefresh, locks, gate = Promise.resolve();
 function reset() {
   actor = { id: "fake-operator", email: "operator@example.test", role: "BRAND_ADMIN", tenantId: "fake-tenant",
     identityTenantId: "fake-tenant", sessionVersion: 1, centerIds: ["fake-school"], workspace: { mode: "center", activeCenterId: "fake-school" } };
-  authorized = true; failSerialization = 0; failAfterTransaction = 0; failAudit = false; locks = [];
+  authorized = true; failSerialization = 0; failAfterTransaction = 0; failAudit = false; failRefresh = false; locks = [];
   state = {
     invoice: { id: "fake-invoice", number: "FAKE-1", billingAccountId: "fake-account", totalCents: 22000,
       status: "PAID", dueDate: new Date("2026-01-01T00:00:00Z"), customFields: {},
@@ -16,7 +16,7 @@ function reset() {
     payment: { id: "fake-payment", billingAccountId: "fake-account", amountCents: 22000, status: "PAID", customFields: {} },
     ledger: [{ id: "fake-invoice-entry", invoiceId: "fake-invoice", paymentId: null, type: "invoice", amountCents: 22000 },
       { id: "fake-payment-entry", invoiceId: "fake-invoice", paymentId: "fake-payment", type: "payment", amountCents: -22000 }],
-    audit: [],
+    audit: [], centerRefreshes: [],
   };
 }
 const snapshot = () => structuredClone({ ...state.invoice, ledgerEntries: state.ledger.filter(row => row.invoiceId === state.invoice.id), billingAccount: state.account });
@@ -59,6 +59,7 @@ const prisma = {
   auditLog: { async create({ data }) { if (failAudit) throw new Error("synthetic audit failure"); state.audit.push(data); return data; } },
   user: { async findFirst() { return authorized ? { id: actor.id } : null; } },
   center: {
+    async update({ where, data }) { if (failRefresh) throw new Error("synthetic live refresh failure"); assert.equal(where.id, "fake-school"); assert.ok(data.updatedAt instanceof Date); state.centerRefreshes.push(where.id); return { id: where.id }; },
     async findUnique() { return { id: state.account.family.centerId, organization: state.account.family.center.organization }; },
     async findFirst({ where }) { return where.id === state.account.family.centerId && where.organization.tenantId === state.account.family.center.organization.tenantId ? { id: where.id } : null; },
   },
@@ -93,6 +94,7 @@ test("220 paid minus 170 refund then revised 50 is PAID, zero owed, and unavaila
   assert.equal(state.audit.length, 1); assert.equal(state.audit[0].action, "billing.invoice.updated");
   assert.equal(state.audit[0].metadata.previousTotalCents, 22000); assert.equal(state.audit[0].metadata.updatedTotalCents, 5000);
   assert.equal(state.audit[0].metadata.updatedStatus, "PAID");
+  assert.deepEqual(state.centerRefreshes, ["fake-school"]);
   assert.match(invoicePaymentActionBlockReason({ invoiceStatus: state.invoice.status, invoiceTotalCents: state.invoice.totalCents }), /not open/);
 });
 test("full refund, underpayment and no payment remain OPEN; overpayment remains credited and PAID", async () => {
@@ -107,6 +109,7 @@ test("repeated and concurrent identical PATCHes write one adjustment/audit and n
   reset(); await refund(); const before = state.ledger.filter(row => row.type === "refund").length;
   const responses = await Promise.all([patch(), patch()]); assert.deepEqual(responses.map(r => r.status), [200, 200]);
   assert.equal((await patch()).status, 200); assert.equal(state.audit.length, 1);
+  assert.deepEqual(state.centerRefreshes, ["fake-school"]);
   assert.equal(state.ledger.filter(row => row.type === "invoice_adjustment").length, 1);
   assert.equal(state.ledger.filter(row => row.type === "refund").length, before); assert.equal(state.account.balanceCents, 0);
 });
@@ -119,7 +122,7 @@ test("unauthorized role, school, foreign tenant, changed authority and mismatche
   for (const change of [() => { actor.role = "TEACHER"; }, () => { actor.centerIds = []; },
     () => { state.account.family.center.organization.tenantId = "foreign-tenant"; }, () => { authorized = false; }]) {
     reset(); await refund(); change(); const response = await patch(); assert.ok([403, 404].includes(response.status));
-    assert.equal(state.invoice.totalCents, 22000); assert.equal(state.audit.length, 0);
+    assert.equal(state.invoice.totalCents, 22000); assert.equal(state.audit.length, 0); assert.equal(state.centerRefreshes.length, 0);
   }
   reset(); await refund(); assert.equal((await patch({ familyId: "foreign-family" })).status, 403);
 });
@@ -137,6 +140,11 @@ test("serialization retries recompute once, and audit failure rolls back the ent
   assert.equal(state.ledger.filter(row => row.type === "invoice_adjustment").length, 1);
   reset(); await refund(); failAudit = true; await assert.rejects(patch(), /synthetic audit failure/);
   assert.equal(state.invoice.totalCents, 22000); assert.equal(state.invoice.status, "OPEN"); assert.equal(state.account.balanceCents, 17000);
+  assert.equal(state.ledger.filter(row => row.type === "invoice_adjustment").length, 0);
+  assert.equal(state.centerRefreshes.length, 0);
+  reset(); await refund(); failRefresh = true; await assert.rejects(patch(), /synthetic live refresh failure/);
+  assert.equal(state.invoice.totalCents, 22000); assert.equal(state.invoice.status, "OPEN"); assert.equal(state.account.balanceCents, 17000);
+  assert.equal(state.audit.length, 0); assert.equal(state.centerRefreshes.length, 0);
   assert.equal(state.ledger.filter(row => row.type === "invoice_adjustment").length, 0);
 });
 test("only this invoice's payment allocation is counted, net of its refund", async () => {

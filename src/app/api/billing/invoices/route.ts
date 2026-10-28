@@ -1261,7 +1261,7 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
     const invoiceOutstandingAfterCents = ledgerBalanceAfterCents - allocatedCreditCents;
     // A household credit is not proof this invoice was paid. Require its own
     // charge ledger before using its linked payments/refunds to settle it.
-    const hasChargeLedger = invoice.ledgerEntries.some((entry) => !entry.paymentId && entry.amountCents > 0);
+    const hasChargeLedger = invoice.ledgerEntries.some((entry) => entry.type === "invoice" && !entry.paymentId && entry.amountCents > 0);
     const status = invoice.status === PaymentStatus.OPEN && hasChargeLedger && invoiceOutstandingAfterCents <= 0
       ? PaymentStatus.PAID : invoice.status;
     if (!fieldsChanged && status === invoice.status) {

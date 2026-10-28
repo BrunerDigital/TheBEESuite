@@ -18,7 +18,7 @@ For every school in the explicitly selected rollout wave:
 
 CRM stages are operational follow-up labels. `APPLICATION_SENT`, `APPLICATION_SUBMITTED`, `DOCUMENTS_PENDING`, `DEPOSIT_PENDING`, and `ENROLLED` do not themselves create a family, child, guardian, registration approval, or enrollment record.
 
-Director registration approval is the boundary that creates the linked family/child/guardian data and enrollment record. The CRM API returns a `stageSemantics` disclosure. Manual lead creation as `ENROLLED` and moving a lead to `ENROLLED` without a linked approved enrollment record return HTTP `409` with code `approved_enrollment_required`. Parent invitation remains a separate explicit opt-in during approval.
+Director registration approval is the boundary that creates the linked family/child/guardian data and enrollment record. The CRM API returns a `stageSemantics` disclosure. Authorized CRM managers, including directors, can create or move a lead to `ENROLLED` without a linked enrollment record, including when enrollment forms were completed on paper. Parent invitation remains a separate explicit opt-in during approval.
 
 Use `ENROLLMENT_CRM_DELIVERY_BACKUP_EVIDENCE_TEMPLATE.md` once per selected school for notification, Google Sheets backup, retry, isolation, and signoff evidence.
 
@@ -103,7 +103,7 @@ Brenden names the selected rollout schools and approves test accounts/test-famil
 7. In an approved safe environment, exercise one notification or backup failure through retry. Reconcile initial/final delivery status and attempt counts and prove no duplicate message or row.
 8. From the School A CRM lead, open the school application. Confirm School A is preselected; replace the URL with an invalid center ID and confirm no school is preselected.
 9. Submit the application with the same normalized guardian email. Confirm the existing School A lead is updated, no duplicate School A lead is created, and a School B lead with the same email remains separate.
-10. Before approval, attempt to set the CRM stage to `ENROLLED`; require HTTP `409` and code `approved_enrollment_required`. Confirm no family, child, guardian, enrollment, or parent invitation was created by the stage attempt.
+10. As an authorized director, set a lead without a linked enrollment record to `ENROLLED`; require HTTP `200`, the updated stage, an audit entry, and the welcome follow-up task. Confirm no family, child, guardian, enrollment, or parent invitation was created by the stage change. Verify another school’s director and unauthorized roles cannot update the lead.
 11. Approve the registration as the authorized School A director with parent invitation explicitly off. Verify the linked family, child, guardians, enrollment record, checklist, registration review, audit log, and absence from School B. Confirm no invitation was sent.
 12. Set the CRM stage to `ENROLLED` only after the linked enrollment exists and confirm the API `stageSemantics` plus UI show both the operational CRM stage and the linked onboarding record stage.
 13. Complete `ENROLLMENT_CRM_DELIVERY_BACKUP_EVIDENCE_TEMPLATE.md`, obtain director/corporate/technical `GO` or `NO-GO`, and record only actual approved accounts, real mailbox evidence, school selection, and signed decisions in `BRENDENS_TASKS.md`.

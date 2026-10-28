@@ -158,7 +158,12 @@ test("only this invoice's payment allocation is counted, net of its refund", asy
   assert.equal(state.ledger.filter(row => row.invoiceId === "other-invoice").length, 2);
 });
 test("an unrelated family credit or absent invoice ledger cannot prove this invoice paid", async () => {
-  reset(); state.invoice.status = "OPEN"; state.ledger = []; await patch(); assert.equal(state.invoice.status, "OPEN");
+  reset(); state.invoice.status = "OPEN"; state.ledger = []; state.account.balanceCents = 22000;
+  for (const amountCents of [5000, 6000, 5500]) {
+    assert.equal((await patch({ amountCents })).status, 200);
+    assert.equal(state.invoice.status, "OPEN");
+    assert.equal(state.account.balanceCents, amountCents);
+  }
   reset(); await refund(); state.account.balanceCents = 0; await patch({ amountCents: 10000 }); assert.equal(state.invoice.status, "OPEN");
 });
 

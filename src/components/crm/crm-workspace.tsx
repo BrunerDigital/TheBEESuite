@@ -1951,7 +1951,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2 text-xs leading-5">
                       {selectedLeadDetails?.enrollments.length
                         ? `${selectedLeadDetails.enrollments.length} director-approved linked enrollment record(s). Current onboarding record stage: ${stageLabels[selectedLeadDetails.enrollments[0].stage]}.`
-                        : "No director-approved enrollment record is linked yet. The Enrolled stage remains unavailable until registration is approved."}
+                        : "No enrollment record is linked yet. You can move this lead to Enrolled when enrollment is completed, including with paper forms."}
                     </div>
                     <Select
                       value={selectedLead.stage}

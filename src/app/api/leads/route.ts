@@ -145,15 +145,6 @@ async function POSTHandler(request: NextRequest) {
   if (requestedStage && !stage) {
     return NextResponse.json({ ok: false, errors: { stage: "Pipeline stage is invalid." } }, { status: 400 });
   }
-  if (stage) {
-    const boundary = crmStageApprovalBoundary(stage, 0);
-    if (!boundary.allowed) {
-      return NextResponse.json(
-        { ok: false, error: boundary.message, code: boundary.code, stageSemantics: boundary },
-        { status: 409 },
-      );
-    }
-  }
 
   let centerId: string;
   try {

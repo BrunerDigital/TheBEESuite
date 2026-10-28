@@ -69,11 +69,12 @@ test("two-school CRM isolation denies each director access to the other school",
   assert.equal(canAccessCenter(schoolBDirector, "school_b"), true);
 });
 
-test("CRM Enrolled stage requires a linked director-approved enrollment record", () => {
-  const blocked = crmStageApprovalBoundary(EnrollmentStage.ENROLLED, 0);
-  assert.equal(blocked.allowed, false);
-  assert.equal(blocked.code, "approved_enrollment_required");
-  assert.match(blocked.message, /director registration approval/i);
+test("CRM Enrolled stage supports paper enrollment without a linked enrollment record", () => {
+  const paperEnrollment = crmStageApprovalBoundary(EnrollmentStage.ENROLLED, 0);
+  assert.equal(paperEnrollment.allowed, true);
+  assert.equal(paperEnrollment.code, null);
+  assert.equal(paperEnrollment.approvedRecordExists, false);
+  assert.equal(paperEnrollment.message, crmPipelineStageDisclosure);
 
   const allowed = crmStageApprovalBoundary(EnrollmentStage.ENROLLED, 1);
   assert.equal(allowed.allowed, true);

@@ -145,15 +145,6 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: false, error: "You do not have access to this lead." }, { status: 403 });
   }
 
-  if (stage) {
-    const boundary = crmStageApprovalBoundary(stage, existing._count.enrollments);
-    if (!boundary.allowed) {
-      return NextResponse.json(
-        { ok: false, error: boundary.message, code: boundary.code, stageSemantics: boundary },
-        { status: 409 },
-      );
-    }
-  }
 
   const data: Prisma.LeadUpdateInput = {};
   const fieldChanges: string[] = [];

@@ -33,18 +33,15 @@ export const stageLabels: Record<EnrollmentStage, string> = {
 export const crmPipelineStageDisclosure =
   "CRM stages track follow-up progress only. They do not create or approve family, child, guardian, or enrollment records. Changing a stage does not create a calendar appointment. To add a tour appointment, enter its date and time and choose Schedule tour.";
 
-export function crmStageApprovalBoundary(stage: EnrollmentStage, approvedEnrollmentRecordCount: number) {
+export function crmStageApprovalBoundary(_stage: EnrollmentStage, approvedEnrollmentRecordCount: number) {
   const approvedRecordExists = approvedEnrollmentRecordCount > 0;
-  const allowed = stage !== EnrollmentStage.ENROLLED || approvedRecordExists;
   return {
-    allowed,
-    code: allowed ? null : "approved_enrollment_required",
+    allowed: true,
+    code: null,
     approvedEnrollmentRecordCount,
     approvedRecordExists,
     disclosure: crmPipelineStageDisclosure,
-    message: allowed
-      ? crmPipelineStageDisclosure
-      : "The CRM stage cannot be moved to Enrolled until director registration approval has created a linked enrollment record.",
+    message: crmPipelineStageDisclosure,
   };
 }
 

@@ -134,11 +134,14 @@ final class KeyboardUITests: XCTestCase {
         eventually("Simulator processes the landscape request") { XCUIDevice.shared.orientation == .landscapeLeft }
         // An immediate portrait-frame check can pass before UIKit rotates.
         // Observe the settled request long enough to catch an unwanted rotation.
-        let landscapeFrame = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            self.app.frame.width > self.app.frame.height
-        }, object: nil)
-        landscapeFrame.isInverted = true
-        XCTAssertEqual(XCTWaiter.wait(for: [landscapeFrame], timeout: 2), .completed, "Native app retains its portrait lock after rotation settles")
+        // Complete each synchronous accessibility snapshot before sampling again;
+        // a timed predicate waiter can interrupt a snapshot while it is resolving.
+        let portraitObservationDeadline = ProcessInfo.processInfo.systemUptime + 2
+        repeat {
+            let frame = app.frame
+            XCTAssertGreaterThan(frame.height, frame.width, "Native app retains its portrait lock after rotation settles")
+            Thread.sleep(forTimeInterval: 0.1)
+        } while ProcessInfo.processInfo.systemUptime < portraitObservationDeadline
         XCTAssertGreaterThan(app.frame.height, app.frame.width)
         XCTAssertTrue((field.value as? String)?.contains(draft) == true, "Rotation keeps the draft")
         evidence("rotation-draft-retained")

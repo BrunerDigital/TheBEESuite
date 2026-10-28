@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { assertPackagedConfiguration, nativeTarget, selectSimulatorTemplate, unsignedBuildArguments, SIMULATOR_BOOT_TIMEOUT_MS, VERIFICATION_TIMEOUT_MS, launchProcessId, loginScreenVisible, assertProcessAlive, matchingCrashReport } from "../scripts/verify-ios-native.mjs";
+import { assertPackagedConfiguration, nativeTarget, selectSimulatorTemplate, unsignedBuildArguments, SIMULATOR_BOOT_TIMEOUT_MS, SIMULATOR_LAUNCH_TIMEOUT_MS, VERIFICATION_TIMEOUT_MS, launchProcessId, loginScreenVisible, assertProcessAlive, matchingCrashReport } from "../scripts/verify-ios-native.mjs";
 
 test("native verifier restricts roles and aligns projects with production routes", () => {
   assert.equal(nativeTarget("parent").project, "ios/App/App.xcodeproj");
@@ -116,6 +116,12 @@ test("fresh simulator migration is bounded and does not compete with asset compi
   assert.equal(VERIFICATION_TIMEOUT_MS, 45 * 60 * 1000);
   assert.match(script, /timeout: Math\.min\(timeout, remaining\)/);
   assert.match(readFileSync(".github/workflows/ios-native-verify.yml", "utf8"), /timeout-minutes: 60/);
+});
+
+test("simulator app launch allows slower first launches on hosted runners", () => {
+  assert.ok(SIMULATOR_LAUNCH_TIMEOUT_MS >= 5 * 60 * 1000);
+  assert.match(readFileSync("scripts/verify-ios-native.mjs", "utf8"),
+    /simctl", "launch"[\s\S]*?\{ timeout: SIMULATOR_LAUNCH_TIMEOUT_MS \}/);
 });
 
 test("native liveness uses only the exact process returned for the selected bundle", () => {

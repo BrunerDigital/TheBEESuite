@@ -48,6 +48,8 @@ import {
 import { offlinePaymentExternalId, offlinePaymentPaidAt, offlinePaymentRequestId, offlinePaymentRequestIdentity } from "@/lib/offline-payment-request";
 
 import { withApiLogging } from "@/lib/request-response-logging";
+import { authorizeBillingActorForTarget } from "@/lib/billing-actor-authorization";
+import { retrySerialization } from "@/lib/retry-serialization";
 export const runtime = "nodejs";
 
 type CurrentBillingUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
@@ -1173,42 +1175,112 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
   if (!centerId || !canAccessCenter(user, centerId)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this invoice." }, { status: 403 });
   }
-  if (invoice.status !== PaymentStatus.OPEN) {
-    return NextResponse.json({ ok: false, error: "Only open invoices can be edited." }, { status: 400 });
+  const targetCenter = await prisma.center.findUnique({
+    where: { id: centerId }, select: { organization: { select: { tenantId: true } } },
+  });
+  if (targetCenter?.organization.tenantId !== user.tenantId) {
+    return NextResponse.json({ ok: false, error: "Invoice not found." }, { status: 404 });
   }
-  if ((amountProvided || descriptionProvided) && invoiceResponsibilitySeparation(invoice.customFields)) {
-    return NextResponse.json(
-      { ok: false, error: "The amount or item description cannot be changed after family and agency responsibility has been separated." },
-      { status: 409 },
-    );
-  }
+  const target = { invoiceId: invoice.id, billingAccountId: invoice.billingAccount.id,
+    familyId: invoice.billingAccount.family.id, centerId, tenantId: user.tenantId };
 
-  const currentDescription = invoice.items[0]?.description || clean((jsonObject(invoice.customFields)).description) || invoice.number;
-  const description = descriptionProvided ? requestedDescription : currentDescription;
-  const totalCents = nextTotalCents ?? invoice.totalCents;
-  const dueDate = nextDueDate ?? invoice.dueDate;
-  const amountDeltaCents = totalCents - invoice.totalCents;
-  const amountChanged = amountDeltaCents !== 0;
-  const dueDateChanged = dueDate.getTime() !== invoice.dueDate.getTime();
-  const descriptionChanged = description !== currentDescription;
-
-  if (!amountChanged && !dueDateChanged && !descriptionChanged) {
-    return NextResponse.json({
-      ok: true,
-      updated: false,
-      invoice: {
-        id: invoice.id,
-        number: invoice.number,
-        status: invoice.status,
-        dueDate: invoice.dueDate,
-        totalCents: invoice.totalCents,
-        items: invoice.items,
+  const result = await retrySerialization(() => prisma.$transaction(async (tx) => {
+    // Match payment claims/refund application: lock account before invoice, then
+    // recompute from current rows. A stale request must never double its delta.
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "id" = ${target.billingAccountId} FOR UPDATE`);
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Invoice" WHERE "id" = ${target.invoiceId} FOR UPDATE`);
+    const invoice = await tx.invoice.findUnique({
+      where: { id: target.invoiceId },
+      include: {
+        billingAccount: { include: { family: true } },
+        items: { orderBy: { id: "asc" }, select: { id: true, description: true, amountCents: true, productId: true } },
+        ledgerEntries: { select: { amountCents: true, paymentId: true, type: true, externalId: true, sourceSystem: true, metadata: true } },
       },
-      deltaCents: 0,
     });
-  }
+    if (!invoice || invoice.billingAccountId !== target.billingAccountId
+      || invoice.billingAccount.family.id !== target.familyId
+      || invoice.billingAccount.family.centerId !== target.centerId) {
+      return { error: "Invoice changed. Refresh and review it again.", status: 409 };
+    }
+    if (!await authorizeBillingActorForTarget(tx, user, target)) {
+      return { error: "You no longer have access to this invoice.", status: 403 };
+    }
+    if ((amountProvided || descriptionProvided) && invoiceResponsibilitySeparation(invoice.customFields)) {
+      return { error: "The amount or item description cannot be changed after family and agency responsibility has been separated.", status: 409 };
+    }
 
-  const result = await prisma.$transaction(async (tx) => {
+    const currentDescription = invoice.items[0]?.description || clean((jsonObject(invoice.customFields)).description) || invoice.number;
+    const description = descriptionProvided ? requestedDescription : currentDescription;
+    const totalCents = nextTotalCents ?? invoice.totalCents;
+    const dueDate = nextDueDate ?? invoice.dueDate;
+    const amountDeltaCents = totalCents - invoice.totalCents;
+    const amountChanged = amountDeltaCents !== 0;
+    const dueDateChanged = dueDate.getTime() !== invoice.dueDate.getTime();
+    const descriptionChanged = description !== currentDescription;
+
+    const fieldsChanged = amountChanged || dueDateChanged || descriptionChanged;
+    if (invoice.status !== PaymentStatus.OPEN && !(invoice.status === PaymentStatus.PAID && !fieldsChanged)) {
+      return { error: "Only open invoices can be edited.", status: 400 };
+    }
+    const ledgerBalanceAfterCents = invoiceLedgerBalanceCents(invoice.ledgerEntries) + amountDeltaCents;
+    // Credit-first collection records an invoice-scoped allocation as a zero-
+    // dollar marker; its balance effect already occurred in the household pool.
+    // Count only that canonical marker, never payment metadata or pool balance.
+    const creditMarkers = invoice.ledgerEntries.filter((entry) => entry.type === "account_credit_application" && entry.amountCents === 0);
+    let allocatedCreditCents = 0;
+    if (creditMarkers.length) {
+      const marker = creditMarkers[0];
+      const allocation = jsonObject(marker.metadata);
+      const credit = allocation.accountCreditAppliedCents;
+      const principal = allocation.stripeChargePrincipalCents;
+      const originalTotal = allocation.invoiceTotalCents;
+      if (creditMarkers.length !== 1 || marker.sourceSystem !== "bee_suite"
+        || marker.externalId !== `account-credit:invoice:${invoice.id}`
+        || typeof credit !== "number" || !Number.isSafeInteger(credit) || credit <= 0
+        || typeof principal !== "number" || !Number.isSafeInteger(principal) || principal < 0
+        || typeof originalTotal !== "number" || !Number.isSafeInteger(originalTotal) || originalTotal <= 0
+        || credit + principal !== originalTotal) {
+        return { error: "This invoice's account-credit allocation requires billing review before correction.", status: 409 };
+      }
+      // Pool refunds are not allocated back to individual credit markers. Do
+      // not treat a historical allocation as still funded when that is unknown.
+      const poolRefund = await tx.ledgerEntry.findFirst({
+        where: { billingAccountId: target.billingAccountId, invoiceId: null, type: "refund", amountCents: { gt: 0 } },
+        select: { id: true },
+      });
+      if (poolRefund) return { error: "Refunded household credit requires invoice-allocation review before correction.", status: 409 };
+      allocatedCreditCents = credit;
+    } else if (!invoice.ledgerEntries.some((entry) => entry.type === "account_credit_application" && entry.amountCents < 0)
+      && (jsonObject(invoice.customFields).paidByBalancePayment === true
+        || jsonObject(invoice.customFields).paidByAccountCredit === true
+        || jsonObject(invoice.customFields).paidWithAccountCredit === true)) {
+      // Flags alone do not prove coverage. A posted negative credit application
+      // already affects the invoice ledger sum and must not be deducted again.
+      return { error: "This pooled-payment invoice requires allocation review before correction.", status: 409 };
+    }
+    const invoiceOutstandingAfterCents = ledgerBalanceAfterCents - allocatedCreditCents;
+    // A household credit is not proof this invoice was paid. Require its own
+    // charge ledger before using its linked payments/refunds to settle it.
+    const hasChargeLedger = invoice.ledgerEntries.some((entry) => entry.type === "invoice" && !entry.paymentId && entry.amountCents > 0);
+    const status = invoice.status === PaymentStatus.OPEN && hasChargeLedger && invoiceOutstandingAfterCents <= 0
+      ? PaymentStatus.PAID : invoice.status;
+    if (!fieldsChanged && status === invoice.status) {
+      return {
+        updated: false,
+        invoice: {
+          id: invoice.id,
+          number: invoice.number,
+          status: invoice.status,
+          dueDate: invoice.dueDate,
+          totalCents: invoice.totalCents,
+          items: invoice.items,
+        },
+        deltaCents: 0,
+        balanceAfterCents: invoice.billingAccount.balanceCents,
+        ledgerEntryId: null,
+      };
+    }
+
     const now = new Date();
     const currentFields = jsonObject(invoice.customFields);
     await tx.invoice.update({
@@ -1216,6 +1288,7 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
       data: {
         totalCents,
         dueDate,
+        status,
         customFields: {
           ...currentFields,
           lastEditedAt: now.toISOString(),
@@ -1225,6 +1298,7 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
           lastEditPreviousTotalCents: invoice.totalCents,
           lastEditPreviousDueDate: invoice.dueDate.toISOString(),
           lastEditPreviousDescription: currentDescription,
+          status: status.toLowerCase(),
         },
       },
     });
@@ -1299,28 +1373,43 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
       },
     });
 
-    return { invoice: updatedInvoice, deltaCents: amountDeltaCents, balanceAfterCents, ledgerEntryId };
+    await tx.auditLog.create({ data: {
+      tenantId: target.tenantId,
+      centerId: target.centerId,
+      userId: user.id,
+      action: "billing.invoice.updated",
+      resource: "Invoice",
+      resourceId: invoice.id,
+      metadata: {
+        familyId: invoice.billingAccount.family.id,
+        previousTotalCents: invoice.totalCents,
+        updatedTotalCents: totalCents,
+        deltaCents: amountDeltaCents,
+        previousDueDate: invoice.dueDate.toISOString(),
+        updatedDueDate: dueDate.toISOString(),
+        previousDescription: currentDescription,
+        updatedDescription: description,
+        ledgerEntryId,
+        previousStatus: invoice.status,
+        updatedStatus: status,
+        invoiceLedgerBalanceAfterCents: ledgerBalanceAfterCents,
+        accountCreditAllocatedCents: allocatedCreditCents,
+        invoiceOutstandingAfterCents,
+        reason: clean(body.reason) || "Director invoice edit",
+      },
+    } });
+    await tx.center.update({ where: { id: target.centerId }, data: { updatedAt: new Date() } });
+
+    return { updated: true, invoice: updatedInvoice, deltaCents: amountDeltaCents, balanceAfterCents, ledgerEntryId };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })).catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2034") {
+      return { error: "Invoice activity changed during the update. Refresh and try again.", status: 409 };
+    }
+    throw error;
   });
 
-  await writeAuditLog(user, {
-    centerId,
-    action: "billing.invoice.updated",
-    resource: "Invoice",
-    resourceId: invoice.id,
-    metadata: {
-      familyId: invoice.billingAccount.family.id,
-      previousTotalCents: invoice.totalCents,
-      updatedTotalCents: totalCents,
-      deltaCents: result.deltaCents,
-      previousDueDate: invoice.dueDate.toISOString(),
-      updatedDueDate: dueDate.toISOString(),
-      previousDescription: currentDescription,
-      updatedDescription: description,
-      ledgerEntryId: result.ledgerEntryId,
-    },
-  });
-
-  return NextResponse.json({ ok: true, updated: true, ...result });
+  if ("error" in result) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
+  return NextResponse.json({ ok: true, ...result });
 }
 
 async function voidInvoice(user: CurrentBillingUser, body: Record<string, unknown>) {

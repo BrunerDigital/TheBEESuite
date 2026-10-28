@@ -121,7 +121,7 @@ test("fresh simulator migration is bounded and does not compete with asset compi
 test("simulator app launch allows slower first launches on hosted runners", () => {
   assert.ok(SIMULATOR_LAUNCH_TIMEOUT_MS >= 5 * 60 * 1000);
   assert.match(readFileSync("scripts/verify-ios-native.mjs", "utf8"),
-    /simctl", "launch".*?\{ timeout: SIMULATOR_LAUNCH_TIMEOUT_MS \}/s);
+    /simctl", "launch"[\s\S]*?\{ timeout: SIMULATOR_LAUNCH_TIMEOUT_MS \}/);
 });
 
 test("native liveness uses only the exact process returned for the selected bundle", () => {

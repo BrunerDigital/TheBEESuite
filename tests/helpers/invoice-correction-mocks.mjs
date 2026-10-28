@@ -175,12 +175,22 @@ function creditFirstPayment() {
     metadata: { accountCreditAppliedCents: 17000, invoiceTotalCents: 22000, stripeChargePrincipalCents: 5000 } });
 }
 test("canonical zero-dollar allocated credit plus net payment settles the corrected invoice without another balance debit", async () => {
-  creditFirstPayment(); await refund(5000); assert.equal(state.account.balanceCents, 5000);
-  assert.equal((await patch({ amountCents: 17000 })).status, 200);
-  assert.equal(state.invoice.status, "PAID"); assert.equal(state.account.balanceCents, 0);
-  assert.equal(state.audit[0].metadata.accountCreditAllocatedCents, 17000);
-  assert.equal(state.audit[0].metadata.invoiceOutstandingAfterCents, 0);
-  assert.equal(state.ledger.filter(row => row.type === "account_credit_application").length, 1);
+  for (const totalKey of ["invoiceTotalCents", "invoiceAmountCents"]) {
+    creditFirstPayment();
+    const marker = state.ledger.find(row => row.type === "account_credit_application");
+    delete marker.metadata.invoiceTotalCents;
+    marker.metadata[totalKey] = 22000;
+    await refund(5000); assert.equal(state.account.balanceCents, 5000);
+    assert.equal((await patch({ amountCents: 17000 })).status, 200);
+    assert.equal(state.invoice.status, "PAID"); assert.equal(state.account.balanceCents, 0);
+    assert.equal(state.audit[0].metadata.accountCreditAllocatedCents, 17000);
+    assert.equal(state.audit[0].metadata.invoiceOutstandingAfterCents, 0);
+    assert.equal(state.ledger.filter(row => row.type === "account_credit_application").length, 1);
+  }
+  creditFirstPayment(); await refund(5000);
+  state.ledger.find(row => row.type === "account_credit_application").metadata.invoiceAmountCents = 21000;
+  assert.equal((await patch({ amountCents: 17000 })).status, 409);
+  assert.equal(state.invoice.totalCents, 22000); assert.equal(state.audit.length, 0);
 });
 test("duplicate or malformed credit markers fail closed; a nonzero credit is not subtracted twice", async () => {
   for (const malformed of [false, true]) {

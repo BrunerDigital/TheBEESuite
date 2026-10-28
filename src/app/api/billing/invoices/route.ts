@@ -1233,8 +1233,10 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
       const allocation = jsonObject(marker.metadata);
       const credit = allocation.accountCreditAppliedCents;
       const principal = allocation.stripeChargePrincipalCents;
-      const originalTotal = allocation.invoiceTotalCents;
-      if (creditMarkers.length !== 1 || marker.sourceSystem !== "bee_suite"
+      const originalTotal = allocation.invoiceTotalCents ?? allocation.invoiceAmountCents;
+      if ((allocation.invoiceTotalCents !== undefined && allocation.invoiceAmountCents !== undefined
+        && allocation.invoiceTotalCents !== allocation.invoiceAmountCents)
+        || creditMarkers.length !== 1 || marker.sourceSystem !== "bee_suite"
         || marker.externalId !== `account-credit:invoice:${invoice.id}`
         || typeof credit !== "number" || !Number.isSafeInteger(credit) || credit <= 0
         || typeof principal !== "number" || !Number.isSafeInteger(principal) || principal < 0

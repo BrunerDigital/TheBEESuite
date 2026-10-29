@@ -12,5 +12,5 @@ test("invoice corrections settle verified net payments and preserve authorizatio
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /220 paid minus 170 refund then revised 50/);
-  assert.match(result.stdout, /tests 12/);
+  assert.match(result.stdout, /tests 14/);
 });

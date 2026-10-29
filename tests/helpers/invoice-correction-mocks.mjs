@@ -216,3 +216,31 @@ test("unallocated household refunds and pool-settled invoices cannot manufacture
     assert.equal(state.audit.length, 0);
   }
 });
+
+test("itemized tuition charge originals settle verified net payments without weakening refund and retry boundaries", async () => {
+  for (const [refunded, revised, status, balance] of [
+    [17000, 5000, "PAID", 0], [22000, 5000, "OPEN", 5000],
+    [17000, 10000, "OPEN", 5000], [17000, 4000, "PAID", -1000],
+  ]) {
+    reset(); state.ledger[0].type = "tuition_charge";
+    await refund(refunded);
+    assert.equal((await patch({ amountCents: revised })).status, 200);
+    assert.equal(state.invoice.status, status);
+    assert.equal(state.account.balanceCents, balance);
+    const ledgerCount = state.ledger.length;
+    assert.equal((await patch({ amountCents: revised })).status, 200);
+    assert.equal(state.ledger.length, ledgerCount);
+    assert.equal(state.audit.length, 1);
+  }
+});
+
+test("positive adjustments and payment-linked charge labels cannot stand in for an original charge", async () => {
+  for (const type of ["invoice_adjustment", "late_fee", "tuition_credit", "invoice", "tuition_charge"]) {
+    reset(); state.ledger[0].type = type;
+    if (type === "invoice" || type === "tuition_charge") state.ledger[0].paymentId = "fake-payment";
+    await refund();
+    assert.equal((await patch()).status, 200);
+    assert.equal(state.invoice.status, "OPEN");
+    assert.equal(state.account.balanceCents, 0);
+  }
+});

@@ -105,7 +105,9 @@
       "kid city usa tn pulaski", "tn pulaski", "kid city usa pulaski tn",
       "kid city usa mo lees summit", "mo lees summit", "kid city usa lees summit",
       "kid city usa mo lee s summit", "mo lee s summit", "kid city usa lee s summit",
-      "cmp4ewfzn004g6alwqbqrzcql"].includes(key);
+      "cmp4ewfzn004g6alwqbqrzcql",
+      "kid city usa tx garland", "tx garland", "kid city usa garland",
+      "cmp4ewh78004y6alwu6s3bsv4"].includes(key);
   }
 
   function availableInquiryLocations(locations) {

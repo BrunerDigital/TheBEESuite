@@ -14,6 +14,8 @@ const hiddenWebsiteIdentifiers = new Set([
   "Kid City USA - MO | Lees Summit", "MO | Lees Summit", "Kid City USA - Lees Summit",
   "Kid City USA - MO | Lee's Summit", "MO | Lee's Summit", "Kid City USA - Lee's Summit",
   "cmp4ewfzn004g6alwqbqrzcql",
+  "Kid City USA - TX | Garland", "TX | Garland", "Kid City USA - Garland",
+  "cmp4ewh78004y6alwu6s3bsv4",
 ].map(identifierKey));
 const blockedInquiryIdentifiers = new Set([
   "kid city usa fl daytona beach east",
@@ -28,18 +30,19 @@ export function isBlockedPublicInquiryIdentifier(value: string | null | undefine
 }
 
 type InquiryLocation = {
+  id?: string | null;
   crmLocationId?: string | null;
   locationId?: string | null;
   name?: string | null;
 };
 
 export function filterPublicWebsiteLocations<T extends InquiryLocation>(locations: T[]) {
-  return locations.filter((location) => ![location.crmLocationId, location.locationId, location.name]
+  return locations.filter((location) => ![location.id, location.crmLocationId, location.locationId, location.name]
     .some((value) => hiddenWebsiteIdentifiers.has(identifierKey(value))));
 }
 
 export function isBlockedPublicInquiryLocation(location: InquiryLocation) {
-  return [location.crmLocationId, location.locationId, location.name]
+  return [location.id, location.crmLocationId, location.locationId, location.name]
     .some(isBlockedPublicInquiryIdentifier);
 }
 

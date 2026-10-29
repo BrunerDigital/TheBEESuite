@@ -4,7 +4,7 @@ import { embedFixture } from "./helpers/inquiry-embed-fixture.mjs";
 
 const removed = ["Kid City USA - IN | Whitestown", "IN | Whitestown", "Kid City USA - Whitestown",
   "Kid City USA - TN | Pulaski", "TN | Pulaski", "Kid City USA - Pulaski TN"];
-const kept = ["Kid City USA - MO | Lees Summit", "Kid City USA - FL | Vero Beach", "Kid City USA - TN | Lewisburg"];
+const kept = ["Kid City USA - FL | Vero Beach", "Kid City USA - TN | Lewisburg"];
 
 for (const script of ["kidcity-inquiry-form.js", "bee-suite-inquiry-form.js"]) {
   test(`${script}: stale/custom catalogs omit both removed schools and retain approved choices`, async () => {

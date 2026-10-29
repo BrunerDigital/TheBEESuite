@@ -32,6 +32,8 @@ const reviewedLocationDataFiles = new Set([
   "src/lib/parent-billing-visibility.ts",
   // Exact center/tenant/mailbox binding for explicitly authorized public intake only.
   "src/lib/public-inquiry-restoration.ts",
+  // Reviewed public-only exclusions; operational and portal behavior stays shared.
+  "src/lib/public-inquiry-policy.ts",
   "src/lib/stripe-billing-approval.ts",
 ]);
 

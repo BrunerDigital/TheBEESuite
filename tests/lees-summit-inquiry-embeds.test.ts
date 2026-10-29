@@ -2,57 +2,32 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { embedFixture } from "./helpers/inquiry-embed-fixture.mjs";
 import { leesSummitInquiryRestoration as binding } from "../src/lib/public-inquiry-restoration";
-
-const identifiers = [binding.publicLocationId, "MO | Lees Summit", binding.name];
-
-test("location-only Lee embeds require exact-center availability and do not synthesize unavailable intake", async () => {
-  for (const field of ["locationId", "publicLocationId", "locationName"]) for (const value of identifiers) {
-    for (const unavailable of [{ eligibility: false }, { omitEligibility: true }, { loadFails: true }, { responseOk: false }]) {
-      const fixture = await embedFixture("kidcity-inquiry-form.js", {
-        dataset: { [field]: value }, additionalLocations: [binding.publicLocationId], ...unavailable,
-      });
-      assert.doesNotMatch(fixture.target.innerHTML, /<form/);
-      assert.equal(new URL(fixture.calls[0].url).searchParams.get("centerId"), binding.centerId);
-      assert.equal(fixture.calls.some((call: { options?: { method?: string } }) => call.options?.method === "POST"), false);
+const removed = [binding.publicLocationId, "MO | Lees Summit", binding.name, "MO | Lee's Summit", binding.centerId];
+for (const script of ["kidcity-inquiry-form.js", "bee-suite-inquiry-form.js"]) {
+  test(script + ": stale catalogs cannot advertise Lee", async () => {
+    const f = await embedFixture(script, { additionalLocations: removed });
+    assert.doesNotMatch(f.target.innerHTML, /Lees Summit|Lee's Summit|cmp4ewfzn/);
+    assert.match(f.target.innerHTML, /Altamonte - Douglas/);
+  });
+  test(script + ": Lee fixed selectors stop before network or form rendering even with stale availability", async () => {
+    const fields = ["centerId", "locationId", "publicLocationId", "locationName"];
+    for (const field of fields) for (const value of removed) for (const loadFails of [false, true]) {
+      const f = await embedFixture(script, { dataset: { [field]: value }, additionalLocations: removed, loadFails });
+      assert.doesNotMatch(f.target.innerHTML, /<form/);
+      assert.match(f.target.innerHTML, /not accepting website inquiries/);
+      assert.equal(f.calls.length, 0);
     }
-  }
-});
-
-test("verified location-only Lee embeds retain the exact selected public location", async () => {
-  for (const field of ["locationId", "publicLocationId", "locationName"]) for (const value of identifiers) {
-    const fixture = await embedFixture("kidcity-inquiry-form.js", { dataset: { [field]: value }, additionalLocations: [binding.publicLocationId] });
-    assert.match(fixture.target.innerHTML, /<form/);
-    assert.ok(fixture.target.innerHTML.includes('name="locationId" type="hidden" value="' + binding.publicLocationId + '"'));
-    assert.equal(new URL(fixture.calls[0].url).searchParams.get("centerId"), binding.centerId);
-  }
-});
-
-test("Lee fixed selectors reject a conflicting center or public identifier before fetching", async () => {
-  for (const dataset of [
-    { locationId: binding.publicLocationId, centerId: "other_center" },
-    { locationId: binding.publicLocationId, publicLocationId: "Kid City USA - FL | Vero Beach" },
-    { locationName: binding.name, locationId: "Kid City USA - FL | Vero Beach" },
-  ]) {
-    const fixture = await embedFixture("kidcity-inquiry-form.js", { dataset });
-    assert.doesNotMatch(fixture.target.innerHTML, /<form/);
-    assert.equal(fixture.calls.length, 0);
-  }
-});
-
-test("verified Lee identifiers take priority over a conflicting friendly display label", async () => {
-  const fixture = await embedFixture("kidcity-inquiry-form.js", {
-    dataset: { locationId: binding.publicLocationId, locationName: "Kid City USA - FL | Vero Beach" },
-    additionalLocations: ["Kid City USA - FL | Vero Beach", binding.publicLocationId],
   });
-  assert.ok(fixture.target.innerHTML.includes('name="locationId" type="hidden" value="' + binding.publicLocationId + '"'));
-  assert.doesNotMatch(fixture.target.innerHTML, /value="Kid City USA - FL \| Vero Beach"/);
-});
-
-test("unrelated legacy fixed-location fallback remains available during catalog failure", async () => {
-  const fixture = await embedFixture("kidcity-inquiry-form.js", {
-    dataset: { locationId: "Kid City USA - FL | Altamonte - Douglas" }, loadFails: true,
+  test(script + ": forged Lee selections cannot send", async () => {
+    for (const locationId of removed) {
+      const f = await embedFixture(script, { fields: { locationId } });
+      await f.submit();
+      assert.equal(f.calls.some((call: { options?: { method?: string } }) => call.options?.method === "POST"), false);
+    }
   });
-  assert.match(fixture.target.innerHTML, /<form/);
-  assert.match(fixture.target.innerHTML, /Altamonte - Douglas/);
-  assert.equal(new URL(fixture.calls[0].url).searchParams.has("centerId"), false);
+}
+test("unrelated Douglas fixed-location fallback remains available during catalog failure", async () => {
+  const f = await embedFixture("kidcity-inquiry-form.js", { dataset: { locationId: "Kid City USA - FL | Altamonte - Douglas" }, loadFails: true });
+  assert.match(f.target.innerHTML, /<form/);
+  assert.match(f.target.innerHTML, /Altamonte - Douglas/);
 });

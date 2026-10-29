@@ -111,7 +111,12 @@
     return ["kid city usa fl daytona beach east", "fl daytona beach east",
       "kid city usa daytona beach east", "daytona beach east",
       "kid city usa in whitestown", "in whitestown", "kid city usa whitestown",
-      "kid city usa tn pulaski", "tn pulaski", "kid city usa pulaski tn"].includes(key);
+      "kid city usa tn pulaski", "tn pulaski", "kid city usa pulaski tn",
+      "kid city usa mo lees summit", "mo lees summit", "kid city usa lees summit",
+      "kid city usa mo lee s summit", "mo lee s summit", "kid city usa lee s summit",
+      "cmp4ewfzn004g6alwqbqrzcql",
+      "kid city usa tx garland", "tx garland", "kid city usa garland",
+      "cmp4ewh78004y6alwu6s3bsv4"].includes(key);
   }
 
   function availableInquiryLocations(locations) {

@@ -1,227 +1,81 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { effectiveWorkspaceRole, resolveWorkspaceState } from "../src/lib/workspace-selection";
-import { canManageOperations } from "../src/lib/auth";
-import { canInviteGuardianToPortal } from "../src/lib/portal-guardrails";
-import { UserRole } from "@prisma/client";
 import { readFileSync } from "node:fs";
 import { inquiryFixture } from "./helpers/inquiry-route-fixture.mjs";
 import { isRestoredPublicInquiryCenter, leesSummitInquiryRestoration as binding } from "../src/lib/public-inquiry-restoration";
 import { isEligiblePublicInquiryCenter } from "../src/lib/inquiry-routing";
 import { isActivePublicSchoolCandidate, isActiveSchoolFinanceOperationsCandidate } from "../src/lib/active-school-locations";
 
-const closed = {
-  id: binding.centerId, name: binding.name, status: "closed", crmLocationId: binding.publicLocationId,
-  locationId: "MO | Lees Summit", email: binding.notificationEmail,
-  organization: { tenantId: "synthetic_tenant", tenant: { slug: binding.tenantSlug } },
-};
-
-test("restoration requires explicit enablement, exact identity, tenant, mailbox and identifiers", () => {
-  assert.equal(isRestoredPublicInquiryCenter(closed, true), true);
-  assert.equal(isRestoredPublicInquiryCenter(closed, false), false);
-  for (const changed of [
-    { ...closed, id: "another_closed_school" }, { ...closed, name: "Other school" },
-    { ...closed, organization: { tenantId: "other_tenant", tenant: { slug: "other-brand" } } },
-    { ...closed, email: "unverified@example.invalid" },
-    { ...closed, crmLocationId: "unknown", locationId: "unknown" },
-  ]) assert.equal(isRestoredPublicInquiryCenter(changed, true), false);
-  assert.equal(closed.status, "closed");
-  assert.equal(isEligiblePublicInquiryCenter(closed, true), false, "Ordinary inquiry policy remains closed");
-  assert.equal(isActivePublicSchoolCandidate(closed), false);
-  assert.equal(isActiveSchoolFinanceOperationsCandidate(closed), false);
-  const workspace = resolveWorkspaceState({ role: UserRole.BRAND_ADMIN,
-    authorizedCenters: [{ id: closed.id, name: closed.name, detail: "Synthetic school", status: closed.status }],
-    requestedSelection: `center:${closed.id}` });
-  const role = effectiveWorkspaceRole(UserRole.BRAND_ADMIN, workspace);
-  assert.equal(role, UserRole.READ_ONLY_AUDITOR);
-  assert.equal(canManageOperations({ role }), false);
-  assert.equal(canInviteGuardianToPortal({ canManageOperations: canManageOperations({ role }),
-    hasCenterAccess: true, guardianEmail: "synthetic@example.invalid", targetTenantId: "synthetic_tenant" }).ok, false,
-    "Public inquiry restoration cannot enable invitations from the closed history workspace");
-});
-
-test("full handler accepts only the enabled, verified binding without school mutations", async () => {
-  for (const form of [false, true]) {
-    const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
-    const result = await fixture.post({ locationId: binding.publicLocationId }, { form });
-    assert.equal(result.status, 201);
-    assert.equal(fixture.effects.leads[0].centerId, binding.centerId);
-    assert.equal(fixture.centers.find((center: { id: string }) => center.id === binding.centerId)?.status, "closed");
-    assert.deepEqual(fixture.effects.deliveries[1].payload.locationRecipients, [binding.notificationEmail]);
-    assert.equal(fixture.effects.notificationLookups, 1, "Center mailbox only; no grant/staff fallback");
-    assert.equal(fixture.effects.unexpectedNetwork, 0);
-  }
-});
-
-test("disabled, wrong tenant/mailbox and conflicting selectors fail before all writes or sends", async () => {
-  for (const options of [
-    { restored: true },
-    { restored: true, restorationEnabled: true, restorationTenant: "another-brand" },
-    { restored: true, restorationEnabled: true, restorationEmail: "unverified@example.invalid" },
-  ]) {
-    const fixture = inquiryFixture(options);
-    assert.equal((await fixture.post({ centerId: binding.centerId })).status, 400);
-    assert.equal(fixture.effects.writes, 0);
-    assert.equal(fixture.effects.notificationLookups, 0);
-    assert.equal(fixture.effects.emails, 0);
-  }
-  for (const fields of [
-    { centerId: "center_douglas_fixture", locationId: binding.publicLocationId },
-    { centerId: binding.centerId, locationId: "Kid City USA - FL | Altamonte - Douglas" },
-  ]) {
-    const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
-    assert.equal((await fixture.post(fields)).status, 400);
-    assert.equal(fixture.effects.writes, 0);
-  }
-});
-
-test("inquiry catalog and fixed-center availability agree with the enabled verified intake", async () => {
-  for (const enabled of [false, true]) {
-    const fixture = inquiryFixture({ restored: true, restorationEnabled: enabled });
-    const catalog = await fixture.get("?purpose=inquiry&centerId=" + binding.centerId);
-    assert.equal(catalog.body.inquiryCenterEligible, enabled);
-    assert.equal(catalog.body.locations.some((row: { name: string }) => row.name === binding.name), enabled);
-    assert.equal(fixture.effects.writes, 0);
-  }
-  const wrongTenant = inquiryFixture({ restored: true, restorationEnabled: true, restorationTenant: "other-brand" });
-  const result = await wrongTenant.get("?purpose=inquiry&centerId=" + binding.centerId);
-  assert.equal(result.body.inquiryCenterEligible, false);
-  assert.equal(result.body.locations.some((row: { name: string }) => row.name === binding.name), false);
-});
-
-test("unrelated closed schools and non-inquiry operations retain their existing closed guards", async () => {
-  const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
-  fixture.centers.push({ ...fixture.centers[2], ...closed, id: "another_closed_school", name: "Another closed school", crmLocationId: "Kid City USA - MO | Another", locationId: "MO | Another" });
-  assert.equal((await fixture.post({ locationId: "Kid City USA - MO | Another" })).status, 400);
-  assert.equal(fixture.effects.writes, 0);
-  // These handlers must not consume the public-only exception. Their pre-existing
-  // status guards stay in force; no test invokes registration or a provider.
-  for (const path of [
-    "src/app/api/registration/route.ts", "src/app/api/registration/share/route.ts",
-    "src/app/api/kiosk/check/route.ts", "src/app/api/kiosk/lookup/route.ts", "src/app/api/kiosk/staff/route.ts",
-    "src/app/api/cron/tuition-billing/route.ts", "src/app/api/cron/fte-reminders/route.ts",
-    "src/app/api/cron/tuition-payment-reminders/route.ts", "src/lib/workspace-selection.ts",
-  ]) {
-    const source = readFileSync(path, "utf8");
-    assert.doesNotMatch(source, /public-inquiry-restoration|INQUIRY_LEES_SUMMIT_ENABLED/);
-    assert.match(source, /closed|status: "active"/, path);
-  }
-});
-
-test("static frontend and directory use the same exact restoration identifier", () => {
-  const directory = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8"));
-  assert.equal(directory.locations.filter((row: { crmLocationId: string }) => row.crmLocationId === binding.publicLocationId).length, 1);
-  const html = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
-  assert.ok(html.includes(`value="${binding.publicLocationId}"`));
-});
-
-
-test("routing audit uses the same exact binding and cannot use staff recipient fallbacks", async () => {
-  for (const [enabled, tenant, expected] of [[false, binding.tenantSlug, true], [true, binding.tenantSlug, false], [true, "other-brand", true]] as const) {
-    const fixture = inquiryFixture({ restored: true, restorationEnabled: enabled, restorationTenant: tenant });
-    const result = await fixture.audit();
-    assert.equal(result.status, 200);
-    assert.equal(result.body.missingCenter.some((row: { publicLocationId: string }) => row.publicLocationId === binding.publicLocationId), expected);
-    assert.equal(fixture.effects.notificationLookups, 0);
-    assert.equal(fixture.effects.writes, 0);
-  }
-});
-
-
-for (const field of ["crmLocationId", "locationId"] as const) {
-  test(`conflicting persisted ${field} rejects catalog eligibility and POST despite the other expected identifier`, async () => {
-    const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
-    const center = fixture.centers.find((row: { id: string }) => row.id === binding.centerId)!;
-    center[field] = "Kid City USA - FL | Altamonte - Douglas";
-    assert.equal(isRestoredPublicInquiryCenter({ ...closed, [field]: center[field] }, true), false);
-    const catalog = await fixture.get("?purpose=inquiry&centerId=" + binding.centerId);
-    assert.equal(catalog.body.inquiryCenterEligible, false);
-    assert.equal(catalog.body.locations.some((row: { name: string }) => row.name === binding.name), false);
-    assert.equal((await fixture.post({ centerId: binding.centerId })).status, 400);
-    assert.equal(fixture.effects.writes, 0);
-    assert.equal(fixture.effects.notificationLookups, 0);
-    assert.equal(fixture.effects.emails, 0);
-    const audit = await fixture.audit();
-    assert.equal(audit.body.missingCenter.some((row: { publicLocationId: string }) => row.publicLocationId === binding.publicLocationId), true);
-  });
+const identifiers = [binding.publicLocationId, "MO | Lees Summit", binding.name, "MO | Lee's Summit", binding.centerId];
+const kept = ["Kid City USA - FL | Vero Beach", "Kid City USA - FL | Altamonte - Douglas", "Kid City USA - TN | Lewisburg"];
+function fixture(options = {}) {
+  return inquiryFixture({ restored: true, restorationEnabled: true, additionalLocations: kept.filter((id) => id !== kept[1]), ...options });
 }
 
-test("empty identifiers require at least one expected stored identifier in catalog and POST", async () => {
-  for (const [crmLocationId, locationId, expected] of [
-    [binding.publicLocationId, null, true],
-    ["", "MO | Lees Summit", true],
-    [binding.publicLocationId, "  ", true],
-    [null, null, false],
-    ["", "  ", false],
-    [binding.publicLocationId, "MO | Lees Summit", true],
-  ] as const) {
-    const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
-    const center = fixture.centers.find((row: { id: string }) => row.id === binding.centerId)!;
-    center.crmLocationId = crmLocationId;
-    center.locationId = locationId;
-    assert.equal(isRestoredPublicInquiryCenter({ ...closed, crmLocationId, locationId }, true), expected);
-    const catalog = await fixture.get("?purpose=inquiry&centerId=" + binding.centerId);
-    assert.equal(catalog.body.inquiryCenterEligible, expected);
-    assert.equal(catalog.body.locations.some((row: { name: string }) => row.name === binding.name), expected);
-    assert.equal((await fixture.post({ centerId: binding.centerId })).status, expected ? 201 : 400);
-    assert.equal(center.status, "closed");
-    if (!expected) assert.equal(fixture.effects.writes, 0);
-  }
+test("October removal overrides either historical restoration flag without mutating the school", () => {
+  const f = fixture();
+  const center = f.centers.find((row: { id: string }) => row.id === binding.centerId)!;
+  const before = structuredClone(center);
+  for (const enabled of [false, true]) assert.equal(isRestoredPublicInquiryCenter(center, enabled), false);
+  assert.equal(isEligiblePublicInquiryCenter(center, true), false);
+  assert.deepEqual(center, before);
+  const active = { ...center, status: "active" };
+  assert.equal(isEligiblePublicInquiryCenter(active, true), false);
+  assert.equal(isActivePublicSchoolCandidate(active), true);
+  assert.equal(isActiveSchoolFinanceOperationsCandidate(active), true);
 });
 
-test("default and inquiry catalogs gate restored Lee consistently across live and static fallback paths", async () => {
-  for (const path of [{}, { liveFails: true }, { emptyLive: true }]) {
-    for (const scenario of [
-      { restorationEnabled: false, expected: false },
-      { restorationEnabled: true, expected: true },
-      { restorationEnabled: true, restorationTenant: "other-brand", expected: false },
-      { restorationEnabled: true, restorationEmail: "unverified@example.invalid", expected: false },
-      { restorationEnabled: true, lookupFails: true, expected: false },
-    ]) {
-      const { expected, ...options } = scenario;
-      for (const query of ["", "?purpose=inquiry"]) {
-        const fixture = inquiryFixture({ restored: true, ...path, ...options });
-        const result = await fixture.get(query);
-        assert.equal(result.status, 200);
-        assert.equal(result.body.locations.some((row: { crmLocationId: string }) => row.crmLocationId === binding.publicLocationId), expected);
-        assert.equal(result.body.locations.some((row: { crmLocationId: string }) => row.crmLocationId === "Kid City USA - FL | Altamonte - Douglas"), true);
-        assert.equal(fixture.effects.writes, 0);
-        assert.equal(fixture.effects.emails, 0);
-      }
+test("Lee disappears from default/inquiry live and static fallback catalogs even with the stale enabled flag", async () => {
+  for (const path of [{}, { liveFails: true }, { emptyLive: true }, { lookupFails: true }]) {
+    for (const enabled of [false, true]) for (const query of ["", "?purpose=inquiry", "?purpose=inquiry&centerId=" + binding.centerId]) {
+      const f = fixture({ ...path, restorationEnabled: enabled });
+      const result = await f.get(query);
+      assert.equal(result.status, 200);
+      assert.equal(result.body.locations.some((row: { name: string }) => row.name === binding.name), false);
+      if (query.includes("centerId=")) assert.equal(result.body.inquiryCenterEligible, false);
+      for (const id of kept) assert.equal(result.body.locations.some((row: { crmLocationId: string }) => row.crmLocationId === id), true, id);
+      assert.equal(f.effects.writes, 0);
+      assert.equal(f.effects.emails, 0);
     }
   }
 });
 
-test("generic fixed-center duplicate ID routes only the verified restored Lee binding", async () => {
-  for (const form of [false, true]) {
-    for (const publicLocationId of ["", binding.publicLocationId]) {
-      const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
-      const result = await fixture.post({ centerId: binding.centerId, locationId: binding.centerId, publicLocationId }, { form });
-      assert.equal(result.status, 201);
-      assert.equal(fixture.effects.leads[0].centerId, binding.centerId);
-      assert.deepEqual(fixture.effects.deliveries[1].payload.locationRecipients, [binding.notificationEmail]);
-      assert.equal(fixture.centers.find((center: { id: string }) => center.id === binding.centerId)?.status, "closed");
-    }
+test("canonical, fixed-center, conflicting and legacy Lee selectors reject JSON and form intake before all effects", async () => {
+  for (const identifier of identifiers) for (const fields of [
+    { locationId: identifier }, { location_id: identifier }, { publicLocationId: identifier },
+    { centerId: binding.centerId }, { center_id: binding.centerId },
+    { locationId: kept[0], locationName: identifier }, { locationId: kept[0], public_location_id: identifier },
+    { centerId: binding.centerId, locationId: binding.centerId },
+    { locationId: "legacy_" + binding.name, brandName: "Kid City USA" },
+  ]) for (const form of [false, true]) {
+    const f = fixture();
+    assert.equal((await f.post(fields, { form })).status, 400, JSON.stringify(fields));
+    for (const key of ["writes", "notificationLookups", "emails", "sheets", "unexpectedNetwork"] as const) assert.equal(f.effects[key], 0, key);
   }
-  for (const options of [
-    { restored: true },
-    { restored: true, restorationEnabled: true, restorationTenant: "another-brand" },
-    { restored: true, restorationEnabled: true, restorationEmail: "unverified@example.invalid" },
-  ]) {
-    const fixture = inquiryFixture(options);
-    assert.equal((await fixture.post({ centerId: binding.centerId, locationId: binding.centerId })).status, 400);
-    assert.equal(fixture.effects.writes, 0);
-    assert.equal(fixture.effects.emails, 0);
+});
+
+test("configured Lee default and originless intake cannot bypass the exclusion", async () => {
+  const f = fixture({ defaultCenterId: binding.centerId });
+  assert.equal((await f.post({ centerId: binding.centerId }, { origin: "" })).status, 400);
+  assert.equal((await f.post({ locationId: "unknown", brandName: "Example Brand" })).status, 400);
+  assert.equal(f.effects.writes, 0);
+});
+
+test("approved schools still route memory-only inquiries to their exact centers", async () => {
+  for (const id of kept) {
+    const f = fixture();
+    assert.equal((await f.post({ locationId: id })).status, 201, id);
+    assert.equal(f.effects.leads[0].centerId, id === kept[1] ? "center_douglas_fixture" : "synthetic_" + id);
+    assert.equal(f.effects.unexpectedNetwork, 0);
   }
-  for (const fields of [
-    { centerId: binding.centerId, locationId: "other_opaque_center" },
-    { centerId: binding.centerId, locationId: binding.centerId, publicLocationId: "Kid City USA - FL | Altamonte - Douglas" },
-    { centerId: binding.centerId, locationId: binding.centerId, publicLocationId: binding.centerId },
-    { centerId: "other_opaque_center", locationId: "other_opaque_center", publicLocationId: binding.publicLocationId },
-  ]) {
-    const fixture = inquiryFixture({ restored: true, restorationEnabled: true });
-    assert.equal((await fixture.post(fields)).status, 400);
-    assert.equal(fixture.effects.writes, 0);
-    assert.equal(fixture.effects.emails, 0);
+});
+
+test("static directory and standalone choices omit Lee while operational guards stay independent", () => {
+  const rows = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")).locations;
+  assert.equal(rows.some((row: { crmLocationId: string }) => row.crmLocationId === binding.publicLocationId), false);
+  const html = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
+  assert.equal(html.includes('value="' + binding.publicLocationId + '"'), false);
+  for (const path of ["src/app/api/registration/route.ts", "src/app/api/kiosk/check/route.ts", "src/app/api/cron/tuition-billing/route.ts", "src/lib/workspace-selection.ts"]) {
+    assert.doesNotMatch(readFileSync(path, "utf8"), /public-inquiry-policy|public-inquiry-restoration|INQUIRY_LEES_SUMMIT_ENABLED/);
   }
 });

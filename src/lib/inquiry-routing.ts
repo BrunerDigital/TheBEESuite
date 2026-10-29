@@ -3,6 +3,7 @@ import { isRetiredPublicKidCityLocation } from "@/lib/active-school-locations";
 import { isBlockedPublicInquiryLocation } from "@/lib/public-inquiry-policy";
 
 export type IntakeCenterMatchCandidate = {
+  id?: string | null;
   crmLocationId: string | null;
   locationId: string | null;
   name: string;

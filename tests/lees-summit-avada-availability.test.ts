@@ -35,29 +35,20 @@ async function runTemplate({ eligible = true, includeLocation = true, responseOk
   return { option, calls };
 }
 
-test("standalone Avada Lee option is hidden and disabled before availability verification", () => {
-  const option = html.match(/<option[^>]*value="Kid City USA - MO \| Lees Summit"[^>]*>/)![0];
-  assert.match(option, /disabled/);
-  assert.match(option, /hidden/);
+test("standalone Avada omits the removed Lee option and retains approved schools", () => {
+  assert.doesNotMatch(html, /<option[^>]*value="Kid City USA - MO \| Lees Summit"[^>]*>/);
   for (const retained of ["FL | Vero Beach", "TN | Lewisburg"]) {
     const option = html.match(new RegExp('<option[^>]*value="Kid City USA - ' + retained.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '"[^>]*>'))![0];
     assert.doesNotMatch(option, /disabled|hidden/);
   }
 });
 
-test("verified Avada restoration enables only Lee after a read-only exact-center catalog check", async () => {
+test("a stale Avada Lee option cannot be re-enabled by old availability results", async () => {
   for (const loading of [false, true]) {
     const result = await runTemplate({ loading });
-    assert.equal(result.option.disabled, false);
-    assert.equal(result.option.hidden, false);
-    assert.equal(result.calls.length, 1);
-    const url = new URL(result.calls[0].url);
-    assert.equal(url.origin, "https://fixture.invalid");
-    assert.equal(url.pathname, "/api/public/kidcity-locations");
-    assert.equal(url.searchParams.get("purpose"), "inquiry");
-    assert.equal(url.searchParams.get("centerId"), "cmp4ewfzn004g6alwqbqrzcql");
-    assert.equal(result.calls[0].options.cache, "no-store");
-    assert.equal("method" in result.calls[0].options, false, "No lead submission or real network");
+    assert.equal(result.option.disabled, true);
+    assert.equal(result.option.hidden, true);
+    assert.equal(result.calls.length, 0, "Removed binding cannot advertise or submit intake");
   }
 });
 

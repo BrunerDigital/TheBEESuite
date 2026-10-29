@@ -45,17 +45,17 @@ export async function runSync(locations: Location[], centers: Center[] = [], cus
 const closedLee = (): Center => ({ id: binding.centerId, status: "closed", crmLocationId: binding.publicLocationId,
   locationId: binding.publicLocationId, address: "850 NE Swann Rd", customFields: {} });
 
-test("default public fallback cannot reopen or recreate inquiry-only Lee during open-school sync", async () => {
+test("removed public fallback cannot reopen or recreate Lee during open-school sync", async () => {
   const locations: Location[] = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")).locations;
-  assert.ok(locations.some((location) => location.crmLocationId === binding.publicLocationId));
+  assert.equal(locations.some((location) => location.crmLocationId === binding.publicLocationId), false);
   const lee = closedLee();
   const effects = await runSync(locations, [lee]);
   assert.equal(effects.inputPath, join("/synthetic", "public", "kidcity-locations.json"));
   assert.equal(lee.status, "closed");
   assert.deepEqual(effects.updates, []);
   assert.equal(effects.creates.includes(binding.publicLocationId), false);
-  assert.equal(effects.lookups, locations.length - 1);
-  assert.equal(effects.creates.length, locations.length - 1, "Other schools retain existing synchronization behavior");
+  assert.equal(effects.lookups, locations.length);
+  assert.equal(effects.creates.length, locations.length, "Other schools retain existing synchronization behavior");
 });
 
 test("each recognized identifier holds Lee before lookups, including custom input files", async () => {

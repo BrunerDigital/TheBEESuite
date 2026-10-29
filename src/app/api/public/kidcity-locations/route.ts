@@ -69,6 +69,7 @@ async function getLiveLocations() {
     },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
     select: {
+      id: true,
       crmLocationId: true,
       locationId: true,
       name: true,
@@ -81,7 +82,7 @@ async function getLiveLocations() {
     },
   });
 
-  return centers
+  return filterPublicWebsiteLocations(centers)
     .filter(isActivePublicSchoolCandidate)
     .map(toPublicKidCityLocation)
     .sort(comparePublicKidCityLocations);
@@ -138,7 +139,7 @@ async function GETHandler(request: Request) {
       const center = requestedCenterId.length <= 200
         ? await prisma.center.findFirst({
             where: { id: requestedCenterId, status: { not: "closed" } },
-            select: { crmLocationId: true, locationId: true, name: true, status: true },
+            select: { id: true, crmLocationId: true, locationId: true, name: true, status: true },
           })
         : null;
       inquiryCenterEligible = Boolean(center && isEligiblePublicInquiryCenter(center, false));

@@ -74,7 +74,7 @@ test("public exclusion leaves Center status, finance eligibility and historical 
   assert.equal(filterPublicWebsiteLocations([{ crmLocationId: keep[0], locationId: targets[0] }]).length, 0);
 });
 
-test("Vero and Lewisburg can still create synthetic inquiries, and Lee restoration stays enabled only by its gate", async () => {
+test("Vero and Lewisburg can still create synthetic inquiries, and the newer Lee exclusion overrides its historical gate", async () => {
   for (const id of keep.slice(0, 2)) {
     const fixture = populatedFixture();
     assert.equal((await fixture.post({ locationId: id })).status, 201);
@@ -83,19 +83,19 @@ test("Vero and Lewisburg can still create synthetic inquiries, and Lee restorati
   }
   const fixture = populatedFixture({ restored: true, restorationEnabled: true });
   const lee = "Kid City USA - MO | Lees Summit";
-  assert.equal((await fixture.get("?purpose=inquiry")).body.locations.some((row: { crmLocationId: string }) => row.crmLocationId === lee), true);
-  assert.equal((await fixture.post({ locationId: lee })).status, 201);
+  assert.equal((await fixture.get("?purpose=inquiry")).body.locations.some((row: { crmLocationId: string }) => row.crmLocationId === lee), false);
+  assert.equal((await fixture.post({ locationId: lee })).status, 400);
   assert.equal(fixture.centers.find((row: { crmLocationId: string }) => row.crmLocationId === lee)?.status, "closed");
 });
 
-test("static fallbacks omit only the approved targets and retain Vero, Lewisburg and Lee", () => {
+test("static fallbacks omit only the approved targets and retain Vero, Lewisburg and Soddy Daisy", () => {
   const rows = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")).locations;
   const html = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
   for (const id of targets) {
     assert.equal(rows.some((row: { crmLocationId: string }) => row.crmLocationId === id), false);
     assert.equal(html.includes(`value="${id}"`), false);
   }
-  for (const id of [...keep, "Kid City USA - MO | Lees Summit"]) {
+  for (const id of keep) {
     assert.equal(rows.some((row: { crmLocationId: string }) => row.crmLocationId === id), true);
     assert.equal(html.includes(`value="${id}"`), true);
   }

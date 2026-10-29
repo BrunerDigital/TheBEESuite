@@ -46,6 +46,7 @@ import {
   oneTimeBillingAdjustmentOption,
   type OneTimeBillingAdjustmentReason,
 } from "@/lib/one-time-billing-adjustments";
+import { BillingFamilyPicker } from "@/components/billing-family-picker";
 import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
 import { isCurrentlyEnrolledChildRecord, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
 import { BILLING_TARGET_UNAVAILABLE, resolveBillingChildSelection, resolveBillingFamilySelection } from "@/lib/billing-family-selection";
@@ -2158,6 +2159,77 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       </CardHeader>
       <CardContent className="space-y-4">
         <fieldset disabled={isPending} aria-busy={isPending} className="min-w-0 space-y-4">
+        <section id="billing-family-picker" aria-label="Choose a billing family" className="scroll-mt-28 space-y-3 rounded-xl border bg-background/35 p-4">
+          <div>
+            <h3 className="font-semibold">Choose a family</h3>
+            <p className="text-sm text-muted-foreground">Open the Family dropdown or browse the list below. No search is required.</p>
+          </div>
+        <div className="billing-family-picker-grid grid gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="billing-workbench-school">School</Label>
+            <Select disabled={isPending} value={centerId} onValueChange={handleCenterChange}>
+              <SelectTrigger id="billing-workbench-school"><SelectValue placeholder="Choose school" /></SelectTrigger>
+              <SelectContent>
+                {centers.map((center) => (
+                  <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="billing-workbench-family">Family</Label>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Family account type">
+              {(["current", "past", "prospective"] as const).map((mode) => (
+                <Button
+                  key={mode}
+                  type="button"
+                  size="sm"
+                  variant={effectiveFamilyListMode === mode ? "default" : "outline"}
+                  disabled={isPending || familyCounts[mode] === 0}
+                  onClick={() => {
+                    if (offlinePaymentOperationInFlight.current || isPending || mode === effectiveFamilyListMode || !familyCounts[mode] || !confirmDiscardBillingInput()) return;
+                    const nextFamily = scopedFamilies.find((family) => billingFamilyAccountCategory(family) === mode) ?? null;
+                    resetFamilyBoundBillingDrafts(nextFamily, centerId);
+                    setFamilyListMode(mode);
+                    setFamilyId(nextFamily?.id ?? "");
+                    setSelectionError(null);
+                    applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
+                  }}
+                >
+                  {mode === "current" ? "Current" : mode === "past" ? "Past accounts" : "Pending"} ({familyCounts[mode]})
+                </Button>
+              ))}
+            </div>
+            <BillingFamilyPicker
+              id="billing-workbench-family"
+              disabled={isPending}
+              value={effectiveFamilyId}
+              families={filteredFamilies}
+              onValueChange={handleFamilyChange}
+            />
+          </div>
+          <div className="rounded-lg border bg-background/40 p-3">
+            <div className="text-xs text-muted-foreground">Selected ledger balance</div>
+            <div className="text-lg font-semibold">{money(familyBalanceCents)}</div>
+            <p className="mt-1 text-xs text-muted-foreground">This posted account total may include agency responsibility and does not subtract pending ACH payments. Checkout verifies the collectible family amount.</p>
+          </div>
+        </div>
+
+          <details open={Boolean(searchQuery?.trim())} className="rounded-lg border bg-background/35 p-3">
+            <summary className="min-h-11 cursor-pointer content-center font-medium">Search by name or email</summary>
+        <form action="/billing-invoices" method="get" className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="centerId" value={centerId} />
+          <div className="min-w-0 flex-1 basis-48 space-y-1">
+            <Label htmlFor="billing-family-search">Search families (optional)</Label>
+            <Input id="billing-family-search" name="q" defaultValue={searchQuery ?? ""} maxLength={120} placeholder="Family, child, guardian, or email" />
+            <p className="text-xs text-muted-foreground">Up to 1,000 matching households are loaded. Search includes current and withdrawn families.</p>
+          </div>
+          <Button type="submit" variant="outline"><Search data-icon="inline-start" />Search accounts</Button>
+          {searchQuery?.trim() ? <Link href={`/billing-invoices?centerId=${encodeURIComponent(centerId)}#billing-family-picker`} className={buttonVariants({ variant: "outline" })}>Show all families</Link> : null}
+        </form>
+          </details>
+        </section>
+
         {childSelectionError || (assignmentChildId && !selectedAssignmentChild) ? <Alert variant="destructive"><AlertTitle>Child selection needed</AlertTitle><AlertDescription>The requested child is not available for this family. No other child has been selected. Choose the intended child before saving tuition or enrollment details.</AlertDescription></Alert> : null}
         {selectionError || (familyId && !selectedFamily) ? (
           <Alert variant="destructive">
@@ -2268,68 +2340,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </AlertDescription>
           </Alert>
         ) : null}
-
-        <form action="/billing-invoices" method="get" className="flex flex-wrap items-end gap-2">
-          <div className="min-w-48 flex-1 space-y-1">
-            <Label htmlFor="billing-family-search">Find a billing family</Label>
-            <Input id="billing-family-search" name="q" defaultValue={searchQuery ?? ""} maxLength={120} placeholder="Family, child, guardian, or email" />
-            <p className="text-xs text-muted-foreground">Up to 1,000 matching households are loaded. Search includes current and withdrawn families.</p>
-          </div>
-          <Button type="submit" variant="outline"><Search data-icon="inline-start" />Search accounts</Button>
-        </form>
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-          <div className="space-y-1">
-            <Label htmlFor="billing-workbench-school">School</Label>
-            <Select disabled={isPending} value={centerId} onValueChange={handleCenterChange}>
-              <SelectTrigger id="billing-workbench-school"><SelectValue placeholder="Choose school" /></SelectTrigger>
-              <SelectContent>
-                {centers.map((center) => (
-                  <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="billing-workbench-family">Family</Label>
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Family account type">
-              {(["current", "past", "prospective"] as const).map((mode) => (
-                <Button
-                  key={mode}
-                  type="button"
-                  size="sm"
-                  variant={effectiveFamilyListMode === mode ? "default" : "outline"}
-                  disabled={isPending || familyCounts[mode] === 0}
-                  onClick={() => {
-                    if (offlinePaymentOperationInFlight.current || isPending || mode === effectiveFamilyListMode || !familyCounts[mode] || !confirmDiscardBillingInput()) return;
-                    const nextFamily = scopedFamilies.find((family) => billingFamilyAccountCategory(family) === mode) ?? null;
-                    resetFamilyBoundBillingDrafts(nextFamily, centerId);
-                    setFamilyListMode(mode);
-                    setFamilyId(nextFamily?.id ?? "");
-                    setSelectionError(null);
-                    applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
-                  }}
-                >
-                  {mode === "current" ? "Current" : mode === "past" ? "Past accounts" : "Pending"} ({familyCounts[mode]})
-                </Button>
-              ))}
-            </div>
-            <Select disabled={isPending} value={effectiveFamilyId} onValueChange={handleFamilyChange}>
-              <SelectTrigger id="billing-workbench-family"><SelectValue placeholder="Choose family" /></SelectTrigger>
-              <SelectContent>
-                {filteredFamilies.map((family) => (
-                  <SelectItem key={family.id} value={family.id}>
-                    {family.name}{billingFamilyAccountCategory(family) === "prospective" ? " · Pending / waitlisted" : billingFamilyAccountCategory(family) === "past" ? " · Past family" : ""}{family.billingEmail ? ` · ${family.billingEmail}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="rounded-lg border bg-background/40 p-3">
-            <div className="text-xs text-muted-foreground">Selected ledger balance</div>
-            <div className="text-lg font-semibold">{money(familyBalanceCents)}</div>
-            <p className="mt-1 text-xs text-muted-foreground">This posted account total may include agency responsibility and does not subtract pending ACH payments. Checkout verifies the collectible family amount.</p>
-          </div>
-        </div>
 
         {selectedPaymentProgress ? (
           <Alert data-director-payment-progress>

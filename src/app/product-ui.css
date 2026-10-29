@@ -786,6 +786,11 @@
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
   }
 
+  .office-billing-workspace .billing-family-picker-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    align-items: start;
+  }
+
   #family-ledger .ledger-heading-layout {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
   }

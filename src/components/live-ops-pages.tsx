@@ -4911,6 +4911,34 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           </CardHeader>
         </Card>
       ) : null}
+      {!writableTarget ? (
+        <Card id="billing-workbench" className="glass-panel scroll-mt-24"><CardHeader><CardTitle as="h2">{targetState === "history" ? "Historical family account" : "Family selection needed"}</CardTitle><CardDescription>{targetState === "history" ? "This settled historical account is available in the family ledger below. No payment or account-editing tools have been opened." : BILLING_TARGET_UNAVAILABLE}</CardDescription></CardHeader><CardContent><Link href="/billing-invoices" className={buttonVariants({ variant: "outline" })}>Choose another billing family</Link>{targetState === "history" ? <Link href="#family-ledger" className={buttonVariants({ variant: "ghost" })}>Review this family’s ledger</Link> : null}</CardContent></Card>
+      ) : null}
+      {!data.readOnly && writableTarget ? (
+        <BillingWorkbench
+          key={`workbench:${billingSelectionKey(data.initialSelection)}`}
+          families={data.workbench.families}
+          centers={data.workbench.centers}
+          products={data.workbench.products}
+          tuitionPlans={data.workbench.tuitionPlans}
+          currentRole={data.workbench.currentRole}
+          currentUserId={data.workbench.currentUserId}
+          canOpenFamilyProfile={data.canOpenFamilyProfile}
+          canManageEnrollment={data.canManageEnrollment}
+          initialFamilyId={data.initialSelection?.familyId}
+          initialCenterId={data.initialSelection?.centerId}
+          initialChildId={data.initialSelection?.childId}
+          searchQuery={data.initialSelection?.searchQuery}
+        />
+      ) : null}
+      <CollapsibleCard
+        id="billing-school-reports"
+        title="School billing reports and setup"
+        description="Review school totals, recurring tuition, agency claims, reconciliation, and enrollment setup."
+        collapsedSummary={`${data.stats.open} current-family open invoices · ${money(data.stats.outstandingCents)} outstanding${data.reconciliation.isBalanced ? "" : " · Reconciliation needs review"}${data.needsEnrollmentSetup.length ? " · Enrollment setup needed" : ""}`}
+        defaultCollapsed
+        contentClassName="space-y-4"
+      >
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="All invoices" value={data.stats.total} />
         <StatCard label="Current-family open" value={data.stats.open} />
@@ -5062,26 +5090,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           )}
         </CardContent>
       </Card>
-      {!writableTarget ? (
-        <Card id="billing-workbench" className="glass-panel scroll-mt-24"><CardHeader><CardTitle as="h2">{targetState === "history" ? "Historical family account" : "Family selection needed"}</CardTitle><CardDescription>{targetState === "history" ? "This settled historical account is available in the family ledger below. No payment or account-editing tools have been opened." : BILLING_TARGET_UNAVAILABLE}</CardDescription></CardHeader><CardContent><Link href="/billing-invoices" className={buttonVariants({ variant: "outline" })}>Choose another billing family</Link>{targetState === "history" ? <Link href="#family-ledger" className={buttonVariants({ variant: "ghost" })}>Review this family’s ledger</Link> : null}</CardContent></Card>
-      ) : null}
-      {!data.readOnly && writableTarget ? (
-        <BillingWorkbench
-          key={`workbench:${billingSelectionKey(data.initialSelection)}`}
-          families={data.workbench.families}
-          centers={data.workbench.centers}
-          products={data.workbench.products}
-          tuitionPlans={data.workbench.tuitionPlans}
-          currentRole={data.workbench.currentRole}
-          currentUserId={data.workbench.currentUserId}
-          canOpenFamilyProfile={data.canOpenFamilyProfile}
-          canManageEnrollment={data.canManageEnrollment}
-          initialFamilyId={data.initialSelection?.familyId}
-          initialCenterId={data.initialSelection?.centerId}
-          initialChildId={data.initialSelection?.childId}
-          searchQuery={data.initialSelection?.searchQuery}
-        />
-      ) : null}
+      </CollapsibleCard>
       <Card className="glass-panel" id="invoices">
         <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1.5">

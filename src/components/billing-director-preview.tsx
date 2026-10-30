@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useBillingAccountOverview } from "@/components/use-billing-account-overview";
 import { BillingWorkbench } from "@/components/billing-workbench";
 import { PaymentReceiptPrintButton } from "@/components/billing-print-actions";
+import { FamilyLedgerCard } from "@/components/family-ledger-card";
 import { center, families, schools, entries, accounts, accountOverviewFixtures, tuitionPlans } from "@/lib/billing-director-demo-data";
 
 export function BillingDirectorPreview({ familyId, section, category, centerId }: { familyId?: string; section?: string; category?: string; centerId?: string }) {
@@ -15,6 +16,10 @@ export function BillingDirectorPreview({ familyId, section, category, centerId }
 
 export function BillingDirectorReceiptPreview() {
   return <section><h1 className="mb-4 text-2xl font-semibold">Synthetic director receipt review</h1><PaymentReceiptPrintButton preview schools={schools} payment={{ id: "demo-payment", amountCents: 10000, status: "PAID", provider: "manual_cash", externalIdPlaceholder: "DEMO-RECEIPT-1", paidAt: "2026-10-26T12:00:00Z", invoiceNumber: "DEMO-1042", paymentReferenceLabel: "Demo weekly tuition", billingAccount: { family: families[0] } }} /></section>;
+}
+
+export function BillingStandaloneLedgerPreview({ centerId }: { centerId?: string }) {
+  return <section><h1 className="mb-4 text-2xl font-semibold">Synthetic standalone ledger review</h1><FamilyLedgerCard entries={entries} accounts={accounts} families={[...families, { id: "demo-other-school-family", name: "Other School Household", centerId: "demo-other-school" }]} schools={schools} initialCenterId={centerId} canOpenFamilyProfile={false} readOnly /></section>;
 }
 
 export function BillingOverviewRefreshPreview() {

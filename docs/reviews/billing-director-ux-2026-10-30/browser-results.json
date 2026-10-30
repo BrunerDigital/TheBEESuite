@@ -10,6 +10,7 @@
     "A $250 weekly rate displays $500 biweekly and $1,000 every four weeks; pay-ahead edits warn, survive cancellation and reset on a confirmed family switch.",
     "An empty local search retains the selected family; the long browse list scrolls with an emulated touch gesture.",
     "Refreshed pending ACH props invalidate the actual overview hook while the family, account and $245 posted balance remain unchanged.",
+    "Standalone ledger options match the selected school, remain selectable across authorized schools when unfiltered, and explain an empty school.",
     "Ledger and charge/credit summaries also preview before printing; director receipt preview identifies the paid family, school, amount and receipt reference.",
     "All four sections fit desktop, tablet, 390px and 320px layouts with 44px section targets and persistent context; zero API traffic."
   ],

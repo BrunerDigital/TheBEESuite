@@ -92,17 +92,21 @@ export function FamilyLedgerCard({
   selectedFamilyId?: string;
 }) {
   const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
-  const validInitialFamilyId = families.some((family) => family.id === initialFamilyId && (!initialCenterId || family.centerId === initialCenterId))
+  const availableFamilies = useMemo(
+    () => families.filter((family) => !initialCenterId || family.centerId === initialCenterId),
+    [families, initialCenterId],
+  );
+  const validInitialFamilyId = availableFamilies.some((family) => family.id === initialFamilyId)
     ? initialFamilyId
     : "";
   const [localFamilyId, setFamilyId] = useState(validInitialFamilyId);
   const requestedFamilyId = selectedFamilyId ?? localFamilyId;
-  const familyId = families.some(family => family.id === requestedFamilyId && (!initialCenterId || family.centerId === initialCenterId)) ? requestedFamilyId : "";
+  const familyId = availableFamilies.some((family) => family.id === requestedFamilyId) ? requestedFamilyId : "";
   const [selectionError, setSelectionError] = useState(Boolean(initialFamilyId && !validInitialFamilyId));
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const invalidRange = Boolean(startDate && endDate && startDate > endDate);
-  const selectedFamily = families.find((family) => family.id === familyId) ?? null;
+  const selectedFamily = availableFamilies.find((family) => family.id === familyId) ?? null;
   const selectedAccount = accounts.find((account) => account.familyId === familyId) ?? null;
   const visibleEntries = useMemo(
     () => reconciledFamilyLedgerEntries(
@@ -153,12 +157,12 @@ export function FamilyLedgerCard({
         <div className="flex min-w-0 w-full flex-col gap-3">
           {selectedFamilyId === undefined ? <div className="grid min-w-0 flex-1 gap-1.5">
             <Label htmlFor="family-ledger-family">Family</Label>
-            <Select value={familyId} onValueChange={(value) => { if (value && families.some((family) => family.id === value)) { setFamilyId(value); setSelectionError(false); } }}>
-              <SelectTrigger id="family-ledger-family" className="w-full">
-                <SelectValue placeholder="Choose a family" />
+            <Select value={familyId} onValueChange={(value) => { if (value && availableFamilies.some((family) => family.id === value)) { setFamilyId(value); setSelectionError(false); } }}>
+              <SelectTrigger id="family-ledger-family" className="w-full" disabled={availableFamilies.length === 0}>
+                <SelectValue placeholder={availableFamilies.length ? "Choose a family" : "No families in this school"} />
               </SelectTrigger>
               <SelectContent>
-                {families.map((family) => (
+                {availableFamilies.map((family) => (
                   <SelectItem key={family.id} value={family.id}>
                     {family.name}
                   </SelectItem>

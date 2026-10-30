@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, type ReactNode } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Printer } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Button } from "@/components/ui/button";
@@ -99,25 +101,42 @@ function paymentTypeLabel(provider: string) {
   return "Other payment";
 }
 
-export function LedgerPrintButton({ entries, schools }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[] }) {
+function BillingPrintPreview({ buttonLabel, title, disabled, children, historyNotice = true }: { buttonLabel: string; title: string; disabled: boolean; historyNotice?: boolean; children: (generatedAt: Date) => ReactNode }) {
+  const { active, generatedAt, print, error, cancelPrint } = usePrintableReport();
+  const [open, setOpen] = useState(false);
+  const [printRequested, setPrintRequested] = useState(false);
+  const report = <>{children(generatedAt ?? new Date())}{historyNotice ? <p className="mt-4 text-sm">Loaded activity for the selected date range. Confirm full-year coverage before using this report as an annual statement.</p> : null}</>;
+  function close() { setOpen(false); cancelPrint(); }
+  return <>
+    <ReportPrintStyles />
+    <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => { setOpen(true); setPrintRequested(false); }}><Printer data-icon="inline-start" />{buttonLabel}</Button>
+    <Dialog open={open} onOpenChange={value => { if (value) setOpen(true); else close(); }}>
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader><DialogTitle>{title} preview</DialogTitle><DialogDescription>Review the family and school before printing or saving a PDF.</DialogDescription></DialogHeader>
+        <div className="billing-statement-preview overflow-x-auto rounded-lg border bg-background p-4 [&_table]:min-w-[30rem]">{report}</div>
+        {printRequested ? <p role="status">Print requested. If no dialog appears, use your browser&apos;s Print command or try another browser.</p> : null}
+        {error ? <p role="alert" className="text-destructive">{error}</p> : null}
+        <DialogFooter><Button type="button" variant="outline" onClick={close}>Close preview</Button><Button type="button" onClick={() => { setPrintRequested(true); print(); }}>Print / Save PDF</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <PrintableReport active={active} label={`Printable ${title}`}>{report}</PrintableReport>
+  </>;
+}
+
+export function LedgerPrintButton({ entries, schools, startDate = "", endDate = "" }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[]; startDate?: string; endDate?: string }) {
   const timeZone = useSchoolTimeZone(entries[0]?.billingAccount.family.centerId);
-  const { active, generatedAt, print } = usePrintableReport();
   const familyName = entries[0]?.billingAccount.family.name.trim();
   const reportTitle = familyName ? `${familyName} Ledger Report` : "Family Ledger Report";
   const totalCharges = entries.filter((entry) => entry.amountCents > 0).reduce((sum, entry) => sum + entry.amountCents, 0);
   const totalCredits = entries.filter((entry) => entry.amountCents < 0).reduce((sum, entry) => sum + Math.abs(entry.amountCents), 0);
-  const singleSchool = schools.length === 1 ? schools[0] : null;
+  const singleSchool = schoolForCenterId(schools, entries[0]?.billingAccount.family.centerId);
 
   return (
-    <>
-      <ReportPrintStyles />
-      <Button type="button" variant="outline" size="sm" onClick={print} disabled={!entries.length}>
-        <Printer data-icon="inline-start" />
-        Print ledger
-      </Button>
-      <PrintableReport active={active} label={`Printable ${reportTitle}`}>
+    <BillingPrintPreview title={reportTitle} buttonLabel="Preview ledger" disabled={!entries.length}>
+      {generatedAt => <>
         <header style={{ marginBottom: 20 }}>
           <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>{reportTitle}</h1>
+          <div>Reporting period: {startDate || "Earliest loaded activity"} through {endDate || "Latest loaded activity"}</div>
           <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
           <div>School: {singleSchool ? schoolLabel(singleSchool) : "Multiple schools"}</div>
           <div>School EIN: {singleSchool ? schoolEinLabel(singleSchool) : "See each row"}</div>
@@ -158,66 +177,74 @@ export function LedgerPrintButton({ entries, schools }: { entries: BillingLedger
             })}
           </tbody>
         </table>
-      </PrintableReport>
-    </>
+      </>}
+    </BillingPrintPreview>
   );
 }
 
 export function CustomerStatementPrintButton({
-  entries,
-  schools,
-  familyName,
-  centerId,
-  currentBalanceCents,
+  entries, schools, familyName, centerId, currentBalanceCents, startDate = "", endDate = "", familyReference, disabled = false,
 }: {
   entries: BillingLedgerPrintEntry[];
   schools: BillingReceiptSchool[];
   familyName: string | null;
   centerId: string | null;
   currentBalanceCents: number | null;
+  startDate?: string;
+  endDate?: string;
+  familyReference?: string;
+  disabled?: boolean;
 }) {
   const timeZone = useSchoolTimeZone(centerId);
-  const { active, generatedAt, print } = usePrintableReport();
+  const { active, generatedAt, print, error, cancelPrint } = usePrintableReport();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [printRequested, setPrintRequested] = useState(false);
   const school = schoolForCenterId(schools, centerId);
+  const period = `${startDate || "Earliest loaded activity"} through ${endDate || "Latest loaded activity"}`;
+  const document = <>
+    <header className="mb-5 space-y-1">
+      <h2 className="text-xl font-semibold">Customer statement</h2>
+      <div>Family: {familyName || "Not selected"}</div>
+      {familyReference ? <div className="break-all text-xs">Account: {familyReference}</div> : null}
+      <div>School: {schoolLabel(school)}</div>
+      <div>School EIN: {schoolEinLabel(school)}</div>
+      <div>Reporting period: {period}</div>
+      <div>Generated: {formatPrintDateTime(generatedAt ?? new Date(), timeZone)}</div>
+      <div>Current posted balance: {currentBalanceCents === null ? "Not available" : money(currentBalanceCents)}</div>
+      <p className="text-sm">Current balance reflects today&apos;s posted account, including any agency responsibility. It is not the closing balance for this reporting period or a verified collectible amount.</p>
+      <p className="text-sm">Loaded activity only. Confirm full-year history before using this report as an annual statement.</p>
+    </header>
+    <table className="w-full text-sm">
+      <thead><tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Description</th><th className="p-2 text-right">Charge</th><th className="p-2 text-right">Payment / credit</th></tr></thead>
+      <tbody>{entries.map(entry => <tr key={entry.id} className="border-t">
+        <td className="p-2 align-top">{formatDate(entry.effectiveAt, timeZone)}</td><td className="break-words p-2 align-top">{entry.description}</td>
+        <td className="p-2 text-right align-top">{entry.amountCents > 0 ? money(entry.amountCents) : ""}</td>
+        <td className="p-2 text-right align-top">{entry.amountCents < 0 ? money(Math.abs(entry.amountCents)) : ""}</td>
+      </tr>)}</tbody>
+    </table>
+    {!entries.length ? <p className="mt-3">No charge or payment activity in the selected date range.</p> : null}
+  </>;
 
-  return (
-    <>
-      <ReportPrintStyles />
-      <Button type="button" variant="outline" size="sm" onClick={print} disabled={!familyName}>
-        <Printer data-icon="inline-start" />
-        Customer statement
-      </Button>
-      <PrintableReport active={active} label="Printable standard customer statement">
-        <header style={{ marginBottom: 20 }}>
-          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Standard Customer Statement</h1>
-          <div>Family: {familyName || "Not selected"}</div>
-          <div>School: {schoolLabel(school)}</div>
-          <div>School EIN: {schoolEinLabel(school)}</div>
-          <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
-          <div>Current balance: {currentBalanceCents === null ? "Not set" : money(currentBalanceCents)}</div>
-        </header>
-        <table>
-          <thead><tr><th>Date</th><th>Description</th><th>Charge</th><th>Payment / credit</th></tr></thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr key={entry.id}>
-                <td>{formatDate(entry.effectiveAt, timeZone)}</td>
-                <td>{entry.description}</td>
-                <td>{entry.amountCents > 0 ? money(entry.amountCents) : ""}</td>
-                <td>{entry.amountCents < 0 ? money(Math.abs(entry.amountCents)) : ""}</td>
-              </tr>
-            ))}
-            {!entries.length ? <tr><td colSpan={4}>No charge or payment activity in the selected date range.</td></tr> : null}
-          </tbody>
-        </table>
-      </PrintableReport>
-    </>
-  );
+  return <>
+    <ReportPrintStyles />
+    <Button type="button" variant="outline" size="sm" onClick={() => { setPreviewOpen(true); setPrintRequested(false); }} disabled={disabled || !familyName}>
+      <Printer data-icon="inline-start" />Preview customer statement
+    </Button>
+    <Dialog open={previewOpen} onOpenChange={open => { setPreviewOpen(open); if (!open) cancelPrint(); }}>
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader><DialogTitle>Statement preview</DialogTitle><DialogDescription>Review the family, school and reporting period before printing or saving a PDF.</DialogDescription></DialogHeader>
+        <div className="billing-statement-preview overflow-x-auto rounded-lg border bg-background p-4" aria-label="Customer statement preview">{document}</div>
+        {printRequested ? <p role="status" className="text-sm text-muted-foreground">Print requested. If no dialog appears, use your browser&apos;s Print command or try another browser. You can keep reviewing this preview.</p> : null}
+        {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+        <DialogFooter><Button type="button" variant="outline" onClick={() => { setPreviewOpen(false); cancelPrint(); }}>Close preview</Button><Button type="button" onClick={() => { setPrintRequested(true); print(); }}><Printer data-icon="inline-start" />Print / Save PDF</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <PrintableReport active={active} label="Printable standard customer statement">{document}</PrintableReport>
+  </>;
 }
 
-export function ChargeCreditSummaryPrintButton({ entries, schools }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[] }) {
+export function ChargeCreditSummaryPrintButton({ entries, schools, startDate = "", endDate = "" }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[]; startDate?: string; endDate?: string }) {
   const timeZone = useSchoolTimeZone(entries[0]?.billingAccount.family.centerId);
-  const { active, generatedAt, print } = usePrintableReport();
   const familyName = entries[0]?.billingAccount.family.name.trim();
   const school = entries.length
     ? schoolForCenterId(schools, entries[0].billingAccount.family.centerId)
@@ -234,18 +261,14 @@ export function ChargeCreditSummaryPrintButton({ entries, schools }: { entries: 
   }, new Map<string, { charges: number; credits: number }>())).sort(([left], [right]) => left.localeCompare(right));
 
   return (
-    <>
-      <ReportPrintStyles />
-      <Button type="button" variant="outline" size="sm" onClick={print} disabled={!entries.length}>
-        <Printer data-icon="inline-start" />
-        Charge / credit summary
-      </Button>
-      <PrintableReport active={active} label="Printable charge and credit summary">
+    <BillingPrintPreview title="Charge / credit summary" buttonLabel="Preview charge / credit summary" disabled={!entries.length}>
+      {generatedAt => <>
         <header style={{ marginBottom: 20 }}>
           <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Charge / Credit Summary</h1>
           <div>Family: {familyName || "Not selected"}</div>
           <div>School: {schoolLabel(school)}</div>
           <div>School EIN: {schoolEinLabel(school)}</div>
+          <div>Reporting period: {startDate || "Earliest loaded activity"} through {endDate || "Latest loaded activity"}</div>
           <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
         </header>
         <table>
@@ -256,8 +279,8 @@ export function ChargeCreditSummaryPrintButton({ entries, schools }: { entries: 
             <tr><th>Net activity</th><th colSpan={2}>{money(totalCharges - totalCredits)}</th></tr>
           </tbody>
         </table>
-      </PrintableReport>
-    </>
+      </>}
+    </BillingPrintPreview>
   );
 }
 
@@ -266,11 +289,13 @@ export function PaymentReceiptPrintButton({
   schools,
   schoolTimeZone,
   buttonLabel = "Receipt",
+  preview = false,
 }: {
   payment: BillingPaymentReceipt;
   schools: BillingReceiptSchool[];
   schoolTimeZone?: string;
   buttonLabel?: string;
+  preview?: boolean;
 }) {
   const contextTimeZone = useSchoolTimeZone(payment.billingAccount.family.centerId);
   const timeZone = schoolTimeZone ?? contextTimeZone;
@@ -278,14 +303,7 @@ export function PaymentReceiptPrintButton({
   const school = schoolForCenterId(schools, payment.billingAccount.family.centerId);
   const paid = payment.status === "PAID";
 
-  return (
-    <>
-      <ReportPrintStyles />
-      <Button type="button" variant="outline" size="sm" onClick={print} disabled={!paid}>
-        <Printer data-icon="inline-start" />
-        {buttonLabel}
-      </Button>
-      <PrintableReport active={active} label="Printable customer payment receipt">
+  const receipt = (generatedAt: Date | null) => <>
         <header style={{ marginBottom: 20 }}>
           <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Customer Payment Receipt</h1>
           <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
@@ -343,6 +361,19 @@ export function PaymentReceiptPrintButton({
             </tr>
           </tbody>
         </table>
+  </>;
+
+  if (preview) return <BillingPrintPreview title="Payment receipt" buttonLabel={buttonLabel} disabled={!paid} historyNotice={false}>{receipt}</BillingPrintPreview>;
+
+  return (
+    <>
+      <ReportPrintStyles />
+      <Button type="button" variant="outline" size="sm" onClick={print} disabled={!paid}>
+        <Printer data-icon="inline-start" />
+        {buttonLabel}
+      </Button>
+      <PrintableReport active={active} label="Printable customer payment receipt">
+        {receipt(generatedAt)}
       </PrintableReport>
     </>
   );

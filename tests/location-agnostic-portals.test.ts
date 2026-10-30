@@ -22,6 +22,8 @@ const locationNames = new RegExp(
 // or examples. They are data/configuration boundaries, not location-specific UI
 // implementations or feature switches.
 const reviewedLocationDataFiles = new Set([
+  // Development-only synthetic billing fixtures; operational UI remains shared.
+  "src/lib/billing-director-demo-data.ts",
   "src/components/executive-admin-console.tsx",
   "src/components/fte-bulk-import-panel.tsx",
   "src/lib/active-school-locations.ts",

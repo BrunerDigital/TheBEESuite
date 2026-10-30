@@ -1201,3 +1201,35 @@
     }
   }
 }
+
+/* Director billing: compact sections retain an unambiguous account context. */
+.office-billing-workspace .billing-section-tabs {
+  height: auto;
+}
+.office-billing-workspace .billing-section-tabs > [role="tab"] {
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.office-billing-workspace [data-billing-context] {
+  top: calc(var(--app-header-height, 4rem) + .5rem);
+}
+.office-billing-workspace .billing-persistent-context,
+.office-billing-workspace [data-slot="tabs-content"] {
+  min-width: 0;
+}
+.billing-statement-preview table {
+  table-layout: fixed;
+  overflow-wrap: anywhere;
+}
+.office-billing-workspace .billing-account-metrics .truncate {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+@media (max-width: 639px) {
+  .office-billing-workspace .billing-persistent-context {
+    padding: .625rem;
+  }
+}

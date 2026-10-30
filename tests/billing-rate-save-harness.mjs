@@ -37,6 +37,8 @@ export function createRateSaveHarness(overrides = {}, options = {}) {
   let refreshed = 0;
   const selectedAssignment = { cadence: 'biweekly', invoiceDelayWeeks: 1, startsPeriod: '2026-W42', tuitionPlanId: 'synthetic-rate' };
   const context = createContext({
+    billingRequestInFlight: { current: false },
+    billingViewActive: { current: true },
     selectedFamily: { id: 'synthetic-family' },
     selectedAssignmentChild: { id: 'synthetic-child', fullName: 'Synthetic Child' },
     selectedAssignmentChildIsCurrent: true,

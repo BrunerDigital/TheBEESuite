@@ -4709,6 +4709,8 @@ export type BillingInvoicesPageData = {
     childId?: string;
     searchQuery?: string;
     workspace?: "terminal";
+    section?: string;
+    category?: string;
   };
   receiptSchools: BillingReceiptSchool[];
   workbench: {
@@ -4929,6 +4931,9 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           initialCenterId={data.initialSelection?.centerId}
           initialChildId={data.initialSelection?.childId}
           searchQuery={data.initialSelection?.searchQuery}
+          initialSection={data.initialSelection?.section}
+          initialCategory={data.initialSelection?.category}
+          ledger={{ entries: data.ledgerEntries, accounts: data.ledgerAccounts, schools: data.receiptSchools }}
         />
       ) : null}
       <CollapsibleCard
@@ -5091,7 +5096,8 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         </CardContent>
       </Card>
       </CollapsibleCard>
-      <Card className="glass-panel" id="invoices">
+      <CollapsibleCard id="invoices" title="School invoice list" description="Review invoices across the authorized school workspace." collapsedSummary={`${data.invoices.length} loaded ${data.invoiceStatus} invoices`} defaultCollapsed>
+      <Card className="border-0 shadow-none">
         <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1.5">
             <CardTitle as="h2">Invoices</CardTitle>
@@ -5191,7 +5197,8 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           )}
         </CardContent>
       </Card>
-      <FamilyLedgerCard
+      </CollapsibleCard>
+      {data.readOnly || !writableTarget ? <FamilyLedgerCard
         key={`ledger:${billingSelectionKey(data.initialSelection)}`}
         initialCenterId={data.initialSelection?.centerId}
         canOpenFamilyProfile={data.canOpenFamilyProfile}
@@ -5201,7 +5208,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         schools={data.receiptSchools}
         initialFamilyId={data.initialSelection?.familyId}
         readOnly={data.readOnly}
-      />
+      /> : null}
     </div>
   );
 }
@@ -5375,7 +5382,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                   <TableCell>
                     {achProcessing
                       ? <span className="text-xs text-muted-foreground">After settlement</span>
-                      : <PaymentReceiptPrintButton payment={receiptPayments[index]} schools={data.receiptSchools} />}
+                      : <PaymentReceiptPrintButton preview payment={receiptPayments[index]} schools={data.receiptSchools} />}
                   </TableCell>
                   <TableCell>
                     <Link href={billingRecordHref(payment.billingAccount.family, payment.billingAccount.family.name)} className={buttonVariants({ variant: "outline", size: "sm" })}>

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useBillingAccountOverview } from "@/components/use-billing-account-overview";
-import { parentPaymentAmountCents } from "@/lib/parent-billing-visibility";
 import { BillingWorkbench } from "@/components/billing-workbench";
 import { PaymentReceiptPrintButton } from "@/components/billing-print-actions";
 import { center, families, schools, entries, accounts, accountOverviewFixtures, tuitionPlans } from "@/lib/billing-director-demo-data";
@@ -20,11 +19,10 @@ export function BillingDirectorReceiptPreview() {
 
 export function BillingOverviewRefreshPreview() {
   const [processing, setProcessing] = useState(false);
-  const fixture = useMemo(() => {
-    const credit = processing ? 10000 : 0;
-    const account = { balanceCents: 24500, paymentProgress: { phase: "ach_processing", count: processing ? 1 : 0, provisionalAchCreditCents: credit } };
-    return { account, summaries: { "demo-family-0": { familyId: "demo-family-0", centerId: center.id, billingAccountId: "demo-account-0", postedBalanceCents: account.balanceCents, collectibleCents: parentPaymentAmountCents({ accountBalanceCents: account.balanceCents, agencyLedgerEntries: [], provisionalCreditCents: credit }), responsibilityReviewRequired: false, pendingCount: account.paymentProgress.count, provisionalAchCreditCents: credit } } };
-  }, [processing]);
-  const overview = useBillingAccountOverview({ familyId: "demo-family-0", centerId: center.id, billingAccountId: "demo-account-0", balanceCents: fixture.account.balanceCents, paymentStateKey: JSON.stringify(fixture.account.paymentProgress), refreshSource: fixture.account }, fixture.summaries);
-  return <section><h1>Account overview refresh fixture</h1><p>Posted balance: $245.00</p><p role="status">{overview.data ? `Pending: ${overview.data.pendingCount}; collectible: ${overview.data.collectibleCents}` : "Checking account"}</p><button type="button" onClick={() => setProcessing(true)}>Simulate pending ACH props</button></section>;
+  const [readerReady, setReaderReady] = useState(false);
+  const account = useMemo(() => ({ balanceCents: 24500, paymentProgress: { phase: "ach_processing", count: processing ? 1 : 0, provisionalAchCreditCents: processing ? 10000 : 0 } }), [processing]);
+  // The QA runner supplies an in-memory fetch transport. Keep the fixtures argument
+  // absent so the original effect would not be invalidated by a changing fixture map.
+  const overview = useBillingAccountOverview({ familyId: "demo-family-0", centerId: center.id, billingAccountId: readerReady ? "demo-account-0" : "", balanceCents: account.balanceCents, paymentStateKey: JSON.stringify(account.paymentProgress), refreshSource: account });
+  return <section data-overview-processing={processing ? "true" : "false"}><h1>Account overview refresh fixture</h1><p>Posted balance: $245.00</p><p role="status">{overview.data ? `Pending: ${overview.data.pendingCount}; collectible: ${overview.data.collectibleCents}` : "Checking account"}</p><button type="button" onClick={() => setReaderReady(true)}>Enable mocked overview reader</button><button type="button" onClick={() => setProcessing(true)}>Simulate pending ACH props</button></section>;
 }

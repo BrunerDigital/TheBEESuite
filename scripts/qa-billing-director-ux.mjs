@@ -273,10 +273,26 @@ export async function runBillingDirectorQa(page, baseUrl = "http://localhost:305
   await receiptDialog.getByRole("button", { name: "Close preview", exact: true }).click();
   await page.goto(`${origin.origin}/device-preview?view=billing&scenario=overview-refresh`);
   await page.waitForFunction(() => document.documentElement.dataset.devicePreviewHydrated === "true");
+  await page.evaluate(() => {
+    const original = window.fetch;
+    window.__overviewReadCount = 0;
+    window.fetch = async (input, init) => {
+      if (new URL(String(input), location.href).pathname === "/api/billing/account-overview") {
+        window.__overviewReadCount++;
+        const processing = document.querySelector("[data-overview-processing]").getAttribute("data-overview-processing") === "true";
+        return new Response(JSON.stringify({ familyId: "demo-family-0", centerId: "preview-center", billingAccountId: "demo-account-0", postedBalanceCents: 24500, collectibleCents: processing ? 14500 : 24500, pendingCount: processing ? 1 : 0, provisionalAchCreditCents: processing ? 10000 : 0, responsibilityReviewRequired: false }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return original(input, init);
+    };
+    window.__restoreOverviewFetch = () => { window.fetch = original; };
+  });
+  await page.getByRole("button", { name: "Enable mocked overview reader", exact: true }).click();
   await page.getByRole("status").filter({ hasText: "Pending: 0; collectible: 24500" }).waitFor();
   await page.getByRole("button", { name: "Simulate pending ACH props", exact: true }).click();
   await page.getByRole("status").filter({ hasText: "Pending: 1; collectible: 14500" }).waitFor();
   await page.getByText("Posted balance: $245.00", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.__overviewReadCount), 2);
+  await page.evaluate(() => window.__restoreOverviewFetch());
   report.checks.push("Refreshed pending ACH props invalidate the actual overview hook while the family, account and $245 posted balance remain unchanged.");
   assert.deepEqual(report.apiRequests, [], "The fixture browser must never request an API");
   assert.deepEqual(report.consoleErrors, [], "No application runtime errors");

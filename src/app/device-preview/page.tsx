@@ -5,7 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
 import { DevicePreviewGuard } from "@/components/device-preview-guard";
 import { BILLING_DIRECTOR_DEMO_SCHOOL_NAME } from "@/lib/billing-director-demo-data";
-import { BillingDirectorPreview, BillingDirectorReceiptPreview } from "@/components/billing-director-preview";
+import { BillingDirectorPreview, BillingDirectorReceiptPreview, BillingOverviewRefreshPreview } from "@/components/billing-director-preview";
 import { ExecutiveDashboard } from "@/components/dashboard";
 import { KioskCheckIn } from "@/components/kiosk-check-in";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
@@ -334,6 +334,7 @@ function ShellPreview({ role, screen, familySection, scenario, updateDay, billin
     return <AppShell previewMode previewHrefBase={`/device-preview?view=${role}`} currentUser={{ name: regional ? "Riley Morgan" : "Casey Bennett", email: `${role}@example.com`, role: regional ? "REGIONAL_MANAGER" : "PLATFORM_OWNER", accessScope: regional ? "tenant" : "platform", centerIds: ["preview-center", "preview-center-two", "preview-center-three"], timeZone: "America/Indiana/Indianapolis", workspace, scopeContext: { kind: selectedSchool ? "school" : "portfolio", label: workspace.label, detail: `${selectedSchool ? "Sunshine Group · Carmel, IN" : "3 schools"} · ${regional ? "Regional Manager" : "Platform Owner"}`, href: "/multi-location-dashboard" } }}><PortfolioPreview regional={regional} scenario={scenario} /></AppShell>;
   }
   if (role === "billing") {
+    if (scenario === "overview-refresh") return <BillingOverviewRefreshPreview />;
     if (scenario === "director-receipt") return <AppShell previewMode previewHrefBase="/device-preview?view=billing" currentUser={{ name: "Jamie Patel", email: "director@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Denver" }}><BillingDirectorReceiptPreview /></AppShell>;
     if (scenario === "director-ux") return <AppShell previewMode previewHrefBase="/device-preview?view=billing&scenario=director-ux" currentUser={{ name: "Jamie Patel", email: "director@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Denver", scopeContext: { kind: "school", label: BILLING_DIRECTOR_DEMO_SCHOOL_NAME, detail: "Center Director", href: "/billing-invoices" } }}><BillingDirectorPreview familyId={billingFamilyId} section={billingSection} category={billingCategory} centerId={billingCenterId} /></AppShell>;
     return <AppShell previewMode previewHrefBase="/device-preview?view=billing" currentUser={{ name: "Jamie Patel", email: "billing@example.com", role: "BILLING_ADMIN", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Billing Admin · 1 school", href: "/billing-invoices" } }}><BillingPreview /></AppShell>;

@@ -29,12 +29,13 @@ The scoped change does not alter database schema, financial calculation implemen
 | Phone ledger | Separate selector appears in the desktop baseline | [Ledger follows the chosen family](after-mobile-ledger.png) |
 | Customer statement | Immediate browser print request; no onscreen preview | [Visible statement review](after-desktop-statement-preview.png) |
 
-The before images were captured before changing the workbench, using the same synthetic data. The after shell identifies the synthetic Centennial director explicitly. Phone screenshots show the viewport of the app's scrollable workspace; desktop before/after images capture the document. These are demo observations, not a production usability session or timing study.
+The before images were captured before changing the workbench, using the same synthetic family and account balances. The after shell identifies the synthetic Centennial director explicitly. Phone screenshots show the viewport of the app's scrollable workspace; desktop before/after images capture the document. These are demo observations, not a production usability session or timing study.
 
 ## Validation
 
 - Focused behavioral and regression checks: 117 passed, including exact selection, checkout-summary authorization and response identity, stale response cancellation even when abort is ignored, ledger date/history semantics, current/past/pending restrictions, auditor boundaries, child setup and existing atomic tuition-rate saves.
 - Browser QA: [retained results](browser-results.json). All four sections tested at 1440 × 1000, 834 × 1112, 390 × 844 and 320 × 740. No horizontal document overflow; section targets are at least 44 pixels tall. Persistent context was checked while scrolling the actual workspace.
+- Review follow-up regressions: a $250 weekly rate shows a $500 biweekly invoice and a $1,000 four-week invoice; a pending ACH update refreshes the actual overview hook without changing the posted balance; pay-ahead inputs warn before switching and reset only after confirmed discard.
 - Keyboard selection of a duplicate household, category changes, missing-family and empty-category states, refresh recovery, cancelled/confirmed draft loss, ledger synchronization and date-range retention were exercised.
 - The financial review/lock check used an in-memory response. The browser emitted zero API requests and zero application runtime errors.
 - Axe WCAG A/AA checks of the changed workbench: zero violations in all four sections on desktop and mobile. A recurring-tuition panel ID that broke its tab's `aria-controls` was corrected.

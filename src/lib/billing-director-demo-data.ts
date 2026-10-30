@@ -23,3 +23,6 @@ export const accounts = families.map(family => ({ familyId: family.id, familyNam
 export const entries = families.map(family => ({ id: `entry-${family.id}`, type: "tuition_charge", description: `Demo tuition · ${family.children[0].fullName}`, amountCents: family.billingAccount!.balanceCents, balanceAfterCents: family.billingAccount!.balanceCents, effectiveAt: "2026-10-26T12:00:00Z", billingAccount: { family } }));
 
 export const BILLING_DIRECTOR_DEMO_SCHOOL_NAME = center.name;
+
+export const tuitionPlans = [{ id: "demo-weekly-plan", centerId: center.id, name: "Demo weekly tuition", ageGroup: "Pre-K", cadence: "weekly", amountCents: 25000 }];
+families[1].children[0].tuitionAssignment = { enabled: true, tuitionPlanId: tuitionPlans[0].id, tuitionPlanName: tuitionPlans[0].name, cadence: "biweekly", amountCents: 25000, grossAmountCents: 25000, additionalCharges: [], additionalChargesTotalCents: 0, credits: [], creditsTotalCents: 0, netAmountCents: 25000, billingDay: 4, startsPeriod: "2026-W44", description: "Demo biweekly tuition" };

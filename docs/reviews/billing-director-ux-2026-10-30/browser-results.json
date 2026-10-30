@@ -7,7 +7,9 @@
     "Financial review identifies the exact account; in-flight requests lock family/category controls; no stale response survives a later switch. Submission was intercepted in memory.",
     "Past and pending categories show their own family and count; recurring tuition remains disabled with business explanations.",
     "Empty categories and mismatched exact school/family links fail closed, including after refresh.",
+    "A $250 weekly rate displays $500 biweekly and $1,000 every four weeks; pay-ahead edits warn, survive cancellation and reset on a confirmed family switch.",
     "An empty local search retains the selected family; the long browse list scrolls with an emulated touch gesture.",
+    "Refreshed pending ACH props invalidate the actual overview hook while the family, account and $245 posted balance remain unchanged.",
     "Ledger and charge/credit summaries also preview before printing; director receipt preview identifies the paid family, school, amount and receipt reference.",
     "All four sections fit desktop, tablet, 390px and 320px layouts with 44px section targets and persistent context; zero API traffic."
   ],
@@ -18,31 +20,31 @@
       "viewport": 1440,
       "scrollWidth": 1440,
       "height": 1001,
-      "workspaceHeight": 668
+      "workspaceHeight": 800
     },
     {
       "device": "desktop",
       "section": "Tuition & Fees",
       "viewport": 1440,
       "scrollWidth": 1440,
-      "height": 1977,
-      "workspaceHeight": 1778
+      "height": 2109,
+      "workspaceHeight": 1910
     },
     {
       "device": "desktop",
       "section": "Payments",
       "viewport": 1440,
       "scrollWidth": 1440,
-      "height": 1393,
-      "workspaceHeight": 1194
+      "height": 1525,
+      "workspaceHeight": 1326
     },
     {
       "device": "desktop",
       "section": "Ledger & Statements",
       "viewport": 1440,
       "scrollWidth": 1440,
-      "height": 1016,
-      "workspaceHeight": 817
+      "height": 1148,
+      "workspaceHeight": 949
     },
     {
       "device": "tablet",
@@ -50,7 +52,7 @@
       "viewport": 834,
       "scrollWidth": 834,
       "height": 1112,
-      "workspaceHeight": 684
+      "workspaceHeight": 816
     },
     {
       "device": "tablet",
@@ -58,7 +60,7 @@
       "viewport": 834,
       "scrollWidth": 834,
       "height": 1112,
-      "workspaceHeight": 1896
+      "workspaceHeight": 2028
     },
     {
       "device": "tablet",
@@ -66,7 +68,7 @@
       "viewport": 834,
       "scrollWidth": 834,
       "height": 1112,
-      "workspaceHeight": 1214
+      "workspaceHeight": 1346
     },
     {
       "device": "tablet",
@@ -74,7 +76,7 @@
       "viewport": 834,
       "scrollWidth": 834,
       "height": 1112,
-      "workspaceHeight": 901
+      "workspaceHeight": 1033
     },
     {
       "device": "mobile",
@@ -82,7 +84,7 @@
       "viewport": 390,
       "scrollWidth": 390,
       "height": 844,
-      "workspaceHeight": 1262
+      "workspaceHeight": 1490
     },
     {
       "device": "mobile",
@@ -90,7 +92,7 @@
       "viewport": 390,
       "scrollWidth": 390,
       "height": 844,
-      "workspaceHeight": 2754
+      "workspaceHeight": 2966
     },
     {
       "device": "mobile",
@@ -98,7 +100,7 @@
       "viewport": 390,
       "scrollWidth": 390,
       "height": 844,
-      "workspaceHeight": 1850
+      "workspaceHeight": 2062
     },
     {
       "device": "mobile",
@@ -106,7 +108,7 @@
       "viewport": 390,
       "scrollWidth": 390,
       "height": 844,
-      "workspaceHeight": 1265
+      "workspaceHeight": 1477
     },
     {
       "device": "small-mobile",
@@ -114,7 +116,7 @@
       "viewport": 320,
       "scrollWidth": 320,
       "height": 740,
-      "workspaceHeight": 1352
+      "workspaceHeight": 1624
     },
     {
       "device": "small-mobile",
@@ -122,7 +124,7 @@
       "viewport": 320,
       "scrollWidth": 320,
       "height": 740,
-      "workspaceHeight": 3044
+      "workspaceHeight": 3316
     },
     {
       "device": "small-mobile",
@@ -130,7 +132,7 @@
       "viewport": 320,
       "scrollWidth": 320,
       "height": 740,
-      "workspaceHeight": 2044
+      "workspaceHeight": 2316
     },
     {
       "device": "small-mobile",
@@ -138,7 +140,7 @@
       "viewport": 320,
       "scrollWidth": 320,
       "height": 740,
-      "workspaceHeight": 1371
+      "workspaceHeight": 1643
     }
   ],
   "accessibility": [

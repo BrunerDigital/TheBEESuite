@@ -664,6 +664,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const effectiveAssignmentCreditsTotalCents = effectiveAssignmentCredits.reduce((total, credit) => total + credit.amountCents, 0);
   const effectiveAssignmentGrossCents = effectiveAssignmentPlan?.amountCents ?? 0;
   const effectiveAssignmentNetCents = effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents - effectiveAssignmentCreditsTotalCents;
+  const effectiveAssignmentInvoiceCents = Math.max(0, effectiveAssignmentNetCents) * (effectiveAssignmentCadence === "four_week" ? 4 : effectiveAssignmentCadence === "biweekly" ? 2 : 1);
   const savedSelectedWeeklyTuitionCents = selectedAssignment?.enabled
     && typeof selectedAssignment.amountCents === "number"
     && selectedAssignment.amountCents >= 0
@@ -700,7 +701,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     planAgeGroup,
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
-  const accountOverview = useBillingAccountOverview({ familyId: effectiveFamilyId, centerId, billingAccountId: selectedBillingAccount?.id ?? "", balanceCents: familyBalanceCents }, accountOverviewFixtures);
+  const accountOverview = useBillingAccountOverview({ familyId: effectiveFamilyId, centerId, billingAccountId: selectedBillingAccount?.id ?? "", balanceCents: familyBalanceCents, paymentStateKey: JSON.stringify(selectedPaymentProgress ?? null), refreshSource: selectedBillingAccount }, accountOverviewFixtures);
   const pendingPaymentCount = accountOverview.data?.pendingCount ?? selectedPaymentProgress?.count ?? 0;
   const pendingAchCreditCents = accountOverview.data?.provisionalAchCreditCents ?? selectedPaymentProgress?.provisionalAchCreditCents ?? 0;
   const selectedAdjustmentOption = oneTimeBillingAdjustmentOption(adjustmentReason) ?? ONE_TIME_BILLING_ADJUSTMENT_OPTIONS[0];
@@ -824,6 +825,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     || adjustmentReason !== "vacation_credit"
     || dueDate !== draftDates.date || adjustmentEffectiveDate !== draftDates.date
     || billingPeriod !== draftDates.month || weeklyRecoveryPeriod !== draftDates.week
+    || payAheadMonthCount !== "1" || payAheadStartPeriod !== draftDates.month
     || checkPaidAt !== draftDates.localNow || cashPaidAt !== draftDates.localNow || payrollPaidAt !== draftDates.localNow
     || adjustmentAmountDollars.trim()
     || adjustmentNote.trim()
@@ -1165,6 +1167,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setAmountDollars("");
     setDueDate(dates.date);
     setBillingPeriod(dates.month);
+    setPayAheadMonthCount("1"); setPayAheadStartPeriod(dates.month);
     setBatchTarget("child");
     setAgeGroup("all");
     setEnrollmentStatus("enrolled");
@@ -3301,14 +3304,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <DisplayValue label={`${effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} credits`} value={`−${money(effectiveAssignmentCreditsTotalCents)}`} />
                 <DisplayValue
                   label={effectiveAssignmentCadence === "four_week" ? "Every-4-weeks invoice" : effectiveAssignmentCadence === "biweekly" ? "Biweekly invoice" : `Net ${effectiveRateCadence} invoice`}
-                  value={money(Math.max(0, effectiveAssignmentNetCents) * (effectiveAssignmentCadence === "four_week" ? 4 : effectiveAssignmentCadence === "biweekly" ? 2 : 1))}
+                  value={money(effectiveAssignmentInvoiceCents)}
                   detail={effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents && !assignmentIsVoucherFunded
                     ? "Credits must be less than gross tuition"
                     : "Amount added to the family ledger"}
                 />
               </div>
             </details>
-            <SummaryMetric label="Net recurring invoice" value={money(effectiveAssignmentNetCents)} detail="Includes the selected rate, additional lines and recurring credits." />
+            <SummaryMetric label="Net recurring invoice" value={money(effectiveAssignmentInvoiceCents)} detail="Includes the selected rate, additional lines, recurring credits and billing-cycle multiplier." />
             <div className="space-y-1">
               <Label htmlFor="billing-assignment-description">Child tuition label</Label>
               <Input

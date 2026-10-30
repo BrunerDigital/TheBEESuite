@@ -182,7 +182,7 @@ export async function runBillingDirectorQa(page, baseUrl = "http://localhost:305
 
   for (const [width, height, name] of [[1440, 1000, "desktop"], [834, 1112, "tablet"], [390, 844, "mobile"], [320, 740, "small-mobile"]]) {
     await page.setViewportSize({ width, height });
-    await goto("&familyId=demo-family-1&centerId=preview-center");
+    await goto("&familyId=demo-family-0&centerId=preview-center");
     for (const sectionName of ["Overview", "Tuition & Fees", "Payments", "Ledger & Statements"]) {
       await section(sectionName);
       await page.getByRole("tabpanel", { name: sectionName, exact: true }).waitFor();
@@ -219,6 +219,30 @@ export async function runBillingDirectorQa(page, baseUrl = "http://localhost:305
       }
     }
   }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await goto("&familyId=demo-family-1&centerId=preview-center");
+  await section("Tuition & Fees");
+  const invoiceSummary = page.getByText("Net recurring invoice", { exact: true }).locator("..");
+  await invoiceSummary.getByText("$500.00", { exact: true }).waitFor();
+  await page.getByRole("combobox", { name: "Billing cycle", exact: true }).click();
+  await page.getByRole("option", { name: "Every 4 weeks · 4 weeks ahead", exact: true }).click();
+  await invoiceSummary.getByText("$1,000.00", { exact: true }).waitFor();
+  page.once("dialog", dialog => dialog.accept());
+  await pick("demo-family-0");
+  await page.getByRole("tab", { name: "Pay ahead", exact: true }).click();
+  const firstMonth = await page.getByLabel("First month", { exact: true }).inputValue();
+  await page.getByLabel("Months paid ahead", { exact: true }).fill("3");
+  await page.getByLabel("First month", { exact: true }).fill("2027-01");
+  page.once("dialog", dialog => dialog.dismiss());
+  await pick("demo-family-1");
+  await checkContext("demo-family-0");
+  assert.equal(await page.getByLabel("Months paid ahead", { exact: true }).inputValue(), "3");
+  page.once("dialog", dialog => dialog.accept());
+  await pick("demo-family-1");
+  await page.getByRole("tab", { name: "Pay ahead", exact: true }).click();
+  assert.equal(await page.getByLabel("Months paid ahead", { exact: true }).inputValue(), "1");
+  assert.equal(await page.getByLabel("First month", { exact: true }).inputValue(), firstMonth);
+  report.checks.push("A $250 weekly rate displays $500 biweekly and $1,000 every four weeks; pay-ahead edits warn, survive cancellation and reset on a confirmed family switch.");
   await page.setViewportSize({ width: 390, height: 844 });
   await goto("&familyId=demo-family-1&centerId=preview-center");
   await openPicker();
@@ -247,6 +271,13 @@ export async function runBillingDirectorQa(page, baseUrl = "http://localhost:305
   for (const text of ["Rivera Household", "Centennial", "$100.00", "DEMO-RECEIPT-1"]) assert.ok(receiptText.includes(text), text);
   assert.ok(!receiptText.includes("annual statement"));
   await receiptDialog.getByRole("button", { name: "Close preview", exact: true }).click();
+  await page.goto(`${origin.origin}/device-preview?view=billing&scenario=overview-refresh`);
+  await page.waitForFunction(() => document.documentElement.dataset.devicePreviewHydrated === "true");
+  await page.getByRole("status").filter({ hasText: "Pending: 0; collectible: 24500" }).waitFor();
+  await page.getByRole("button", { name: "Simulate pending ACH props", exact: true }).click();
+  await page.getByRole("status").filter({ hasText: "Pending: 1; collectible: 14500" }).waitFor();
+  await page.getByText("Posted balance: $245.00", { exact: true }).waitFor();
+  report.checks.push("Refreshed pending ACH props invalidate the actual overview hook while the family, account and $245 posted balance remain unchanged.");
   assert.deepEqual(report.apiRequests, [], "The fixture browser must never request an API");
   assert.deepEqual(report.consoleErrors, [], "No application runtime errors");
   report.checks.push("Ledger and charge/credit summaries also preview before printing; director receipt preview identifies the paid family, school, amount and receipt reference.");

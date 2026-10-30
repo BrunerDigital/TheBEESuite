@@ -4,8 +4,11 @@ import { useId, useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { billingFamilySecondaryLabel } from "@/lib/billing-workspace-context";
 
-type FamilyOption = { id: string; name: string; billingEmail?: string | null };
+type FamilyOption = { id: string; name: string; billingEmail?: string | null; children?: Array<{ fullName: string }> };
 
 /** The caller supplies the authorized school/account group and owns selection guards. */
 export function BillingFamilyPicker({
@@ -23,21 +26,27 @@ export function BillingFamilyPicker({
 }) {
   const listId = useId();
   const [expanded, setExpanded] = useState(false);
+  const [query, setQuery] = useState("");
   const sortedFamilies = useMemo(
     () => families.toSorted((left, right) => left.name.localeCompare(right.name)),
     [families],
   );
+  const matchingFamilies = sortedFamilies.filter(family => `${family.name} ${billingFamilySecondaryLabel(family)}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const selectedFamily = families.find(family => family.id === value);
 
   return (
     <div className="min-w-0 space-y-2">
+      <Label htmlFor={`${id}-filter`} className="sr-only">Find a family in this category</Label>
+      <Input id={`${id}-filter`} type="search" disabled={disabled} value={query} onChange={event => setQuery(event.target.value)} placeholder="Find family, child or email" />
       <Select disabled={disabled || !families.length} value={value} onValueChange={onValueChange}>
-        <SelectTrigger id={id}><SelectValue placeholder="Choose family" /></SelectTrigger>
+        <SelectTrigger id={id}><SelectValue placeholder="Choose family">{selectedFamily ? `${selectedFamily.name} · ${billingFamilySecondaryLabel(selectedFamily)}` : undefined}</SelectValue></SelectTrigger>
         <SelectContent className="max-h-[min(18rem,var(--available-height))]">
-          {sortedFamilies.map((family) => (
+          {matchingFamilies.map((family) => (
             <SelectItem key={family.id} value={family.id}>
-              {family.name}{family.billingEmail ? ` · ${family.billingEmail}` : ""}
+              {family.name} · {billingFamilySecondaryLabel(family)}
             </SelectItem>
           ))}
+          {!matchingFamilies.length ? <SelectItem value="__no-matches" disabled>No matching families. Clear your search.</SelectItem> : null}
         </SelectContent>
       </Select>
       <Button
@@ -55,7 +64,7 @@ export function BillingFamilyPicker({
       <div id={listId} hidden={!expanded}>
         {expanded ? (
           <div role="group" aria-label="Browse billing families" className="max-h-64 overflow-y-auto overscroll-contain rounded-lg border bg-background/60 p-1">
-            {sortedFamilies.map((family) => (
+            {matchingFamilies.map((family) => (
               <button
                 key={family.id}
                 type="button"
@@ -66,15 +75,17 @@ export function BillingFamilyPicker({
               >
                 <span className="min-w-0 break-words">
                   <span className="block font-medium">{family.name}</span>
-                  {family.billingEmail ? <span className="block break-all text-xs text-muted-foreground">{family.billingEmail}</span> : null}
+                  <span className="block break-words text-xs text-muted-foreground">{billingFamilySecondaryLabel(family)}</span>
                 </span>
                 {value === family.id ? <Check className="size-4 shrink-0" aria-hidden="true" /> : null}
               </button>
             ))}
+            {!matchingFamilies.length ? <p className="p-3 text-sm text-muted-foreground">No matching families. Try a child&apos;s name, an email, or clear your search.</p> : null}
           </div>
         ) : null}
       </div>
       {!families.length ? <p className="text-sm text-muted-foreground">No families in this account group.</p> : null}
+      {query ? <p role="status" className="text-xs text-muted-foreground">{matchingFamilies.length} matching of {families.length} families. The selected account stays unchanged until you choose another family.</p> : null}
     </div>
   );
 }

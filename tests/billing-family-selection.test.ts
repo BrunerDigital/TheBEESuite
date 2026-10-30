@@ -44,6 +44,8 @@ test("historical visibility does not confer writable eligibility, even without l
 
 test("route keys cannot collide and historical links preserve exact account and invoice filter", () => {
   assert.notEqual(billingSelectionKey({ familyId: "a-b", centerId: "c" }), billingSelectionKey({ familyId: "a", centerId: "b-c" }));
+  assert.notEqual(billingSelectionKey({ familyId: "a", section: "overview" }), billingSelectionKey({ familyId: "a", section: "ledger" }));
+  assert.notEqual(billingSelectionKey({ centerId: "c", category: "current" }), billingSelectionKey({ centerId: "c", category: "past" }));
   const link = new URL(exactBillingFamilyHref({ id: "past&one", centerId: "school two" }, { invoiceStatus: "paid", history: true }), "https://example.test");
   assert.equal(link.searchParams.get("familyId"), "past&one");
   assert.equal(link.searchParams.get("centerId"), "school two");

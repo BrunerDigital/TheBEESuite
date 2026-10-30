@@ -32,7 +32,7 @@ for(const file of paths){
  });
 }
 test.after(()=>{if(process.env.FTE_TEST_RESULTS_PATH)writeFileSync(process.env.FTE_TEST_RESULTS_PATH,JSON.stringify(results,null,2)+'\n')});
-test('API inventory covers all 169 routes with 140 getCurrentUser surfaces and fixed opt-ins',()=>{
- assert.equal(paths.length,169);assert.equal(paths.filter(p=>readFileSync(p,'utf8').includes('getCurrentUser')).length,140);
+test('API inventory covers all 170 routes with 141 getCurrentUser surfaces and fixed opt-ins',()=>{
+ assert.equal(paths.length,170);assert.equal(paths.filter(p=>readFileSync(p,'utf8').includes('getCurrentUser')).length,141);
  for(const file of paths){const relative=path.relative(inventoryRoot,file).split(path.sep).join('/'),candidate=existsSync(path.join(root,relative))?path.join(root,relative):file;const source=readFileSync(candidate,'utf8');if(source.includes('accessPurpose:'))assert.ok(allowed.has(relative),relative);}
 });

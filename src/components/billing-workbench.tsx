@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, ChevronDown, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, PlusCircle, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
-import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
+import { ContextBadge, SummaryMetric } from "@/components/entity-context";
 import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
@@ -47,7 +47,10 @@ import {
   type OneTimeBillingAdjustmentReason,
 } from "@/lib/one-time-billing-adjustments";
 import { BillingFamilyPicker } from "@/components/billing-family-picker";
-import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
+import { FamilyLedgerCard, type FamilyLedgerData } from "@/components/family-ledger-card";
+import { billingContextUrl, billingSection, billingCategory, billingFamilySecondaryLabel, type BillingSection } from "@/lib/billing-workspace-context";
+import { useBillingAccountOverview } from "@/components/use-billing-account-overview";
+import type { BillingAccountOverview } from "@/lib/billing-account-overview";
 import { isCurrentlyEnrolledChildRecord, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
 import { BILLING_TARGET_UNAVAILABLE, resolveBillingChildSelection, resolveBillingFamilySelection } from "@/lib/billing-family-selection";
 import {
@@ -191,6 +194,10 @@ type Props = {
   initialCenterId?: string;
   initialChildId?: string;
   searchQuery?: string;
+  initialSection?: string;
+  initialCategory?: string;
+  ledger?: FamilyLedgerData;
+  accountOverviewFixtures?: Record<string, BillingAccountOverview>;
 };
 
 function billingFamilyAccountCategory(family: BillingWorkbenchFamily): BillingFamilyListMode {
@@ -398,16 +405,16 @@ function formatShortDate(value: Date | string | null | undefined) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-export function BillingWorkbench({ families, centers, products, tuitionPlans, currentRole, currentUserId, canOpenFamilyProfile, canManageEnrollment, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
+export function BillingWorkbench({ families, centers, products, tuitionPlans, currentRole, currentUserId, canOpenFamilyProfile, canManageEnrollment, initialFamilyId, initialCenterId, initialChildId, searchQuery, initialSection, initialCategory, ledger, accountOverviewFixtures }: Props) {
   const router = useRouter();
   const [offlineReceiptReview, setOfflineReceiptReview] = useState<{ scope: OfflinePaymentOperationScope; requestId: string; receipt: NonNullable<ReturnType<typeof readOfflinePaymentReceipt>> } | null>(null);
   const initialSelection = useMemo(
     () => resolveBillingFamilySelection({
-      families, allowedCenterIds: centers.map((center) => center.id),
+      families: initialFamilyId || !initialCategory ? families : families.filter(family => billingFamilyAccountCategory(family) === billingCategory(initialCategory)), allowedCenterIds: centers.map((center) => center.id),
       requestedFamilyId: initialFamilyId, requestedCenterId: initialCenterId,
       matchesSearch: (family) => Boolean(searchQuery?.trim() && billingFamilySearchText(family).includes(searchQuery.trim().toLowerCase())),
     }),
-    [families, centers, initialFamilyId, initialCenterId, searchQuery],
+    [families, centers, initialFamilyId, initialCenterId, searchQuery, initialCategory],
   );
   const initialFamily = initialSelection.family;
   const initialCenter = initialSelection.centerId;
@@ -417,6 +424,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [childSelectionError, setChildSelectionError] = useState(Boolean(initialChildId && !initialAssignmentChild));
   const initialAssignment = initialAssignmentChild?.tuitionAssignment ?? null;
   const initialAssignedPlan = initialLocationTuitionPlans.find((plan) => plan.id === initialAssignment?.tuitionPlanId) ?? null;
+  const initialFamilyIsPast = initialFamily ? billingFamilyAccountCategory(initialFamily) === "past" : false;
   const initialFamilyIsProspective = initialFamily ? billingFamilyAccountCategory(initialFamily) === "prospective" : false;
   const [centerId, setCenterId] = useState(initialCenter);
   const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
@@ -501,16 +509,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
   const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
   const [savedRateRecords, setSavedRateRecords] = useState<BillingWorkbenchTuitionPlan[]>([]);
-  const [billingAction, setBillingAction] = useState(initialFamilyIsProspective ? "single" : "recurring");
+  const [billingAction, setBillingAction] = useState(billingSection(initialSection) === "payments" ? "online" : initialFamilyIsPast ? "edit" : initialFamilyIsProspective ? "single" : "recurring");
   const [moreBillingActionsExpanded, setMoreBillingActionsExpanded] = useState(false);
-  const [familyListMode, setFamilyListMode] = useState<BillingFamilyListMode>(initialFamily ? billingFamilyAccountCategory(initialFamily) : "current");
+  const [familyPickerOpen, setFamilyPickerOpen] = useState(!initialFamily);
+  const [workspaceSection, setWorkspaceSection] = useState<BillingSection>(billingSection(initialSection));
+  const [familyListMode, setFamilyListMode] = useState<BillingFamilyListMode>(initialFamily ? billingFamilyAccountCategory(initialFamily) : billingCategory(initialCategory));
 
-  useEffect(() => {
-    const sectionId = decodeURIComponent(window.location.hash.slice(1));
-    if (!["billing-family-overview", "billing-payment-methods", "billing-actions"].includes(sectionId)) return;
-    const frame = window.requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({ block: "start" }));
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [weeklyRecoveryPeriod, setWeeklyRecoveryPeriod] = useState(draftDates.week);
@@ -519,15 +523,37 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
   const [paymentReviewMethod, setPaymentReviewMethod] = useState<DirectorPaymentMethod | null>(null);
   const [isPending, startTransition] = useTransition();
+  useEffect(() => {
+    const sectionId = decodeURIComponent(window.location.hash.slice(1));
+    const target = sectionId === "family-ledger" ? "ledger" : ["billing-payment-methods", "billing-payment-reminder"].includes(sectionId) ? "payments" : ["billing-actions", "child-tuition-setup"].includes(sectionId) ? "tuition" : sectionId === "billing-family-overview" ? "overview" : null;
+    if (!target) return;
+    startTransition(() => {
+      setWorkspaceSection(target);
+      setBillingAction(target === "payments" ? "online" : initialFamilyIsPast ? "edit" : initialFamilyIsProspective ? "single" : "recurring");
+    });
+    const frame = window.requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({ block: "start" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialFamilyIsPast, initialFamilyIsProspective, startTransition]);
   const offlinePaymentOperationInFlight = useRef(false);
+  const billingRequestInFlight = useRef(false);
+  const billingViewActive = useRef(true);
+  useEffect(() => {
+    billingViewActive.current = true;
+    return () => { billingViewActive.current = false; };
+  }, []);
 
   function runBillingTransition(action: () => Promise<void>) {
+    if (!billingViewActive.current || billingRequestInFlight.current) return;
+    billingRequestInFlight.current = true;
     startTransition(async () => {
       try {
         await action();
       } catch {
+        if (!billingViewActive.current) return;
         setStatusMessage("");
         setErrorMessage("The billing request was interrupted. Review the current account and Stripe activity, if applicable, before trying the action again.");
+      } finally {
+        billingRequestInFlight.current = false;
       }
     });
   }
@@ -543,9 +569,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       prospective: scopedFamilies.filter((family) => billingFamilyAccountCategory(family) === "prospective").length,
     } satisfies Record<BillingFamilyListMode, number>;
   }, [scopedFamilies]);
-  const effectiveFamilyListMode = familyCounts[familyListMode] > 0
-    ? familyListMode
-    : (["current", "past", "prospective"] as const).find((mode) => familyCounts[mode] > 0) ?? "current";
+  const effectiveFamilyListMode = familyListMode;
   const filteredFamilies = useMemo(
     () => scopedFamilies.filter((family) => billingFamilyAccountCategory(family) === effectiveFamilyListMode),
     [effectiveFamilyListMode, scopedFamilies],
@@ -676,6 +700,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     planAgeGroup,
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
+  const accountOverview = useBillingAccountOverview({ familyId: effectiveFamilyId, centerId, billingAccountId: selectedBillingAccount?.id ?? "", balanceCents: familyBalanceCents }, accountOverviewFixtures);
+  const pendingPaymentCount = accountOverview.data?.pendingCount ?? selectedPaymentProgress?.count ?? 0;
+  const pendingAchCreditCents = accountOverview.data?.provisionalAchCreditCents ?? selectedPaymentProgress?.provisionalAchCreditCents ?? 0;
   const selectedAdjustmentOption = oneTimeBillingAdjustmentOption(adjustmentReason) ?? ONE_TIME_BILLING_ADJUSTMENT_OPTIONS[0];
   const adjustmentAmountCents = dollarsToCents(adjustmentAmountDollars);
   const projectedAdjustmentBalanceCents = familyBalanceCents
@@ -710,13 +737,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     ? dollarsToCents(paymentAmountDollars)
     : effectivePaymentTarget.startsWith("invoice:")
       ? Math.min(selectedPaymentInvoice?.totalCents ?? 0, hasHouseholdCreditAgainstInvoices ? Math.max(0, familyBalanceCents) : Number.MAX_SAFE_INTEGER)
-      : familyBalanceCents;
+      : accountOverview.data?.collectibleCents ?? familyBalanceCents;
   const directorPaymentTargetLabel = effectivePaymentTarget === "custom"
     ? "custom amount"
     : effectivePaymentTarget.startsWith("invoice:")
       ? `invoice ${selectedPaymentInvoice?.number ?? ""}`.trim()
-      : "total balance";
-  const selectedFamilyProfileHref = familyProfileHref(selectedFamily);
+      : "collectible family balance";
   const selectedChildSummary = selectedChildren.length
     ? `${selectedChildren.length} child${selectedChildren.length === 1 ? "" : "ren"}`
     : selectedFamilyIsPast ? "Past family" : "No children";
@@ -820,11 +846,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     || planDraftIsDirty
   );
 
-  useUnsavedChangesGuard(hasUncommittedBillingInput, "This billing workspace has unsaved input. Discard it and leave this page?");
+  useUnsavedChangesGuard(hasUncommittedBillingInput || isPending, isPending ? "A billing request is still in progress. Leaving does not cancel it. Review this account before retrying. Leave this page?" : "This billing workspace has unsaved input. Discard it and leave this page?");
 
   function billingContextDescription(childName?: string) {
     return [
       selectedFamily?.name ?? "selected family",
+      selectedFamily ? billingFamilySecondaryLabel(selectedFamily) : undefined,
       selectedCenter ? centerLabel(selectedCenter) : "selected school",
       childName,
     ].filter(Boolean).join(" / ");
@@ -836,8 +863,24 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function confirmDiscardBillingInput() {
+    if (billingRequestInFlight.current) return false;
     return !hasUncommittedBillingInput
       || window.confirm("This billing workspace has unsaved input. Discard it and change the selected school, family, or child?");
+  }
+
+  function persistContext(nextFamilyId: string, nextCenterId: string, section = workspaceSection, resetChild = false, category = familyListMode) {
+    const nextFamily = families.find(family => family.id === nextFamilyId && family.centerId === nextCenterId);
+    window.history.replaceState(null, "", billingContextUrl(window.location.href, { familyId: nextFamilyId, centerId: nextCenterId, section, category: nextFamily ? billingFamilyAccountCategory(nextFamily) : category }, resetChild));
+  }
+
+  function changeWorkspaceSection(value: string) {
+    if (billingRequestInFlight.current || isPending) return;
+    const section = billingSection(value);
+    setWorkspaceSection(section);
+    if (section === "payments") setBillingAction("online");
+    if (section === "tuition") setBillingAction(selectedFamilyIsPast ? "edit" : selectedFamilyIsProspective ? "single" : "recurring");
+    setMoreBillingActionsExpanded(false);
+    persistContext(effectiveFamilyId, centerId, section);
   }
 
   function updateInvoiceEditDraft(patch: Partial<Omit<InvoiceEditDraft, "invoiceId">>) {
@@ -863,6 +906,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function openPaymentReview(method: DirectorPaymentMethod) {
+    if (billingRequestInFlight.current) return;
+    if (effectivePaymentTarget === "balance" && (!accountOverview.data || accountOverview.data.responsibilityReviewRequired)) return setErrorMessage("Verify the collectible family amount before collecting a balance payment.");
     if (!selectedFamily || !selectedBillingAccount) {
       return setErrorMessage("Choose a family with a billing account before processing a payment.");
     }
@@ -899,7 +944,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           familyId: selectedFamily.id,
           action,
           paymentMethodCategory,
-          returnPath: "/billing-invoices",
+          returnPath: billingContextUrl(new URL("/billing-invoices", window.location.origin).href, { familyId: effectiveFamilyId, centerId, section: "payments", category: familyListMode }),
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
@@ -908,11 +953,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       if (json?.url) {
+        if (!billingViewActive.current) return;
         window.location.href = json.url;
         return;
       }
       setStatusMessage("Payment method settings updated. Autopay was not changed.");
-      router.refresh();
+      if (billingViewActive.current) router.refresh();
     });
   }
 
@@ -973,7 +1019,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               : "The selected invoice was paid with account credit."
             : `Autopay payment ${first?.status === "paid" ? "recorded" : "is processing"} for ${selectedPaymentInvoice?.number ?? "the selected invoice"}.`,
         );
-        router.refresh();
+        if (billingViewActive.current) router.refresh();
         return;
       }
 
@@ -986,7 +1032,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             paymentMethodCategory: method === "card_checkout" ? "card" : method === "instant_bank_checkout" ? "link_bank" : "ach",
             collectionMode: method === "card_checkout" ? "director_card_terminal" : method === "instant_bank_checkout" ? "director_instant_bank_checkout" : "director_ach_checkout",
             source: "director_dashboard",
-            returnPath: "/billing-invoices",
+            returnPath: billingContextUrl(new URL("/billing-invoices", window.location.origin).href, { familyId: effectiveFamilyId, centerId, section: "payments", category: familyListMode }),
           }),
         });
         const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
@@ -994,6 +1040,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           setErrorMessage(json?.error || "The secure payment form could not be opened.");
           return;
         }
+        if (!billingViewActive.current) return;
         window.location.href = json.url;
         return;
       }
@@ -1011,7 +1058,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           description: paymentDescription,
           collectionMode: method === "card_checkout" ? "director_card_terminal" : method === "instant_bank_checkout" ? "director_instant_bank_checkout" : "director_ach_checkout",
           source: "director_dashboard",
-          returnPath: "/billing-invoices",
+          returnPath: billingContextUrl(new URL("/billing-invoices", window.location.origin).href, { familyId: effectiveFamilyId, centerId, section: "payments", category: familyListMode }),
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string; url?: string; status?: string } | null;
@@ -1020,11 +1067,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       if (json?.url) {
+        if (!billingViewActive.current) return;
         window.location.href = json.url;
         return;
       }
       setStatusMessage(`Saved payment method charge ${json?.status === "paid" ? "recorded" : "submitted"} for the selected family balance.`);
-      router.refresh();
+      if (billingViewActive.current) router.refresh();
     });
   }
   function togglePaymentRequestEmail(email: string) {
@@ -1133,7 +1181,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setWeeklyRecoveryPeriod(dates.week); setWeeklyRecoveryPreview(null);
     setManualPaymentEmailCopies([]); setPaymentReviewMethod(null);
     setStatusMessage(""); setErrorMessage("");
-    setBillingAction(nextFamily && billingFamilyAccountCategory(nextFamily) === "prospective" ? "single" : "recurring");
+    setBillingAction(workspaceSection === "payments" ? "online" : nextFamily && billingFamilyAccountCategory(nextFamily) === "past" ? "edit" : nextFamily && billingFamilyAccountCategory(nextFamily) === "prospective" ? "single" : "recurring");
     setMoreBillingActionsExpanded(false);
   }
 
@@ -1145,6 +1193,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setCenterId(value);
     setSelectionError(null);
     setFamilyId(nextFamily?.id ?? "");
+    persistContext(nextFamily?.id ?? "", value, workspaceSection, true);
     setFamilyListMode(nextFamily ? billingFamilyAccountCategory(nextFamily) : "current");
     applyFamilyTuitionContext(nextFamily, nextPlans);
   }
@@ -1155,6 +1204,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     resetFamilyBoundBillingDrafts(nextFamily, centerId);
     if (nextFamily) setFamilyListMode(billingFamilyAccountCategory(nextFamily));
     setFamilyId(value);
+    persistContext(value, centerId, workspaceSection, true);
     setSelectionError(null);
     applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
   }
@@ -1208,6 +1258,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function submit(payload: Record<string, unknown>) {
+    if (billingRequestInFlight.current) return;
     const isOfflinePayment = payload.mode === "manualCashPayment" || payload.mode === "manualCheckPayment";
     // React's pending state is rendered asynchronously. Keep rapid repeated
     // submissions from racing to clear the same confirmed recovery marker.
@@ -1256,7 +1307,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setCheckNumber("");
         setCheckNotes("");
         setCheckPaidAt(currentLocalDateTime(timeZone));
-        router.refresh();
+        if (billingViewActive.current) router.refresh();
         return;
       }
       if (payload.mode === "manualCashPayment") {
@@ -1270,7 +1321,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setCashReference("");
         setCashNotes("");
         setCashPaidAt(currentLocalDateTime(timeZone));
-        router.refresh();
+        if (billingViewActive.current) router.refresh();
         return;
       }
       if (payload.mode === "payrollDeductionPayment") {
@@ -1281,7 +1332,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setPayrollReference("");
         setPayrollNotes("");
         setPayrollPaidAt(currentLocalDateTime(timeZone));
-        router.refresh();
+        if (billingViewActive.current) router.refresh();
         return;
       }
       if (payload.mode === "refundPayment") {
@@ -1294,7 +1345,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         if (!json?.partial) {
           setRefundAmountDollars(""); setRefundReason(""); setRefundPaymentIds([]); refundOperation.current = null;
         }
-        router.refresh();
+        if (billingViewActive.current) router.refresh();
         return;
       }
       if (payload.mode === "adjustment") {
@@ -1305,7 +1356,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setAdjustmentAmountDollars("");
         setAdjustmentEffectiveDate(currentLocalDate(timeZone));
         setAdjustmentNote("");
-        router.refresh();
+        if (billingViewActive.current) router.refresh();
         return;
       }
       const created = json?.created ?? 0;
@@ -1363,7 +1414,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const childEligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
     if (childEligibilityError) return setErrorMessage(childEligibilityError);
     const confirmed = window.confirm(
-      `Create one due-now tuition invoice for ${selectedAssignmentChild.fullName}? This does not submit a payment immediately. If family autopay is enabled, the open invoice can be collected by the next autopay run.`,
+      `Create one due-now tuition invoice for ${billingContextDescription(selectedAssignmentChild.fullName)}? This does not submit a payment immediately. If family autopay is enabled, the open invoice can be collected by the next autopay run.`,
     );
     if (!confirmed) return;
     submit({
@@ -1461,7 +1512,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       const total = typeof json?.totalCents === "number" ? ` Total posted: ${money(json.totalCents)}.` : "";
       setWeeklyRecoveryPreview(null);
       setStatusMessage(`${created} weekly tuition invoice${created === 1 ? "" : "s"} created. ${skipped} duplicate${skipped === 1 ? "" : "s"} skipped. ${failed} failed.${total}`);
-      router.refresh();
+      if (billingViewActive.current) router.refresh();
     });
   }
 
@@ -1474,7 +1525,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     }
     const balanceEffect = selectedAdjustmentOption.adjustmentType === "credit" ? "lower" : "increase";
     const confirmed = window.confirm(
-      `Post a ${money(adjustmentAmountCents)} ${selectedAdjustmentOption.label.toLowerCase()} dated ${adjustmentEffectiveDate} to ${selectedFamily.name}? This will ${balanceEffect} the current family balance once and will not change saved recurring tuition or future weekly invoices.`,
+      `Post a ${money(adjustmentAmountCents)} ${selectedAdjustmentOption.label.toLowerCase()} dated ${adjustmentEffectiveDate} to ${billingContextDescription()}? This will ${balanceEffect} the current family balance once and will not change saved recurring tuition or future weekly invoices.`,
     );
     if (!confirmed) return;
     submit({
@@ -1536,7 +1587,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function recoverOfflineReceipt() {
-    if (offlinePaymentOperationInFlight.current || !selectedFamily) return;
+    if (billingRequestInFlight.current || offlinePaymentOperationInFlight.current || !selectedFamily) return;
     offlinePaymentOperationInFlight.current = true;
     const family = selectedFamily;
     const lookupReceipt = async () => {
@@ -1584,7 +1635,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setCashAmountDollars(""); setCashReference(""); setCashNotes(""); setCashPaidAt(currentLocalDateTime(timeZone));
     setCheckAmountDollars(""); setCheckNumber(""); setCheckNotes(""); setCheckPaidAt(currentLocalDateTime(timeZone));
     setErrorMessage(""); setStatusMessage("Existing receipt reviewed. A separate payment can now be entered; no new payment was posted.");
-    router.refresh();
+    if (billingViewActive.current) router.refresh();
   }
 
   function submitManualCheckPayment() {
@@ -1678,7 +1729,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       return setErrorMessage("Enter invoice details for the updated line item.");
     }
     const confirmed = window.confirm(
-      `Update invoice ${selectedEditableInvoice.number} from ${money(selectedEditableInvoice.totalCents)} to ${money(invoiceEditAmountCents)} for ${selectedFamily.name}?`,
+      `Update invoice ${selectedEditableInvoice.number} from ${money(selectedEditableInvoice.totalCents)} to ${money(invoiceEditAmountCents)} for ${billingContextDescription()}?`,
     );
     if (!confirmed) return;
 
@@ -1724,7 +1775,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         ? ` Family balance ${deltaCents < 0 ? "reduced" : "increased"} by ${money(Math.abs(deltaCents))}.`
         : "";
       setStatusMessage(json?.updated === false ? "Invoice already matched those details." : `Invoice updated.${balanceMessage}`);
-      router.refresh();
+      if (billingViewActive.current) router.refresh();
     });
   }
 
@@ -1733,7 +1784,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const reason = invoiceVoidReason.trim();
     if (reason.length < 5) return setErrorMessage("Enter a reason for voiding this invoice.");
     const confirmed = window.confirm(
-      `Void invoice ${selectedEditableInvoice.number} for ${money(selectedEditableInvoice.totalCents)}? This removes the charge from ${selectedFamily.name}'s balance and keeps an audit record.`,
+      `Void invoice ${selectedEditableInvoice.number} for ${money(selectedEditableInvoice.totalCents)} for ${billingContextDescription()}? This removes the charge from this family's balance and keeps an audit record.`,
     );
     if (!confirmed) return;
 
@@ -1759,7 +1810,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       setInvoiceEditorId("");
       setInvoiceEditDraft(null);
       setStatusMessage(`Invoice voided. ${money(json?.reversedCents ?? selectedEditableInvoice.totalCents)} was removed from the family balance.`);
-      router.refresh();
+      if (billingViewActive.current) router.refresh();
     });
   }
 
@@ -1824,7 +1875,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       }
       setLastSavedChildContextDraftSignature(assignmentChildContextDraftSignature);
       setStatusMessage(`Program, classroom, and care schedule saved for ${selectedAssignmentChild.fullName}. Tuition and ledger amounts were not changed.`);
-      router.refresh();
+      if (billingViewActive.current) router.refresh();
     });
   }
 
@@ -1884,7 +1935,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             : `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} net per week. ${effectiveAssignmentCadence === "four_week" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 4)} and cover four weeks ahead.` : effectiveAssignmentCadence === "biweekly" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 2)} and cover two weeks ahead.` : "Thursday invoice creation is scheduled for the following week."}`
           : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
       );
-      router.refresh();
+      if (billingViewActive.current) router.refresh();
     });
   }
 
@@ -2035,7 +2086,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setStatusMessage("Rate saved. Child tuition is not saved yet. Choose the intended child, enable recurring tuition, and select Save Tuition Assignment.");
       }
       setBillingAction("recurring");
-      router.refresh();
+      if (billingViewActive.current) router.refresh();
     });
   }
 
@@ -2052,18 +2103,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       const json = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) return setErrorMessage(json?.error || "Tuition rate could not be archived or restored.");
       setStatusMessage(plan.archived ? "Tuition rate restored for new assignments." : "Tuition rate archived. Existing child assignments, invoices and history are unchanged.");
-      router.refresh();
-    });
-  }
-
-  function showChildTuitionSetup() {
-    if (selectedFamilyIsProspective || selectedFamilyIsPast) {
-      setErrorMessage("Recurring tuition is available after a child has a current enrollment and assigned classroom.");
-      return;
-    }
-    setBillingAction("recurring");
-    requestAnimationFrame(() => {
-      document.getElementById("child-tuition-setup")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (billingViewActive.current) router.refresh();
     });
   }
 
@@ -2074,6 +2114,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setDescription("Enrollment fee");
     setAmountDollars("");
     setChildId("none");
+    changeWorkspaceSection("tuition");
     setBillingAction("single");
     requestAnimationFrame(() => {
       document.getElementById("billing-actions")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2100,7 +2141,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         {paymentReviewMethod ? (
           <div className="grid gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <SummaryMetric label="Family" value={selectedFamily?.name ?? "Not selected"} detail={selectedFamily?.billingEmail ?? "No billing email"} />
+              <SummaryMetric label="Family" value={selectedFamily?.name ?? "Not selected"} detail={selectedFamily ? billingFamilySecondaryLabel(selectedFamily) : "No billing email"} />
               <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} detail={selectedCheckoutReadiness?.canAcceptParentPayments ? "Online payments ready" : "Online payments unavailable"} />
               <SummaryMetric label="Apply payment to" value={directorPaymentTargetLabel} detail={selectedPaymentInvoice ? `Due ${formatInvoiceDueDate(selectedPaymentInvoice.dueDate)}` : "Family balance payment"} />
               <SummaryMetric label="Amount" value={money(directorPaymentAmountCents)} detail={effectivePaymentTarget === "custom" ? paymentDescription : selectedPaymentInvoice?.number ?? "Balance"} />
@@ -2144,14 +2185,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       </DialogContent>
     </Dialog>
 
-    <Card id="billing-workbench" className="office-billing-workspace glass-panel scroll-mt-28" onFocusCapture={event => scheduleFocusedPortalControlReveal(event.target)}>
-      <CardHeader>
+    <Card id="billing-workbench" className="office-billing-workspace glass-panel overflow-visible scroll-mt-28" onFocusCapture={event => scheduleFocusedPortalControlReveal(event.target)}>
+      <CardHeader className="pb-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle as="h2">Family billing</CardTitle>
-            <CardDescription>Create charges, record payments, and manage account adjustments.</CardDescription>
+            <CardDescription>Review the account, then choose a task.</CardDescription>
           </div>
-          <Badge variant="outline">
+          <Badge variant="outline" className="hidden sm:inline-flex">
             <BadgeDollarSign data-icon="inline-start" />
             Director tools
           </Badge>
@@ -2159,77 +2200,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       </CardHeader>
       <CardContent className="space-y-4">
         <fieldset disabled={isPending} aria-busy={isPending} className="min-w-0 space-y-4">
-        <section id="billing-family-picker" aria-label="Choose a billing family" className="scroll-mt-28 space-y-3 rounded-xl border bg-background/35 p-4">
-          <div>
-            <h3 className="font-semibold">Choose a family</h3>
-            <p className="text-sm text-muted-foreground">Open the Family dropdown or browse the list below. No search is required.</p>
-          </div>
-        <div className="billing-family-picker-grid grid gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="billing-workbench-school">School</Label>
-            <Select disabled={isPending} value={centerId} onValueChange={handleCenterChange}>
-              <SelectTrigger id="billing-workbench-school"><SelectValue placeholder="Choose school" /></SelectTrigger>
-              <SelectContent>
-                {centers.map((center) => (
-                  <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="billing-workbench-family">Family</Label>
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Family account type">
-              {(["current", "past", "prospective"] as const).map((mode) => (
-                <Button
-                  key={mode}
-                  type="button"
-                  size="sm"
-                  variant={effectiveFamilyListMode === mode ? "default" : "outline"}
-                  disabled={isPending || familyCounts[mode] === 0}
-                  onClick={() => {
-                    if (offlinePaymentOperationInFlight.current || isPending || mode === effectiveFamilyListMode || !familyCounts[mode] || !confirmDiscardBillingInput()) return;
-                    const nextFamily = scopedFamilies.find((family) => billingFamilyAccountCategory(family) === mode) ?? null;
-                    resetFamilyBoundBillingDrafts(nextFamily, centerId);
-                    setFamilyListMode(mode);
-                    setFamilyId(nextFamily?.id ?? "");
-                    setSelectionError(null);
-                    applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
-                  }}
-                >
-                  {mode === "current" ? "Current" : mode === "past" ? "Past accounts" : "Pending"} ({familyCounts[mode]})
-                </Button>
-              ))}
-            </div>
-            <BillingFamilyPicker
-              id="billing-workbench-family"
-              disabled={isPending}
-              value={effectiveFamilyId}
-              families={filteredFamilies}
-              onValueChange={handleFamilyChange}
-            />
-          </div>
-          <div className="rounded-lg border bg-background/40 p-3">
-            <div className="text-xs text-muted-foreground">Selected ledger balance</div>
-            <div className="text-lg font-semibold">{money(familyBalanceCents)}</div>
-            <p className="mt-1 text-xs text-muted-foreground">This posted account total may include agency responsibility and does not subtract pending ACH payments. Checkout verifies the collectible family amount.</p>
-          </div>
-        </div>
-
-          <details open={Boolean(searchQuery?.trim())} className="rounded-lg border bg-background/35 p-3">
-            <summary className="min-h-11 cursor-pointer content-center font-medium">Search by name or email</summary>
-        <form action="/billing-invoices" method="get" className="flex flex-wrap items-end gap-2">
-          <input type="hidden" name="centerId" value={centerId} />
-          <div className="min-w-0 flex-1 basis-48 space-y-1">
-            <Label htmlFor="billing-family-search">Search families (optional)</Label>
-            <Input id="billing-family-search" name="q" defaultValue={searchQuery ?? ""} maxLength={120} placeholder="Family, child, guardian, or email" />
-            <p className="text-xs text-muted-foreground">Up to 1,000 matching households are loaded. Search includes current and withdrawn families.</p>
-          </div>
-          <Button type="submit" variant="outline"><Search data-icon="inline-start" />Search accounts</Button>
-          {searchQuery?.trim() ? <Link href={`/billing-invoices?centerId=${encodeURIComponent(centerId)}#billing-family-picker`} className={buttonVariants({ variant: "outline" })}>Show all families</Link> : null}
-        </form>
-          </details>
-        </section>
-
         {childSelectionError || (assignmentChildId && !selectedAssignmentChild) ? <Alert variant="destructive"><AlertTitle>Child selection needed</AlertTitle><AlertDescription>The requested child is not available for this family. No other child has been selected. Choose the intended child before saving tuition or enrollment details.</AlertDescription></Alert> : null}
         {selectionError || (familyId && !selectedFamily) ? (
           <Alert variant="destructive">
@@ -2252,70 +2222,110 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </Alert>
         ) : null}
 
-        {selectedFamily ? <Alert>
-          <AlertTitle>Interrupted cash or check payment?</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <p>Review the saved request after a reload or interrupted response. This only checks for an existing receipt and never submits a payment.</p>
-            <Button type="button" variant="outline" disabled={isPending} onClick={recoverOfflineReceipt}>Review unresolved payment</Button>
-            {currentOfflineReview ? <div className="space-y-2">
-              <p>Recorded {currentOfflineReview.receipt.provider === "manual_cash" ? "cash" : "check"} payment: {money(currentOfflineReview.receipt.amountCents)}. Receipt {currentOfflineReview.receipt.paymentId}. No additional payment was posted.</p>
-              <Button type="button" variant="outline" disabled={isPending} onClick={acknowledgeOfflineReceipt}>I reviewed this receipt; start a new payment</Button>
-            </div> : null}
-          </AlertDescription>
-        </Alert> : null}
-
-        <WorkspaceSectionDirectory
-          id="billing-workspace-directory"
-          description="Keep the current family and balance visible, then move directly to payment setup or the billing task that needs a change. Less common corrections stay under More billing tasks."
-          reviewDestinations={[
-            { href: "#billing-family-overview", label: "Family billing overview", description: `${selectedFamily?.name ?? "Choose a family"} · ${money(familyBalanceCents)} balance` },
-            { href: "#billing-payment-methods", label: "Payment methods", description: selectedPaymentMethod?.hasSavedPaymentMethod ? selectedPaymentMethod.paymentMethodLabel ?? "Saved method on file" : "No saved method" },
-          ]}
-          actionDestinations={[
-            { href: "#billing-payment-methods", label: "Collect or request payment" },
-            { href: "#billing-actions", label: "Add or update billing" },
-            { href: "#agency-subsidy-billing", label: "Open agency claims" },
-          ]}
-        />
-
-        <div id="billing-family-overview" className="scroll-mt-28">
-        <EntityHeader
-          sticky
-          eyebrow="Family billing"
-          title={selectedFamily?.name ?? "Choose a family"}
-          subtitle={billingContextDescription()}
-          initials={initialsFromName(selectedFamily?.name)}
-          status={selectedFamilyIsPast
-            ? <ContextBadge label="Account" value="Past family" variant="outline" />
-            : selectedFamilyIsProspective
-              ? <ContextBadge label="Account" value="Pending / waitlisted" variant="outline" />
-              : <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
-          actions={
-            selectedFamily && canOpenFamilyProfile ? (
-              <Link href={selectedFamilyProfileHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                <ArrowUpRight data-icon="inline-start" />
-                Open family
-              </Link>
-            ) : null
-          }
-        >
-          <div className="billing-summary-grid grid gap-3">
-            <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} />
-            <SummaryMetric label="Last updated" value={formatShortDate(selectedFamily?.updatedAt)} detail="Family billing information" />
-            <SummaryMetric label={familyBalanceCents < 0 ? "Household credit" : "Ledger balance"} value={money(Math.abs(familyBalanceCents))} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
-            <SummaryMetric label="Payment contacts" value={`${selectedPaymentRequestEmailOptions.length} contact${selectedPaymentRequestEmailOptions.length === 1 ? "" : "s"}`} detail={selectedFamily?.billingEmail ?? "No billing email"} />
-            <SummaryMetric label="Children" value={selectedChildSummary} detail={selectedChildren.map((child) => child.fullName).slice(0, 2).join(", ") || "No child records"} />
-            <SummaryMetric
-              label="Weekly tuition"
-              value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
-              detail={activeWeeklyTuitionAssignments.length
-                ? activeWeeklyTuitionAssignments.map((child) => `${child.fullName} ${money(child.tuitionAssignment?.amountCents ?? 0)}`).join(" · ")
-                : "No saved child rate"}
+        <Tabs value={workspaceSection} onValueChange={(value) => changeWorkspaceSection(String(value))} className="min-w-0 gap-4">
+        <section className="billing-persistent-context sticky top-16 z-20 rounded-xl border bg-card p-3 shadow-sm" aria-label="Selected billing account" data-billing-context>
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1 basis-40">
+              <div className="break-words font-semibold">{selectedFamily?.name ?? "Choose a family"}</div>
+              <div className="text-xs text-muted-foreground">{selectedCenter ? centerLabel(selectedCenter) : "Choose a school"} · {effectiveFamilyListMode === "past" ? "Past account" : effectiveFamilyListMode === "prospective" ? "Pending" : "Current"}</div>
+              {selectedFamily ? <div className="break-words text-xs text-muted-foreground">{billingFamilySecondaryLabel(selectedFamily)}</div> : null}
+            </div>
+            <div className="text-right"><div className="text-xs text-muted-foreground">Posted balance</div><div className="text-lg font-semibold tabular-nums">{selectedBillingAccount ? money(accountOverview.data?.postedBalanceCents ?? familyBalanceCents) : "No billing account"}</div></div>
+          </div>
+          <TabsList className="billing-section-tabs mt-3 grid w-full grid-cols-2 gap-1 sm:grid-cols-4" aria-label="Account sections">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="tuition">Tuition &amp; Fees</TabsTrigger>
+            <TabsTrigger value="payments">Payments</TabsTrigger>
+            <TabsTrigger value="ledger" disabled={!ledger}>Ledger &amp; Statements</TabsTrigger>
+          </TabsList>
+        </section>
+        <details id="billing-family-picker" open={familyPickerOpen || !selectedFamily} onToggle={event => setFamilyPickerOpen(event.currentTarget.open)} className="scroll-mt-28 space-y-3 rounded-xl border bg-background/35 p-4">
+          <summary className="min-h-11 cursor-pointer content-center font-medium">Choose or change family</summary>
+        <div className="billing-family-picker-grid grid gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="billing-workbench-school">School</Label>
+            <Select disabled={isPending} value={centerId} onValueChange={handleCenterChange}>
+              <SelectTrigger id="billing-workbench-school"><SelectValue placeholder="Choose school" /></SelectTrigger>
+              <SelectContent>
+                {centers.map((center) => (
+                  <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="billing-workbench-family">Family</Label>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Family account type">
+              {(["current", "past", "prospective"] as const).map((mode) => (
+                <Button
+                  key={mode}
+                  type="button"
+                  size="sm"
+                  variant={effectiveFamilyListMode === mode ? "default" : "outline"}
+                  aria-pressed={effectiveFamilyListMode === mode}
+                  disabled={isPending}
+                  onClick={() => {
+                    if (offlinePaymentOperationInFlight.current || isPending || mode === effectiveFamilyListMode || !confirmDiscardBillingInput()) return;
+                    const nextFamily = scopedFamilies.find((family) => billingFamilyAccountCategory(family) === mode) ?? null;
+                    resetFamilyBoundBillingDrafts(nextFamily, centerId);
+                    setFamilyListMode(mode);
+                    setFamilyId(nextFamily?.id ?? "");
+                    persistContext(nextFamily?.id ?? "", centerId, workspaceSection, true, mode);
+                    setSelectionError(null);
+                    applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
+                  }}
+                >
+                  {mode === "current" ? "Current" : mode === "past" ? "Past accounts" : "Pending"} ({familyCounts[mode]})
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Counts show loaded households in this school. Use Search all accounts below if the intended family is missing.</p>
+            <BillingFamilyPicker
+              key={`${centerId}:${effectiveFamilyListMode}`}
+              id="billing-workbench-family"
+              disabled={isPending}
+              value={effectiveFamilyId}
+              families={filteredFamilies}
+              onValueChange={handleFamilyChange}
             />
           </div>
-        </EntityHeader>
         </div>
 
+          <details open={Boolean(searchQuery?.trim())} className="rounded-lg border bg-background/35 p-3">
+            <summary className="min-h-11 cursor-pointer content-center font-medium">Search all accounts by name or email</summary>
+        <form action="/billing-invoices" method="get" className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="centerId" value={centerId} />
+          <div className="min-w-0 flex-1 basis-48 space-y-1">
+            <Label htmlFor="billing-family-search">Search families (optional)</Label>
+            <Input id="billing-family-search" name="q" defaultValue={searchQuery ?? ""} maxLength={120} placeholder="Family, child, guardian, or email" />
+            <p className="text-xs text-muted-foreground">Up to 1,000 matching households are loaded. Search includes current and withdrawn families.</p>
+          </div>
+          <Button type="submit" variant="outline"><Search data-icon="inline-start" />Search accounts</Button>
+          {searchQuery?.trim() ? <Link href={`/billing-invoices?centerId=${encodeURIComponent(centerId)}#billing-family-picker`} className={buttonVariants({ variant: "outline" })}>Show all families</Link> : null}
+        </form>
+          </details>
+        </details>
+
+        <TabsContent value="overview" className="space-y-4">
+        <div className="billing-account-metrics grid gap-3 sm:grid-cols-3">
+          <SummaryMetric label="Posted balance" value={selectedBillingAccount ? money(accountOverview.data?.postedBalanceCents ?? familyBalanceCents) : "No billing account"} detail="Includes posted activity and any agency responsibility." />
+          <SummaryMetric label="Pending payments" value={pendingPaymentCount ? `${pendingPaymentCount} in progress` : "None"} detail={pendingAchCreditCents ? `${money(pendingAchCreditCents)} ACH awaiting settlement; not deducted from the posted balance.` : "Check payment status before collecting again."} />
+          <SummaryMetric label="Collectible family amount" value={!selectedBillingAccount ? "No billing account" : accountOverview.data?.responsibilityReviewRequired ? "Review required" : accountOverview.data ? money(accountOverview.data.collectibleCents) : accountOverview.error ? "Unavailable" : "Checking account…"} detail="Family responsibility after credits and provisional ACH. Rechecked at checkout; advance payments are separate." />
+        </div>
+        {accountOverview.error ? <Alert variant="destructive"><AlertTitle>Account summary unavailable</AlertTitle><AlertDescription>The collectible amount could not be verified. Retry before collecting a balance payment.<Button type="button" variant="outline" onClick={accountOverview.retry}>Retry account summary</Button></AlertDescription></Alert> : null}
+        <p className="text-xs text-muted-foreground">Family details last updated {formatShortDate(selectedFamily?.updatedAt)}.</p>
+        <section id="billing-family-overview" aria-label="Account details" className="billing-summary-grid grid gap-3 sm:grid-cols-3">
+          <SummaryMetric label="Children" value={selectedChildSummary} detail={selectedChildren.map(child => child.fullName).join(", ") || "No child records"} />
+          <SummaryMetric label={`Saved ${effectiveRateCadence} tuition`} value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"} detail="Review individual rates and other billing cycles in Tuition & Fees." />
+          <SummaryMetric label="Autopay consent" value={selectedFamilyIsPast ? "Unavailable for past accounts" : selectedAutopayStatus} detail={selectedPaymentMethod?.paymentMethodLabel ?? "No saved payment method"} />
+        </section>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" disabled={!selectedFamily} onClick={() => changeWorkspaceSection("payments")}><CreditCard data-icon="inline-start" />Record or collect payment</Button>
+          <Button type="button" variant="outline" disabled={!selectedFamily} onClick={() => changeWorkspaceSection("tuition")}><CalendarClock data-icon="inline-start" />Tuition &amp; fees</Button>
+          <Button type="button" variant="outline" disabled={!ledger || !selectedFamily} onClick={() => changeWorkspaceSection("ledger")}><ReceiptText data-icon="inline-start" />Preview a statement</Button>
+          {selectedFamily && canOpenFamilyProfile ? <Link href={familyProfileHref(selectedFamily)} className={buttonVariants({ variant: "outline" })}><ArrowUpRight data-icon="inline-start" />Open family</Link> : null}
+        </div>
+        </TabsContent>
         {selectedFamilyIsPast ? (
           <Alert className="border-sky-500/30 bg-sky-500/10">
             <ReceiptText className="size-4" />
@@ -2341,7 +2351,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </Alert>
         ) : null}
 
-        {selectedPaymentProgress ? (
+        {selectedPaymentProgress && selectedPaymentProgress.count === pendingPaymentCount && selectedPaymentProgress.provisionalAchCreditCents === pendingAchCreditCents ? (
           <Alert data-director-payment-progress>
             <AlertCircle className="size-4" />
             <AlertTitle>{directorPaymentProgressTitle(selectedPaymentProgress)}</AlertTitle>
@@ -2355,7 +2365,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </Alert>
         ) : null}
 
-        {selectedCheckoutReadiness?.canAcceptParentPayments ? (
+        {workspaceSection === "payments" && selectedCheckoutReadiness?.canAcceptParentPayments ? (
           <Alert className="border-emerald-500/30 bg-emerald-500/10">
             <CheckCircle2 className="size-4 text-emerald-600" />
             <AlertTitle>Online payments ready</AlertTitle>
@@ -2363,7 +2373,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               Parents can pay invoices online for {selectedCenter ? centerLabel(selectedCenter) : "this school"}.
             </AlertDescription>
           </Alert>
-        ) : selectedCheckoutReadiness ? (
+        ) : workspaceSection === "payments" && selectedCheckoutReadiness && !selectedCheckoutReadiness.canAcceptParentPayments ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" />
             <AlertTitle>Online payments unavailable</AlertTitle>
@@ -2373,223 +2383,22 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </Alert>
         ) : null}
 
-        <div id="billing-payment-methods" className="scroll-mt-28 rounded-lg border bg-background/35 p-4">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-medium">
-                Family payment methods
-                <InfoTip label="About family payment profiles">
-                  Saving a method and enabling autopay are separate actions. Parents enable or disable autopay from their Parent Portal.
-                </InfoTip>
-              </div>
-            </div>
-            <Badge variant={!selectedFamilyIsPast && selectedAutopayStatus === "enabled" ? "default" : "outline"} className="capitalize">
-              {selectedFamilyIsPast ? "Past family" : selectedPaymentMethod?.paymentMethodReauthorizationRequired ? "Reauthorization required" : selectedAutopayStatus}
-            </Badge>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-            <div className="rounded-lg border bg-background/40 p-3">
-              <div className="text-xs text-muted-foreground">Saved method</div>
-              <div className="mt-1 text-sm font-medium">
-                {selectedPaymentMethod?.hasSavedPaymentMethod
-                  ? selectedPaymentMethod.paymentMethodLabel ?? "Saved securely"
-                  : selectedPaymentMethod?.autopayStatus === "pending"
-                    ? "Setup pending"
-                    : "No saved payment method"}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {selectedPaymentMethod?.paymentMethodReauthorizationRequired
-                  ? "This method belongs to the school's prior payout account and is excluded from payment processing until the family replaces it."
-                  : selectedPaymentMethod?.lastUpdatedAt ? `Updated ${formatZonedDateTime(selectedPaymentMethod.lastUpdatedAt, timeZone, { month: "short", day: "numeric", year: "numeric" })}` : "Families can also update this from the parent portal."}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily || selectedFamilyIsPast} onClick={() => manageFamilyPaymentMethod("setup", "link_bank")}>
-                <Building2 data-icon="inline-start" />
-                Connect bank account
-              </Button>
-              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily || selectedFamilyIsPast} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
-                <CreditCard data-icon="inline-start" />
-                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace saved card" : "Save card"}
-              </Button>
-              <Button className="w-full sm:w-auto" disabled={isPending || selectedFamilyIsPast || !selectedPaymentMethod?.hasStripeCustomer} onClick={() => manageFamilyPaymentMethod("portal")} variant="outline">
-                Manage payment method
-              </Button>
-            </div>
-          </div>
-          <div className="mt-4 rounded-lg border bg-background/40 p-3">
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  Collect a family payment
-                  <InfoTip label="About director payment actions">
-                    Directors can run an open invoice with the saved method only after the parent enables autopay. In-person and secure checkout options remain available separately.
-                  </InfoTip>
-                </div>
-              </div>
-              <Badge variant="outline">{money(directorPaymentAmountCents)}</Badge>
-            </div>
-            <p className="mb-3 text-xs text-muted-foreground">Choose Custom amount and Advance payment to collect tuition early, including at a $0 balance. Excess remains household credit for future invoices. Review the amount in secure checkout; autopay consent stays unchanged.</p>
-            <div className="grid gap-3 md:grid-cols-6">
-              <div className="space-y-1 md:col-span-2">
-                <Label htmlFor="billing-payment-target">Apply payment to</Label>
-                <Select value={effectivePaymentTarget} onValueChange={(value) => value && setPaymentTarget(value)}>
-                  <SelectTrigger id="billing-payment-target"><SelectValue placeholder="Choose balance or invoice" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="balance">Total balance · {money(familyBalanceCents)}</SelectItem>
-                    {openInvoices.map((invoice) => (
-                      <SelectItem key={invoice.id} value={`invoice:${invoice.id}`}>
-                        {invoice.number} · {money(invoice.totalCents)} · due {formatInvoiceDueDate(invoice.dueDate)}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="custom">Custom amount</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="billing-payment-custom-amount">Custom amount</Label>
-                {effectivePaymentTarget === "custom" ? <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={advancePayment} onChange={(event) => setAdvancePayment(event.target.checked)} />Advance payment for future tuition</label> : null}
-                <Input
-                  id="billing-payment-custom-amount"
-                  disabled={effectivePaymentTarget !== "custom"}
-                  inputMode="decimal"
-                  value={paymentAmountDollars}
-                  onChange={(event) => setPaymentAmountDollars(event.target.value)}
-                  placeholder="250.00"
-                />
-              </div>
-              <div className="space-y-1 md:col-span-2">
-                <Label htmlFor="billing-payment-description">Description</Label>
-                <Input id="billing-payment-description" value={paymentDescription} onChange={(event) => setPaymentDescription(event.target.value)} placeholder="Tuition payment" />
-              </div>
-              <div className="rounded-lg border bg-background/50 p-3">
-                <div className="text-xs text-muted-foreground">Charging</div>
-                <div className="text-sm font-medium">{directorPaymentTargetLabel}</div>
-              </div>
-            </div>
-            {hasHouseholdCreditAgainstInvoices ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                Invoice totals show the amounts billed on each invoice. The current
-                account balance includes recorded payments and credits.
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {effectivePaymentTarget.startsWith("invoice:") && !selectedFamilyIsPast ? (
-                <Button
-                  disabled={isPending || selectedAutopayStatus !== "enabled" || !selectedBillingAccount || directorPaymentAmountCents <= 0 || selectedInvoiceHasPendingPayment}
-                  onClick={() => openPaymentReview("autopay")}
-                  variant="outline"
-                >
-                  <Play data-icon="inline-start" />
-                  {selectedInvoiceHasPendingPayment ? "Autopay payment pending" : "Process invoice with autopay"}
-                </Button>
-              ) : null}
-              {selectedCenter?.hardwareTerminalConfigured && selectedFamily && selectedBillingAccount ? (
-                <StripeTerminalPayment
-                  centerId={selectedCenter.id}
-                  billingAccountId={selectedBillingAccount.id}
-                  familyId={selectedFamily.id}
-                  invoiceId={selectedPaymentInvoice?.id || null}
-                  amountCents={directorPaymentAmountCents}
-                  description={paymentDescription}
-                  disabled={isPending || !selectedCheckoutReadiness?.canAcceptParentPayments}
-                />
-              ) : null}
-              <Button
-                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
-                onClick={() => openPaymentReview("card_checkout")}
-              >
-                <CreditCard data-icon="inline-start" />
-                Digital Terminal
-              </Button>
-              <Button
-                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0} title="Link or card; bank funding is offered when eligible. No added parent processing fee."
-                onClick={() => openPaymentReview("instant_bank_checkout")}
-                variant="outline"
-              >
-                Link or card
-              </Button>
-              <Button
-                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
-                onClick={() => openPaymentReview("ach_checkout")}
-                variant="outline"
-              >
-                <Building2 data-icon="inline-start" />
-                Bank account
-              </Button>
-            </div>
-            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-              Payment options
-              <InfoTip label="Payment action help" side="right">
-                Use Digital Terminal to open a secure card screen on this device for a parent who is present. A certified hardware reader appears only after that school has registered one.
-              </InfoTip>
-            </div>
-          </div>
-          <div id="billing-payment-reminder" className="mt-4 scroll-mt-24 rounded-lg border bg-background/40 p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Mail className="size-4 text-muted-foreground" />
-                  Send a secure payment link
-                  <InfoTip label="About secure payment links" side="right">
-                    Send a secure payment form to email addresses saved on the family record. The form collects card or bank details securely.
-                  </InfoTip>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selectedPaymentMethod?.paymentMethodReauthorizationRequired ? (
-                  <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast || !selectedPaymentMethod.paymentMethodReauthorizationRecipientEmails.length} onClick={() => sendPaymentMethodRequest("payment_method_reauthorization")}>
-                    <Send data-icon="inline-start" />
-                    Send replacement method link
-                  </Button>
-                ) : null}
-                <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("instant_bank_verification")}>
-                  <Building2 data-icon="inline-start" />
-                  Send bank verification link
-                </Button>
-                <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("payment_steps")} variant="outline">
-                  <Send data-icon="inline-start" />
-                  Send payment link
-                </Button>
-                {manualPaymentEmailCopies.length ? (
-                  <Button type="button" disabled={isPending} onClick={copyPaymentEmails} variant="outline">
-                    <Copy data-icon="inline-start" />
-                    Copy email{manualPaymentEmailCopies.length === 1 ? "" : "s"}
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {selectedPaymentRequestEmailOptions.map((option) => {
-                const id = `payment-request-${encodeURIComponent(option.email)}`;
-                return (
-                  <label key={option.email} htmlFor={id} className="flex min-h-12 items-start gap-2 rounded-lg border bg-background/50 p-2 text-sm">
-                    <input
-                      id={id}
-                      type="checkbox"
-                      className="mt-1 size-4"
-                      checked={selectedPaymentRequestEmails.includes(option.email)}
-                      onChange={() => togglePaymentRequestEmail(option.email)}
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">{option.label}</span>
-                      <span className="block break-all text-xs text-muted-foreground">
-                        {option.email}{option.hasPortalUser ? " · Parent Portal notification" : ""}
-                      </span>
-                    </span>
-                  </label>
-                );
-              })}
-              {!selectedPaymentRequestEmailOptions.length ? (
-                <div className="rounded-lg border bg-background/50 p-3 text-sm text-muted-foreground">
-                  Add a parent or billing email to this family before sending the tuition payment link.
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        {workspaceSection === "tuition" || workspaceSection === "payments" ? (
+        <TabsContent value={workspaceSection} className="min-w-0 space-y-4">
+        {selectedFamily && workspaceSection === "payments" ? <details className="rounded-lg border p-3"><summary className="min-h-11 cursor-pointer content-center font-medium">Recover an interrupted cash or check payment</summary><Alert>
+          <AlertTitle>Interrupted cash or check payment?</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>Review the saved request after a reload or interrupted response. This only checks for an existing receipt and never submits a payment.</p>
+            <Button type="button" variant="outline" disabled={isPending} onClick={recoverOfflineReceipt}>Review unresolved payment</Button>
+            {currentOfflineReview ? <div className="space-y-2">
+              <p>Recorded {currentOfflineReview.receipt.provider === "manual_cash" ? "cash" : "check"} payment: {money(currentOfflineReview.receipt.amountCents)}. Receipt {currentOfflineReview.receipt.paymentId}. No additional payment was posted.</p>
+              <Button type="button" variant="outline" disabled={isPending} onClick={acknowledgeOfflineReceipt}>I reviewed this receipt; start a new payment</Button>
+            </div> : null}
+          </AlertDescription>
+        </Alert></details> : null}
 
-        {!selectedFamilyIsProspective ? <>
+        {workspaceSection === "tuition" ? <>
+        {!selectedFamilyIsProspective ? <><details className="rounded-lg border p-3"><summary className="min-h-11 cursor-pointer content-center font-medium">School tuition rates · view or edit</summary><fieldset disabled={selectedFamilyIsPast} className="min-w-0">
         <div className="rounded-lg border bg-background/35 p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -2685,26 +2494,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           {planBeingEdited ? <div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="outline" disabled={isPending} onClick={changeTuitionPlanArchive}>{planBeingEdited.archived ? "Restore rate" : "Archive rate"}</Button><p className="text-xs text-muted-foreground">Archiving removes a rate from new choices and preserves existing assignments and history.</p></div> : null}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 p-4">
-          <div>
-            <div className="text-sm font-medium">Set each child’s recurring tuition</div>
-            <p className="text-xs text-muted-foreground">
-              Choose one child at a time. Their saved rates stay visible separately and combine with other rates using the same cadence.
-            </p>
-          </div>
-          <Button type="button" variant="outline" disabled={selectedFamilyIsProspective || selectedFamilyIsPast} onClick={showChildTuitionSetup}>
-            <CalendarClock data-icon="inline-start" />
-            Open child tuition
-          </Button>
-        </div>
+        <p className="mt-3 text-xs text-muted-foreground">Set each child’s recurring tuition in Child tuition. Their saved rates combine with other rates using the same cadence.</p>
+        </fieldset>{selectedFamilyIsPast ? <p className="text-sm text-muted-foreground">Tuition changes are unavailable for past accounts.</p> : null}</details></> : null}
         </> : null}
-
         <Tabs
           id="billing-actions"
           value={billingAction}
           onValueChange={(value) => {
             setBillingAction(value);
-            if (["edit", "batch", "weekly-recovery", "payroll", "refund", "agency"].includes(value)) {
+            if (["adjustment", "edit", "batch", "weekly-recovery", "payroll", "refund", "agency"].includes(value)) {
               setMoreBillingActionsExpanded(true);
             }
           }}
@@ -2724,19 +2522,20 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 aria-controls="billing-action-tabs"
                 onClick={() => setMoreBillingActionsExpanded((expanded) => !expanded)}
               >
-                More billing tasks
+                More actions
                 <ChevronDown className={`size-4 transition-transform ${moreBillingActionsExpanded ? "rotate-180" : ""}`} aria-hidden="true" />
               </Button>
               <p className="mt-1 max-w-md text-xs text-muted-foreground">Invoice corrections, batch work, payroll deductions, refunds, and agency claims</p>
             </div>
           </div>
           <TabsList id="billing-action-tabs" className="flex flex-wrap justify-start gap-1 group-data-horizontal/tabs:h-auto" aria-label="Billing tasks">
-            <TabsTrigger value="recurring" disabled={selectedFamilyIsProspective || selectedFamilyIsPast} className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Child tuition</TabsTrigger>
-            <TabsTrigger value="pay-ahead" disabled={selectedFamilyIsProspective || selectedFamilyIsPast} className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Pay ahead</TabsTrigger>
-            <TabsTrigger value="single" className="h-10 min-h-10"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
-            <TabsTrigger value="adjustment" className="h-10 min-h-10"><MinusCircle data-icon="inline-start" />One-time fee / credit</TabsTrigger>
-            <TabsTrigger value="check" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
-            <TabsTrigger value="cash" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger>
+            {workspaceSection === "payments" ? <TabsTrigger value="online" className="h-10 min-h-10"><CreditCard data-icon="inline-start" />Online payment</TabsTrigger> : null}
+            {workspaceSection === "tuition" ? <TabsTrigger value="recurring" disabled={selectedFamilyIsProspective || selectedFamilyIsPast} className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Child tuition</TabsTrigger> : null}
+            {workspaceSection === "tuition" ? <TabsTrigger value="pay-ahead" disabled={selectedFamilyIsProspective || selectedFamilyIsPast} className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Pay ahead</TabsTrigger> : null}
+            {workspaceSection === "tuition" ? <TabsTrigger value="single" disabled={selectedFamilyIsPast} className="h-10 min-h-10"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger> : null}
+            <TabsTrigger value="adjustment" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "adjustment" ? "hidden" : ""}`}><MinusCircle data-icon="inline-start" />One-time fee / credit</TabsTrigger>
+            {workspaceSection === "payments" ? <TabsTrigger value="check" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Check payment</TabsTrigger> : null}
+            {workspaceSection === "payments" ? <TabsTrigger value="cash" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger> : null}
             <TabsTrigger value="edit" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "edit" ? "hidden" : ""}`}><FilePenLine data-icon="inline-start" />Edit invoice</TabsTrigger>
             <TabsTrigger value="batch" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "batch" ? "hidden" : ""}`}><Rows3 data-icon="inline-start" />Batch tuition</TabsTrigger>
             <TabsTrigger value="weekly-recovery" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "weekly-recovery" ? "hidden" : ""}`}><Search data-icon="inline-start" />Weekly recovery</TabsTrigger>
@@ -2745,6 +2544,229 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <TabsTrigger value="agency" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "agency" ? "hidden" : ""}`}><BadgeDollarSign data-icon="inline-start" />Agency claims</TabsTrigger>
           </TabsList>
 
+          <TabsContent value="online" className="space-y-4">
+        <div id="billing-payment-methods" className="scroll-mt-28 rounded-lg border bg-background/35 p-4">
+          <details className="mb-3 rounded-lg border p-3"><summary className="min-h-11 cursor-pointer content-center font-medium">Saved method &amp; autopay consent</summary><div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                Family payment methods
+                <InfoTip label="About family payment profiles">
+                  Saving a method and enabling autopay are separate actions. Parents enable or disable autopay from their Parent Portal.
+                </InfoTip>
+              </div>
+            </div>
+            <Badge variant={!selectedFamilyIsPast && selectedAutopayStatus === "enabled" ? "default" : "outline"} className="capitalize">
+              {selectedFamilyIsPast ? "Past family" : selectedPaymentMethod?.paymentMethodReauthorizationRequired ? "Reauthorization required" : selectedAutopayStatus}
+            </Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="rounded-lg border bg-background/40 p-3">
+              <div className="text-xs text-muted-foreground">Saved method</div>
+              <div className="mt-1 text-sm font-medium">
+                {selectedPaymentMethod?.hasSavedPaymentMethod
+                  ? selectedPaymentMethod.paymentMethodLabel ?? "Saved securely"
+                  : selectedPaymentMethod?.autopayStatus === "pending"
+                    ? "Setup pending"
+                    : "No saved payment method"}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {selectedPaymentMethod?.paymentMethodReauthorizationRequired
+                  ? "This method belongs to the school's prior payout account and is excluded from payment processing until the family replaces it."
+                  : selectedPaymentMethod?.lastUpdatedAt ? `Updated ${formatZonedDateTime(selectedPaymentMethod.lastUpdatedAt, timeZone, { month: "short", day: "numeric", year: "numeric" })}` : "Families can also update this from the parent portal."}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily || selectedFamilyIsPast} onClick={() => manageFamilyPaymentMethod("setup", "link_bank")}>
+                <Building2 data-icon="inline-start" />
+                Connect bank account
+              </Button>
+              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily || selectedFamilyIsPast} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
+                <CreditCard data-icon="inline-start" />
+                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace saved card" : "Save card"}
+              </Button>
+              <Button className="w-full sm:w-auto" disabled={isPending || selectedFamilyIsPast || !selectedPaymentMethod?.hasStripeCustomer} onClick={() => manageFamilyPaymentMethod("portal")} variant="outline">
+                Manage payment method
+              </Button>
+            </div>
+          </div>
+          </details>
+          <div className="mt-4 rounded-lg border bg-background/40 p-3">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  Collect a family payment
+                  <InfoTip label="About director payment actions">
+                    Directors can run an open invoice with the saved method only after the parent enables autopay. In-person and secure checkout options remain available separately.
+                  </InfoTip>
+                </div>
+              </div>
+              <Badge variant="outline">{money(directorPaymentAmountCents)}</Badge>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Choose Custom amount and Advance payment to collect tuition early, including at a $0 balance. Excess remains household credit for future invoices. Review the amount in secure checkout; autopay consent stays unchanged.</p>
+            <div className="grid gap-3 md:grid-cols-6">
+              <div className="space-y-1 md:col-span-2">
+                <Label htmlFor="billing-payment-target">Apply payment to</Label>
+                <Select value={effectivePaymentTarget} onValueChange={(value) => value && setPaymentTarget(value)}>
+                  <SelectTrigger id="billing-payment-target"><SelectValue placeholder="Choose balance or invoice" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="balance">Collectible family balance · {accountOverview.data ? money(accountOverview.data.collectibleCents) : "Checking"}</SelectItem>
+                    {openInvoices.map((invoice) => (
+                      <SelectItem key={invoice.id} value={`invoice:${invoice.id}`}>
+                        {invoice.number} · {money(invoice.totalCents)} · due {formatInvoiceDueDate(invoice.dueDate)}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom amount</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="billing-payment-custom-amount">Custom amount</Label>
+                {effectivePaymentTarget === "custom" ? <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={advancePayment} onChange={(event) => setAdvancePayment(event.target.checked)} />Advance payment for future tuition</label> : null}
+                <Input
+                  id="billing-payment-custom-amount"
+                  disabled={effectivePaymentTarget !== "custom"}
+                  inputMode="decimal"
+                  value={paymentAmountDollars}
+                  onChange={(event) => setPaymentAmountDollars(event.target.value)}
+                  placeholder="250.00"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label htmlFor="billing-payment-description">Description</Label>
+                <Input id="billing-payment-description" value={paymentDescription} onChange={(event) => setPaymentDescription(event.target.value)} placeholder="Tuition payment" />
+              </div>
+              <div className="rounded-lg border bg-background/50 p-3">
+                <div className="text-xs text-muted-foreground">Charging</div>
+                <div className="text-sm font-medium">{directorPaymentTargetLabel}</div>
+              </div>
+            </div>
+            {hasHouseholdCreditAgainstInvoices ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Invoice totals show the amounts billed on each invoice. The current
+                account balance includes recorded payments and credits.
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {effectivePaymentTarget.startsWith("invoice:") && !selectedFamilyIsPast ? (
+                <Button
+                  disabled={isPending || selectedAutopayStatus !== "enabled" || !selectedBillingAccount || directorPaymentAmountCents <= 0 || selectedInvoiceHasPendingPayment}
+                  onClick={() => openPaymentReview("autopay")}
+                  variant="outline"
+                >
+                  <Play data-icon="inline-start" />
+                  {selectedInvoiceHasPendingPayment ? "Autopay payment pending" : "Process invoice with autopay"}
+                </Button>
+              ) : null}
+              {selectedCenter?.hardwareTerminalConfigured && selectedFamily && selectedBillingAccount ? (
+                <StripeTerminalPayment
+                  centerId={selectedCenter.id}
+                  billingAccountId={selectedBillingAccount.id}
+                  familyId={selectedFamily.id}
+                  invoiceId={selectedPaymentInvoice?.id || null}
+                  amountCents={directorPaymentAmountCents}
+                  description={paymentDescription}
+                  disabled={isPending || !selectedCheckoutReadiness?.canAcceptParentPayments}
+                />
+              ) : null}
+              <Button
+                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0 || (effectivePaymentTarget === "balance" && (!accountOverview.data || accountOverview.data.responsibilityReviewRequired))}
+                onClick={() => openPaymentReview("card_checkout")}
+              >
+                <CreditCard data-icon="inline-start" />
+                Digital Terminal
+              </Button>
+              <Button
+                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0 || (effectivePaymentTarget === "balance" && (!accountOverview.data || accountOverview.data.responsibilityReviewRequired))} title="Link or card; bank funding is offered when eligible. No added parent processing fee."
+                onClick={() => openPaymentReview("instant_bank_checkout")}
+                variant="outline"
+              >
+                Link or card
+              </Button>
+              <Button
+                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0 || (effectivePaymentTarget === "balance" && (!accountOverview.data || accountOverview.data.responsibilityReviewRequired))}
+                onClick={() => openPaymentReview("ach_checkout")}
+                variant="outline"
+              >
+                <Building2 data-icon="inline-start" />
+                Bank account
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{!selectedBillingAccount ? "Choose a family with a billing account to collect a payment." : effectivePaymentTarget === "balance" && !accountOverview.data ? "Verify the account summary before collecting a balance payment." : accountOverview.data?.responsibilityReviewRequired ? "Family and agency responsibility must be reviewed before collecting the balance." : directorPaymentAmountCents <= 0 ? "There is no collectible balance. Use Custom amount and Advance payment for future tuition." : "The family and amount are reviewed before secure checkout opens."}</p>
+            {accountOverview.error ? <Button type="button" variant="outline" onClick={accountOverview.retry}>Retry account summary</Button> : null}
+            {effectivePaymentTarget.startsWith("invoice:") && selectedAutopayStatus !== "enabled" ? <p className="text-xs text-muted-foreground">Autopay requires the parent&apos;s consent for a saved payment method. Use a one-time checkout instead.</p> : null}
+            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+              Payment options
+              <InfoTip label="Payment action help" side="right">
+                Use Digital Terminal to open a secure card screen on this device for a parent who is present. A certified hardware reader appears only after that school has registered one.
+              </InfoTip>
+            </div>
+          </div>
+          <details id="billing-payment-reminder" className="mt-4 scroll-mt-24 rounded-lg border bg-background/40 p-3"><summary className="min-h-11 cursor-pointer content-center font-medium">Send a secure payment link</summary><div>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Mail className="size-4 text-muted-foreground" />
+                  Send a secure payment link
+                  <InfoTip label="About secure payment links" side="right">
+                    Send a secure payment form to email addresses saved on the family record. The form collects card or bank details securely.
+                  </InfoTip>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedPaymentMethod?.paymentMethodReauthorizationRequired ? (
+                  <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast || !selectedPaymentMethod.paymentMethodReauthorizationRecipientEmails.length} onClick={() => sendPaymentMethodRequest("payment_method_reauthorization")}>
+                    <Send data-icon="inline-start" />
+                    Send replacement method link
+                  </Button>
+                ) : null}
+                <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("instant_bank_verification")}>
+                  <Building2 data-icon="inline-start" />
+                  Send bank verification link
+                </Button>
+                <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("payment_steps")} variant="outline">
+                  <Send data-icon="inline-start" />
+                  Send payment link
+                </Button>
+                {manualPaymentEmailCopies.length ? (
+                  <Button type="button" disabled={isPending} onClick={copyPaymentEmails} variant="outline">
+                    <Copy data-icon="inline-start" />
+                    Copy email{manualPaymentEmailCopies.length === 1 ? "" : "s"}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {selectedPaymentRequestEmailOptions.map((option) => {
+                const id = `payment-request-${encodeURIComponent(option.email)}`;
+                return (
+                  <label key={option.email} htmlFor={id} className="flex min-h-12 items-start gap-2 rounded-lg border bg-background/50 p-2 text-sm">
+                    <input
+                      id={id}
+                      type="checkbox"
+                      className="mt-1 size-4"
+                      checked={selectedPaymentRequestEmails.includes(option.email)}
+                      onChange={() => togglePaymentRequestEmail(option.email)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{option.label}</span>
+                      <span className="block break-all text-xs text-muted-foreground">
+                        {option.email}{option.hasPortalUser ? " · Parent Portal notification" : ""}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+              {!selectedPaymentRequestEmailOptions.length ? (
+                <div className="rounded-lg border bg-background/50 p-3 text-sm text-muted-foreground">
+                  Add a parent or billing email to this family before sending the tuition payment link.
+                </div>
+              ) : null}
+            </div>
+          </div>
+          </details>
+        </div>
+
+          </TabsContent>
           <TabsContent value="pay-ahead" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <div>
               <div className="text-sm font-medium">Create one monthly pay-ahead invoice</div>
@@ -2992,8 +3014,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </p>
           </TabsContent>
 
-          <TabsContent id="child-tuition-setup" value="recurring" className="scroll-mt-4 space-y-4 rounded-lg border bg-background/35 p-4">
-            <div>
+          <TabsContent value="recurring" className="scroll-mt-4 space-y-4 rounded-lg border bg-background/35 p-4">
+            <div id="child-tuition-setup">
               <div className="text-sm font-medium">Recurring tuition by child</div>
               <p className="text-xs text-muted-foreground">
                 Select a child, choose that child’s rate, and save. Repeat for each sibling; the family ledger receives the combined total while each child keeps an individual rate.
@@ -3038,7 +3060,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 );
               })}
             </div>
-            {canManageEnrollment ? <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+            {canManageEnrollment ? <details name="billing-tuition-options" className="space-y-3 rounded-lg border bg-muted/20 p-3"><summary className="min-h-11 cursor-pointer content-center font-medium">Child setup: program, classroom and schedule</summary>
               <div>
                 <div className="text-sm font-medium">Selected child setup</div>
                 <p className="text-xs text-muted-foreground">
@@ -3089,7 +3111,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <Save data-icon="inline-start" />
                 Save child setup
               </Button>
-            </div> : <p className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">Program, classroom, and care schedule are shown above. Ask a director to change enrollment details; authorized tuition changes remain available below.</p>}
+            </details> : <p className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">Program, classroom, and care schedule are shown above. Ask a director to change enrollment details; authorized tuition changes remain available below.</p>}
             <div className="grid gap-3 md:grid-cols-5">
               <div className="space-y-1">
                 <Label htmlFor="billing-assignment-child">Child</Label>
@@ -3212,7 +3234,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 detail={`Auto-calculated from ${projectedActiveRateCount} child rate${projectedActiveRateCount === 1 ? "" : "s"}; save tuition to update the family ledger`}
               />
             </div>
-            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+            <details name="billing-tuition-options" className="space-y-3 rounded-lg border bg-muted/20 p-3"><summary className="min-h-11 cursor-pointer content-center font-medium">Additional invoice lines - {money(effectiveAssignmentAdditionalChargesTotalCents)}</summary>
               <div>
                 <div className="text-sm font-medium">{effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} additional invoice lines</div>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -3251,8 +3273,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <DisplayValue label="Additional lines" value={money(effectiveAssignmentAdditionalChargesTotalCents)} />
                 <DisplayValue label={`Gross ${effectiveRateCadence} total`} value={money(effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)} />
               </div>
-            </div>
-            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+            </details>
+            <details name="billing-tuition-options" className="space-y-3 rounded-lg border bg-muted/20 p-3"><summary className="min-h-11 cursor-pointer content-center font-medium">Recurring invoice credits - {money(effectiveAssignmentCreditsTotalCents)}</summary>
               <div>
                 <div className="text-sm font-medium">{effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} invoice credits</div>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -3285,7 +3307,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     : "Amount added to the family ledger"}
                 />
               </div>
-            </div>
+            </details>
+            <SummaryMetric label="Net recurring invoice" value={money(effectiveAssignmentNetCents)} detail="Includes the selected rate, additional lines and recurring credits." />
             <div className="space-y-1">
               <Label htmlFor="billing-assignment-description">Child tuition label</Label>
               <Input
@@ -3559,6 +3582,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               {selectedAdjustmentOption.buttonLabel}
             </Button>
           </TabsContent>
+        </Tabs>
+        </TabsContent>
+        ) : null}
+        <TabsContent value="ledger" keepMounted className="min-w-0">
+          {ledger ? <FamilyLedgerCard {...ledger} families={families} selectedFamilyId={effectiveFamilyId} initialCenterId={centerId} canOpenFamilyProfile={canOpenFamilyProfile} /> : <p className="text-sm text-muted-foreground">Ledger history is unavailable in this preview.</p>}
+        </TabsContent>
         </Tabs>
         </fieldset>
       </CardContent>

@@ -49,6 +49,12 @@ type FamilyOption = {
   centerId: string | null;
 };
 
+export type FamilyLedgerData = {
+  entries: FamilyLedgerEntry[];
+  accounts: Array<{ familyId: string; familyName: string; billingEmail: string | null; centerId: string | null; balanceCents: number }>;
+  schools: BillingReceiptSchool[];
+};
+
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
@@ -67,6 +73,7 @@ export function FamilyLedgerCard({
   initialCenterId = "",
   canOpenFamilyProfile,
   readOnly = false,
+  selectedFamilyId,
 }: {
   entries: FamilyLedgerEntry[];
   accounts: Array<{
@@ -82,15 +89,19 @@ export function FamilyLedgerCard({
   initialCenterId?: string;
   canOpenFamilyProfile: boolean;
   readOnly?: boolean;
+  selectedFamilyId?: string;
 }) {
   const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
   const validInitialFamilyId = families.some((family) => family.id === initialFamilyId && (!initialCenterId || family.centerId === initialCenterId))
     ? initialFamilyId
     : "";
-  const [familyId, setFamilyId] = useState(validInitialFamilyId);
+  const [localFamilyId, setFamilyId] = useState(validInitialFamilyId);
+  const requestedFamilyId = selectedFamilyId ?? localFamilyId;
+  const familyId = families.some(family => family.id === requestedFamilyId && (!initialCenterId || family.centerId === initialCenterId)) ? requestedFamilyId : "";
   const [selectionError, setSelectionError] = useState(Boolean(initialFamilyId && !validInitialFamilyId));
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const invalidRange = Boolean(startDate && endDate && startDate > endDate);
   const selectedFamily = families.find((family) => family.id === familyId) ?? null;
   const selectedAccount = accounts.find((account) => account.familyId === familyId) ?? null;
   const visibleEntries = useMemo(
@@ -134,13 +145,13 @@ export function FamilyLedgerCard({
     <Card id="family-ledger" className="office-billing-workspace glass-panel scroll-mt-24" onFocusCapture={event => scheduleFocusedPortalControlRevealExcept(event.target, new Set(["family-ledger-family"]))}>
       <CardHeader className="ledger-heading-layout grid grid-cols-1 gap-4">
         <div>
-        <CardTitle as="h2">Family Ledger</CardTitle>
+        <CardTitle as="h2">Ledger &amp; statements</CardTitle>
           <CardDescription>
-            Select one family to see only that family&apos;s tuition, credits, payments, and adjustments.
+            {selectedFamilyId === undefined ? "Select one family to review their account history." : "History and statements follow the family selected above."}
           </CardDescription>
         </div>
         <div className="flex min-w-0 w-full flex-col gap-3">
-          <div className="grid min-w-0 flex-1 gap-1.5">
+          {selectedFamilyId === undefined ? <div className="grid min-w-0 flex-1 gap-1.5">
             <Label htmlFor="family-ledger-family">Family</Label>
             <Select value={familyId} onValueChange={(value) => { if (value && families.some((family) => family.id === value)) { setFamilyId(value); setSelectionError(false); } }}>
               <SelectTrigger id="family-ledger-family" className="w-full">
@@ -154,7 +165,7 @@ export function FamilyLedgerCard({
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </div> : null}
           <div className="ledger-date-grid grid grid-cols-1 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="family-ledger-start-date">From</Label>
@@ -167,15 +178,22 @@ export function FamilyLedgerCard({
           </div>
           <div className="flex flex-wrap gap-2">
             <CustomerStatementPrintButton
+              key={familyId}
               entries={customerStatementEntries}
               schools={schools}
               familyName={selectedAccount?.familyName ?? selectedFamily?.name ?? null}
               centerId={selectedCenterId}
               currentBalanceCents={currentBalanceCents}
+              startDate={startDate}
+              endDate={endDate}
+              familyReference={familyId}
+              disabled={invalidRange || !selectedFamily}
             />
-            <ChargeCreditSummaryPrintButton entries={printableEntries} schools={schools} />
-            <LedgerPrintButton entries={printableEntries} schools={schools} />
+            <ChargeCreditSummaryPrintButton key={`summary:${familyId}`} startDate={startDate} endDate={endDate} entries={invalidRange ? [] : printableEntries} schools={schools} />
+            <LedgerPrintButton key={`ledger:${familyId}`} startDate={startDate} endDate={endDate} entries={invalidRange ? [] : printableEntries} schools={schools} />
           </div>
+          {invalidRange ? <p role="alert" className="text-sm text-destructive">Choose a From date on or before the Through date.</p> : null}
+          <p className="text-xs text-muted-foreground">Reports include the loaded history for the selected period. Confirm full-year coverage before using a report as an annual statement. Current balance means today&apos;s posted account balance, including any agency responsibility; it is not the closing balance for the selected period.</p>
         </div>
       </CardHeader>
       <CardContent>

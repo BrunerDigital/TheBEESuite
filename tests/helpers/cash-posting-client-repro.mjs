@@ -14,7 +14,7 @@ function fixture(storage=memoryStorage()){
   const state={errors:[],messages:[],requests:[],resets:0,refreshes:0,review:null};let pending=Promise.resolve();let response={status:200,body:null};let confirmed=false;
   const deps={
     checkAmountDollars:'100.00',checkNumber:'fixture-reference',checkPaidAt:'2026-10-13T12:00',checkNotes:'',cashAmountDollars:'100.00',cashReference:'receipt-fixture',cashNotes:'',cashPaidAt:'2026-10-16T17:32',confirmBillingAction:()=>!state.cancelled,
-    offlinePaymentOperationInFlight:{current:false},state, families:[family,{id:'other-family',centerId:'school-fixture'}], currentUserId:'user-fixture',selectedFamily:family,timeZone:'UTC',
+    offlinePaymentOperationInFlight:{current:false},billingRequestInFlight:{current:false},billingViewActive:{current:true},state, families:[family,{id:'other-family',centerId:'school-fixture'}], currentUserId:'user-fixture',selectedFamily:family,timeZone:'UTC',
     window:{sessionStorage:storage,confirm:()=>confirmed},
     fetch:async(url,init)=>{state.requests.push(JSON.parse(init.body));if(response.wait)await response.wait;if(response.throws)throw new Error('interrupted');return {ok:response.status<400,json:async()=>{if(response.malformed)throw new Error('truncated JSON');return typeof response.body==='function'?response.body(state.requests.at(-1)):response.body;}};},
     setErrorMessage:v=>state.errors.push(v),setStatusMessage:v=>state.messages.push(v),

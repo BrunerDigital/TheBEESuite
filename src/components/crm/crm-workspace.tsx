@@ -1415,7 +1415,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
         <div className="flex min-w-0 flex-col gap-4">
           <Card>
             <CardContent className="flex flex-col gap-3 p-4">
-              <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
+              <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
                 <div className="relative">
                   <Label htmlFor={leadSearchId} className="sr-only">Search enrollment inquiries</Label>
                   <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1444,7 +1444,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                   </Select>
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[13rem_12rem_12rem_1fr_auto]">
+              <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-3">
                 <div>
                   <Label htmlFor={stageFilterId} className="sr-only">Filter by pipeline stage</Label>
                   <Select
@@ -1509,7 +1509,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     placeholder="Saved view name"
                   />
                 </div>
-                <div className="grid gap-2 sm:grid-cols-3 xl:flex">
+                <div className="col-span-full flex flex-wrap gap-2">
                   <Button variant="outline" onClick={saveCurrentView}>
                     <Save data-icon="inline-start" />
                     Save view
@@ -1546,7 +1546,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 xl:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-4">
             {enrollmentStages.slice(0, 8).map((stage) => (
               <Card
                 key={stage}

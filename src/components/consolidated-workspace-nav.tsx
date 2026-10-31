@@ -146,28 +146,17 @@ export function ConsolidatedWorkspaceNav({ workspace, activeView, allowedViews }
   const config = workspaceConfig[workspace];
   const visibleViews = allowedViews ? config.views.filter(([id]) => allowedViews.includes(id)) : config.views;
   return (
-    <section className="mb-6 overflow-hidden rounded-xl border bg-card shadow-none">
-      <div className="flex flex-col gap-3 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 text-lg font-semibold">
-            <span>{config.title}</span>
-            {config.brandAlias ? (
-              <span
-                aria-hidden="true"
-                className="whitespace-nowrap text-sm font-normal text-muted-foreground"
-              >
-                · {config.brandAlias}
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-1 max-w-4xl text-sm text-muted-foreground">{config.description}</p>
-        </div>
-        <div className="shrink-0 text-xs text-muted-foreground">{config.note}</div>
-      </div>
-      <nav className={cn("grid", config.columns)} aria-label={`${config.title} views`}>
+    <section className="mb-4 rounded-xl border bg-card p-2">
+      <nav className="flex flex-wrap gap-1" aria-label={`${config.title} views`}>
         {visibleViews.map(([id, label, detail, href, Icon]) => {
           const active = activeView === id;
-          return <Link key={id} href={href} aria-current={active ? "page" : undefined} className={cn("relative flex min-h-20 items-center gap-3 border-b border-border/60 px-5 py-3 transition-colors hover:bg-muted/50 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:border-r", active && "bg-muted/70 text-foreground")}><span className={cn("grid size-9 shrink-0 place-items-center rounded-lg border bg-background text-muted-foreground transition-colors", active && "border-primary/45 text-primary")}><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span></span></Link>;
+          return (
+            <Link key={id} href={href} aria-current={active ? "page" : undefined} aria-description={detail}
+              className={cn("inline-flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", active ? "bg-primary/10 text-foreground ring-1 ring-primary/30" : "text-muted-foreground")}>
+              <Icon className="size-4 shrink-0" aria-hidden="true" />
+              <span>{label}</span>
+            </Link>
+          );
         })}
       </nav>
     </section>

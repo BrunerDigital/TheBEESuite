@@ -574,6 +574,8 @@ export function StripeConnectPanel({
           </DialogContent>
         </Dialog>
 
+        <details className="rounded-xl border" open={localCenters.length <= 1 ? true : undefined}>
+          <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">School payout directory · {localCenters.length} schools</summary>
         <Table>
           <TableHeader>
             <TableRow>
@@ -703,6 +705,7 @@ export function StripeConnectPanel({
             ) : null}
           </TableBody>
         </Table>
+        </details>
 
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />

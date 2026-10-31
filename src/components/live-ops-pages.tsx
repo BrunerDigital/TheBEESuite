@@ -36,6 +36,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import { formSchemaSummary } from "@/lib/form-schema-summary";
 import { Badge } from "@/components/ui/badge";
 import {
   isAchPaymentProcessing,
@@ -237,19 +238,6 @@ function registrationPaymentLabel(payment: RegistrationPaymentStatus) {
   return `Open ${formatRegistrationPaymentAmount(payment.totalCents)}`;
 }
 
-function jsonSummary(value: unknown) {
-  if (!value) return "Not set";
-  if (Array.isArray(value)) return value.join(", ");
-  if (typeof value === "object") {
-    return Object.entries(value as Record<string, unknown>)
-      .slice(0, 3)
-      .map(([key, item]) => `${key}: ${Array.isArray(item) ? item.join(", ") : String(item)}`)
-      .join(" · ");
-  }
-  return String(value);
-}
-
-
 function localImageSrc(value: string | null | undefined) {
   return value?.startsWith("/") ? value : null;
 }
@@ -370,8 +358,8 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Bell data-icon="inline-start" />
           Notifications
         </Badge>
@@ -380,7 +368,7 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
           Review enrollment follow-ups, prospective-family activity, incident reviews, and school notifications.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Unread notifications" value={data.stats.unread} detail="Assigned to this user or system-wide" />
         <StatCard label="Open lead tasks" value={data.stats.openTasks} detail="Follow-ups needing action" />
         <StatCard label="High-intent leads" value={data.stats.highIntentLeads} detail="Lead score 75+" />
@@ -527,8 +515,8 @@ export type AgencyAdminData = {
 export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Building2 data-icon="inline-start" />
           Corporate administration
         </Badge>
@@ -537,7 +525,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
           Manage locations, owner groups, user access, and multi-location visibility for {data.brandName}.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Organizations" value={data.stats.organizations} />
         <StatCard label="Centers" value={data.stats.centers} />
         <StatCard label="Users" value={data.stats.users} />
@@ -710,8 +698,8 @@ export type IntegrationsData = {
 export function IntegrationsPage({ data }: { data: IntegrationsData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Link2 data-icon="inline-start" />
           Connected services
         </Badge>
@@ -721,7 +709,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
         </p>
       </section>
       {data.deliveryStats ? (
-        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
           <StatCard label="Deliveries" value={data.deliveryStats.total.toLocaleString()} detail="Email, SMS, and Sheets" />
           <StatCard label="Delivered" value={data.deliveryStats.delivered.toLocaleString()} />
           <StatCard label="Accepted" value={data.deliveryStats.accepted.toLocaleString()} detail="Provider queued; not final delivery" />
@@ -736,7 +724,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
             <CardTitle as="h2">Email delivery follow-up</CardTitle>
             <CardDescription>Email deliveries that have not completed after 24 hours need review. Deferred messages remain in progress while the email provider retries.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-5">
+          <CardContent className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
             <StatCard label="Needs follow-up" value={data.deliveryStats.needsFollowUp.toLocaleString()} />
             <StatCard label="Accepted stale" value={data.deliveryStats.acceptedStale.toLocaleString()} detail="No final event after 24 hours" />
             <StatCard label="Deferred" value={data.deliveryStats.deferred.toLocaleString()} detail="Provider retrying" />
@@ -1047,8 +1035,8 @@ const projectAccountGroups: Array<{ title: string; description: string; accounts
 export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Code2 data-icon="inline-start" />
           Platform operations
         </Badge>
@@ -1136,7 +1124,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         <StatCard label="Audit events" value={data.stats.auditEvents.toLocaleString()} />
         <StatCard label="Record changes" value={data.stats.operationMutations.toLocaleString()} detail="Administrative actions" />
         <StatCard label="Deliveries" value={data.stats.integrationDeliveries.toLocaleString()} />
@@ -1398,10 +1386,10 @@ export type CenterDashboardData = {
 export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
-            <Badge className="mb-4">
+            <Badge className="mb-2">
               <MapPin data-icon="inline-start" />
               Today at {data.centerName}
             </Badge>
@@ -1417,7 +1405,7 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
         </div>
       </section>
       {data.canViewEnrollmentStatus ? <EnrollmentStatusShortcut centerId={data.centerId} /> : null}
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
         <StatCard label="High intent" value={data.stats.highIntentLeads.toLocaleString()} />
         <StatCard label="Teachers" value={data.stats.staff} />
@@ -1427,7 +1415,7 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
         <StatCard label="Upcoming tours" value={data.stats.toursUpcoming} />
         <StatCard label="Open tasks" value={data.stats.openTasks} />
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard
           label="Weekly FTE status"
           value={data.stats.fteSubmittedThisWeek ? "Submitted" : "Due"}
@@ -1580,8 +1568,8 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Workflow data-icon="inline-start" />
           Live enrollment pipeline
         </Badge>
@@ -1590,7 +1578,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
           Review prospective families by enrollment stage, priority, and recent activity.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Visible leads" value={total.toLocaleString()} />
         <StatCard label="High intent" value={highIntent.toLocaleString()} detail="Lead score 75+" />
         <StatCard label="Active stages" value={data.stages.filter((stage) => stage.count > 0).length} />
@@ -1801,8 +1789,8 @@ export type ToursPageData = {
 export function ToursPage({ data }: { data: ToursPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <MapPin data-icon="inline-start" />
           Tour calendar
         </Badge>
@@ -1811,7 +1799,7 @@ export function ToursPage({ data }: { data: ToursPageData }) {
           Review scheduled family tours. Schedule a new tour from the prospective family&apos;s inquiry.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Upcoming tours" value={data.stats.upcoming} />
         <StatCard label="Today" value={data.stats.today} />
         <StatCard label="Completed" value={data.stats.completed} />
@@ -1868,6 +1856,7 @@ export function ToursPage({ data }: { data: ToursPageData }) {
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
                     No tours are scheduled for the schools you can access.
+                    <Link href="/crm-leads" className="ml-2 inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4">Open enrollment inquiries</Link>
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -1904,8 +1893,8 @@ export type WaitlistPageData = {
 export function WaitlistPage({ data }: { data: WaitlistPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Workflow data-icon="inline-start" />
           Enrollment demand
         </Badge>
@@ -2137,7 +2126,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
 
       <BlockedMessageSenders />
       {data.demoMode ? <DemoDataNotice section="parent messaging" /> : null}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Messages" value={data.stats.total.toLocaleString()} />
         <StatCard label="Unread" value={data.stats.unread.toLocaleString()} />
         <StatCard label="Priority" value={data.stats.priority.toLocaleString()} />
@@ -2271,8 +2260,8 @@ export type CampaignsPageData = CampaignWorkspaceData;
 export function CampaignsPage({ data }: { data: CampaignsPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Inbox data-icon="inline-start" />
           Enrollment marketing
         </Badge>
@@ -2281,7 +2270,7 @@ export function CampaignsPage({ data }: { data: CampaignsPageData }) {
           Campaign templates and nurture sequences for inquiries, tours, applications, waitlist updates, newsletters, and review requests.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Campaigns" value={data.stats.total} />
         <StatCard label="Active" value={data.stats.active} />
         <StatCard label="Draft" value={data.stats.draft} />
@@ -2297,8 +2286,8 @@ export type AutomationsPageData = AutomationWorkflowBuilderData;
 export function AutomationsPage({ data }: { data: AutomationsPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Bot data-icon="inline-start" />
           Workflow configuration
         </Badge>
@@ -2307,7 +2296,7 @@ export function AutomationsPage({ data }: { data: AutomationsPageData }) {
           Prepare account-wide workflow rules and drafts, not limited to the selected school. These saved configurations do not automatically send messages, charge payments, schedule work, or change records.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Workflows" value={data.stats.total} />
         <StatCard label="Configured" value={data.stats.active} />
         <StatCard label="Paused" value={data.stats.paused} />
@@ -2350,8 +2339,8 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Activity data-icon="inline-start" />
           Classroom operations
         </Badge>
@@ -2364,7 +2353,7 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
         <EnrollmentStatusShortcut centerId={data.centers.length === 1 ? data.centers[0]?.id : null} />
       ) : null}
       {data.demoMode ? <DemoDataNotice section="classroom operations" /> : null}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Classrooms" value={data.classrooms.length} />
         <StatCard label="Children assigned" value={children} />
         <StatCard label="Children in rooms now" value={currentChildrenInRooms} />
@@ -2419,8 +2408,8 @@ export type AttendancePageData = {
 export function AttendancePage({ data }: { data: AttendancePageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <ClipboardCheck data-icon="inline-start" />
           Check-in workflow
         </Badge>
@@ -2429,7 +2418,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
           Child attendance records, PIN/QR kiosk check-ins, pickup verification, late pickup flags, and end-of-day reconciliation.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Records" value={data.stats.total} />
         <StatCard label="Present" value={data.stats.present} />
         <StatCard label="Absent" value={data.stats.absent} />
@@ -2613,8 +2602,8 @@ export type DailyReportsPageData = {
 export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <BookOpen data-icon="inline-start" />
           Teacher daily sheets
         </Badge>
@@ -2624,7 +2613,7 @@ export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
         </p>
       </section>
       {data.demoMode ? <DemoDataNotice section="daily report" /> : null}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Reports" value={data.stats.total} />
         <StatCard label="Sent" value={data.stats.sent} />
         <StatCard label="In progress" value={data.stats.inProgress} />
@@ -2724,6 +2713,7 @@ export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
                   </TableCell>
                 </TableRow>
               ))}
+              {!data.reports.length ? <TableRow><TableCell colSpan={7} className="whitespace-normal py-6 text-muted-foreground">No daily reports are available for the schools you can access. Reports appear here after staff save classroom updates.</TableCell></TableRow> : null}
             </TableBody>
           </Table>
         </CardContent>
@@ -2764,8 +2754,8 @@ export type ParentMediaReviewPageData = {
 export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <ImageIcon data-icon="inline-start" />
           Parent engagement safety
         </Badge>
@@ -2774,7 +2764,7 @@ export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageDat
           Review teacher-uploaded child photos that need approval before they can be shared with families.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Needs review" value={data.stats.pending} />
         <StatCard label="Shared in 30 days" value={data.stats.sharedThirtyDays} />
         <StatCard label="Rejected in 30 days" value={data.stats.rejectedThirtyDays} />
@@ -2897,8 +2887,8 @@ export type IncidentReportsPageData = {
 export function IncidentReportsPage({ data }: { data: IncidentReportsPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <ShieldCheck data-icon="inline-start" />
           Safety review
         </Badge>
@@ -2907,7 +2897,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
           Review incident details, parent notification, and acknowledgment status. Staff must verify every fact before completing a report.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Incidents" value={data.stats.total} />
         <StatCard label="Pending review" value={data.stats.pending} />
         <StatCard label="Parents notified" value={data.stats.parentNotified} />
@@ -3022,6 +3012,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
                   </TableCell>
                 </TableRow>
               ))}
+              {!data.incidents.length ? <TableRow><TableCell colSpan={8} className="whitespace-normal py-6 text-muted-foreground">No incident reports are recorded for the schools you can access.</TableCell></TableRow> : null}
             </TableBody>
           </Table>
         </CardContent>
@@ -3101,8 +3092,8 @@ export function StaffPage({ data }: { data: StaffPageData }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <HeartHandshake data-icon="inline-start" />
           Teacher operations
         </Badge>
@@ -3309,8 +3300,8 @@ export type FormsPageData = {
 export function FormsPage({ data }: { data: FormsPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <FileText data-icon="inline-start" />
           Digital paperwork
         </Badge>
@@ -3319,10 +3310,10 @@ export function FormsPage({ data }: { data: FormsPageData }) {
           Enrollment, emergency contact, medical, permission, policy acknowledgment, incident, and staff onboarding forms.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Forms" value={data.forms.length} />
-        <StatCard label="Submissions" value={data.submissions.length} />
-        <StatCard label="Signature captures" value={data.submissions.filter((submission) => submission.signaturePlaceholder).length} />
+        <StatCard label="Recent submissions" value={data.submissions.length} />
+        <StatCard label="Recent signatures" value={data.submissions.filter((submission) => submission.signaturePlaceholder).length} />
       </div>
       <Card className="glass-panel">
         <CardHeader>
@@ -3345,7 +3336,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
                 <TableRow key={form.id}>
                   <TableCell className="font-medium">{form.name}</TableCell>
                   <TableCell>{formatRecordLabel(form.type)}</TableCell>
-                  <TableCell>{jsonSummary(form.schema)}</TableCell>
+                  <TableCell>{formSchemaSummary(form.schema)}</TableCell>
                   <TableCell>{form._count.submissions}</TableCell>
                   <TableCell><Badge>{formatRecordLabel(form.status)}</Badge></TableCell>
                 </TableRow>
@@ -3490,8 +3481,8 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <ShieldCheck data-icon="inline-start" />
           Classroom safety records
         </Badge>
@@ -3500,7 +3491,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
           Review child information, allergy plans, medical care notes, emergency details, and permission records for your assigned classroom or schools.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Children visible" value={data.stats.children} />
         <StatCard label="Allergies" value={data.stats.allergies} />
         <StatCard label="Medical notes" value={data.stats.medicalNotes} />
@@ -3652,8 +3643,8 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
 export function DocumentsPage({ data }: { data: DocumentsPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <FileText data-icon="inline-start" />
           Document checklist
         </Badge>
@@ -3821,8 +3812,8 @@ export type CompliancePageData = {
 export function CompliancePage({ data }: { data: CompliancePageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <ShieldCheck data-icon="inline-start" />
           Documentation support
         </Badge>
@@ -4003,29 +3994,28 @@ export type MultiLocationDashboardData = {
 export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashboardData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Building2 data-icon="inline-start" />
           Multi-location visibility
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Multi-Location Dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Brand and regional visibility across {data.brandName} school profiles, enrollment demand, staff, and upcoming tours.
+          Brand and regional visibility across {data.brandName} school profiles, enrollment demand, staff, and upcoming tours. This portfolio lists non-closed school profiles, including inactive locations. The workspace selector lists your authorized locations, including historical ones; administration also includes closed profiles.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         <StatCard label="Centers" value={data.stats.centers} />
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
         <StatCard label="High intent" value={data.stats.highIntentLeads.toLocaleString()} />
         <StatCard label="Upcoming tours" value={data.stats.upcomingTours} />
         <StatCard label="Teachers" value={data.stats.staff} />
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Latest submitted FTE" value={data.stats.latestFteTotal.toLocaleString()} detail="Most recent report per school" />
         <StatCard label="FTE rows" value={data.stats.submittedFteReports.toLocaleString()} detail="Editable weekly reports in The BEE Suite" />
-        <StatCard label="Schools due" value={data.stats.missingFteReports.toLocaleString()} detail="No current-week FTE report" />
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard
           label="Current week FTE"
           value={data.stats.currentWeekFteTotal.toLocaleString()}
@@ -4042,7 +4032,8 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
           detail={data.dueCenters.slice(0, 2).map((center) => center.name).join("; ") || "All visible schools submitted"}
         />
       </div>
-      {data.canManageFte ? <FteReportForm
+      <div className="flex flex-wrap gap-2"><Link href="#school-network" className={buttonVariants({ variant: "outline" })}>View school network</Link><Link href="/fte-reports" className={buttonVariants({ variant: "outline" })}>FTE report history</Link></div>
+      {data.canManageFte ? <CollapsibleCard id="executive-fte-entry" title="Enter or correct weekly FTE" collapsedSummary="Choose a school to submit or correct a weekly report" defaultCollapsed><FteReportForm
         centers={data.fteCenters}
         prefills={data.ftePrefills}
         reports={data.fteReports}
@@ -4050,7 +4041,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
         mode="executive"
         title="Executive FTE Reporting"
         description="Submit, correct, or manually enter weekly FTE data for any visible school. Rows can also forward to the configured FTE Google Sheet backup."
-      /> : <Link href="/fte-reports" className={buttonVariants({ variant: "outline" })}>View FTE report history</Link>}
+      /></CollapsibleCard> : <Link href="/fte-reports" className={buttonVariants({ variant: "outline" })}>View FTE report history</Link>}
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle as="h2">Current Week Submission Tracker</CardTitle>
@@ -4138,7 +4129,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
           </CardContent>
         </Card>
       ) : null}
-      <Card className="glass-panel">
+      <Card id="school-network" className="glass-panel scroll-mt-28">
         <CardHeader>
           <CardTitle as="h2">School Network</CardTitle>
           <CardDescription>School contact details, readiness, and enrollment inquiry volume</CardDescription>
@@ -4241,10 +4232,10 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <Badge className="mb-4">
+            <Badge className="mb-2">
               <ClipboardCheck data-icon="inline-start" />
               Weekly FTE reporting
             </Badge>
@@ -4274,7 +4265,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard
           label="Current week FTE"
           value={data.stats.currentWeekFteTotal.toLocaleString()}
@@ -4292,7 +4283,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="FTE rows" value={data.stats.submittedFteReports.toLocaleString()} detail="Visible reports" />
         <StatCard label="Latest FTE total" value={data.stats.latestFteTotal.toLocaleString()} detail="Most recent report per visible school" />
         <StatCard label="Schools available" value={data.stats.centers.toLocaleString()} detail={isExecutive ? "Assigned corporate access" : "Assigned director access"} />
@@ -4489,8 +4480,8 @@ export type FamilyProfilesPageData = {
 export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <HeartHandshake data-icon="inline-start" />
           Family lifecycle
         </Badge>
@@ -4640,8 +4631,8 @@ export type ChildProfilesPageData = {
 export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <ShieldCheck data-icon="inline-start" />
           Child safety records
         </Badge>
@@ -4881,10 +4872,10 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Badge className="mb-4">
+            <Badge className="mb-2">
               <BadgeDollarSign data-icon="inline-start" />
               Billing workbench
             </Badge>
@@ -4939,7 +4930,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         defaultCollapsed
         contentClassName="space-y-4"
       >
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="All invoices" value={data.stats.total} />
         <StatCard label="Current-family open" value={data.stats.open} />
         <StatCard label="Paid invoices" value={data.stats.paid} />
@@ -5259,8 +5250,8 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <BadgeDollarSign data-icon="inline-start" />
           Payment processing
         </Badge>
@@ -5269,7 +5260,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
           Review parent payment status, follow-up needs, and each school&apos;s payout readiness.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-8">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         <StatCard label="Payment records" value={data.stats.total} />
         <StatCard label="Paid" value={data.stats.paid} />
         <StatCard label="Failed" value={data.stats.failed} />
@@ -5279,7 +5270,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
         <StatCard label="Payment processing" value={data.stats.stripeConfigured && data.stats.webhookConfigured ? "Ready" : "Setup needed"} />
         <StatCard label="Payout schools" value={`${data.stats.payoutReadyCenters}/${data.stats.payoutStartedCenters}`} detail="ready / started" />
       </div>
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         <StatCard label="Billing accounts" value={data.stats.paymentMethodAccounts} />
         <StatCard label="Payment profiles" value={data.stats.stripeCustomers} detail="customer records created" />
         <StatCard label="Saved methods" value={data.stats.savedPaymentMethods} detail="ready for parent payments" />
@@ -5287,7 +5278,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
         <StatCard label="Setup pending" value={data.stats.autopayPending} detail="checkout setup in progress" />
         <StatCard label="Due autopay" value={data.stats.autopayDueInvoices} detail={money(data.stats.autopayDueCents)} />
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Reminders ready" value={data.stats.dunningReady} detail="scheduled for the next reminder run" />
         <StatCard label="Retry waiting" value={data.stats.dunningWaiting} detail="follow-up scheduled" />
         <StatCard label="Maxed retries" value={data.stats.dunningMaxed} detail="manual billing review" />
@@ -5418,8 +5409,8 @@ export type AnalyticsPageData = {
 export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Activity data-icon="inline-start" />
           Executive analytics
         </Badge>
@@ -5431,23 +5422,23 @@ export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
       <CollapsibleCard
         id="analytics-operational-overview"
         title="Operational Overview"
-        description="Enrollment, tours, billing, incidents, and family-message totals across the active workspace."
-        collapsedSummary={`${data.stats.enrolled.toLocaleString()} enrolled · ${data.stats.incidentsPending.toLocaleString()} incidents pending · ${data.stats.unreadMessages.toLocaleString()} unread messages`}
-        defaultCollapsed={!data.stats.incidentsPending && !data.stats.unreadMessages}
+        description="Inquiry outcomes, tours, billing and incidents. Message totals include current and historical family records in this workspace."
+        collapsedSummary={`${data.stats.enrolled.toLocaleString()} enrolled inquiries · ${data.stats.incidentsPending.toLocaleString()} incidents pending · ${data.stats.unreadMessages.toLocaleString()} unread across family history`}
+        defaultCollapsed
       >
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
-          <StatCard label="Enrolled" value={data.stats.enrolled.toLocaleString()} />
-          <StatCard label="Waitlisted" value={data.stats.waitlisted.toLocaleString()} />
+          <StatCard label="Enrolled inquiries" value={data.stats.enrolled.toLocaleString()} />
+          <StatCard label="Waitlisted inquiries" value={data.stats.waitlisted.toLocaleString()} />
           <StatCard label="Tours" value={data.stats.tours.toLocaleString()} />
           <StatCard label="Current-family open invoices" value={data.stats.openInvoices.toLocaleString()} />
           <StatCard label="Current-family outstanding" value={money(data.stats.outstandingCents)} />
           <StatCard label="Incidents pending" value={data.stats.incidentsPending.toLocaleString()} />
-          <StatCard label="Unread messages" value={data.stats.unreadMessages.toLocaleString()} />
+          <StatCard label="Unread across family history" value={data.stats.unreadMessages.toLocaleString()} />
         </div>
       </CollapsibleCard>
       {data.fte ? (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <StatCard label="FTE total" value={data.fte.totalFte.toLocaleString()} detail={formatRecordLabel(data.fte.status)} />
           <StatCard label="FTE locations" value={data.fte.locationCount.toLocaleString()} detail={`${data.fte.sourceMode === "template_week_tab" ? "Template" : "Rolling"} tab: ${data.fte.sheetName}`} />
           <StatCard
@@ -5467,8 +5458,8 @@ export type ReputationPageData = ReputationWorkspaceData;
 export function ReputationPage({ data }: { data: ReputationPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <Star data-icon="inline-start" />
           Family trust signals
         </Badge>
@@ -5477,7 +5468,7 @@ export function ReputationPage({ data }: { data: ReputationPageData }) {
           Review requests, parent satisfaction surveys, testimonial approval, and AI response drafts with Google Business setup status.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Reviews" value={data.stats.reviews} />
         <StatCard label="Average rating" value={data.stats.averageRating.toFixed(1)} />
         <StatCard label="Testimonials" value={data.stats.testimonials} />
@@ -5569,8 +5560,8 @@ export type WhiteLabelPageData = {
 export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <PenTool data-icon="inline-start" />
           White-label controls
         </Badge>
@@ -5580,9 +5571,9 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
         </p>
       </section>
       <div className="grid gap-4 lg:grid-cols-3">
-        <StatCard label="Legacy brand settings" value={data.settings.length} detail="Backward-compatible white-label records" />
+        <StatCard label="Loaded brand settings" value={data.settings.length} detail="Backward-compatible white-label records" />
         <StatCard label="Branding settings" value={data.customizations.length} detail="Brand, owner group, and school overrides" />
-        <StatCard label="Brand assets" value={data.assets.length} detail="Logos, favicon, mascot, and portal media references" />
+        <StatCard label="Loaded brand assets" value={data.assets.length} detail="Logos, favicon, mascot, and portal media references" />
       </div>
       <TenantControlsPanel
         canManage={data.canManageControls}
@@ -5773,8 +5764,8 @@ export function TerminalStorePage({ data }: { data: TerminalStorePageData }) {
   const accessoryCount = data.items.filter((item) => item.category === "accessory").length;
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <CreditCard data-icon="inline-start" />
           Terminal store
         </Badge>
@@ -5784,7 +5775,7 @@ export function TerminalStorePage({ data }: { data: TerminalStorePageData }) {
         </p>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Readers" value={readerCount} />
         <StatCard label="Accessories" value={accessoryCount} />
         <StatCard label="Store markup" value="20%" />
@@ -5800,8 +5791,8 @@ export function TerminalStoreReturnPage({ status }: { status: "success" | "cance
   const returnedFromCheckout = status === "success";
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <CreditCard data-icon="inline-start" />
           Terminal store checkout
         </Badge>
@@ -5831,8 +5822,8 @@ export function CorporateBillingPage({ data }: { data: CorporateBillingPageData 
   const partnerSchoolCount = invoice.activeSchools.filter((school) => school.feeTier === "partner").length;
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <BadgeDollarSign data-icon="inline-start" />
           School subscriptions
         </Badge>
@@ -5842,7 +5833,7 @@ export function CorporateBillingPage({ data }: { data: CorporateBillingPageData 
         </p>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="First paid cycle" value="Sep 1, 2026" />
         <StatCard label="Corporate schools" value={corporateSchoolCount} />
         <StatCard label="Other locations" value={partnerSchoolCount} />
@@ -5858,7 +5849,7 @@ export function CorporateBillingPage({ data }: { data: CorporateBillingPageData 
                 Each location authorizes its own school payment method. No parent payment method or tuition invoice is used for software fees.
               </CardDescription>
             </div>
-            <Badge>September 1 start</Badge>
+            <Badge variant="outline">Monthly subscriptions</Badge>
           </div>
         </CardHeader>
         <CardContent className="grid gap-5 lg:grid-cols-[1fr_340px]">
@@ -5872,7 +5863,7 @@ export function CorporateBillingPage({ data }: { data: CorporateBillingPageData 
           <div className="rounded-xl border bg-background/40 p-4">
             <div className="text-sm font-medium">Configure each school</div>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Use Billing Settings to select a school and authorize its bank account or card. The first paid cycle begins September 1, 2026, then renews monthly.
+              Use Billing Settings to select a school and authorize its bank account or card. The first paid cycle started September 1, 2026; authorized subscriptions renew monthly.
             </p>
             <Link className={buttonVariants({ className: "mt-4 w-full" })} href="/billing-settings">
               Open Billing Settings
@@ -5888,8 +5879,8 @@ export function CorporateBillingPage({ data }: { data: CorporateBillingPageData 
 export function BillingSettingsPage({ data }: { data: BillingSettingsPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
+      <section className="rounded-xl border bg-card p-4 shadow-none sm:p-5">
+        <Badge className="mb-2">
           <BadgeDollarSign data-icon="inline-start" />
           SaaS and tuition settings
         </Badge>
@@ -5898,7 +5889,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
           Tuition plans, products, fees, discounts, subscriptions, and payout setup for each school.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Products and fees" value={data.products.length} />
         <StatCard label="Tuition plans" value={data.tuitionPlans.length} />
         <StatCard label="Subscriptions" value={data.subscriptions.length} />

@@ -76,8 +76,8 @@ test("dashboard content reflows before constrained laptop and touch layouts", ()
   assert.match(dashboard, /dashboard-command-center min-w-0 rounded-xl border bg-card p-4 sm:p-6/);
   assert.doesNotMatch(dashboard, /dashboard-command-center[^"\n]*shadow-2xl/);
   assert.match(dashboard, /min-\[112rem\]:grid-cols-\[minmax\(0,1fr\)_28rem\]/);
-  assert.match(dashboard, /min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto/);
-  assert.match(dashboard, /dashboard-ai-brief order-first[\s\S]*min-\[112rem\]:order-none/);
+  assert.match(dashboard, /min-h-11 touch-manipulation sm:min-h-8/);
+  assert.doesNotMatch(dashboard, /dashboard-ai-brief[^"\n]*order-first/);
   assert.match(dashboard, /2xl:grid-cols-\[minmax\(0,1fr\)_22rem\]/);
   assert.match(dashboard, /storageId="dashboard-shared-insights"[\s\S]*className="grid gap-6 xl:grid-cols-2"/);
   assert.match(dashboard, /sm:grid-cols-\[minmax\(10rem,14rem\)_minmax\(0,1fr\)\]/);

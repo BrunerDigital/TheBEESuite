@@ -1203,7 +1203,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
           </table>
       </PrintableReport>
       <section className="overflow-hidden rounded-2xl border bg-card">
-        <div className="grid min-w-0 gap-0 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="grid min-w-0 gap-0">
           <div className="min-w-0 p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-primary text-primary-foreground">{brandName} enrollment</Badge>
@@ -1213,12 +1213,11 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                   ? "1 school"
                   : `${centers.length.toLocaleString()} schools`}
               </Badge>
-              <Badge variant="secondary">Signed in: {currentUser.name}</Badge>
             </div>
             <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Enrollment pipeline
+                  Enrollment inquiries
                 </h1>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                   Review new inquiries, route families to the correct school, schedule
@@ -1241,7 +1240,9 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
               </div>
             </div>
           </div>
-          <div className="min-w-0 border-t bg-primary/10 p-5 xl:border-l xl:border-t-0">
+          <details className="min-w-0 border-t bg-primary/5">
+            <summary className="min-h-11 cursor-pointer px-5 py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Draft a follow-up{selectedLead ? ` · ${selectedLead.familyName}` : ""}</summary>
+            <div className="p-5">
             <div className="flex items-center gap-3">
               <div className="relative size-20 shrink-0 overflow-hidden rounded-2xl border bg-black">
                 <Image src="/mr-bee.png" alt="Mr. Bee" fill className="object-contain p-1" />
@@ -1390,7 +1391,8 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 {activePendingAction === "send-email" ? "Sending email…" : "Send reviewed email"}
               </Button>
             </div>
-          </div>
+            </div>
+          </details>
         </div>
       </section>
 

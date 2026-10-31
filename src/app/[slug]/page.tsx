@@ -5517,24 +5517,24 @@ async function renderLivePage(
           currentRole: user.role,
           canManageRoleDefaults: canManageNotificationDefaults,
           derived: [
-            {
+            ...(openTasks ? [{
               title: `${openTasks.toLocaleString()} lead follow-up tasks are open`,
               body: "Review the enrollment pipeline and complete the open follow-up work.",
               priority: openTasks ? "high" : "normal",
               type: "Enrollment",
-            },
-            {
+            }] : []),
+            ...(highIntentLeads ? [{
               title: `${highIntentLeads.toLocaleString()} high-intent leads are visible`,
               body: "Prioritize families with complete contact information, strong score, and selected location.",
               priority: highIntentLeads ? "high" : "normal",
               type: "Enrollment",
-            },
-            {
+            }] : []),
+            ...(pendingIncidents ? [{
               title: `${pendingIncidents.toLocaleString()} incident reports need review`,
               body: "Review the report details, family notification, and required follow-up. Staff make all final safety decisions.",
               priority: pendingIncidents ? "high" : "normal",
               type: "Safety",
-            },
+            }] : []),
           ],
         }}
       />

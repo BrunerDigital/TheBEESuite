@@ -1285,6 +1285,15 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
         : searchDestination === "messages"
           ? "Search messages…"
           : "Search your dashboard…";
+  const searchFallbackLabel = searchDestination === "crm-leads"
+    ? "enrollment inquiries"
+    : searchDestination === "parent-portal"
+      ? "your family portal"
+      : searchDestination === "billing-invoices"
+        ? "billing invoices"
+        : searchDestination === "messages"
+          ? "messages"
+          : "your dashboard";
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("bee-suite-theme");
@@ -1571,7 +1580,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                       </div>
                     ) : (
                       <div className="px-3 py-4 text-sm text-muted-foreground" role="status">
-                        No quick matches. Press Enter to search all records.
+                        No matching records. Try another search or press Enter to search {searchFallbackLabel}.
                       </div>
                     )}
                   </div>
@@ -1643,7 +1652,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground" role="status">No quick matches. Press Enter to search all records.</p>
+                      <p className="text-sm text-muted-foreground" role="status">No matching records. Try another search or press Enter to search {searchFallbackLabel}.</p>
                     )}
                   </div>
                 </DialogContent>

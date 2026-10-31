@@ -1638,7 +1638,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 </Button> : null}
             </div>
           </div>
-          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+          <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
             <Card className={actionQueue.length ? "border-amber-500/25 bg-amber-500/[0.04]" : "border-emerald-500/20 bg-emerald-500/[0.03]"}>
               <CardHeader className="pb-3">
                 <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold" id="dashboard-needs-attention">
@@ -1673,7 +1673,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 <h2 className="text-lg font-semibold" id="dashboard-primary-actions">Primary actions</h2>
                 <CardDescription>The most common destinations for your role.</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2" role="group" aria-labelledby="dashboard-primary-actions">
+              <CardContent className="grid gap-2 sm:grid-cols-2" role="group" aria-labelledby="dashboard-primary-actions">
                 {primaryActionItems.map((item, index) => (
                   <DashboardPrimaryActionLink
                     key={item.slug}
@@ -1685,7 +1685,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   >
                     <span className="min-w-0">
                       <span className="block break-words text-sm font-semibold capitalize">{item.label}</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{item.description}</span>
+                      <span className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.description}</span>
                     </span>
                     <ArrowUpRight className="size-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
                   </DashboardPrimaryActionLink>

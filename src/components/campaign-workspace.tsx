@@ -291,6 +291,9 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
 
   return (
     <div className="space-y-6">
+      <details className="rounded-xl border bg-card" open={connectedPlatforms.length > 0 ? true : undefined}>
+        <summary className="min-h-11 cursor-pointer px-4 py-3 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Advertising analytics & accounts · {connectedPlatforms.length} connected</summary>
+        <div className="space-y-4 border-t p-3">
       <section className="overflow-hidden rounded-2xl border bg-card">
         <div className="flex flex-col gap-4 border-b p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -379,6 +382,9 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
           </div>
         ))}
       </div>
+
+        </div>
+      </details>
 
       <Tabs defaultValue="editor" className="gap-4">
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:inline-flex sm:h-10 sm:w-fit">

@@ -4,6 +4,7 @@ import {
   BookOpen,
   Bot,
   Building2,
+  CalendarDays,
   Code2,
   ClipboardCheck,
   CreditCard,
@@ -270,6 +271,8 @@ export const navGroups = [
     items: [
       ["FTE reports", "fte-reports", ClipboardCheck],
       ["School Operations", "classroom-dashboard", Activity],
+      ["Calendar", "calendar", CalendarDays],
+      ["Announcements", "announcements", Megaphone],
     ],
   },
   {
@@ -286,7 +289,7 @@ export const navGroups = [
     items: [
       ["Executive admin", "agency-admin", Building2],
       ["Developer", "developer-dashboard", Code2],
-      ["Software invoice", "corporate-billing", CreditCard],
+      ["Software subscriptions", "corporate-billing", CreditCard],
     ],
   },
   {

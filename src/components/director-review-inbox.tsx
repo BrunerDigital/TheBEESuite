@@ -25,13 +25,13 @@ export function DirectorReviewInbox({ items }: { items: DirectorReviewInboxItem[
 
   return (
     <Card id="director-review-inbox" className="glass-panel scroll-mt-36 overflow-hidden border-primary/20">
-      <CardHeader className="border-b bg-gradient-to-br from-primary/10 via-card/80 to-amber-500/8">
+      <CardHeader className="border-b py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <Badge variant="secondary" className="mb-3"><Inbox data-icon="inline-start" />Daily Review</Badge>
+            <Badge variant="secondary" className="mb-1"><Inbox data-icon="inline-start" />Daily Review</Badge>
             <h2 className="font-heading text-balance text-xl font-medium leading-snug">Director Review Inbox</h2>
             <CardDescription className="mt-1 max-w-2xl text-pretty">
-              One place to see what needs human judgment. Each item opens its original role-scoped workflow so approvals remain separate and auditable.
+              Open a queue to review its waiting items.
             </CardDescription>
           </div>
           <Badge variant={total ? "secondary" : "default"} className="w-fit tabular-nums">{total ? `${total} waiting` : "Inbox clear"}</Badge>
@@ -39,13 +39,13 @@ export function DirectorReviewInbox({ items }: { items: DirectorReviewInboxItem[
       </CardHeader>
       <CardContent className="p-4 sm:p-5">
         {activeItems.length ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={cn("grid gap-3", activeItems.length > 1 && "sm:grid-cols-2 xl:grid-cols-3")}>
             {activeItems.map((item) => (
               <Link
                 key={item.id}
                 href={item.href}
                 className={cn(
-                  "group flex min-h-28 items-start gap-3 rounded-2xl border p-4 transition-[transform,box-shadow,background-color] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none",
+                  "group flex min-h-20 items-start gap-3 rounded-xl border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none",
                   toneClasses[item.tone],
                 )}
               >
@@ -62,7 +62,7 @@ export function DirectorReviewInbox({ items }: { items: DirectorReviewInboxItem[
             ))}
           </div>
         ) : (
-          <div className="flex min-h-32 items-center justify-center rounded-2xl border border-dashed bg-emerald-500/6 p-6 text-center">
+          <div className="flex min-h-20 items-center justify-center rounded-2xl border border-dashed bg-emerald-500/6 p-6 text-center">
             <div>
               <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" aria-hidden="true"><ShieldCheck className="size-6" /></span>
               <div className="mt-3 font-semibold">No Review Items Are Waiting</div>

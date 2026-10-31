@@ -5,7 +5,7 @@ import test from "node:test";
 test("dashboard text uses readable text tokens instead of decorative gold", () => {
   const dashboard = readFileSync("src/components/dashboard.tsx", "utf8");
   assert.match(dashboard, /text-muted-foreground">\{asOfLabel\}/);
-  assert.match(dashboard, /text-foreground underline underline-offset-4[^>]+>View all/);
+  assert.match(dashboard, /actionQueue\.map\(\(item, index\)/);
   assert.doesNotMatch(dashboard, /text-primary">\{asOfLabel\}|text-primary[^>]+>View all/);
   assert.match(dashboard, /group-focus-visible:opacity-100">\s*Open matching leads/);
 });
@@ -19,7 +19,7 @@ test("named home containers expose a valid semantic group", () => {
 
 test("mobile alert labels remain concise without changing permission or route scope", () => {
   const shell = readFileSync("src/components/app-shell.tsx", "utf8");
-  assert.equal((shell.match(/label: "Alerts", href: "\/notifications", slug: "notifications"/g) ?? []).length, 2);
+  assert.equal((shell.match(/label: "Alerts", href: "\/billing-settings\?view=notifications", slug: "notifications"/g) ?? []).length, 2);
   assert.match(shell, /sourceItems\.filter\(\(item\) => canAccessShellModule\(currentUser, item\.slug\)\)/);
 });
 

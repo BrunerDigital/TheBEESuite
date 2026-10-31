@@ -15,9 +15,9 @@ test("the shared workspace control names its change action", () => {
 test("CRM contains its wide desktop columns within the application frame", () => {
   const crm = source("src/components/crm/crm-workspace.tsx");
   const containedDesktopGrids = crm.match(/grid min-w-0[^\n]*xl:grid-cols-\[minmax\(0,1fr\)_22rem\]/g) ?? [];
-  assert.equal(containedDesktopGrids.length, 2);
+  assert.equal(containedDesktopGrids.length, 1);
   assert.match(crm, /<div className="min-w-0 p-5 sm:p-6">/);
-  assert.match(crm, /<div className="min-w-0 border-t bg-primary\/10 p-5/);
+  assert.match(crm, /<details className="min-w-0 border-t bg-primary\/5">/);
   assert.match(crm, /<div className="flex min-w-0 flex-col gap-4">/);
   assert.match(crm, /<aside className="flex min-w-0 flex-col gap-4">/);
   assert.match(crm, /<input\s+id=\{emailAttachmentsId\}\s+type="file"\s+multiple\s+className="sr-only"/);

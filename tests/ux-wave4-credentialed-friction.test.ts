@@ -79,13 +79,13 @@ test("credential and write preflights reject unmarked identities and non-heartbe
   assert.match(dashboard, /return <a className=\{className\} href=\{href\}>\{children\}<\/a>/);
 });
 
-test("report exports stay discoverable without crowding the mobile collapsed header", async () => {
+test("report exports remain visible with collapsed report options on every device", async () => {
   const analytics = await readSource("src/components/analytics-report-builder.tsx");
 
-  assert.match(analytics, /headerActions=\{\([\s\S]*hidden flex-wrap gap-2 sm:flex/);
-  assert.match(analytics, /sm:hidden" aria-label="Report exports"/);
-  assert.ok((analytics.match(/Export CSV/g) ?? []).length >= 2);
-  assert.ok((analytics.match(/Print report/g) ?? []).length >= 2);
+  assert.match(analytics, /headerActions=\{\([\s\S]*flex flex-wrap gap-2/);
+  assert.match(analytics, /aria-label="Report exports"/);
+  assert.ok((analytics.match(/Export CSV/g) ?? []).length === 1);
+  assert.ok((analytics.match(/Print report/g) ?? []).length === 1);
 });
 
 test("dynamic family media bypasses the optimizer that rejects arbitrary signed or demo URLs", async () => {

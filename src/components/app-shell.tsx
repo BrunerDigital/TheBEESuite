@@ -303,7 +303,7 @@ function ScopeContextLink({
         type="button"
         aria-label={`${label}. ${detail}. Change workspace.`}
         className={cn(
-          "group flex min-w-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.07] p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "group flex w-full max-w-full min-w-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.07] p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           mobile && "app-scope-context-mobile mx-auto w-full max-w-xl border-border/70 bg-card/75 px-3 py-2 shadow-sm",
         )}
       >
@@ -400,7 +400,7 @@ function ScopeContextLink({
       onClick={(event) => closeForPlainNavigation(event, onNavigate)}
       aria-label={`${label}. ${detail}`}
       className={cn(
-        "group flex min-w-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.07] p-3 transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group flex w-full max-w-full min-w-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.07] p-3 transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         mobile && "app-scope-context-mobile mx-auto w-full max-w-xl border-border/70 bg-card/75 px-3 py-2 shadow-sm",
       )}
     >
@@ -812,30 +812,11 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
     const active = !previewMode && (pathname === targetHref || (slug === "dashboard" && pathname === "/center-dashboard"));
     const description = descriptionBySlug.get(slug) ?? `Go to ${label}.`;
     return (
-      <Tooltip key={slug}>
-        <TooltipTrigger
-          render={
-            <Link
-              href={href}
-              onClick={(event) => closeForPlainNavigation(event, close)}
-              aria-current={active ? "page" : undefined}
-              aria-description={description}
-              className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                active &&
-                  "bg-sidebar-accent pl-4 text-sidebar-accent-foreground shadow-sm before:absolute before:left-1.5 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-primary",
-              )}
-            />
-          }
-        >
-          <Icon data-icon="inline-start" />
-          <span className="truncate">{label}</span>
-        </TooltipTrigger>
-        <TooltipContent side="right" align="start" className="max-w-80 flex-col items-start gap-0.5 px-3 py-2 text-xs leading-5">
-          <span className="font-semibold">{label}</span>
-          <span className="text-background/80">{description}</span>
-        </TooltipContent>
-      </Tooltip>
+      <Link key={slug} href={href} onClick={(event) => closeForPlainNavigation(event, close)}
+        aria-current={active ? "page" : undefined} aria-description={description}
+        className={cn("group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", active && "bg-sidebar-accent pl-4 text-sidebar-accent-foreground shadow-sm before:absolute before:left-1.5 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-primary")}>
+        <Icon data-icon="inline-start" /><span className="truncate">{label}</span>
+      </Link>
     );
   }
 
@@ -1096,13 +1077,13 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
   const directorItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "School", href: "/classroom-dashboard", slug: "classroom-dashboard", Icon: Building2 },
-    { label: "Alerts", href: "/notifications", slug: "notifications", Icon: ClipboardList },
+    { label: "Alerts", href: "/billing-settings?view=notifications", slug: "notifications", Icon: ClipboardList },
     { label: "Inbox", href: STAFF_MESSAGING_HREF, slug: "messages", Icon: MessageSquare },
   ];
   const executiveItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "Schools", href: "/multi-location-dashboard", slug: "multi-location-dashboard", Icon: Building2 },
-    { label: "Alerts", href: "/notifications", slug: "notifications", Icon: ClipboardList },
+    { label: "Alerts", href: "/billing-settings?view=notifications", slug: "notifications", Icon: ClipboardList },
     { label: "Inbox", href: STAFF_MESSAGING_HREF, slug: "messages", Icon: MessageSquare },
   ];
   const billingItems = [
@@ -1138,8 +1119,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
     : navGroups
       .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
       .filter((item) => canAccessShellModule(currentUser, item.slug))
-      .filter((item) => !items.some((quickItem) => quickItem.slug === item.slug))
-      .slice(0, 12);
+      .filter((item) => !items.some((quickItem) => quickItem.slug === item.slug));
   const bottomNavItemCount = items.length + (moreItems.length ? 1 : 0);
 
   if (!items.length) return null;

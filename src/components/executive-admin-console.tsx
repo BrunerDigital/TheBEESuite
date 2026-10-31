@@ -747,7 +747,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
   return (
     <>
-      <CollapsiblePanel id="owner-login-setup" title="Create owner login" summary="Set up an owner account when needed; school and user directories are below." defaultCollapsed>
+      <CollapsiblePanel id="owner-logins" title="Create owner login" summary="Set up an owner account when needed; school and user directories are below." defaultCollapsed>
         <OwnerLoginPanel centers={centers} />
       </CollapsiblePanel>
       <Dialog open={Boolean(pendingConfirmation)} onOpenChange={(open) => {

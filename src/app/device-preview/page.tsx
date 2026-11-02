@@ -4,6 +4,8 @@ import { Activity, CreditCard, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
 import { DevicePreviewGuard } from "@/components/device-preview-guard";
+import { BILLING_DIRECTOR_DEMO_SCHOOL_NAME } from "@/lib/billing-director-demo-data";
+import { BillingDirectorPreview, BillingDirectorReceiptPreview, BillingOverviewRefreshPreview, BillingStandaloneLedgerPreview } from "@/components/billing-director-preview";
 import { ExecutiveDashboard } from "@/components/dashboard";
 import { KioskCheckIn } from "@/components/kiosk-check-in";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
@@ -289,7 +291,7 @@ function PickupPreview() {
   );
 }
 
-function ShellPreview({ role, screen, familySection, scenario, updateDay }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff">; screen?: string; familySection?: string; scenario?: string; updateDay?: string }) {
+function ShellPreview({ role, screen, familySection, scenario, updateDay, billingFamilyId, billingSection, billingCategory, billingCenterId }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff">; screen?: string; familySection?: string; scenario?: string; updateDay?: string; billingFamilyId?: string; billingSection?: string; billingCategory?: string; billingCenterId?: string }) {
   if (role === "role-dashboard" || role === "director" || role === "assistant-director") {
     const directorRole = role === "assistant-director" ? "ASSISTANT_DIRECTOR" : "CENTER_DIRECTOR";
     const directorLabel = role === "assistant-director" ? "Assistant Director" : "Center Director";
@@ -332,6 +334,10 @@ function ShellPreview({ role, screen, familySection, scenario, updateDay }: { ro
     return <AppShell previewMode previewHrefBase={`/device-preview?view=${role}`} currentUser={{ name: regional ? "Riley Morgan" : "Casey Bennett", email: `${role}@example.com`, role: regional ? "REGIONAL_MANAGER" : "PLATFORM_OWNER", accessScope: regional ? "tenant" : "platform", centerIds: ["preview-center", "preview-center-two", "preview-center-three"], timeZone: "America/Indiana/Indianapolis", workspace, scopeContext: { kind: selectedSchool ? "school" : "portfolio", label: workspace.label, detail: `${selectedSchool ? "Sunshine Group · Carmel, IN" : "3 schools"} · ${regional ? "Regional Manager" : "Platform Owner"}`, href: "/multi-location-dashboard" } }}><PortfolioPreview regional={regional} scenario={scenario} /></AppShell>;
   }
   if (role === "billing") {
+    if (scenario === "overview-refresh") return <BillingOverviewRefreshPreview />;
+    if (scenario === "standalone-ledger") return <BillingStandaloneLedgerPreview centerId={billingCenterId} />;
+    if (scenario === "director-receipt") return <AppShell previewMode previewHrefBase="/device-preview?view=billing" currentUser={{ name: "Jamie Patel", email: "director@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Denver" }}><BillingDirectorReceiptPreview /></AppShell>;
+    if (scenario === "director-ux") return <AppShell previewMode previewHrefBase="/device-preview?view=billing&scenario=director-ux" currentUser={{ name: "Jamie Patel", email: "director@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Denver", scopeContext: { kind: "school", label: BILLING_DIRECTOR_DEMO_SCHOOL_NAME, detail: "Center Director", href: "/billing-invoices" } }}><BillingDirectorPreview familyId={billingFamilyId} section={billingSection} category={billingCategory} centerId={billingCenterId} /></AppShell>;
     return <AppShell previewMode previewHrefBase="/device-preview?view=billing" currentUser={{ name: "Jamie Patel", email: "billing@example.com", role: "BILLING_ADMIN", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Billing Admin · 1 school", href: "/billing-invoices" } }}><BillingPreview /></AppShell>;
   }
   if (role === "auditor") {
@@ -343,10 +349,10 @@ function ShellPreview({ role, screen, familySection, scenario, updateDay }: { ro
   return null;
 }
 
-export default async function DevicePreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; screen?: string; section?: string; scenario?: string; updateDay?: string; familyId?: string }> }) {
+export default async function DevicePreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; screen?: string; section?: string; scenario?: string; updateDay?: string; familyId?: string; billingSection?: string; billingCategory?: string; centerId?: string }> }) {
   if (process.env.NODE_ENV !== "development") notFound();
 
-  const { view, screen, section, scenario: requestedScenario, updateDay, familyId } = await searchParams;
+  const { view, screen, section, scenario: requestedScenario, updateDay, familyId, billingSection, billingCategory, centerId } = await searchParams;
   const scenario = familyId === PARENT_UPDATES_PREVIEW_FAMILY ? "updates-history" : requestedScenario;
   const role: PreviewRole = view === "role-dashboard" || view === "assistant-director" || view === "parent" || view === "pickup" || view === "teacher" || view === "executive" || view === "regional" || view === "billing" || view === "auditor" || view === "workflow" || view === "kiosk" || view === "kiosk-staff" ? view : "director";
   if (role === "kiosk" || role === "kiosk-staff") {
@@ -359,6 +365,6 @@ export default async function DevicePreviewPage({ searchParams }: { searchParams
       <Link prefetch={false} href="/device-preview?view=billing&scenario=history-qa">Fake billing destination</Link>
       <Link prefetch={false} href="/device-preview?view=teacher&scenario=history-qa">Fake teacher destination</Link>
     </nav> : null}
-    <ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} updateDay={updateDay} />
+    <ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} updateDay={updateDay} billingFamilyId={familyId} billingSection={billingSection} billingCategory={billingCategory} billingCenterId={centerId} />
   </DevicePreviewGuard>;
 }

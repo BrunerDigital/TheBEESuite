@@ -59,7 +59,7 @@ test('post-save timing reason is visible in the rate panel before saving', () =>
   assert.match(field, /id="billing-rate-timing-reason" value=\{assignmentTimingReason\}/);
   assert.match(field, /setAssignmentTimingReason\(event.target.value\)/);
   assert.ok(source.indexOf('Tuition rate setup') < start);
-  assert.ok(start < source.indexOf('Set each child’s recurring tuition'));
+  assert.ok(start < source.indexOf('id="billing-actions"'));
 });
 
 test('valid reason passes the exact server timing guard with monthly delay zero', async () => {
@@ -345,4 +345,18 @@ test('source-derived server timing guard retains typed validation errors', () =>
   assert.equal(rejection.status, 400);
   assert.equal(rejection.body.ok, false);
   assert.equal(rejection.body.error, reasonError);
+});
+
+test('an unmounted billing view cannot start another request', async () => {
+  const harness = createRateSaveHarness({ assignmentTimingReason: 'Switch to monthly tuition' });
+  harness.read('billingViewActive.current = false');
+  await harness.save();
+  assert.equal(harness.requests.length, 0);
+  assert.equal(harness.refreshed, 0);
+});
+
+test('a synchronous request lock prevents two rapid rate submissions', async () => {
+  const harness = createRateSaveHarness({ assignmentTimingReason: 'Switch to monthly tuition' });
+  await Promise.all([harness.save(), harness.save()]);
+  assert.equal(harness.requests.length, 1);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,11 @@ export function ReportPrintStyles() {
 
         body.bee-report-printing,
         body.bee-report-printing *:has(.bee-print-report-active) {
+          background: #ffffff !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+          box-shadow: none !important;
           position: static !important;
           width: auto !important;
           max-width: none !important;
@@ -106,6 +111,16 @@ export function ReportPrintStyles() {
 export function usePrintableReport() {
   const [active, setActive] = useState(false);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
+  const [error, setError] = useState("");
+  const scheduledPrint = useRef<number | null>(null);
+
+  function cancelPrint() {
+    if (scheduledPrint.current !== null) window.clearTimeout(scheduledPrint.current);
+    scheduledPrint.current = null;
+    document.body.classList.remove("bee-report-printing");
+    setActive(false);
+    setError("");
+  }
 
   useEffect(() => {
     function handleAfterPrint() {
@@ -114,21 +129,29 @@ export function usePrintableReport() {
     }
     window.addEventListener("afterprint", handleAfterPrint);
     return () => {
+      if (scheduledPrint.current !== null) window.clearTimeout(scheduledPrint.current);
       document.body.classList.remove("bee-report-printing");
       window.removeEventListener("afterprint", handleAfterPrint);
     };
   }, []);
 
   function print() {
+    setError("");
     setGeneratedAt(new Date());
     setActive(true);
-    window.setTimeout(() => {
+    if (scheduledPrint.current !== null) window.clearTimeout(scheduledPrint.current);
+    scheduledPrint.current = window.setTimeout(() => {
+      scheduledPrint.current = null;
       document.body.classList.add("bee-report-printing");
-      window.print();
+      try {
+        window.print();
+      } catch {
+        setError("Printing could not open. Keep the preview open and use your browser's Print command or try another browser.");
+      }
     }, 0);
   }
 
-  return { active, generatedAt, print };
+  return { active, generatedAt, print, error, cancelPrint };
 }
 
 export function PrintableReport({

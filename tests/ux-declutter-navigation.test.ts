@@ -60,7 +60,8 @@ test("family billing keeps routine tasks visible and secondary tasks expandable"
   assert.match(billing, /id="billing-more-actions"/);
   assert.match(billing, /aria-expanded=\{moreBillingActionsExpanded\}/);
   assert.match(billing, /aria-controls="billing-action-tabs"/);
-  assert.equal(billing.match(/<TabsList/g)?.length, 1);
+  assert.equal(billing.match(/<TabsList/g)?.length, 2);
+  assert.match(billing, /aria-label="Account sections"/);
   assert.match(billing, /!moreBillingActionsExpanded && billingAction !== "edit" \? "hidden"/);
   assert.match(billing, /id="billing-family-overview"/);
   assert.match(billing, /id="billing-payment-methods"/);

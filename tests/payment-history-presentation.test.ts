@@ -88,7 +88,7 @@ test("settled, refunded, failed, returned and void attempts do not remain pendin
   assert.equal(directorPaymentProgress([draft("payment_returned")]), null);
 });
 
-test("presentation uses complete authorized drafts and leaves payment amounts and collection guards unchanged", () => {
+test("presentation uses complete authorized drafts and uses the checkout projection while retaining complete payment history and collection guards", () => {
   const page = readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
   const query = page.slice(page.indexOf("const workbenchDraftPayments ="), page.indexOf("const workbenchDraftPaymentsByAccount"));
   assert.match(query, /billingAccountId: \{ in: billingFamilies\.flatMap/);
@@ -103,8 +103,8 @@ test("presentation uses complete authorized drafts and leaves payment amounts an
   assert.equal((portal.match(/View \/ print original receipt/g) ?? []).length, 2);
   assert.match(portal, /if \(isReturnedStripePayment\(payment\)\)[\s\S]*const refund = paymentRefundDetails/);
   const workbench = readFileSync(new URL("../src/components/billing-workbench.tsx", import.meta.url), "utf8");
-  assert.match(workbench, /Selected ledger balance/);
-  assert.match(workbench, /Checkout verifies the collectible family amount/);
+  assert.match(workbench, /label="Posted balance"/);
+  assert.match(workbench, /Rechecked at checkout/);
   assert.match(workbench, /selectedPaymentProgress\.provisionalAchCreditCents/);
   assert.match(workbench, /const familyBalanceCents = selectedFamily\?\.billingAccount\?\.balanceCents \?\? 0/);
 });

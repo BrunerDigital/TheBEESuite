@@ -45,7 +45,7 @@ test("billing workbench includes pipeline families without widening receivable t
   assert.match(page, /billingFamilyAccountCategory\(family\.children\)/);
   assert.match(workbench, /Prospective family billing/);
   assert.match(workbench, /Prepare Enrollment Fee/);
-  assert.match(workbench, /!selectedFamilyIsProspective \? <>[\s\S]*Tuition rate setup[\s\S]*Set each child.s recurring tuition[\s\S]*<\/\> : null/);
+  assert.match(workbench, /!selectedFamilyIsProspective \? <>[\s\S]*School tuition rates[\s\S]*Tuition rate setup[\s\S]*<\/\> : null/);
   assert.match(workbench, /Recurring tuition stays unavailable until a child is current and assigned to a classroom/);
   assert.match(workbench, /allowTuitionPlan=\{!selectedFamilyIsProspective\}/);
   assert.match(workbench, /TabsTrigger value="recurring" disabled=\{selectedFamilyIsProspective \|\| selectedFamilyIsPast\}/);

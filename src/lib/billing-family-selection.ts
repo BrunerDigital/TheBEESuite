@@ -32,8 +32,8 @@ export function resolveBillingFamilySelection<T extends ScopedBillingFamily>({
   };
 }
 
-export function billingSelectionKey(selection?: { familyId?: string; centerId?: string; childId?: string; searchQuery?: string }) {
-  return JSON.stringify([selection?.familyId ?? "", selection?.centerId ?? "", selection?.childId ?? "", selection?.searchQuery ?? ""]);
+export function billingSelectionKey(selection?: { familyId?: string; centerId?: string; childId?: string; searchQuery?: string; section?: string; category?: string }) {
+  return JSON.stringify([selection?.familyId ?? "", selection?.centerId ?? "", selection?.childId ?? "", selection?.searchQuery ?? "", selection?.section ?? "", selection?.category ?? ""]);
 }
 
 export function billingWorkspaceTarget({ families, historicalFamilies, allowedCenterIds, requestedFamilyId, requestedCenterId }: {

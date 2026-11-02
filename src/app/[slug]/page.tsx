@@ -4518,6 +4518,8 @@ async function renderLivePage(
             childId: requestedBillingChildId,
             searchQuery: requestedBillingSearch,
             workspace: requestedBillingWorkspace,
+            section: firstSearchParam(searchParams.billingSection),
+            category: firstSearchParam(searchParams.billingCategory),
           },
           workbench: {
             currentRole: user.role,

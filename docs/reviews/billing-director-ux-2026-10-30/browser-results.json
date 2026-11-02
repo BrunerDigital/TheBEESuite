@@ -1,0 +1,191 @@
+{
+  "checks": [
+    "Posted $245, pending ACH $100 and collectible $145 are distinct; initial overview has no financial form.",
+    "Keyboard search selects the correct duplicate household; ledger uses the same ID; refresh preserves family and section.",
+    "Statement preview is explicit, includes account/school/period and history limits, requests print only on confirmation, and rejects reversed dates.",
+    "Cancelled family switch retains the draft; section changes retain edits; confirmed family switch clears family-bound drafts.",
+    "Financial review identifies the exact account; in-flight requests lock family/category controls; no stale response survives a later switch. Submission was intercepted in memory.",
+    "Past and pending categories show their own family and count; recurring tuition remains disabled with business explanations.",
+    "Empty categories and mismatched exact school/family links fail closed, including after refresh.",
+    "A $250 weekly rate displays $500 biweekly and $1,000 every four weeks; pay-ahead edits warn, survive cancellation and reset on a confirmed family switch.",
+    "An empty local search retains the selected family; the long browse list scrolls with an emulated touch gesture.",
+    "Refreshed pending ACH props invalidate the actual overview hook while the family, account and $245 posted balance remain unchanged.",
+    "Standalone ledger options match the selected school, remain selectable across authorized schools when unfiltered, and explain an empty school.",
+    "Ledger and charge/credit summaries also preview before printing; director receipt preview identifies the paid family, school, amount and receipt reference.",
+    "All four sections fit desktop, tablet, 390px and 320px layouts with 44px section targets and persistent context; zero API traffic."
+  ],
+  "layouts": [
+    {
+      "device": "desktop",
+      "section": "Overview",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "height": 1001,
+      "workspaceHeight": 800
+    },
+    {
+      "device": "desktop",
+      "section": "Tuition & Fees",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "height": 2109,
+      "workspaceHeight": 1910
+    },
+    {
+      "device": "desktop",
+      "section": "Payments",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "height": 1525,
+      "workspaceHeight": 1326
+    },
+    {
+      "device": "desktop",
+      "section": "Ledger & Statements",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "height": 1148,
+      "workspaceHeight": 949
+    },
+    {
+      "device": "tablet",
+      "section": "Overview",
+      "viewport": 834,
+      "scrollWidth": 834,
+      "height": 1112,
+      "workspaceHeight": 816
+    },
+    {
+      "device": "tablet",
+      "section": "Tuition & Fees",
+      "viewport": 834,
+      "scrollWidth": 834,
+      "height": 1112,
+      "workspaceHeight": 2028
+    },
+    {
+      "device": "tablet",
+      "section": "Payments",
+      "viewport": 834,
+      "scrollWidth": 834,
+      "height": 1112,
+      "workspaceHeight": 1346
+    },
+    {
+      "device": "tablet",
+      "section": "Ledger & Statements",
+      "viewport": 834,
+      "scrollWidth": 834,
+      "height": 1112,
+      "workspaceHeight": 1033
+    },
+    {
+      "device": "mobile",
+      "section": "Overview",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "height": 844,
+      "workspaceHeight": 1490
+    },
+    {
+      "device": "mobile",
+      "section": "Tuition & Fees",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "height": 844,
+      "workspaceHeight": 2966
+    },
+    {
+      "device": "mobile",
+      "section": "Payments",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "height": 844,
+      "workspaceHeight": 2062
+    },
+    {
+      "device": "mobile",
+      "section": "Ledger & Statements",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "height": 844,
+      "workspaceHeight": 1477
+    },
+    {
+      "device": "small-mobile",
+      "section": "Overview",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "height": 740,
+      "workspaceHeight": 1624
+    },
+    {
+      "device": "small-mobile",
+      "section": "Tuition & Fees",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "height": 740,
+      "workspaceHeight": 3316
+    },
+    {
+      "device": "small-mobile",
+      "section": "Payments",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "height": 740,
+      "workspaceHeight": 2316
+    },
+    {
+      "device": "small-mobile",
+      "section": "Ledger & Statements",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "height": 740,
+      "workspaceHeight": 1643
+    }
+  ],
+  "accessibility": [
+    {
+      "device": "desktop",
+      "section": "Overview",
+      "violations": []
+    },
+    {
+      "device": "desktop",
+      "section": "Tuition & Fees",
+      "violations": []
+    },
+    {
+      "device": "desktop",
+      "section": "Payments",
+      "violations": []
+    },
+    {
+      "device": "desktop",
+      "section": "Ledger & Statements",
+      "violations": []
+    },
+    {
+      "device": "mobile",
+      "section": "Overview",
+      "violations": []
+    },
+    {
+      "device": "mobile",
+      "section": "Tuition & Fees",
+      "violations": []
+    },
+    {
+      "device": "mobile",
+      "section": "Payments",
+      "violations": []
+    },
+    {
+      "device": "mobile",
+      "section": "Ledger & Statements",
+      "violations": []
+    }
+  ],
+  "apiRequests": [],
+  "consoleErrors": []
+}

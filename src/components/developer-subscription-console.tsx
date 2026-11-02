@@ -166,7 +166,7 @@ export function DeveloperSubscriptionConsole({
                       >
                         {row.cancelAtPeriodEnd
                           ? "Cancels at renewal"
-                          : row.status || "Not started"}
+                          : (row.status || "Not started").replaceAll("_", " ")}
                       </Badge>
                       {row.lastInvoiceStatus === "payment_failed" ? (
                         <XCircle className="ml-2 inline size-4 text-destructive" />

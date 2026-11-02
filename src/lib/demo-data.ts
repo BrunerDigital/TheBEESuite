@@ -4,6 +4,7 @@ import {
   BookOpen,
   Bot,
   Building2,
+  CalendarDays,
   Code2,
   ClipboardCheck,
   CreditCard,
@@ -270,6 +271,8 @@ export const navGroups = [
     items: [
       ["FTE reports", "fte-reports", ClipboardCheck],
       ["School Operations", "classroom-dashboard", Activity],
+      ["Calendar", "calendar", CalendarDays],
+      ["Announcements", "announcements", Megaphone],
     ],
   },
   {
@@ -286,7 +289,7 @@ export const navGroups = [
     items: [
       ["Executive admin", "agency-admin", Building2],
       ["Developer", "developer-dashboard", Code2],
-      ["Software invoice", "corporate-billing", CreditCard],
+      ["Software subscriptions", "corporate-billing", CreditCard],
     ],
   },
   {
@@ -661,14 +664,14 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "corporate-billing",
-    title: "Software Invoice",
+    title: "Software subscriptions",
     eyebrow: "Corporate billing",
     description:
-      "Kid City USA Enterprises monthly software fee view for The BEE Suite access, billed at a fixed amount per active school.",
+      "Review recurring software access fees and each school’s separately authorized subscription.",
     owner: "Kid City USA accounting, platform owner, brand admin",
     metrics: ["$49 corporate / $79 partner", "Monthly subscription", "School-authorized payment", "Audit logged"],
-    features: ["Current invoice preview", "Active school-user count", "Bee Suite-branded hosted invoice link", "Corporate billing audit trail"],
-    records: ["Kid City USA Enterprises monthly software access invoice"],
+    features: ["Monthly fee summary", "Corporate and partner school counts", "Per-school payment setup", "Separate tuition and software billing"],
+    records: ["School software subscriptions"],
     sensitive: true,
   },
   {

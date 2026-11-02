@@ -32,7 +32,7 @@ export function OwnerLoginPanel({ centers }: { centers: School[] }) {
       } catch (failure) { setError(failure instanceof Error ? failure.message : "Owner setup failed."); }
     });
   }
-  return <Card id="owner-logins">
+  return <Card>
     <CardHeader><CardTitle as="h2">Owner / tenant logins</CardTitle><CardDescription>Create a separate owner login with director tools for the schools selected below. Owners can complete Stripe setup, manage payouts, import families, and configure their schools.</CardDescription></CardHeader>
     <CardContent className="space-y-4">
       <fieldset disabled={pending} className="space-y-4">

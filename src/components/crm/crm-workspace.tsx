@@ -601,6 +601,16 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   }, [filteredLeads]);
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0];
+  const hasActiveFilters = Boolean(query.trim() || selectedCenter !== "all" || stageFilter !== "all" || scoreFilter !== "all" || createdRange !== "all");
+  const selectedLeadOutsideFilters = selectedLead && !filteredLeads.some((lead) => lead.id === selectedLead.id);
+
+  function clearInquiryFilters() {
+    setQueryState({ routeQuery, value: "" });
+    setSelectedCenter("all");
+    setStageFilter("all");
+    setScoreFilter("all");
+    setCreatedRange("all");
+  }
   const highIntent = filteredLeads.filter((lead) => lead.score >= 75).length;
   const selectedCenterOption = selectedCenter === "all" ? null : centers.find((center) => center.id === selectedCenter) ?? null;
   const printSchoolLabel = selectedCenterOption
@@ -1203,7 +1213,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
           </table>
       </PrintableReport>
       <section className="overflow-hidden rounded-2xl border bg-card">
-        <div className="grid min-w-0 gap-0 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="grid min-w-0 gap-0">
           <div className="min-w-0 p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-primary text-primary-foreground">{brandName} enrollment</Badge>
@@ -1213,12 +1223,11 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                   ? "1 school"
                   : `${centers.length.toLocaleString()} schools`}
               </Badge>
-              <Badge variant="secondary">Signed in: {currentUser.name}</Badge>
             </div>
             <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Enrollment pipeline
+                  Enrollment inquiries
                 </h1>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                   Review new inquiries, route families to the correct school, schedule
@@ -1241,7 +1250,9 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
               </div>
             </div>
           </div>
-          <div className="min-w-0 border-t bg-primary/10 p-5 xl:border-l xl:border-t-0">
+          <details className="min-w-0 border-t bg-primary/5">
+            <summary className="min-h-11 cursor-pointer px-5 py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Draft a follow-up{selectedLead ? ` · ${selectedLead.familyName}` : ""}</summary>
+            <div className="p-5">
             <div className="flex items-center gap-3">
               <div className="relative size-20 shrink-0 overflow-hidden rounded-2xl border bg-black">
                 <Image src="/mr-bee.png" alt="Mr. Bee" fill className="object-contain p-1" />
@@ -1390,7 +1401,8 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 {activePendingAction === "send-email" ? "Sending email…" : "Send reviewed email"}
               </Button>
             </div>
-          </div>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -1413,7 +1425,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
         <div className="flex min-w-0 flex-col gap-4">
           <Card>
             <CardContent className="flex flex-col gap-3 p-4">
-              <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
+              <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
                 <div className="relative">
                   <Label htmlFor={leadSearchId} className="sr-only">Search enrollment inquiries</Label>
                   <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1442,7 +1454,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                   </Select>
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[13rem_12rem_12rem_1fr_auto]">
+              <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-3">
                 <div>
                   <Label htmlFor={stageFilterId} className="sr-only">Filter by pipeline stage</Label>
                   <Select
@@ -1507,7 +1519,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     placeholder="Saved view name"
                   />
                 </div>
-                <div className="grid gap-2 sm:grid-cols-3 xl:flex">
+                <div className="col-span-full flex flex-wrap gap-2">
                   <Button variant="outline" onClick={saveCurrentView}>
                     <Save data-icon="inline-start" />
                     Save view
@@ -1520,6 +1532,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     <Printer data-icon="inline-start" />
                     Print inquiries
                   </Button>
+                  {hasActiveFilters ? <Button variant="ghost" onClick={clearInquiryFilters}>Clear filters</Button> : null}
                 </div>
               </div>
               {savedViews.length > 0 ? (
@@ -1544,7 +1557,16 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 xl:grid-cols-4">
+          {filteredLeads.length === 0 ? (
+            <Card>
+              <CardContent className="grid gap-2 p-6" role="status">
+                <h2 className="font-semibold">{leads.length ? "No inquiries match your filters" : "No inquiries yet"}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {leads.length ? "Clear the filters or try a different search to find an inquiry." : "Add an inquiry to start tracking a family's enrollment interest."}
+                </p>
+              </CardContent>
+            </Card>
+          ) : <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-4">
             {enrollmentStages.slice(0, 8).map((stage) => (
               <Card
                 key={stage}
@@ -1609,7 +1631,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 </CardContent>
               </Card>
             ))}
-          </div>
+          </div>}
         </div>
 
         <aside className="flex min-w-0 flex-col gap-4">
@@ -1696,7 +1718,9 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
               <CardTitle as="h2" className="flex items-center gap-2 text-base">
                 Selected inquiry
               </CardTitle>
-              <CardDescription>Update the inquiry stage or contact this family.</CardDescription>
+              <CardDescription>
+                {selectedLeadOutsideFilters ? "This selected inquiry is outside your current filters. Clear filters to see it on the board." : "Update the inquiry stage or contact this family."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {selectedLead ? (

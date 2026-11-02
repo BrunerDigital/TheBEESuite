@@ -334,9 +334,9 @@ export function AssetHubWorkspace({
           )}
         </div>
       </section>
-      <div className="grid gap-4 xl:grid-cols-[190px_minmax(0,1fr)_280px]">
-        <aside className="rounded-2xl border border-border/70 bg-card/70 p-3" aria-label="Asset collections">
-          <div className="px-2 pb-2 text-sm font-medium text-muted-foreground">
+      <div className={cn("grid gap-4", selected ? "xl:grid-cols-[190px_minmax(0,1fr)_280px]" : "xl:grid-cols-[190px_minmax(0,1fr)]")}>
+        <aside className="flex flex-wrap content-start gap-1 rounded-xl border border-border/70 bg-card/70 p-3 xl:block" aria-label="Asset collections">
+          <div className="w-full px-2 pb-2 text-sm font-medium text-muted-foreground">
             Collections
           </div>
           {["all", ...ASSET_HUB_CATEGORIES].map((item) => (
@@ -346,7 +346,7 @@ export function AssetHubWorkspace({
               aria-pressed={category === item}
               onClick={() => setCategory(item)}
               className={cn(
-                "flex min-h-11 w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex min-h-11 items-center justify-between gap-3 rounded-lg px-3 py-2 xl:w-full text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 category === item
                   ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -418,10 +418,11 @@ export function AssetHubWorkspace({
             <div className="grid min-h-80 place-items-center rounded-2xl border border-dashed border-border text-center">
               <div>
                 <Search aria-hidden="true" className="mx-auto mb-2 text-muted-foreground" />
-                <div className="font-medium">No matching assets</div>
+                <div className="font-medium">{assets.length ? "No matching assets" : "No published assets yet"}</div>
                 <p className="text-sm text-muted-foreground">
-                  Try another search or collection.
+                  {assets.length ? "Clear your filters to see the full library." : "Approved resources will appear here after the executive team publishes them."}
                 </p>
+                {assets.length ? <Button type="button" variant="outline" className="mt-3" onClick={() => { setQuery(""); setCategory("all"); setKind("all"); }}>Clear asset filters</Button> : null}
               </div>
             </div>
           ) : (
@@ -501,7 +502,7 @@ export function AssetHubWorkspace({
             </div>
           )}
         </main>
-        <aside className="h-fit rounded-2xl border border-amber-400/20 bg-card/80 p-4 xl:sticky xl:top-4">
+        <aside className={cn("h-fit rounded-2xl border border-amber-400/20 bg-card/80 p-4 xl:sticky xl:top-4", !selected && "hidden")}>
           {selected ? (
             <>
               <div className="relative grid aspect-video place-items-center overflow-hidden rounded-xl bg-muted">

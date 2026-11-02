@@ -55,7 +55,7 @@ test("the alias catalog cannot define routing, access, native, PWA, or store beh
   }
 });
 
-test("shared workspace navigation keeps functional labels primary and aliases secondary", () => {
+test("compact workspace navigation retains functional view labels and current-page semantics", () => {
   const source = readFileSync(
     new URL("../src/components/consolidated-workspace-nav.tsx", import.meta.url),
     "utf8",
@@ -67,7 +67,7 @@ test("shared workspace navigation keeps functional labels primary and aliases se
   }
 
   assert.equal((source.match(/brandAlias: null/g) ?? []).length, 2);
-  assert.match(source, /<span>\{config\.title\}<\/span>[\s\S]*\{config\.brandAlias \? \(/);
-  assert.match(source, /aria-hidden="true"[\s\S]*\{config\.brandAlias\}/);
+  assert.match(source, /aria-current=\{active \? "page" : undefined\}/);
+  assert.match(source, /aria-description=\{detail\}/);
   assert.match(source, /aria-label=\{`\$\{config\.title\} views`\}/);
 });

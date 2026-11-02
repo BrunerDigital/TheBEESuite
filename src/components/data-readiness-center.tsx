@@ -111,12 +111,12 @@ function ReadinessStatusCard({ status, value }: { status: DataReadinessStatus; v
   const copy = statusCopy[status];
   const Icon = copy.icon;
   return (
-    <div className="rounded-xl border bg-card p-3">
-      <div className="flex items-center justify-between gap-3">
-        <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border bg-card p-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <Icon className="hidden size-4 shrink-0 text-muted-foreground sm:block" aria-hidden="true" />
         <Badge variant={statusVariant(status)}>{copy.label}</Badge>
       </div>
-      <strong className="mt-3 block text-2xl font-semibold tabular-nums">
+      <strong className="text-xl font-semibold tabular-nums">
         {value.toLocaleString()}
       </strong>
     </div>
@@ -262,27 +262,27 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
   return (
     <div className="flex flex-col gap-6 [&_button]:min-h-10" aria-busy={saving}>
       <section className="border-b border-border/80 pb-6">
-        <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_34rem] xl:items-end">
+        <div className="grid gap-4">
           <div>
-            <Badge className="mb-4" variant="outline"><ListChecks data-icon="inline-start" /> {allowBulkImport ? "Executive multi-school review" : "Director guided migration"}</Badge>
+            <Badge className="mb-2" variant="outline"><ListChecks data-icon="inline-start" /> {allowBulkImport ? "Executive multi-school review" : "Director guided migration"}</Badge>
             <h1 className="max-w-3xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">{allowBulkImport ? "Migration data workbook" : "School migration setup"}</h1>
-            <p className="mt-4 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
+            <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">
               {allowBulkImport
                 ? "Review every authorized school's migration exceptions in one spreadsheet-style workspace. Corrections are retained as school-scoped proposals and never change operational records until the exact reviewed import package is separately confirmed."
                 : "Upload the school's previous-system reports, review parsed families and children, confirm balances and actual tuition frequency, resolve exceptions, and create the final BEE Suite migration package."}
             </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">{data.summary.sourceRows.toLocaleString()} retained source rows</Badge>
               <Badge variant="outline">{centers.length.toLocaleString()} authorized location{centers.length === 1 ? "" : "s"}</Badge>
               <Badge variant="outline">Updated {formatDate(data.summary.lastUpdated)}</Badge>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label="Data readiness status summary">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 2xl:grid-cols-7" aria-label="Data readiness status summary">
             {DATA_READINESS_STATUSES.map((status) => <ReadinessStatusCard key={status} status={status} value={data.summary[status]} />)}
           </div>
         </div>
         <div
-          className="mt-6 h-2 overflow-hidden rounded-full bg-muted"
+          className="mt-4 h-2 overflow-hidden rounded-full bg-muted"
           role="progressbar"
           aria-label="Readiness evidence completion"
           aria-valuemin={0}

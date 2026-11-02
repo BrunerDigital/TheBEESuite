@@ -15,7 +15,7 @@ test("reporting keeps the current summary visible while collapsing report option
   assert.match(analytics, /grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-6/);
   assert.match(analytics, /aria-label="Available reports"[\s\S]*?flex-nowrap[\s\S]*?overflow-x-auto/);
   assert.match(analytics, /window\.history\.replaceState/);
-  assert.match(page, /id="analytics-operational-overview"[\s\S]*?defaultCollapsed=/);
+  assert.match(page, /id="analytics-operational-overview"[\s\S]*?defaultCollapsed/);
 });
 
 test("family and child landing screens separate review destinations from focused edit forms", async () => {

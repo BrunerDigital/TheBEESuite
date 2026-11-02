@@ -40,7 +40,8 @@ test("dashboard priorities reuse scoped destinations and empty states remain tru
   assert.match(dashboard, /function actionQueueHref[\s\S]*return dashboardNotificationHref\(item, widgetSummaries\)/);
   assert.match(dashboard, /<h2[^>]*id="dashboard-needs-attention"/);
   assert.match(dashboard, /You’re up to date/);
-  assert.match(dashboard, /View all \{actionQueue\.length\} items/);
+  assert.match(dashboard, /actionQueue\.map\(\(item, index\)/);
+  assert.doesNotMatch(dashboard, /View all \{actionQueue\.length\} items/);
   assert.match(dashboard, /<Link key=\{school\.id\} href=\{fteReportHref\(school\.id, metrics\.currentWeekKey\)\}/);
   assert.match(dashboard, /No schools in this workspace/);
   assert.match(dashboard, /storageId="dashboard-command-center-kpis"/);

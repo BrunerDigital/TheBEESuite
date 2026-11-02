@@ -1301,6 +1301,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     }, slug) }))
     .filter(({ slug, resolvedSlug }) => (
       Boolean(resolvedSlug)
+      && resolvedSlug !== "dashboard"
       && (slug !== "data-readiness" || dataReadinessCenterEnabled())
     ))
     .map(({ slug, resolvedSlug }) => {
@@ -1315,7 +1316,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     .slice(0, 4);
 
   function renderKpiCard({ kpi, Icon, widgetId }: (typeof dashboardKpiRows)[number], valueClassName: string, honeycomb = false) {
-    const href = widgetSummaries[widgetId]?.href ?? "/dashboard";
+    const href = /active children|enrolled children/i.test(kpi.label) ? "/analytics?report=enrollment_status"
+      : /occupancy|capacity/i.test(kpi.label) ? (isExecutiveDashboard ? "/multi-location-dashboard" : "/center-dashboard")
+      : widgetSummaries[widgetId]?.href ?? "/dashboard";
     return (
       <Link
         href={href}
@@ -1628,14 +1631,14 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 {commandCenterDescription}
               </p>
             </div>
-            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto">
-                {canPrintDashboard ? <Button type="button" className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" onClick={printDashboard}>
+            <div className="flex shrink-0 gap-2">
+                {canPrintDashboard ? <Button type="button" className="min-h-11 touch-manipulation sm:min-h-8" variant="outline" onClick={printDashboard}>
                   <Printer data-icon="inline-start" aria-hidden="true" />
                   Print dashboard
                 </Button> : null}
             </div>
           </div>
-          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+          <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
             <Card className={actionQueue.length ? "border-amber-500/25 bg-amber-500/[0.04]" : "border-emerald-500/20 bg-emerald-500/[0.03]"}>
               <CardHeader className="pb-3">
                 <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold" id="dashboard-needs-attention">
@@ -1647,7 +1650,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               <CardContent>
                 {actionQueue.length ? (
                   <ul className="grid gap-2" aria-labelledby="dashboard-needs-attention">
-                    {actionQueue.slice(0, 3).map((item, index) => (
+                    {actionQueue.map((item, index) => (
                       <li key={`${index}-${notificationText(item)}`}>
                         <Link href={actionQueueHref(item)} className="flex min-h-11 items-center justify-between gap-3 rounded-lg border bg-background/70 px-3 py-2 text-sm transition-colors hover:border-primary/40 hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                           <span className="min-w-0 break-words [overflow-wrap:anywhere]">{notificationText(item)}</span>
@@ -1662,7 +1665,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     No current exceptions are visible in this workspace.
                   </div>
                 )}
-                {actionQueue.length > 3 ? <Link href="/notifications" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-4 hover:decoration-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">View all {actionQueue.length} items</Link> : null}
+
               </CardContent>
             </Card>
             <Card>
@@ -1670,7 +1673,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 <h2 className="text-lg font-semibold" id="dashboard-primary-actions">Primary actions</h2>
                 <CardDescription>The most common destinations for your role.</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2" role="group" aria-labelledby="dashboard-primary-actions">
+              <CardContent className="grid gap-2 sm:grid-cols-2" role="group" aria-labelledby="dashboard-primary-actions">
                 {primaryActionItems.map((item, index) => (
                   <DashboardPrimaryActionLink
                     key={item.slug}
@@ -1682,7 +1685,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   >
                     <span className="min-w-0">
                       <span className="block break-words text-sm font-semibold capitalize">{item.label}</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{item.description}</span>
+                      <span className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.description}</span>
                     </span>
                     <ArrowUpRight className="size-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
                   </DashboardPrimaryActionLink>
@@ -1703,7 +1706,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             {showAiBrief ? (
               <CollapsibleCard
                 id="dashboard-ai-daily-summary"
-                className="dashboard-ai-brief order-first border-primary/30 bg-primary/10 min-[112rem]:order-none"
+                className="dashboard-ai-brief border-primary/30 bg-primary/10"
                 title={(
                   <span className="flex items-center gap-2 text-lg">
                     <MessageSquare className="text-primary" aria-hidden="true" />

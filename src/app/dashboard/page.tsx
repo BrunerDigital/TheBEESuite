@@ -867,10 +867,10 @@ export default async function DashboardPage() {
   }));
   type DashboardNotificationRow = { widgetId: DashboardWidgetId; text: string; href?: string };
   const dashboardNotificationRows: Array<DashboardNotificationRow | null> = [
+    pendingIncidents ? { widgetId: "complianceQueue" as const, text: `${pendingIncidents.toLocaleString()} incident reports need review`, href: "/classroom-dashboard?view=incidents" } : null,
     unreadMessages ? { widgetId: "familyCommunication" as const, text: `${unreadMessages.toLocaleString()} parent messages need a response` } : null,
     expiringDocuments ? { widgetId: "complianceQueue" as const, text: `${expiringDocuments.toLocaleString()} documents expire within 30 days` } : null,
-    totalOpenSeats ? { widgetId: "classroomCapacity" as const, text: `${totalOpenSeats.toLocaleString()} open seats across visible centers` } : null,
-    pendingIncidents ? { widgetId: "complianceQueue" as const, text: `${pendingIncidents.toLocaleString()} incident reports need review`, href: "/classroom-dashboard?view=incidents" } : null,
+
     highIntentLeadCount ? { widgetId: "enrollmentPipeline" as const, text: `${highIntentLeadCount.toLocaleString()} high-fit leads should be prioritized` } : null,
     openTasks ? { widgetId: "toursAndTasks" as const, text: `${openTasks.toLocaleString()} enrollment follow-up tasks are open`, href: "/crm-leads" } : null,
     toursToday ? { widgetId: "toursAndTasks" as const, text: `${toursToday.toLocaleString()} tours are scheduled today` } : null,
@@ -974,7 +974,7 @@ export default async function DashboardPage() {
     { id: "registration", label: "Registration Packets", count: pendingRegistrationReviewCount, detail: "Submitted applications requiring placement review.", href: "/forms", tone: "attention" as const },
     { id: "documents", label: "Submitted Documents", count: submittedDocumentReviewCount, detail: "Family or child documents ready for review.", href: "/forms?view=documents", tone: "standard" as const },
     { id: "guardian-changes", label: "Guardian Changes", count: guardianChangeRequestCount, detail: "Parent-submitted contact or pickup changes.", href: "/family-detail#guardian-change-requests", tone: "attention" as const },
-    { id: "messages", label: "Family Messages", count: unreadMessages, detail: "Unread family conversations that may need a response.", href: "/family-detail?view=messages", tone: "standard" as const },
+    { id: "messages", label: "Family Messages", count: unreadMessages, detail: "Unread family messages that may need a response.", href: "/family-detail?view=messages", tone: "standard" as const },
   ];
   const live: LiveDashboardData = {
     role: user.role,

@@ -1662,6 +1662,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     });
   }
 
+  function cancelCheckPaymentDraft() {
+    if (billingRequestInFlight.current || offlinePaymentOperationInFlight.current || isPending) return;
+    setCheckAmountDollars("");
+    setCheckNumber("");
+    setCheckNotes("");
+    setCheckPaidAt(draftDates.localNow);
+    setStatusMessage("Check payment draft cleared.");
+    changeWorkspaceSection("overview");
+  }
+
   function submitManualCashPayment() {
     if (!selectedFamily) return setErrorMessage("Choose a family before posting a cash payment.");
     const amountCents = dollarsToCents(cashAmountDollars);
@@ -3376,10 +3386,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <Label htmlFor="billing-check-notes">Notes</Label>
               <Textarea id="billing-check-notes" value={checkNotes} onChange={(event) => setCheckNotes(event.target.value)} placeholder="Optional deposit, payer, or office notes" />
             </div>
-            <Button disabled={isPending || !selectedFamily || !checkAmountDollars || !checkNumber.trim()} onClick={submitManualCheckPayment}>
-              <Banknote data-icon="inline-start" />
-              Post Check Payment
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={isPending || !selectedFamily || !checkAmountDollars || !checkNumber.trim()} onClick={submitManualCheckPayment}>
+                <Banknote data-icon="inline-start" />
+                Post Check Payment
+              </Button>
+              <Button type="button" variant="outline" disabled={isPending} onClick={cancelCheckPaymentDraft}>
+                Cancel
+              </Button>
+            </div>
           </TabsContent>
 
           <TabsContent value="cash" className="space-y-4 rounded-lg border bg-background/35 p-4">

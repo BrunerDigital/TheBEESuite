@@ -31,7 +31,7 @@ jobs:
       - name: Install browser for isolated billing component regressions
         run: npx playwright install --with-deps chromium
 
-      - name: Verify billing draft and document interactions
-        run: node --import tsx --test tests/billing-check-draft.browser.ts
+      - name: Verify billing drafts, documents and offline payment recovery
+        run: node --import tsx --test tests/billing-check-draft.browser.ts tests/offline-payment-recovery.browser.ts
 
 # manual trigger for required validate status

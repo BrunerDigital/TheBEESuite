@@ -20,8 +20,11 @@ async function findGuardianByPin(centerId: string, pin: string, childIds: string
     where: {
       checkInPinHash: { not: null },
       family: { centerId },
+      OR: [
+        { email: null },
+        { email: { notIn: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } },
+      ],
       NOT: [
-        { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } },
         { user: { is: { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } } } },
       ],
     },
@@ -55,8 +58,11 @@ async function findGuardianByQrToken(centerId: string, qrToken: string, childIds
       id: parsed.guardianId,
       checkInPinHash: { not: null },
       family: { centerId },
+      OR: [
+        { email: null },
+        { email: { notIn: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } },
+      ],
       NOT: [
-        { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } },
         { user: { is: { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } } } },
       ],
     },

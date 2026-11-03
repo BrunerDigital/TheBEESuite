@@ -1897,7 +1897,8 @@ test("ordinary operations cannot mutate or directly email reserved App Review id
   );
   for (const route of [kioskCheckRoute, kioskLookupRoute]) {
     assert.ok((route.match(/APP_REVIEW_RESERVED_EMAILS/g) ?? []).length >= 3);
-    assert.match(route, /NOT:[\s\S]*email:[\s\S]*user:[\s\S]*mode: "insensitive"/);
+    assert.equal((route.match(/OR:\s*\[\s*\{ email: null \},\s*\{ email: \{ notIn:/g) ?? []).length, 2);
+    assert.equal((route.match(/NOT:\s*\[\s*\{ user: \{ is: \{ email: \{ in:/g) ?? []).length, 2);
   }
   assert.match(familyIntakeRoute, /ReservedAppReviewIdentityMutationError/);
   assert.match(familyIntakeRoute, /existingGuardian\.user\?\.email/);

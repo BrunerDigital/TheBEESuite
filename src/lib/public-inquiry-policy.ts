@@ -16,6 +16,13 @@ const hiddenWebsiteIdentifiers = new Set([
   "cmp4ewfzn004g6alwqbqrzcql",
   "Kid City USA - TX | Garland", "TX | Garland", "Kid City USA - Garland",
   "cmp4ewh78004y6alwu6s3bsv4",
+  // November 3 website audit, corrected by Audrey: Saint Cloud, not College Park.
+  "Kid City USA - FL | Saint Cloud", "FL | Saint Cloud", "Kid City USA - Saint Cloud",
+  "Kid City USA - FL | St. Cloud", "FL | St. Cloud", "Kid City USA - St. Cloud",
+  "Kid City USA - IN | Bargersville", "IN | Bargersville", "Kid City USA - Bargersville",
+  "Kid City USA - TN | Lewisburg", "TN | Lewisburg", "Kid City USA - Lewisburg",
+  "Kid City USA - TN | Lewisburg 1", "TN | Lewisburg 1", "Kid City USA - Lewisburg 1",
+  "Kid City USA - NV | Las Vegas 3", "NV | Las Vegas 3", "Kid City USA - Las Vegas 3",
 ].map(identifierKey));
 const blockedInquiryIdentifiers = new Set([
   "kid city usa fl daytona beach east",

@@ -112,15 +112,15 @@ for (const binding of bindings) {
 }
 
 test("legacy DeLand and similar schools cannot acquire an exact restoration binding", () => {
-  for (const value of ["FL | Deland", "Kid City USA - FL | Deland", "Kid City USA - FL | Deland - Amelia", "Kid City USA - FL | Lake City", "Kid City USA - IN | Whitestown", "Kid City USA - TN | Pulaski", "Kid City USA - FL | Vero Beach", "Kid City USA - TN | Lewisburg"]) assert.equal(directoryInquiryBinding(value), undefined);
+  for (const value of ["FL | Deland", "Kid City USA - FL | Deland", "Kid City USA - FL | Deland - Amelia", "Kid City USA - FL | Lake City", "Kid City USA - IN | Whitestown", "Kid City USA - TN | Pulaski", "Kid City USA - FL | Vero Beach", "Kid City USA - FL | College Park"]) assert.equal(directoryInquiryBinding(value), undefined);
 });
 
 test("protected public schools remain available while the newer Lee exclusion overrides restoration", async () => {
   const fixture = inquiryFixture({ directorySchools: true, directoryFlags: enabledFlags, restored: true, restorationEnabled: true,
-    additionalLocations: ["Kid City USA - IN | Whitestown", "Kid City USA - TN | Pulaski", "Kid City USA - FL | Vero Beach", "Kid City USA - TN | Lewisburg", "Kid City USA - FL | Lake City", "Kid City USA - FL | Deland - Amelia"] });
+    additionalLocations: ["Kid City USA - IN | Whitestown", "Kid City USA - TN | Pulaski", "Kid City USA - FL | Vero Beach", "Kid City USA - FL | College Park", "Kid City USA - FL | Lake City", "Kid City USA - FL | Deland - Amelia"] });
   const result = await fixture.get("?purpose=inquiry");
   for (const id of ["Kid City USA - IN | Whitestown", "Kid City USA - TN | Pulaski", "Kid City USA - FL | Deland - Amelia", "Kid City USA - MO | Lees Summit"]) assert.equal(rowPresent(result, id), false);
-  for (const id of ["Kid City USA - FL | Vero Beach", "Kid City USA - TN | Lewisburg", "Kid City USA - FL | Lake City"]) assert.equal(rowPresent(result, id), true);
+  for (const id of ["Kid City USA - FL | Vero Beach", "Kid City USA - FL | College Park", "Kid City USA - FL | Lake City"]) assert.equal(rowPresent(result, id), true);
   for (const path of ["src/app/api/registration/route.ts", "src/app/api/cron/tuition-billing/route.ts", "src/app/api/cron/fte-reminders/route.ts", "src/app/api/cron/tuition-payment-reminders/route.ts", "src/lib/workspace-selection.ts", "src/lib/active-school-locations.ts"]) assert.doesNotMatch(readFileSync(path, "utf8"), /directory-inquiry-restoration|INQUIRY_DELAND_ORANGE_ENABLED|INQUIRY_LAKE_CITY_2_ENABLED|INQUIRY_BARDSTOWN_ENABLED/);
 });
 

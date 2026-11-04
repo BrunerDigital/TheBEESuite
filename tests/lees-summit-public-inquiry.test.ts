@@ -7,7 +7,7 @@ import { isEligiblePublicInquiryCenter } from "../src/lib/inquiry-routing";
 import { isActivePublicSchoolCandidate, isActiveSchoolFinanceOperationsCandidate } from "../src/lib/active-school-locations";
 
 const identifiers = [binding.publicLocationId, "MO | Lees Summit", binding.name, "MO | Lee's Summit", binding.centerId];
-const kept = ["Kid City USA - FL | Vero Beach", "Kid City USA - FL | Altamonte - Douglas", "Kid City USA - TN | Lewisburg"];
+const kept = ["Kid City USA - FL | Vero Beach", "Kid City USA - FL | Altamonte - Douglas", "Kid City USA - FL | College Park"];
 function fixture(options = {}) {
   return inquiryFixture({ restored: true, restorationEnabled: true, additionalLocations: kept.filter((id) => id !== kept[1]), ...options });
 }

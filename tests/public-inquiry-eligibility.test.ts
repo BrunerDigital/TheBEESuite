@@ -26,7 +26,7 @@ test("Centennial and eligible Kid City locations retain routing without altering
 });
 
 test("retained-school instructions preserve active feeds and inquiry routing", () => {
-  for (const id of ["FL | Altamonte - Douglas", "FL | Longwood - Wekiva", "FL | Vero Beach", "IN | Jasper", "IN | Jasper - Truman", "IN | Jasper - Baden Strasse", "TN | Lewisburg"]) {
+  for (const id of ["FL | Altamonte - Douglas", "FL | Longwood - Wekiva", "FL | Vero Beach", "IN | Jasper", "IN | Jasper - Truman", "IN | Jasper - Baden Strasse", "FL | College Park"]) {
     const center = { status: "active", crmLocationId: id, locationId: id, name: id };
     assert.equal(isActivePublicSchoolCandidate(center), true, id);
     assert.equal(isEligiblePublicInquiryCenter(center, true), true, id);

@@ -37,7 +37,7 @@ async function runTemplate({ eligible = true, includeLocation = true, responseOk
 
 test("standalone Avada omits the removed Lee option and retains approved schools", () => {
   assert.doesNotMatch(html, /<option[^>]*value="Kid City USA - MO \| Lees Summit"[^>]*>/);
-  for (const retained of ["FL | Vero Beach", "TN | Lewisburg"]) {
+  for (const retained of ["FL | Vero Beach", "FL | College Park"]) {
     const option = html.match(new RegExp('<option[^>]*value="Kid City USA - ' + retained.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '"[^>]*>'))![0];
     assert.doesNotMatch(option, /disabled|hidden/);
   }

@@ -14,8 +14,9 @@ const removed = [
   "Kid City USA - TN | Lewisburg", "TN | Lewisburg", "Kid City USA - Lewisburg",
   "Kid City USA - TN | Lewisburg 1", "TN | Lewisburg 1", "Kid City USA - Lewisburg 1",
   "Kid City USA - NV | Las Vegas 3", "NV | Las Vegas 3", "Kid City USA - Las Vegas 3",
+  "Kid City USA - NV | Las Vegas 1 - Page", "NV | Las Vegas 1 - Page", "Kid City USA - Las Vegas 1 - Page",
 ];
-const canonicalTargets = [removed[0], removed[6], removed[9], removed[15]];
+const canonicalTargets = [removed[0], removed[6], removed[9], removed[15], removed[18]];
 const retained = [
   "Kid City USA - FL | College Park", "Kid City USA - FL | Vero Beach",
   "Kid City USA - NV | Las Vegas 2 - Bonanza", "Kid City USA - TX | North Richland Hills",

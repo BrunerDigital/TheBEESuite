@@ -23,6 +23,9 @@ const hiddenWebsiteIdentifiers = new Set([
   "Kid City USA - TN | Lewisburg", "TN | Lewisburg", "Kid City USA - Lewisburg",
   "Kid City USA - TN | Lewisburg 1", "TN | Lewisburg 1", "Kid City USA - Lewisburg 1",
   "Kid City USA - NV | Las Vegas 3", "NV | Las Vegas 3", "Kid City USA - Las Vegas 3",
+  // The website's Las Vegas 3 is Page Street; BEE numbers that school Las Vegas 1.
+  "Kid City USA - NV | Las Vegas 1 - Page", "NV | Las Vegas 1 - Page", "Kid City USA - Las Vegas 1 - Page",
+  "cmp4ewmqd007a6alwxp6md0nq",
 ].map(identifierKey));
 const blockedInquiryIdentifiers = new Set([
   "kid city usa fl daytona beach east",

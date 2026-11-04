@@ -4,14 +4,18 @@ import {readFileSync} from 'node:fs';
 import {inquiryFixture} from './helpers/inquiry-route-fixture.mjs';
 import {embedFixture} from './helpers/inquiry-embed-fixture.mjs';
 import {isActiveSchoolFinanceOperationsCandidate} from '../src/lib/active-school-locations';
-const removed=[{id:'cmp4ewfzn004g6alwqbqrzcql',identifier:'Kid City USA - MO | Lees Summit',name:'Kid City USA - Lees Summit'},{id:'cmp4ewh78004y6alwu6s3bsv4',identifier:'Kid City USA - TX | Garland',name:'Kid City USA - Garland'}];
+const removed=[
+ {id:'cmp4ewfzn004g6alwqbqrzcql',identifier:'Kid City USA - MO | Lees Summit',name:'Kid City USA - Lees Summit'},
+ {id:'cmp4ewh78004y6alwu6s3bsv4',identifier:'Kid City USA - TX | Garland',name:'Kid City USA - Garland'},
+ {id:'cmp4ewmqd007a6alwxp6md0nq',identifier:'Kid City USA - NV | Las Vegas 1 - Page',name:'Kid City USA - Las Vegas 1 - Page'},
+];
 function setup(target:typeof removed[number],options={}){
- const f=inquiryFixture({restored:true,restorationEnabled:true,additionalLocations:[removed[1].identifier,'Kid City USA - FL | Vero Beach'],...options});
+ const f=inquiryFixture({restored:true,restorationEnabled:true,additionalLocations:[...removed.slice(1).map(row=>row.identifier),'Kid City USA - FL | Vero Beach'],...options});
  const center=f.centers.find((c:{crmLocationId:string})=>c.crmLocationId===target.identifier)!;center.id=target.id;return {f,center};
 }
 for(const target of removed){
  test(target.name+': immutable resolved ID blocks mutable alias and default intake before effects',async()=>{
-  for(const mode of ['alias','default'])for(const status of ['active','closed'])for(const form of [false,true]){
+  for(const mode of ['alias','default'])for(const status of ['active','archived','closed'])for(const form of [false,true]){
    const {f,center}=setup(target,{defaultCenterId:target.id});center.status=status;center.name='Synthetic renamed center';center.crmLocationId='synthetic-legacy';center.locationId='synthetic-legacy';
    const before=structuredClone(center);
    const response=await f.post({locationId:mode==='alias'?'synthetic-legacy':'unknown',brandName:'Example Brand'},{form,origin:''});
@@ -51,3 +55,15 @@ for(const target of removed){
   }
  });
 }
+
+test('Page Street fixed availability rejects its archived record while Bonanza still accepts intake',async()=>{
+ const {f,center}=setup(removed[2]);center.status='archived';
+ const availability=await f.get('?purpose=inquiry&centerId='+removed[2].id);
+ assert.equal(availability.status,200);assert.equal(availability.body.inquiryCenterEligible,false);
+ assert.equal(f.effects.writes,0);
+ const bonanza='Kid City USA - NV | Las Vegas 2 - Bonanza';
+ const retained=inquiryFixture({additionalLocations:[bonanza]});
+ const result=await retained.post({locationId:bonanza});
+ assert.equal(result.status,201);assert.equal(retained.effects.leads[0].centerId,'synthetic_'+bonanza);
+ assert.equal(retained.effects.unexpectedNetwork,0);
+});

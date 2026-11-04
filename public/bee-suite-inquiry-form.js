@@ -113,7 +113,9 @@
       "kid city usa in bargersville", "in bargersville", "kid city usa bargersville",
       "kid city usa tn lewisburg", "tn lewisburg", "kid city usa lewisburg",
       "kid city usa tn lewisburg 1", "tn lewisburg 1", "kid city usa lewisburg 1",
-      "kid city usa nv las vegas 3", "nv las vegas 3", "kid city usa las vegas 3"].includes(key);
+      "kid city usa nv las vegas 3", "nv las vegas 3", "kid city usa las vegas 3",
+      "kid city usa nv las vegas 1 page", "nv las vegas 1 page", "kid city usa las vegas 1 page",
+      "cmp4ewmqd007a6alwxp6md0nq"].includes(key);
   }
 
   function availableInquiryLocations(locations) {

@@ -49,6 +49,9 @@ import {
 } from "@/lib/stripe-webhook-receipts";
 import { isStripeWebhookTransientDatabaseError, retryStripeWebhookTransaction } from "@/lib/stripe-webhook-retry";
 import { matchStripeWebhookSecret } from "@/lib/stripe-webhook-readiness";
+import { handlePlatformBillingEvent, PlatformBillingRetryableError } from "@/lib/platform-billing-events";
+import { platformStripeClient } from "@/lib/platform-billing-stripe";
+import { PLATFORM_PAYMENT_SCOPE, platformObjectMetadata } from "@/lib/platform-billing-policy";
 import {
   applySucceededStripeFamilyBalancePayment,
   applySucceededStripeInvoicePayment,
@@ -2996,6 +2999,12 @@ async function dispatchAuthenticatedEvent(
   matchedTenantId: string | null,
   statusCallbackUrl: string | null,
 ) {
+  if (platformObjectMetadata(event.data.object).paymentScope === PLATFORM_PAYMENT_SCOPE) {
+    // Do not allow a school/tenant signature or Connect event to touch platform revenue.
+    if (matchedTenantId || event.account) return NextResponse.json({ ok: true, ignored: true, reason: "platform_billing_requires_platform_destination" });
+    const result = await handlePlatformBillingEvent(prisma, platformStripeClient(), event, matchedTenantId);
+    return NextResponse.json(result || { ok: true, ignored: true });
+  }
   if (accountEventType(event.type)) {
     return handleConnectedAccountEvent(event, matchedTenantId);
   }
@@ -3443,7 +3452,7 @@ async function POSTHandler(request: NextRequest) {
     return response;
   } catch (error) {
     logOperationalError("stripe_webhook.processing_failed_after_receipt", error, { eventId: event.id, eventType: event.type });
-    if (isStripeWebhookTransientDatabaseError(error)) {
+    if (isStripeWebhookTransientDatabaseError(error) || error instanceof PlatformBillingRetryableError) {
       try {
         await markStripeWebhookReceiptRetryable(event);
       } catch (receiptError) {

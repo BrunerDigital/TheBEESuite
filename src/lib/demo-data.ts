@@ -51,6 +51,7 @@ export type ModuleSlug =
   | "terminal-store"
   | "asset-hub"
   | "corporate-billing"
+  | "platform-billing"
   | "compliance"
   | "reputation"
   | "analytics"
@@ -288,6 +289,7 @@ export const navGroups = [
     title: "Administration",
     items: [
       ["Executive admin", "agency-admin", Building2],
+      ["BEE Suite Billing", "platform-billing", BadgeDollarSign],
       ["Developer", "developer-dashboard", Code2],
       ["Software subscriptions", "corporate-billing", CreditCard],
     ],
@@ -326,6 +328,12 @@ export type ModuleDefinition = {
 };
 
 export const modules: ModuleDefinition[] = [
+  {
+    slug: "platform-billing", title: "BEE Suite Billing", eyebrow: "Platform revenue",
+    description: "Bill tenants monthly and accept custom-amount payments to The BEE Suite.",
+    owner: "BEE Suite platform executives", metrics: ["Monthly fees", "One-time charges", "Card checkout", "Invoice history"],
+    features: ["Tenant billing profiles", "Monthly authorizations", "Custom charge amounts", "Payment status"], records: ["Platform billing"], sensitive: true,
+  },
   {
     slug: "data-readiness",
     title: "Data import review",

@@ -1,5 +1,6 @@
 export const REPORT_KINDS = [
   "enrollment_status",
+  "tuition_schedule",
   "lead_funnel",
   "attendance",
   "billing",
@@ -16,6 +17,7 @@ export function isReportKind(value: string): value is ReportKind {
 }
 
 export const REPORT_DEFINITIONS: Record<ReportKind, { source: string; definition: string }> = {
+  tuition_schedule: { source: "Saved child tuition assignments and current enrollment records", definition: "Every currently enrolled child whose start date has arrived, including zero-dollar rates, disabled billing and missing assignments. This is a current snapshot as of the generated time, independent of the activity date range and account balance. Saved net rates include recurring additions and credits. Biweekly tuition is two weekly rates; every 4 weeks is four weekly rates, distinct from monthly tuition. Assignment status does not indicate payment or autopay status. One-time fees, balances and agency claims are excluded." },
   enrollment_status: { source: "BEE Suite child and classroom records", definition: "Current enrolled children with an assigned classroom and a start date on or before the report end date. Age is calculated as of the report end date; all current enrolled ages are included, while future DOB records are excluded and missing imported DOB records remain visible for review. This is the current roster, not a historical reconstruction." },
   lead_funnel: { source: "BEE Suite CRM records", definition: "Leads created in the selected range; conversion is the share whose current stage is Enrolled." },
   attendance: { source: "Attendance records and check-in/out logs", definition: "Present and absent statuses dated in the selected range; check-in/out counts are event totals." },

@@ -33,6 +33,7 @@ const emptyReportData: AnalyticsReportData = {
       enrollmentStatus: "enrolled",
     },
   ],
+  tuitionSchedule: [],
   leadSources: [
     {
       centerId: "center_1",

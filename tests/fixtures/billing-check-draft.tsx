@@ -28,7 +28,7 @@ const ledger = {
 };
 
 createRoot(document.getElementById("root")!).render(<>
-  <BillingWorkbench families={families} centers={schools} products={[]} tuitionPlans={[]} currentRole="CENTER_DIRECTOR"
+  <BillingWorkbench families={families} centers={schools} products={[]} tuitionPlans={[]} currentRole="CENTER_DIRECTOR" currentUserId="fixture-director"
     canOpenFamilyProfile canManageEnrollment={false} initialFamilyId="alpha" initialCenterId="school-one"
     initialSection="payments" ledger={ledger} accountOverviewFixtures={accountOverviewFixtures} />
   <section aria-label="Existing director documents">

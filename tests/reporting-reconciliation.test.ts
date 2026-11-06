@@ -23,6 +23,7 @@ const data: AnalyticsReportData = {
     { id: "school_b", name: "School B", label: "IN | School B", timezone: "America/Indiana/Indianapolis" },
   ],
   enrollmentStatus: [],
+  tuitionSchedule: [],
   leadSources: [{ source: "Website", centerId: "school_a", centerLabel: "IN | School A", leads: 4, tours: 2, applications: 1, enrolled: 1, waitlisted: 0, conversionRate: 25 }],
   funnelStages: [{ stage: "ENROLLED", count: 1, share: 25 }],
   attendanceTrends: [], billing: [], weeklyBilling: [], weeklyPayments: [], messages: [], staffHours: [],

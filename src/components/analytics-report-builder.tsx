@@ -14,6 +14,8 @@ import { CollapsibleCard } from "@/components/workspace-preferences";
 import type { AnalyticsReportData } from "@/lib/reporting-analytics";
 import { REPORT_DEFINITIONS, type ReportKind } from "@/lib/reporting-analytics-shared";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { TuitionScheduleTable } from "@/components/tuition-schedule-table";
+import { filterTuitionScheduleRows } from "@/lib/tuition-schedule-report";
 
 export type AnalyticsReportBuilderFilters = {
   report?: ReportKind;
@@ -25,6 +27,7 @@ export type AnalyticsReportBuilderFilters = {
 
 const reportOptions: Array<{ value: ReportKind; label: string }> = [
   { value: "enrollment_status", label: "Enrollment status" },
+  { value: "tuition_schedule", label: "Tuition schedule" },
   { value: "lead_funnel", label: "Lead funnel" },
   { value: "attendance", label: "Attendance" },
   { value: "billing", label: "Billing/AR" },
@@ -53,7 +56,7 @@ function barWidth(value: number) {
   return `${Math.max(0, Math.min(100, value))}%`;
 }
 
-function exportParams(input: AnalyticsReportBuilderFilters & { report: ReportKind; format: "csv" | "pdf" }) {
+function exportParams(input: AnalyticsReportBuilderFilters & { report: ReportKind; format: "csv" | "pdf"; query?: string }) {
   const params = new URLSearchParams();
   params.set("report", input.report);
   params.set("format", input.format);
@@ -61,6 +64,7 @@ function exportParams(input: AnalyticsReportBuilderFilters & { report: ReportKin
   if (input.start) params.set("start", input.start);
   if (input.end) params.set("end", input.end);
   if (input.centerId && input.centerId !== "all") params.set("centerId", input.centerId);
+  if (input.report === "tuition_schedule" && input.query?.trim()) params.set("q", input.query.trim());
   return `/api/reports/export?${params.toString()}`;
 }
 
@@ -101,16 +105,18 @@ export function AnalyticsReportBuilder({
   const [query, setQuery] = useState("");
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
-  const exportState = { range, start, end, centerId, report };
+  const loadedCenterId = filters.centerId || "all";
+  const exportState = { range, start, end, centerId: report === "tuition_schedule" ? loadedCenterId : centerId, report, query };
   const reportDefinition = REPORT_DEFINITIONS[report];
   const enrollmentAsOf = data.range.endDate;
   const selectedCenterDetails = data.scope.centerIds.length === 1
     ? data.centers.find((center) => center.id === data.scope.centerIds[0]) ?? null
     : null;
-  const selectedCenterLabel = centerId === "all"
+  const reportCenterId = report === "tuition_schedule" ? loadedCenterId : centerId;
+  const selectedCenterLabel = reportCenterId === "all"
     ? "All accessible centers"
-    : data.centers.find((center) => center.id === centerId)?.label ?? "Selected center";
-  const rangeLabel = range === "all"
+    : data.centers.find((center) => center.id === reportCenterId)?.label ?? "Selected center";
+  const rangeLabel = report === "tuition_schedule" ? `Current snapshot · ${formatDate(data.generatedAt, timeZone)}` : range === "all"
     ? `${start ? formatDate(start) : formatDate(data.range.startDate, timeZone)} to ${end ? formatDate(end) : formatDate(data.range.endDate, timeZone)}`
     : reportRangeLabel(range);
   const printFilterSummary = [
@@ -127,6 +133,18 @@ export function AnalyticsReportBuilder({
       row.centerLabel.toLowerCase().includes(needle),
     );
   }, [data.leadSources, query]);
+
+  const filteredTuitionSchedule = useMemo(() => filterTuitionScheduleRows(data.tuitionSchedule, query), [data.tuitionSchedule, query]);
+  const tuitionSummary = [
+    ["Children", filteredTuitionSchedule.length],
+    ["Families", new Set(filteredTuitionSchedule.map(row => row.familyId)).size],
+    ["Weekly", filteredTuitionSchedule.filter(row => row.frequency === "Weekly").length],
+    ["Biweekly", filteredTuitionSchedule.filter(row => row.frequency.startsWith("Biweekly")).length],
+    ["Monthly", filteredTuitionSchedule.filter(row => row.frequency === "Monthly").length],
+    ["Every 4 weeks", filteredTuitionSchedule.filter(row => row.frequency === "Every 4 weeks").length],
+    ["Not assigned / needs review", filteredTuitionSchedule.filter(row => row.status === "Not assigned" || row.status === "Needs review").length],
+    ["Disabled", filteredTuitionSchedule.filter(row => row.status === "Disabled").length],
+  ] as const;
 
   const filteredEnrollmentStatus = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -235,7 +253,7 @@ export function AnalyticsReportBuilder({
           ) : (
             <>
               <p>{printFilterSummary}</p>
-              <p>Loaded range: {formatDate(data.range.startDate, timeZone)} to {formatDate(data.range.endDate, timeZone)}</p>
+              {report !== "tuition_schedule" ? <p>Loaded range: {formatDate(data.range.startDate, timeZone)} to {formatDate(data.range.endDate, timeZone)}</p> : <p>{reportDefinition.definition}</p>}
             </>
           )}
           <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
@@ -254,7 +272,7 @@ export function AnalyticsReportBuilder({
               </tbody>
             </table>
           </>
-        ) : report !== "enrollment_status" ? (
+        ) : report !== "enrollment_status" && report !== "tuition_schedule" ? (
           <>
             <h2>Summary</h2>
             <table>
@@ -265,6 +283,13 @@ export function AnalyticsReportBuilder({
                 <tr><th>Staff hours</th><td>{hours(data.totals.staffHoursMinutes)} decimal hours</td></tr>
               </tbody>
             </table>
+          </>
+        ) : null}
+
+        {report === "tuition_schedule" ? (
+          <>
+            <p>Data as of: {formatPrintDateTime(data.generatedAt, timeZone)}. {filteredTuitionSchedule.length} children in {new Set(filteredTuitionSchedule.map(row => row.familyId)).size} families.</p>
+            <TuitionScheduleTable rows={filteredTuitionSchedule} print />
           </>
         ) : null}
 
@@ -531,12 +556,12 @@ export function AnalyticsReportBuilder({
               <Label htmlFor={controlIds.search}>Search visible rows</Label>
               <div className="relative">
                 <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id={controlIds.search} className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Child, classroom, center, or teacher…" />
+                <Input id={controlIds.search} className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={report === "tuition_schedule" ? "Family, child, classroom, or frequency…" : "Child, classroom, center, or teacher…"} />
               </div>
             </div>
             <div className="space-y-1">
               <Label htmlFor={controlIds.range}>Date range</Label>
-              <Select value={range} onValueChange={(value) => value && setRange(value)}>
+              <Select value={range} onValueChange={(value) => value && setRange(value)} disabled={report === "tuition_schedule"}>
                 <SelectTrigger id={controlIds.range} className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="7">Last 7 days</SelectItem>
@@ -547,7 +572,7 @@ export function AnalyticsReportBuilder({
                 </SelectContent>
               </Select>
             </div>
-            {range === "all" ? (
+            {range === "all" && report !== "tuition_schedule" ? (
               <>
                 <div className="space-y-1">
                   <Label htmlFor={controlIds.start}>Start</Label>
@@ -590,7 +615,9 @@ export function AnalyticsReportBuilder({
                 Change report options
               </a>
             </div>
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-6">
+          {report === "tuition_schedule" ? <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            {tuitionSummary.map(([label, value]) => <div key={label} className="rounded-xl border bg-background/40 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 text-sm font-medium">{value.toLocaleString()}</div></div>)}
+          </div> : <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-6">
             <div className="rounded-xl border bg-background/40 p-3">
               <div className="text-xs text-muted-foreground">Loaded range</div>
               <div className="mt-1 text-sm font-medium">{formatDate(data.range.startDate, timeZone)} to {formatDate(data.range.endDate, timeZone)}</div>
@@ -616,7 +643,7 @@ export function AnalyticsReportBuilder({
               <div className="text-xs text-muted-foreground">Staff hours</div>
               <div className="mt-1 text-sm font-medium">{hours(data.totals.staffHoursMinutes)} decimal hours</div>
             </div>
-          </div>
+          </div>}
           </section>
 
           <CollapsibleCard
@@ -635,6 +662,7 @@ export function AnalyticsReportBuilder({
       <Tabs value={report} onValueChange={selectReport} className="gap-4">
         <TabsList aria-label="Available reports" className="flex h-auto w-full flex-nowrap justify-start overflow-x-auto overscroll-x-contain">
           <TabsTrigger className="shrink-0" value="enrollment_status"><ClipboardList data-icon="inline-start" />Enrollment status</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="tuition_schedule"><ReceiptText data-icon="inline-start" />Tuition schedule</TabsTrigger>
           <TabsTrigger className="shrink-0" value="lead_funnel"><TrendingUp data-icon="inline-start" />Lead funnel</TabsTrigger>
           <TabsTrigger className="shrink-0" value="attendance"><UsersRound data-icon="inline-start" />Attendance</TabsTrigger>
           <TabsTrigger className="shrink-0" value="billing"><ReceiptText data-icon="inline-start" />Billing/AR</TabsTrigger>
@@ -643,6 +671,14 @@ export function AnalyticsReportBuilder({
           <TabsTrigger className="shrink-0" value="messages"><MessageSquare data-icon="inline-start" />Messages</TabsTrigger>
           <TabsTrigger className="shrink-0" value="staff_hours"><Clock data-icon="inline-start" />Staff hours</TabsTrigger>
         </TabsList>
+        <TabsContent value="tuition_schedule" className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold">Tuition Schedule</h2>
+            <p className="text-sm text-muted-foreground">Every current child, including $0 tuition and missing assignments. Saved net rates include recurring additions and credits. Biweekly = two weekly rates; every 4 weeks is different from monthly. Disabled assignments do not create recurring invoices.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Data as of {formatPrintDateTime(data.generatedAt, timeZone)}. Use the print button to print or save a PDF. Search filters also apply to CSV and PDF exports.</p>
+          </div>
+          <div className="overflow-x-auto rounded-lg border"><TuitionScheduleTable rows={filteredTuitionSchedule} /></div>
+        </TabsContent>
         <TabsContent value="enrollment_status" className="space-y-4">
           <CollapsibleCard
             id="analytics-enrollment-details"

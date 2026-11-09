@@ -116,7 +116,15 @@
       "kid city usa mo lee s summit", "mo lee s summit", "kid city usa lee s summit",
       "cmp4ewfzn004g6alwqbqrzcql",
       "kid city usa tx garland", "tx garland", "kid city usa garland",
-      "cmp4ewh78004y6alwu6s3bsv4"].includes(key);
+      "cmp4ewh78004y6alwu6s3bsv4",
+      "kid city usa fl saint cloud", "fl saint cloud", "kid city usa saint cloud",
+      "kid city usa fl st cloud", "fl st cloud", "kid city usa st cloud",
+      "kid city usa in bargersville", "in bargersville", "kid city usa bargersville",
+      "kid city usa tn lewisburg", "tn lewisburg", "kid city usa lewisburg",
+      "kid city usa tn lewisburg 1", "tn lewisburg 1", "kid city usa lewisburg 1",
+      "kid city usa nv las vegas 3", "nv las vegas 3", "kid city usa las vegas 3",
+      "kid city usa nv las vegas 1 page", "nv las vegas 1 page", "kid city usa las vegas 1 page",
+      "cmp4ewmqd007a6alwxp6md0nq"].includes(key);
   }
 
   function availableInquiryLocations(locations) {

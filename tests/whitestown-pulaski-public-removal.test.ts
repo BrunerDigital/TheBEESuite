@@ -7,7 +7,7 @@ import { isActivePublicSchoolCandidate, isActiveSchoolFinanceOperationsCandidate
 import { filterPublicWebsiteLocations } from "../src/lib/public-inquiry-policy";
 
 const targets = ["Kid City USA - IN | Whitestown", "Kid City USA - TN | Pulaski"];
-const keep = ["Kid City USA - FL | Vero Beach", "Kid City USA - TN | Lewisburg", "Kid City USA - TN | Soddy Daisy"];
+const keep = ["Kid City USA - FL | Vero Beach", "Kid City USA - FL | College Park", "Kid City USA - TN | Soddy Daisy"];
 
 function populatedFixture(options = {}) {
   return inquiryFixture({ ...options, additionalLocations: [...targets, ...keep] });
@@ -74,7 +74,7 @@ test("public exclusion leaves Center status, finance eligibility and historical 
   assert.equal(filterPublicWebsiteLocations([{ crmLocationId: keep[0], locationId: targets[0] }]).length, 0);
 });
 
-test("Vero and Lewisburg can still create synthetic inquiries, and the newer Lee exclusion overrides its historical gate", async () => {
+test("Vero and College Park can still create synthetic inquiries, and the newer Lee exclusion overrides its historical gate", async () => {
   for (const id of keep.slice(0, 2)) {
     const fixture = populatedFixture();
     assert.equal((await fixture.post({ locationId: id })).status, 201);
@@ -88,7 +88,7 @@ test("Vero and Lewisburg can still create synthetic inquiries, and the newer Lee
   assert.equal(fixture.centers.find((row: { crmLocationId: string }) => row.crmLocationId === lee)?.status, "closed");
 });
 
-test("static fallbacks omit only the approved targets and retain Vero, Lewisburg and Soddy Daisy", () => {
+test("static fallbacks omit only the approved targets and retain Vero, College Park and Soddy Daisy", () => {
   const rows = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")).locations;
   const html = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
   for (const id of targets) {

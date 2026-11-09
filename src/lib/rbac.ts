@@ -1,6 +1,7 @@
 import { isFteOnlyUser } from "@/lib/application-access";
 import type { ModuleSlug } from "@/lib/demo-data";
 import { terminalStoreEnabled } from "@/lib/feature-availability";
+import { canManagePlatformBilling } from "@/lib/platform-billing-policy";
 
 export const executiveRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "READ_ONLY_AUDITOR"]);
 
@@ -130,6 +131,7 @@ function hasTenantWideUiAccess(subject: AccessSubject) {
 }
 
 export function canAccessModule(subject: AccessSubject, slug: string) {
+  if (slug === "platform-billing") return typeof subject === "object" && canManagePlatformBilling(subject);
   const role = getRole(subject);
   if (!role) return false;
   if (isFteOnlyUser(subject)) return role === "CENTER_DIRECTOR" && slug === "fte-reports";

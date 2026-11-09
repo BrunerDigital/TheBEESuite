@@ -11,6 +11,7 @@ import {
 } from "@/lib/reporting-analytics";
 import { canAccessModule } from "@/lib/rbac";
 import { REPORT_KINDS } from "@/lib/reporting-analytics-shared";
+import { filterTuitionScheduleRows } from "@/lib/tuition-schedule-report";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -41,6 +42,7 @@ async function GETHandler(request: NextRequest) {
   });
 
   const data = await buildAnalyticsReportData(user, filters);
+  if (report === "tuition_schedule") data.tuitionSchedule = filterTuitionScheduleRows(data.tuitionSchedule, request.nextUrl.searchParams.get("q") ?? "");
   const rows = rowsForReportKind(data, report);
   const filename = `${safeFilename(rows.title)}-${new Date().toISOString().slice(0, 10)}`;
 

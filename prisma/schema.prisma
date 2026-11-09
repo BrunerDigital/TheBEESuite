@@ -82,6 +82,77 @@ model Tenant {
   deviceSessions          DeviceSession[]
   dataDeletionRequests    DataDeletionRequest[]
   refundRequests          RefundRequest[]
+  platformBillingAccounts PlatformBillingAccount[] @relation("PlatformBiller")
+  platformCustomerAccounts PlatformBillingAccount[] @relation("PlatformCustomerTenant")
+}
+
+// Platform revenue is deliberately separate from school/family billing ledgers.
+model PlatformBillingAccount {
+  id               String   @id @default(cuid())
+  billerTenantId   String
+  customerTenantId String?
+  name             String
+  email            String
+  stripeCustomerId String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  billerTenant   Tenant @relation("PlatformBiller", fields: [billerTenantId], references: [id])
+  customerTenant Tenant? @relation("PlatformCustomerTenant", fields: [customerTenantId], references: [id])
+  charges        PlatformBillingCharge[]
+
+  @@unique([billerTenantId, customerTenantId])
+  @@index([billerTenantId, createdAt])
+}
+
+model PlatformBillingCharge {
+  id                      String   @id @default(cuid())
+  accountId               String
+  createdById             String
+  requestKey              String   @unique
+  description             String
+  kind                    String
+  amountCents             Int
+  currency                String   @default("usd")
+  status                  String   @default("draft")
+  // Only one outstanding monthly authorization/subscription per payer.
+  recurringKey            String?  @unique
+  stripeCheckoutSessionId String?  @unique
+  checkoutUrl             String?
+  checkoutExpiresAt       DateTime?
+  stripePaymentIntentId   String?  @unique
+  refundedAmountCents      Int      @default(0)
+  stripeSubscriptionId    String?  @unique
+  cancelAtPeriodEnd       Boolean  @default(false)
+  currentPeriodEnd        DateTime?
+  paidAt                  DateTime?
+  providerUpdatedAt       DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  account  PlatformBillingAccount @relation(fields: [accountId], references: [id])
+  invoices PlatformBillingInvoice[]
+
+  @@index([accountId, createdAt])
+}
+
+model PlatformBillingInvoice {
+  id                 String   @id @default(cuid())
+  chargeId           String
+  stripeInvoiceId    String   @unique
+  number             String?
+  status             String
+  amountDueCents     Int
+  amountPaidCents    Int
+  hostedInvoiceUrl   String?
+  paidAt             DateTime?
+  providerUpdatedAt  DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  charge PlatformBillingCharge @relation(fields: [chargeId], references: [id])
+
+  @@index([chargeId, createdAt])
 }
 
 model Brand {

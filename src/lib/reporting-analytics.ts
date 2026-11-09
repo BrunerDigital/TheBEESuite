@@ -4,7 +4,9 @@ import { centerServiceDayWindow, readCenterTimeZone } from "@/lib/attendance-sta
 import { getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { REPORT_DEFINITIONS, type ReportKind } from "@/lib/reporting-analytics-shared";
-import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import { currentlyEnrolledChildWhere, currentlyEnrolledStatusValues } from "@/lib/enrollment-status";
+import { buildTuitionScheduleRows, TUITION_SCHEDULE_HEADERS, tuitionScheduleCells, type TuitionScheduleRow } from "@/lib/tuition-schedule-report";
+import { tuitionScheduleRowsToPdf } from "@/lib/tuition-schedule-pdf";
 import { readSchoolEin } from "@/lib/school-tax-id";
 import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
 import { zonedDateKey } from "@/lib/zoned-date-time";
@@ -125,6 +127,7 @@ export type AnalyticsReportData = {
   };
   centers: ReportCenterOption[];
   enrollmentStatus: EnrollmentStatusReportRow[];
+  tuitionSchedule: TuitionScheduleRow[];
   leadSources: LeadSourceReportRow[];
   funnelStages: FunnelStageReportRow[];
   attendanceTrends: AttendanceTrendReportRow[];
@@ -730,6 +733,7 @@ export async function buildAnalyticsReportData(
 
   const [
     enrollmentChildren,
+    tuitionChildren,
     leads,
     attendanceRecords,
     checkLogs,
@@ -748,15 +752,27 @@ export async function buildAnalyticsReportData(
       orderBy: [{ classroom: { name: "asc" } }, { startDate: "asc" }, { fullName: "asc" }],
       take: 10_000,
       select: {
-        id: true,
-        fullName: true,
-        dateOfBirth: true,
-        startDate: true,
-        ageGroup: true,
-        enrollmentStatus: true,
-        customFields: true,
+        id: true, fullName: true, dateOfBirth: true, startDate: true, ageGroup: true,
+        enrollmentStatus: true, customFields: true,
         family: { select: { centerId: true } },
         classroom: { select: { name: true, ageGroup: true, centerId: true } },
+      },
+    }),
+    // No invoice/amount filter or row cap: missing and $0 tuition stay visible.
+    prisma.child.findMany({
+      where: {
+        enrollmentStatus: { in: currentlyEnrolledStatusValues() },
+        family: { is: { centerId: selectedCenterFilter } },
+        AND: [
+          { OR: [{ classroomId: null }, { classroom: { is: { centerId: selectedCenterFilter } } }] },
+          { OR: [{ startDate: null }, { startDate: { lte: now } }] },
+        ],
+      },
+      orderBy: [{ family: { name: "asc" } }, { fullName: "asc" }, { id: "asc" }],
+      select: {
+        id: true, fullName: true, startDate: true, enrollmentStatus: true, customFields: true,
+        family: { select: { id: true, name: true, centerId: true } },
+        classroom: { select: { name: true, centerId: true } },
       },
     }),
     prisma.lead.findMany({
@@ -876,6 +892,7 @@ export async function buildAnalyticsReportData(
   ]);
 
   const enrollmentStatus = buildEnrollmentStatusReportRows(enrollmentChildren, centerById, endDate);
+  const tuitionSchedule = buildTuitionScheduleRows(tuitionChildren, new Map(selectedCenterIds.map(id => [id, centerById.get(id)!])), now);
   const { leadSources, funnelStages } = buildLeadReports(leads, centerById);
   const attendanceTrends = buildAttendanceReports({ attendanceRecords, checkLogs, centerById, daily });
   const reportInvoices = invoices.map((invoice) => ({
@@ -905,6 +922,7 @@ export async function buildAnalyticsReportData(
     },
     centers,
     enrollmentStatus,
+    tuitionSchedule,
     leadSources,
     funnelStages,
     attendanceTrends,
@@ -943,6 +961,14 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
     centers: data.scope.centerLabels,
     ...REPORT_DEFINITIONS[kind],
   };
+  if (kind === "tuition_schedule") {
+    return {
+      title: "Tuition Schedule Report",
+      traceability: { ...traceability, startDate: data.generatedAt, endDate: data.generatedAt },
+      headers: TUITION_SCHEDULE_HEADERS,
+      rows: data.tuitionSchedule.map(tuitionScheduleCells),
+    };
+  }
   if (kind === "enrollment_status") {
     return {
       title: "Enrollment Status Summary",
@@ -1131,6 +1157,7 @@ function wrapText(text: string, length = 92) {
 }
 
 export function reportRowsToPdf(input: ReportRows, generatedAt = new Date(input.traceability.generatedAt)) {
+  if (input.title === "Tuition Schedule Report") return tuitionScheduleRowsToPdf(input);
   const reportHeader = [
     input.title,
     `Generated ${generatedAt.toISOString()}`,

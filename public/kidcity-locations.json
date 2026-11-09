@@ -141,16 +141,6 @@
       "phone": "407-542-0030"
     },
     {
-      "crmLocationId": "Kid City USA - FL | Saint Cloud",
-      "locationId": "Kid City USA - FL | Saint Cloud",
-      "name": "Kid City USA - St. Cloud",
-      "address": "1422 Virginia Ave.",
-      "city": "St. Cloud",
-      "state": "FL",
-      "postalCode": "34769",
-      "phone": "321-805-4780"
-    },
-    {
       "crmLocationId": "Kid City USA - FL | Sarasota",
       "locationId": "Kid City USA - FL | Sarasota",
       "name": "Kid City USA - Sarasota",
@@ -198,16 +188,6 @@
       "city": "Indianapolis",
       "state": "IN",
       "postalCode": "46234",
-      "phone": "855-543-2489"
-    },
-    {
-      "crmLocationId": "Kid City USA - IN | Bargersville",
-      "locationId": "Kid City USA - IN | Bargersville",
-      "name": "Kid City USA - Bargersville",
-      "address": "2805 South Grove Blvd.",
-      "city": "Bargersville",
-      "state": "IN",
-      "postalCode": "46106",
       "phone": "855-543-2489"
     },
     {
@@ -329,16 +309,6 @@
       "state": "TN",
       "postalCode": "38401",
       "phone": "931-655-0723"
-    },
-    {
-      "crmLocationId": "Kid City USA - TN | Lewisburg",
-      "locationId": "Kid City USA - TN | Lewisburg",
-      "name": "Kid City USA - Lewisburg",
-      "address": "964 N. Ellington Pkwy",
-      "city": "Lewisburg",
-      "state": "TN",
-      "postalCode": "37091",
-      "phone": "931-422-5276"
     },
     {
       "crmLocationId": "Kid City USA - TN | Soddy Daisy",

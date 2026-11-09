@@ -3,6 +3,7 @@ import { canonicalPublicRequestRedirectUrl } from "@/lib/public-app-url";
 import { updateSession } from "@/utils/supabase/middleware";
 
 const PUBLIC_SESSIONLESS_PATHS = new Set([
+  "/platform-payment-return",
   "/app",
   "/brand/the-bee-suite/usage/current",
   "/brand/the-bee-suite/usage/current/",

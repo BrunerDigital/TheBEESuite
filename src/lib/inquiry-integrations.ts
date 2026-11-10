@@ -75,6 +75,10 @@ function sheetValue(value: unknown): GoogleSheetValue {
   return "";
 }
 
+function notificationValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export async function forwardInquiryToGoogleSheets(
   payload: Record<string, unknown>,
 ): Promise<InquiryIntegrationResult> {
@@ -142,16 +146,22 @@ export async function sendInquiryNotificationEmail(
   const effectiveLocationRecipients = externalProviderEmails(requestedLocationRecipients);
 
   const brand = String(payload.brandName || "Kid City USA");
-  const subject = `New ${brand} Inquiry - ${payload.program} - ${payload.locationId || payload.locationName || payload.centerId}`;
+  const locationName = notificationValue(payload.resolvedCenterName) || notificationValue(payload.locationName);
+  const locationLabel = locationName || notificationValue(payload.locationId) || notificationValue(payload.centerId) || "Unknown location";
+  // Submitted metadata stays intact; resolved values only fill presentation gaps.
+  const publicLocationId = notificationValue(payload.publicLocationId) || notificationValue(payload.resolvedLocationId);
+  const city = notificationValue(payload.city) || notificationValue(payload.resolvedCity);
+  const state = notificationValue(payload.state) || notificationValue(payload.resolvedState);
+  const subject = `New ${brand} Inquiry - ${payload.program} - ${locationLabel}`;
   const lines = [
     `Parent: ${payload.parentName}`,
     `Email: ${payload.email}`,
     `Phone: ${payload.phone}`,
     `Program: ${payload.program}`,
     `Location ID: ${payload.locationId}`,
-    `Public Location ID: ${payload.publicLocationId || ""}`,
-    `Location: ${payload.locationName || ""}`,
-    `City/State: ${payload.city || ""}, ${payload.state || ""}`,
+    `Public Location ID: ${publicLocationId || "Not provided"}`,
+    `Location: ${locationName || "Not provided"}`,
+    `City/State: ${[city, state].filter(Boolean).join(", ") || "Not provided"}`,
     `Page: ${payload.pageUrl || ""}`,
     `BEE Suite Lead ID: ${payload.leadId}`,
   ];

@@ -76,6 +76,8 @@ type InquiryPayload = {
 type IntakeCenter = {
   id: string;
   name: string;
+  city: string | null;
+  state: string | null;
   crmLocationId: string | null;
   locationId: string | null;
   email: string | null;
@@ -88,6 +90,8 @@ type IntakeCenterRecord = {
   id: string;
   organizationId: string;
   name: string;
+  city: string | null;
+  state: string | null;
   crmLocationId: string | null;
   locationId: string | null;
   email: string | null;
@@ -113,6 +117,8 @@ const intakeCenterSelect = {
   id: true,
   organizationId: true,
   name: true,
+  city: true,
+  state: true,
   crmLocationId: true,
   locationId: true,
   email: true,
@@ -130,6 +136,8 @@ function toIntakeCenter(center: IntakeCenterRecord): IntakeCenter {
   return {
     id: center.id,
     name: center.name,
+    city: center.city,
+    state: center.state,
     crmLocationId: center.crmLocationId,
     locationId: center.locationId,
     email: center.email,
@@ -721,6 +729,8 @@ async function POSTHandler(request: NextRequest) {
       centerId: center.id,
       tenantId: center.tenantId,
       resolvedCenterName: center.name,
+      resolvedCity: center.city,
+      resolvedState: center.state,
       resolvedCrmLocationId: center.crmLocationId,
       resolvedLocationId: center.locationId,
       leadId: lead.id,

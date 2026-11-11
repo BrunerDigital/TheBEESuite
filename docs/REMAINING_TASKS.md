@@ -1,5 +1,7 @@
 # BEE Suite remaining tasks
 
+Latest PC engineering snapshot: [November 3 task inventory and isolated billing QA](PC_TASK_INVENTORY_2026-11-03.md). It records current source/CI, completed synthetic recovery checks, dependency follow-up and the remaining authenticated/owner gates. The operating counts in this older reconciliation remain dated evidence.
+
 Current reconciliation: October 17, 2026, against production/main `024cbb83`, protected PR history through #489, canonical school readiness and fresh technical verification. Use [the execution checkpoint](COMPLETION_EXECUTION_2026-10-17.md) for complete results/limits and [the 45-school worklist](COMPLETION_SCHOOL_GATES_2026-10-17.csv) for current module gaps. Existing approved operations remain live.
 
 ## Current execution queue

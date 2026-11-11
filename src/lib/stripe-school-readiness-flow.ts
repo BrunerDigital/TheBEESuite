@@ -102,12 +102,12 @@ export function stripeSchoolReadinessFlowFromFields(input: {
 export function stripeMigrationPaymentStatus(input: {
   currentSchoolReady: boolean;
   stripeConfigured: boolean;
-  webhookConfigured: boolean;
+  webhookReadyForCheckout: boolean;
   replacementReadyForCutover: boolean;
 }) {
   const canAcceptParentPayments = input.currentSchoolReady
     && input.stripeConfigured
-    && input.webhookConfigured;
+    && input.webhookReadyForCheckout;
   const currentStatus = canAcceptParentPayments
     ? "Parent payments remain available on the current account."
     : "Parent payments are currently unavailable.";

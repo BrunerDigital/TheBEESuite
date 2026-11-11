@@ -5427,6 +5427,7 @@ async function renderLivePage(
           }),
           stripeConfigured,
           webhookConfigured: stripeWebhookConfigured,
+          allowCheckoutWithoutWebhook: process.env.STRIPE_REQUIRE_WEBHOOK_FOR_CHECKOUT === "false",
           parentProcessingRecoveryApproved: isStripeParentProcessingRecoveryApproved(),
           parentSurchargeBps: getStripeCardProcessingRecoveryBps(),
           parentSurchargeFixedCents: getStripeCardProcessingRecoveryFixedCents(),

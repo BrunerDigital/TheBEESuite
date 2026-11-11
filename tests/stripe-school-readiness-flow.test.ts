@@ -15,12 +15,12 @@ const approval = stripeBillingApprovalCustomFieldPatch({
 });
 
 test("replacement setup cannot claim current payments are active when any payment gate is incomplete", () => {
-  for (const missing of ["currentSchoolReady", "stripeConfigured", "webhookConfigured"] as const) {
+  for (const missing of ["currentSchoolReady", "stripeConfigured", "webhookReadyForCheckout"] as const) {
     for (const replacementReadyForCutover of [false, true]) {
       const status = stripeMigrationPaymentStatus({
         currentSchoolReady: true,
         stripeConfigured: true,
-        webhookConfigured: true,
+        webhookReadyForCheckout: true,
         replacementReadyForCutover,
         [missing]: false,
       });
@@ -36,7 +36,7 @@ test("ready current payments remain distinct from replacement approval", () => {
     const status = stripeMigrationPaymentStatus({
       currentSchoolReady: true,
       stripeConfigured: true,
-      webhookConfigured: true,
+      webhookReadyForCheckout: true,
       replacementReadyForCutover,
     });
     assert.equal(status.canAcceptParentPayments, true);

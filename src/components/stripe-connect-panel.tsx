@@ -17,7 +17,7 @@ import {
 } from "@/lib/payment-disclosures";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { maskStripeAccountId, readStripeConnectMigration } from "@/lib/stripe-connect-migration";
-import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
+import { stripeMigrationPaymentStatusMessage, stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import { stripeReauthorizationHref } from "@/lib/stripe-payout-setup-flow";
 import {
   normalizeStripeConnectSetupInput,
@@ -477,7 +477,7 @@ export function StripeConnectPanel({
           <div className="flex gap-3 rounded-xl border border-blue-300/40 bg-blue-50 p-4 text-sm leading-6 text-slate-800">
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-blue-700" />
             <span>
-              {migrationCount} school{migrationCount === 1 ? " has" : "s have"} a Stripe replacement in progress. Parent payments remain active on each school&apos;s current verified account while the replacement is reviewed. Replacement requirements affect only the future cutover and payout setup; they do not mean parent checkout is unavailable today.
+              {migrationCount} school{migrationCount === 1 ? " has" : "s have"} a Stripe replacement in progress. Each school&apos;s current payment status is shown below. Replacement setup does not by itself enable parent payments.
             </span>
           </div>
         ) : null}
@@ -613,9 +613,12 @@ export function StripeConnectPanel({
                   <TableCell><Badge variant={statusVariant(status)}>{status}</Badge></TableCell>
                   <TableCell className="max-w-xs whitespace-normal text-xs text-muted-foreground">
                     {migrationInProgress
-                      ? migration.status === "ready_for_cutover"
-                        ? "New account authorized and ready for controlled cutover"
-                        : "Parent payments remain active on the current account while the replacement is verified"
+                      ? stripeMigrationPaymentStatusMessage({
+                        currentSchoolReady: flow.canAcceptParentPayments,
+                        stripeConfigured,
+                        webhookConfigured,
+                        replacementReadyForCutover: migration.status === "ready_for_cutover",
+                      })
                       : flow.explanation}
                     {readiness.requirementFields.length
                       ? ` (${readiness.requirementFields.length} item${readiness.requirementFields.length === 1 ? "" : "s"} needed)`

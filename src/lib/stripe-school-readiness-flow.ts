@@ -98,3 +98,22 @@ export function stripeSchoolReadinessFlowFromFields(input: {
     canAcceptParentPayments: stage === "ready",
   };
 }
+
+export function stripeMigrationPaymentStatusMessage(input: {
+  currentSchoolReady: boolean;
+  stripeConfigured: boolean;
+  webhookConfigured: boolean;
+  replacementReadyForCutover: boolean;
+}): string {
+  const currentPaymentsAvailable = input.currentSchoolReady
+    && input.stripeConfigured
+    && input.webhookConfigured;
+  if (input.replacementReadyForCutover) {
+    return currentPaymentsAvailable
+      ? "Current parent payments remain available. The replacement account is ready for the approved switch."
+      : "The replacement account is ready for the approved switch. Current parent payments are not enabled; complete the switch and billing activation before collecting tuition.";
+  }
+  return currentPaymentsAvailable
+    ? "Parent payments remain active on the current account while the replacement is verified."
+    : "Current parent payments are not enabled. Complete Stripe setup and billing activation before collecting tuition.";
+}

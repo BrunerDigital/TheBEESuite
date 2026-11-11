@@ -119,8 +119,17 @@ final class KeyboardUITests: XCTestCase {
         print("EDITOR FRAME \(field.frame)")
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 15), "Real iOS software keyboard is visible")
-        let draft = "Synthetic keyboard draft. Never sent."
-        field.typeText(draft)
+        let draftParts = ["Synthetic", " keyboard", " draft.", " Never", " sent."]
+        let draft = draftParts.joined()
+        var typedDraft = ""
+        // Let WebKit commit each input event before sending the next part.
+        for part in draftParts {
+            app.typeText(part)
+            typedDraft += part
+            eventually("Editor receives the complete input so far") {
+                (field.value as? String) == typedDraft
+            }
+        }
         eventually("Focused field remains above the keyboard") {
             // WebKit may report an invalid hit point while the editor has focus.
             // The typed draft verifies focus. Check visibility with actual frames.
@@ -135,7 +144,7 @@ final class KeyboardUITests: XCTestCase {
         }
         #endif
         evidence("portrait-keyboard-focused")
-        XCTAssertTrue((field.value as? String)?.contains(draft) == true)
+        XCTAssertEqual(field.value as? String, draft)
 
         // Production native apps intentionally support portrait only.
         XCUIDevice.shared.orientation = .landscapeLeft
@@ -151,7 +160,7 @@ final class KeyboardUITests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.1)
         } while ProcessInfo.processInfo.systemUptime < portraitObservationDeadline
         XCTAssertGreaterThan(app.frame.height, app.frame.width)
-        XCTAssertTrue((field.value as? String)?.contains(draft) == true, "Rotation keeps the draft")
+        XCTAssertEqual(field.value as? String, draft, "Rotation keeps the complete draft")
         evidence("rotation-draft-retained")
         XCUIDevice.shared.orientation = .portrait
 
@@ -162,7 +171,7 @@ final class KeyboardUITests: XCTestCase {
         eventually("Keyboard dismisses") { !self.app.keyboards.firstMatch.exists }
         reveal(action)
         XCTAssertTrue(action.isHittable, "Action remains reachable after dismissal")
-        XCTAssertTrue((field.value as? String)?.contains(draft) == true)
+        XCTAssertEqual(field.value as? String, draft)
         evidence("dismissed-keyboard-action-reachable")
         // Never activate the action: this suite tests editing and geometry only.
     }

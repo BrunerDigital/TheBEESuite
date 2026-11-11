@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { stripeBillingApprovalCustomFieldPatch } from "../src/lib/stripe-billing-approval";
-import { stripeMigrationPaymentStatusMessage, stripeSchoolReadinessFlowFromFields } from "../src/lib/stripe-school-readiness-flow";
+import { stripeMigrationPaymentStatus, stripeSchoolReadinessFlowFromFields } from "../src/lib/stripe-school-readiness-flow";
 
 const approvedAt = "2026-08-26T12:00:00.000Z";
 const approval = stripeBillingApprovalCustomFieldPatch({
@@ -17,29 +17,31 @@ const approval = stripeBillingApprovalCustomFieldPatch({
 test("replacement setup cannot claim current payments are active when any payment gate is incomplete", () => {
   for (const missing of ["currentSchoolReady", "stripeConfigured", "webhookConfigured"] as const) {
     for (const replacementReadyForCutover of [false, true]) {
-      const message = stripeMigrationPaymentStatusMessage({
+      const status = stripeMigrationPaymentStatus({
         currentSchoolReady: true,
         stripeConfigured: true,
         webhookConfigured: true,
         replacementReadyForCutover,
         [missing]: false,
       });
-      assert.match(message, /Current parent payments are not enabled/);
-      assert.doesNotMatch(message, /payments remain active|payments remain available/);
+      assert.equal(status.canAcceptParentPayments, false);
+      assert.match(status.explanation, /Parent payments are currently unavailable/);
+      assert.equal(status.explanation.includes("ready for the approved switch"), replacementReadyForCutover);
     }
   }
 });
 
 test("ready current payments remain distinct from replacement approval", () => {
   for (const replacementReadyForCutover of [false, true]) {
-    const message = stripeMigrationPaymentStatusMessage({
+    const status = stripeMigrationPaymentStatus({
       currentSchoolReady: true,
       stripeConfigured: true,
       webhookConfigured: true,
       replacementReadyForCutover,
     });
-    assert.match(message, /payments remain (active|available)/);
-    assert.equal(message.includes("ready for the approved switch"), replacementReadyForCutover);
+    assert.equal(status.canAcceptParentPayments, true);
+    assert.match(status.explanation, /payments remain available/);
+    assert.equal(status.explanation.includes("ready for the approved switch"), replacementReadyForCutover);
   }
 });
 

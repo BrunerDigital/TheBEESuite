@@ -54,7 +54,7 @@ final class KeyboardUITests: XCTestCase {
     }
 
     private func reveal(_ element: XCUIElement) {
-        XCTAssertTrue(element.waitForExistence(timeout: 60))
+        XCTAssertTrue(element.waitForExistence(timeout: 60), "Expected editor or action: \(element)")
         for _ in 0..<16 {
             guard element.exists else {
                 XCTFail("Requested editor or action disappeared while revealing it")
@@ -100,10 +100,10 @@ final class KeyboardUITests: XCTestCase {
 
     func testKeyboardDraftAndRotation() {
         #if TEACHER
-        let shortcut = app.links["Write daily report"]
-        XCTAssertTrue(shortcut.waitForExistence(timeout: 60))
-        reveal(shortcut)
-        shortcut.tap()
+        // Open the report directly to test keyboard behavior independently of the shortcut.
+        let expandReport = app.buttons["Expand Daily Report"]
+        reveal(expandReport)
+        expandReport.tap()
         let field = app.textViews["Teacher note for parents"]
         let action = app.buttons["Save daily report"]
         #else

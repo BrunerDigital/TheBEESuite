@@ -17,7 +17,7 @@ import {
 } from "@/lib/payment-disclosures";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { maskStripeAccountId, readStripeConnectMigration } from "@/lib/stripe-connect-migration";
-import { stripeMigrationPaymentStatusMessage, stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
+import { stripeMigrationPaymentStatus, stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import { stripeReauthorizationHref } from "@/lib/stripe-payout-setup-flow";
 import {
   normalizeStripeConnectSetupInput,
@@ -53,13 +53,6 @@ function fields(value: unknown): Record<string, unknown> {
 
 function text(value: unknown) {
   return typeof value === "string" ? value : "";
-}
-
-function statusLabel(center: StripeConnectCenter) {
-  return stripeSchoolReadinessFlowFromFields({
-    customFields: center.customFields,
-    centerName: center.name,
-  }).label;
 }
 
 function statusVariant(status: string): "default" | "outline" | "secondary" | "destructive" {
@@ -477,7 +470,7 @@ export function StripeConnectPanel({
           <div className="flex gap-3 rounded-xl border border-blue-300/40 bg-blue-50 p-4 text-sm leading-6 text-slate-800">
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-blue-700" />
             <span>
-              {migrationCount} school{migrationCount === 1 ? " has" : "s have"} a Stripe replacement in progress. Each school&apos;s current payment status is shown below. Replacement setup does not by itself enable parent payments.
+              {migrationCount} school{migrationCount === 1 ? " has" : "s have"} a Stripe replacement in progress. Each school&apos;s current payment status is shown below.
             </span>
           </div>
         ) : null}
@@ -592,10 +585,18 @@ export function StripeConnectPanel({
             {localCenters.map((center) => {
               const flow = stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name });
               const readiness = flow.connect;
-              const status = statusLabel(center);
               const hasAccount = maskedAccount(center) !== "Not connected";
               const migration = readStripeConnectMigration(center.customFields);
               const migrationInProgress = Boolean(migration.targetAccountId && !migration.cutoverAt);
+              const migrationPaymentStatus = migrationInProgress ? stripeMigrationPaymentStatus({
+                currentSchoolReady: flow.canAcceptParentPayments,
+                stripeConfigured,
+                webhookConfigured,
+                replacementReadyForCutover: migration.status === "ready_for_cutover",
+              }) : null;
+              const status = flow.canAcceptParentPayments && migrationPaymentStatus?.canAcceptParentPayments === false
+                ? "Payments unavailable"
+                : flow.label;
               return (
                 <TableRow key={center.id}>
                   <TableCell className="font-medium">{center.name}</TableCell>
@@ -612,14 +613,7 @@ export function StripeConnectPanel({
                   </TableCell>
                   <TableCell><Badge variant={statusVariant(status)}>{status}</Badge></TableCell>
                   <TableCell className="max-w-xs whitespace-normal text-xs text-muted-foreground">
-                    {migrationInProgress
-                      ? stripeMigrationPaymentStatusMessage({
-                        currentSchoolReady: flow.canAcceptParentPayments,
-                        stripeConfigured,
-                        webhookConfigured,
-                        replacementReadyForCutover: migration.status === "ready_for_cutover",
-                      })
-                      : flow.explanation}
+                    {migrationPaymentStatus?.explanation ?? flow.explanation}
                     {readiness.requirementFields.length
                       ? ` (${readiness.requirementFields.length} item${readiness.requirementFields.length === 1 ? "" : "s"} needed)`
                       : readiness.pendingVerificationFields.length

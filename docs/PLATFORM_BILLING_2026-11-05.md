@@ -12,9 +12,9 @@ Platform owners in the platform-wide workspace get **BEE Suite Billing** under A
 
 Platform billing uses its own accounts, charges, and invoice history. It never writes family balances or school payout settings. Tenant, regional, school, parent, and auditor roles cannot access this desk or its API. Each payer belongs to the platform owner's identity tenant, independently of the currently selected tenant. Only one outstanding monthly request/subscription is allowed per tenant payer. Request IDs and provider idempotency keys preserve retry safety.
 
-## Release prerequisites
+## Production release
 
-The additive Prisma migration must be reviewed and applied through the approved database release process before enabling this feature. Production migrations and live billing activation are separate gates; neither is performed by this change.
+The approved additive migration was applied on November 5, 2026. On November 11, the production catalog and both migration histories were checked again. Supabase records version `20261105144411`, and the completed Prisma migration `20261105120000_platform_billing` matches the reviewed SQL checksum. The repository's [Supabase mirror](../supabase/migrations/20261105144411_platform_billing.sql) uses that deployed version and the original schema SQL. [Production release evidence](https://github.com/BrunerDigital/TheBEESuite/pull/520).
 
 Use the platform merchant key in `STRIPE_PLATFORM_SECRET_KEY` (or existing platform `STRIPE_SECRET_KEY`). Never use a tenant key here. Optional `STRIPE_PLATFORM_PAYMENT_METHOD_CONFIGURATION_ID` selects a platform payment method configuration with cards enabled; otherwise Checkout uses the platform's dynamic payment methods. The existing platform webhook destination must deliver checkout session lifecycle, invoice paid/failed/action-required, and subscription lifecycle events. Its signing secret is `STRIPE_PLATFORM_WEBHOOK_SECRET` or the existing platform webhook secret. Connected-account and tenant-signed events cannot settle platform charges.
 

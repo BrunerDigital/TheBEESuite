@@ -25,7 +25,7 @@ test("check-payment draft cancellation and billing context isolation", { timeout
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address(); assert.ok(address && typeof address !== "string");
   const base = `http://127.0.0.1:${address.port}`;
-  await withFixtureBrowser(server, () => chromium.launch({ headless: true }), async browser => {
+  await withFixtureBrowser(server, () => chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL }), async browser => {
     async function run(check: (page: Page) => Promise<void>) {
       const page = await browser.newPage();
       page.setDefaultTimeout(10_000);

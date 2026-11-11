@@ -103,17 +103,20 @@ export function StripeConnectPanel({
     [localCenters, setupCenterId],
   );
 
+  const paymentsConfigured = stripeConfigured && webhookConfigured;
   const stats = useMemo(() => {
-    const ready = localCenters.filter((center) => (
-      stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name }).stage === "ready"
-    )).length;
+    const ready = paymentsConfigured
+      ? localCenters.filter((center) => (
+          stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name }).stage === "ready"
+        )).length
+      : 0;
     const started = localCenters.filter((center) => maskedAccount(center) !== "Not connected").length;
     return {
       ready,
       started,
       needsSetup: Math.max(0, localCenters.length - started),
     };
-  }, [localCenters]);
+  }, [localCenters, paymentsConfigured]);
   const migrationCount = useMemo(
     () => localCenters.filter((center) => {
       const migration = readStripeConnectMigration(center.customFields);
@@ -594,9 +597,13 @@ export function StripeConnectPanel({
                 webhookConfigured,
                 replacementReadyForCutover: migration.status === "ready_for_cutover",
               }) : null;
-              const status = flow.canAcceptParentPayments && migrationPaymentStatus?.canAcceptParentPayments === false
-                ? "Payments unavailable"
-                : flow.label;
+              const paymentsAvailable = migrationPaymentStatus?.canAcceptParentPayments
+                ?? (flow.canAcceptParentPayments && paymentsConfigured);
+              const processorUnavailable = flow.canAcceptParentPayments && !paymentsAvailable;
+              const status = processorUnavailable ? "Payments unavailable" : flow.label;
+              const explanation = migrationPaymentStatus?.explanation ?? (processorUnavailable
+                ? "Parent payments are currently unavailable. Check the Stripe and webhook configuration."
+                : flow.explanation);
               return (
                 <TableRow key={center.id}>
                   <TableCell className="font-medium">{center.name}</TableCell>
@@ -613,7 +620,7 @@ export function StripeConnectPanel({
                   </TableCell>
                   <TableCell><Badge variant={statusVariant(status)}>{status}</Badge></TableCell>
                   <TableCell className="max-w-xs whitespace-normal text-xs text-muted-foreground">
-                    {migrationPaymentStatus?.explanation ?? flow.explanation}
+                    {explanation}
                     {readiness.requirementFields.length
                       ? ` (${readiness.requirementFields.length} item${readiness.requirementFields.length === 1 ? "" : "s"} needed)`
                       : readiness.pendingVerificationFields.length

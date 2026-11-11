@@ -5732,6 +5732,7 @@ export type BillingSettingsPageData = {
   softwareBillingCenters: SchoolSoftwareBillingRow[];
   stripeConfigured: boolean;
   webhookConfigured: boolean;
+  allowCheckoutWithoutWebhook: boolean;
   parentProcessingRecoveryApproved: boolean;
   parentSurchargeBps: number;
   parentSurchargeFixedCents: number;
@@ -5911,6 +5912,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         centers={data.centers}
         stripeConfigured={data.stripeConfigured}
         webhookConfigured={data.webhookConfigured}
+        allowCheckoutWithoutWebhook={data.allowCheckoutWithoutWebhook}
         parentProcessingRecoveryApproved={data.parentProcessingRecoveryApproved}
         parentSurchargeBps={data.parentSurchargeBps}
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}

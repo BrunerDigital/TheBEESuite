@@ -24,9 +24,13 @@ final class KeyboardUITests: XCTestCase {
         add(hierarchy)
     }
 
-    private func eventually(_ message: String, _ condition: @escaping () -> Bool) {
-        let predicate = NSPredicate { _, _ in condition() }
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: 15), .completed, message)
+    private func eventually(_ message: String, _ condition: () -> Bool) {
+        let deadline = ProcessInfo.processInfo.systemUptime + 15
+        repeat {
+            if condition() { return }
+            Thread.sleep(forTimeInterval: 0.1)
+        } while ProcessInfo.processInfo.systemUptime < deadline
+        XCTFail(message)
     }
 
     private func evidence(_ name: String) {
@@ -49,8 +53,8 @@ final class KeyboardUITests: XCTestCase {
         guard navigation.exists else { return false }
         let bottom = navigation.frame.minY - 8
         #endif
-        return element.isHittable && frame.minY >= app.frame.height * 0.2
-            && frame.maxY <= bottom
+        return !frame.isEmpty && frame.minY >= app.frame.height * 0.2
+            && frame.maxY <= bottom && element.isHittable
     }
 
     private func reveal(_ element: XCUIElement) {
@@ -118,8 +122,12 @@ final class KeyboardUITests: XCTestCase {
         let draft = "Synthetic keyboard draft. Never sent."
         field.typeText(draft)
         eventually("Focused field remains above the keyboard") {
-            field.isHittable && field.frame.minY >= self.app.webViews.firstMatch.frame.minY
-                && field.frame.maxY <= self.app.keyboards.firstMatch.frame.minY
+            // WebKit may report an invalid hit point while the editor has focus.
+            // The typed draft verifies focus. Check visibility with actual frames.
+            let frame = field.frame
+            let keyboard = self.app.keyboards.firstMatch
+            return keyboard.exists && !frame.isEmpty && self.app.webViews.firstMatch.frame.contains(frame)
+                && frame.maxY <= keyboard.frame.minY
         }
         #if !TEACHER
         eventually("Message action stays reachable above the open keyboard") {

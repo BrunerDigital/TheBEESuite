@@ -42,6 +42,7 @@ type StripeConnectPanelProps = {
   centers: StripeConnectCenter[];
   stripeConfigured: boolean;
   webhookConfigured: boolean;
+  allowCheckoutWithoutWebhook?: boolean;
   parentProcessingRecoveryApproved: boolean;
   parentSurchargeBps: number;
   parentSurchargeFixedCents: number;
@@ -87,6 +88,7 @@ export function StripeConnectPanel({
   centers,
   stripeConfigured,
   webhookConfigured,
+  allowCheckoutWithoutWebhook = false,
 }: StripeConnectPanelProps) {
   const searchParams = useSearchParams();
   const [busyCenterId, setBusyCenterId] = useState<string | null>(null);
@@ -103,7 +105,8 @@ export function StripeConnectPanel({
     [localCenters, setupCenterId],
   );
 
-  const paymentsConfigured = stripeConfigured && webhookConfigured;
+  const webhookReadyForCheckout = webhookConfigured || allowCheckoutWithoutWebhook;
+  const paymentsConfigured = stripeConfigured && webhookReadyForCheckout;
   const stats = useMemo(() => {
     const ready = paymentsConfigured
       ? localCenters.filter((center) => (
@@ -594,7 +597,7 @@ export function StripeConnectPanel({
               const migrationPaymentStatus = migrationInProgress ? stripeMigrationPaymentStatus({
                 currentSchoolReady: flow.canAcceptParentPayments,
                 stripeConfigured,
-                webhookConfigured,
+                webhookReadyForCheckout,
                 replacementReadyForCutover: migration.status === "ready_for_cutover",
               }) : null;
               const paymentsAvailable = migrationPaymentStatus?.canAcceptParentPayments

@@ -1,10 +1,11 @@
 # BEE Suite remaining tasks
 
-Latest PC engineering snapshot: [November 3 task inventory and isolated billing QA](PC_TASK_INVENTORY_2026-11-03.md). It records current source/CI, completed synthetic recovery checks, dependency follow-up and the remaining authenticated/owner gates. The operating counts in this older reconciliation remain dated evidence.
+See [current completion status](CURRENT_COMPLETION_STATUS.md) for November 11 source and deployment reconciliation and the [November 3 PC inventory](PC_TASK_INVENTORY_2026-11-03.md) for the cash/check browser coverage and held proposals.
 
-Current reconciliation: October 17, 2026, against production/main `024cbb83`, protected PR history through #489, canonical school readiness and fresh technical verification. Use [the execution checkpoint](COMPLETION_EXECUTION_2026-10-17.md) for complete results/limits and [the 45-school worklist](COMPLETION_SCHOOL_GATES_2026-10-17.csv) for current module gaps. Existing approved operations remain live.
+## Operational follow-up from October 17, 2026
 
-## Current execution queue
+The [execution checkpoint](COMPLETION_EXECUTION_2026-10-17.md) and [school worklist](COMPLETION_SCHOOL_GATES_2026-10-17.csv) record the observations behind this queue. Refresh counts and owner decisions against the exact targets before acting. Existing approved operations remain live.
+
 
 | Priority / owner | Concrete remaining action | Evidence needed to close |
 | --- | --- | --- |
@@ -15,7 +16,7 @@ Current reconciliation: October 17, 2026, against production/main `024cbb83`, pr
 | P0/P1 — communication owners | Review 107 failed SendGrid deliveries, 52 failed payout SMS and two pending SMS in the rolling 14-day inventory; resolve sender/recipient causes | Exact recipient/template/consent/dedupe previews and actual delivery/reply outcomes; no implicit resend or provider/suppression change |
 | P1 — QA/operations owners | Supply current secure synthetic credentials, finish positive two-school role/device workflows, alert/escalation drills, repaired-worker schedule observation and degraded-provider/concurrency checks | Dated workflow/isolation/logout/device results, alert receipt and rollback ownership; public smoke/static checks do not close operational acceptance |
 | P1 — school/training owners | Review the released narrated library/overview, finish school-specific parent/support training, select reviewed import or intentional empty start and approved waves | Named reviewers, reconciliations, cutover windows, support and module GO/HOLD records; archive source reports recoverably after approval |
-| P1 — Apple/device owner | Test current Parent/Teacher builds on a physical iPhone; finish source-matched signing/disclosures/TestFlight/submission decisions | Authenticated physical-device and authorized Apple receipts; static repository and unsigned native CI are already verified |
+| P1 — Apple/device owner | Test current Parent/Teacher builds on a physical iPhone; finish source-matched signing/disclosures/TestFlight/submission decisions | Authenticated physical-device and authorized Apple receipts; track exact-source repository and unsigned checks in [iOS verification](https://github.com/BrunerDigital/TheBEESuite/actions/workflows/ios-native-verify.yml?query=branch%3Amain) |
 | P1 — engineering/upstream | Resolve the unpatched development-only braces advisory in the lint/glob chain | Patched upstream release or reviewed compatible replacement and full validation. Five audit findings share this root advisory; production audit is clean. UUID's separate native-tooling advisory is corrected in this pass. |
 | P2/P3 — product/business owners | Explicitly include or defer commercial/legal/public-launch extras and expansion modules | Named scope/acceptance; Android, native push, universal links and new modules remain separately scoped |
 

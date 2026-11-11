@@ -31,10 +31,11 @@ jobs:
       - name: Verify cron and migration manifests
         run: npm run ops:check
 
-      - name: Install browser for isolated billing component regressions
-        run: npx playwright install --with-deps chromium
-
       - name: Verify billing drafts, documents and offline payment recovery
-        run: node --import tsx --test tests/billing-check-draft.browser.ts tests/offline-payment-recovery.browser.ts
+        env:
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
+        run: |
+          google-chrome --version
+          node --import tsx --test tests/billing-check-draft.browser.ts tests/offline-payment-recovery.browser.ts
 
 # manual trigger for required validate status

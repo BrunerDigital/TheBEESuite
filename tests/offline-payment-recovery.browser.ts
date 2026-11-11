@@ -87,7 +87,7 @@ test("offline cash/check submission and interrupted receipt recovery", { timeout
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address(); assert.ok(address && typeof address !== "string");
   const base = `http://127.0.0.1:${address.port}`;
-  await withFixtureBrowser(server, () => chromium.launch({ headless: true }), async browser => {
+  await withFixtureBrowser(server, () => chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL }), async browser => {
     async function run(
       handleApi: (payload: FixtureRequest, route: Route) => Promise<void>,
       check: (page: Page, requests: FixtureRequest[]) => Promise<void>,

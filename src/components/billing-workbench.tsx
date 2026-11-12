@@ -2091,8 +2091,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setAssignmentAdditionalCharges(additionalChargeInputs);
         setAssignmentBillingDay(billingDay);
         setLastSavedTuitionDraftSignature(JSON.stringify({
-          enabled: "true", cadence: nextSchedule.cadence, billingDay, tuitionPlanId: savedRateId,
-          invoiceDelayWeeks: assignmentInvoiceDelayWeeks,
+          enabled: "true", cadence: nextSchedule.cadence, billingDay,
+          invoiceDelayWeeks: assignmentInvoiceDelayWeeks, tuitionPlanId: savedRateId,
           startPeriod: nextSchedule.startsPeriod, description: savedChildDescription,
           credits: creditInputs, additionalCharges: additionalChargeInputs,
         }));

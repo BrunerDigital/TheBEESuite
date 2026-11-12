@@ -15,6 +15,11 @@ export function schoolTuitionBillingAllowed(customFields: unknown) {
     && fields.billingPaused !== true;
 }
 
+export function parentTuitionCadenceChangesDisabled(customFields: unknown) {
+  if (!customFields || typeof customFields !== "object" || Array.isArray(customFields)) return false;
+  return (customFields as Record<string, unknown>).parentTuitionCadenceChangesDisabled === true;
+}
+
 export function parseCurrencyCents(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return Math.round(value * 100);
   const normalized = clean(value).replace(/[$,\s]/g, "");

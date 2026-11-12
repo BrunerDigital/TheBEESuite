@@ -189,6 +189,7 @@ import {
   normalizeRecurringBillingDay,
   normalizeRecurringBillingPeriod,
   normalizeTuitionInvoiceDelayWeeks,
+  parentTuitionCadenceChangesDisabled,
   recurringDueDateForPeriod,
   shouldCreateRecurringTuitionInvoice,
   tuitionInvoiceBillingPeriod,
@@ -3231,6 +3232,7 @@ async function renderLivePage(
         checkoutReadiness={parentCheckoutReadiness}
         paymentsReadOnly={verifiedAppReviewKind === "parent"}
         appReviewMode={verifiedAppReviewKind === "parent"}
+        tuitionCadenceManagedBySchool={parentTuitionCadenceChangesDisabled(familyCenter?.customFields)}
         paymentTransitionActive={paymentTransitionActive}
         paymentMethodReauthorizationRequired={paymentMethodReauthorizationRequired}
         paymentMethodReauthorizationPreservesAutopay={paymentMethodReauthorizationPreservesAutopay}

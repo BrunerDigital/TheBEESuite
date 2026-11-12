@@ -1,6 +1,6 @@
 # BEE Suite remaining tasks
 
-See [current completion status](CURRENT_COMPLETION_STATUS.md) for November 11 source and deployment reconciliation and the [November 3 PC inventory](PC_TASK_INVENTORY_2026-11-03.md) for the cash/check browser coverage and held proposals.
+See [current completion status](CURRENT_COMPLETION_STATUS.md) for the November 12 web release, database audit, school readiness and browser evidence. Use the [November 3 PC inventory](PC_TASK_INVENTORY_2026-11-03.md) for the dated cash/check browser coverage and held proposals.
 
 ## Operational follow-up from October 17, 2026
 

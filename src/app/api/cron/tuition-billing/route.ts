@@ -109,14 +109,16 @@ async function GETHandler(request: NextRequest) {
     const amountCents = plan.amountCents > 0 ? plan.amountCents : entry.snapshotAmountCents;
     const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(normalizeTuitionAdditionalCharges(entry.fields.tuitionAdditionalCharges));
     const tuitionCreditsTotalCents = totalTuitionCreditsCents(normalizeTuitionCredits(entry.fields.tuitionCredits));
-    if (tuitionCreditsTotalCents >= amountCents + tuitionAdditionalChargesTotalCents) {
+    if (tuitionCreditsTotalCents > amountCents + tuitionAdditionalChargesTotalCents) {
       configurationFailures.push({
         childId: entry.child.id,
         familyId: entry.child.familyId,
-        error: "Recurring tuition is paused because saved credits are not less than gross tuition. Review the assignment before billing.",
+        error: "Recurring tuition is paused because saved credits exceed gross tuition. Review the assignment before billing.",
       });
       return [];
     }
+    // A full recurring discount is valid and leaves no family charge to invoice.
+    if (tuitionCreditsTotalCents === amountCents + tuitionAdditionalChargesTotalCents) return [];
     const cadence = normalizeBillingCadence(entry.fields.tuitionBillingCadence ?? plan?.cadence ?? entry.fields.tuitionPlanCadence);
     if (cadenceScope && cadence !== cadenceScope) return [];
     const weekBased = cadence === "weekly" || cadence === "biweekly" || cadence === "four_week";

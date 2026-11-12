@@ -271,8 +271,8 @@ async function saveAssignment(tx: Prisma.TransactionClient, user: CurrentBilling
   }
   const tuitionGrossAmountCents = plan.amountCents + tuitionAdditionalChargesTotalCents;
   const tuitionNetAmountCents = tuitionGrossAmountCents - tuitionCreditsTotalCents;
-  if (!voucherFunded && tuitionCreditsTotalCents >= tuitionGrossAmountCents) {
-    tuitionMutationFailure(400, "Credits must be less than the gross recurring tuition rate.");
+  if (!voucherFunded && tuitionCreditsTotalCents > tuitionGrossAmountCents) {
+    tuitionMutationFailure(400, "Credits cannot exceed the gross recurring tuition rate.");
   }
 
   const updated = await (async () => {
@@ -296,7 +296,7 @@ async function saveAssignment(tx: Prisma.TransactionClient, user: CurrentBilling
           tuitionGrossAmountCents,
           tuitionNetAmountCents,
           tuitionFundingType: voucherFunded ? "voucher" : "family",
-          tuitionAutobillEligible: !voucherFunded,
+          tuitionAutobillEligible: !voucherFunded && tuitionNetAmountCents > 0,
           tuitionBillingDay: billingDay,
           tuitionBillingStartsPeriod: billingStartPeriod,
           tuitionBillingInvoiceDelayWeeks: invoiceDelayWeeks,
@@ -371,7 +371,7 @@ async function saveAssignment(tx: Prisma.TransactionClient, user: CurrentBilling
       tuitionGrossAmountCents,
       tuitionNetAmountCents,
       fundingType: voucherFunded ? "voucher" : "family",
-      invoicesScheduled: !voucherFunded,
+      invoicesScheduled: !voucherFunded && tuitionNetAmountCents > 0,
       cadence,
       billingDay,
       billingStartPeriod,

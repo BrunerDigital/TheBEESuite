@@ -97,6 +97,10 @@ async function POSTHandler(request: NextRequest) {
     if (!plan || plan.centerId !== entry.child.family.centerId) return [];
     const cadence = normalizeBillingCadence(entry.fields.tuitionBillingCadence ?? plan.cadence ?? entry.fields.tuitionPlanCadence);
     if (cadence !== "weekly") return [];
+    const grossAmountCents = (plan.amountCents > 0 ? plan.amountCents : entry.snapshotAmountCents)
+      + totalTuitionAdditionalChargesCents(normalizeTuitionAdditionalCharges(entry.fields.tuitionAdditionalCharges));
+    const creditAmountCents = totalTuitionCreditsCents(normalizeTuitionCredits(entry.fields.tuitionCredits));
+    if (creditAmountCents === grossAmountCents) return [];
     const startsPeriod = defaultRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
     if (!shouldCreateRecurringTuitionInvoice({
       enabled: true,
@@ -146,8 +150,8 @@ async function POSTHandler(request: NextRequest) {
         const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(tuitionAdditionalCharges);
         const tuitionCredits = normalizeTuitionCredits(entry.fields.tuitionCredits);
         const tuitionCreditsTotalCents = totalTuitionCreditsCents(tuitionCredits);
-        if (tuitionCreditsTotalCents >= amountCents + tuitionAdditionalChargesTotalCents) {
-          throw new Error(`Weekly credits must be less than tuition for child ${entry.child.id}.`);
+        if (tuitionCreditsTotalCents > amountCents + tuitionAdditionalChargesTotalCents) {
+          throw new Error(`Weekly credits cannot exceed tuition for child ${entry.child.id}.`);
         }
         const invoiceWeekCount = tuitionInvoiceWeekCount(entry.cadence);
         const dueDate = weeklyTuitionChargeDateForPeriod(entry.billingPeriod);

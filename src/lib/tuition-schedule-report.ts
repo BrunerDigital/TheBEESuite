@@ -69,8 +69,7 @@ export function buildTuitionScheduleRows(
     const savedNet = cents(fields.tuitionNetAmountCents);
     const rateCents = assigned ? savedNet ?? (calculatedNet !== null && calculatedNet >= 0 ? calculatedNet : null) : null;
     const inconsistentNet = savedNet !== null && calculatedNet !== null && savedNet !== calculatedNet;
-    const needsReview = !child.classroom || !cadence || rateCents === null || inconsistentNet
-      || (gross !== null && gross > 0 && rateCents === 0);
+    const needsReview = !child.classroom || !cadence || rateCents === null || inconsistentNet;
     const status = !assigned ? "Not assigned"
       : needsReview ? "Needs review"
       : fields.tuitionBillingEnabled !== true ? "Disabled"

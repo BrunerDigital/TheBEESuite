@@ -1905,8 +1905,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       const childEligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
       if (childEligibilityError) return setErrorMessage(childEligibilityError);
     }
-    if (!assignmentIsVoucherFunded && assignmentEnabled === "true" && effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents) {
-      return setErrorMessage("Credits must be less than the gross recurring tuition rate.");
+    if (!assignmentIsVoucherFunded && assignmentEnabled === "true" && effectiveAssignmentCreditsTotalCents > effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents) {
+      return setErrorMessage("Credits cannot exceed the gross recurring tuition rate.");
     }
     const action = assignmentIsVoucherFunded
       ? "save a $0 CCDF or voucher-funded tuition assignment"
@@ -1943,7 +1943,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         assignmentIsVoucherFunded
           ? `$0.00 CCDF or voucher-funded tuition saved for ${selectedAssignmentChild.fullName}. No family invoice or autopay is scheduled.`
           : assignmentEnabled === "true"
-          ? effectiveAssignmentCadence === "monthly"
+          ? effectiveAssignmentNetCents === 0
+            ? `Full recurring discount saved for ${selectedAssignmentChild.fullName}. No family invoice or autopay is scheduled while the net tuition is $0.`
+            : effectiveAssignmentCadence === "monthly"
             ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} per month. Monthly invoice creation is scheduled for day ${effectiveAssignmentBillingDay}.`
             : `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} net per week. ${effectiveAssignmentCadence === "four_week" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 4)} and cover four weeks ahead.` : effectiveAssignmentCadence === "biweekly" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 2)} and cover two weeks ahead.` : "Thursday invoice creation is scheduled for the following week."}`
           : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
@@ -2001,8 +2003,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (applyToChild && selectedAssignmentChild) {
       const eligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
       if (eligibilityError) return setErrorMessage(eligibilityError);
-      if (planFundingType !== "voucher" && effectiveAssignmentCreditsTotalCents >= planAmountCents + effectiveAssignmentAdditionalChargesTotalCents) {
-        return setErrorMessage("Credits must be less than the gross recurring tuition rate.");
+      if (planFundingType !== "voucher" && effectiveAssignmentCreditsTotalCents > planAmountCents + effectiveAssignmentAdditionalChargesTotalCents) {
+        return setErrorMessage("Credits cannot exceed the gross recurring tuition rate.");
       }
       if (!confirmBillingAction("save this rate and recurring child tuition", selectedAssignmentChild.fullName)) return;
     }
@@ -3315,9 +3317,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <DisplayValue
                   label={effectiveAssignmentCadence === "four_week" ? "Every-4-weeks invoice" : effectiveAssignmentCadence === "biweekly" ? "Biweekly invoice" : `Net ${effectiveRateCadence} invoice`}
                   value={money(effectiveAssignmentInvoiceCents)}
-                  detail={effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents && !assignmentIsVoucherFunded
-                    ? "Credits must be less than gross tuition"
-                    : "Amount added to the family ledger"}
+                  detail={effectiveAssignmentCreditsTotalCents > effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents && !assignmentIsVoucherFunded
+                    ? "Credits cannot exceed gross tuition"
+                    : effectiveAssignmentInvoiceCents === 0 && !assignmentIsVoucherFunded
+                      ? "Fully discounted; no recurring family charge"
+                      : "Amount added to the family ledger"}
                 />
               </div>
             </details>
@@ -3336,7 +3340,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
-                disabled={isPending || !selectedFamily || !selectedAssignmentChild || (assignmentEnabled === "true" && (!selectedAssignmentChildIsCurrent || !effectiveAssignmentPlanId || (!assignmentIsVoucherFunded && effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)))}
+                disabled={isPending || !selectedFamily || !selectedAssignmentChild || (assignmentEnabled === "true" && (!selectedAssignmentChildIsCurrent || !effectiveAssignmentPlanId || (!assignmentIsVoucherFunded && effectiveAssignmentCreditsTotalCents > effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)))}
                 onClick={submitAssignment}
               >
                 <CalendarClock data-icon="inline-start" />

@@ -35,7 +35,7 @@ test("tuition cron isolates invoice transactions and reports per-child failures"
   assert.match(route, /configurationFailed: configurationFailures\.length/);
   assert.match(route, /plan\.amountCents > 0 \? plan\.amountCents : entry\.snapshotAmountCents/);
   assert.match(route, /console\.error\("\[tuition-billing\] assignments paused for invalid credit configuration"/);
-  assert.match(route, /Recurring tuition is paused because saved credits are not less than gross tuition/);
+  assert.match(route, /Recurring tuition is paused because saved credits exceed gross tuition/);
   assert.match(route, /status: failures\.length \? 500 : 200/);
   assert.doesNotMatch(route, /prisma\.\$transaction\(async \(tx\) => \{\s*let transactionCreated/);
 });

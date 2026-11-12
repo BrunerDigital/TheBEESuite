@@ -272,3 +272,39 @@ test('combined voucher save preserves zero family responsibility without changin
     reset(); await assertRejectedUnchanged({ tuitionPlanDraft: draft({ amountDollars: '0.00', zeroDollarVoucher: true }), ...patch }, 400, /voucher-funded/); assert.equal(fixture.rateWrites, 1);
   }
 });
+
+
+test('full employee discount saves as family tuition without changing invoices or balances', async () => {
+  reset();
+  const originalInvoices = structuredClone(fixture.state.invoices);
+  const response = await POST(request({ tuitionPlanDraft: draft({ amountDollars: '254.00' }), tuitionCredits: [{ category: 'employee_discount', amountCents: 25400 }] }));
+  const body = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(body));
+  const fields = fixture.state.children[0].customFields;
+  assert.equal(fields.tuitionGrossAmountCents, 25400);
+  assert.equal(fields.tuitionCreditsTotalCents, 25400);
+  assert.equal(fields.tuitionNetAmountCents, 0);
+  assert.equal(fields.tuitionFundingType, 'family');
+  assert.equal(fields.tuitionAutobillEligible, false);
+  assert.equal(fields.tuitionBillingEnabled, true);
+  assert.deepEqual(fields.tuitionCredits, [{ category: 'employee_discount', amountCents: 25400 }]);
+  assert.equal(fixture.state.account.balanceCents, 1234);
+  assert.deepEqual(fixture.state.invoices, originalInvoices);
+  assert.equal(fixture.state.audits.length, 2);
+  assert.equal(fixture.state.audits.find(row => row.action === 'billing.tuition_assignment.enabled').metadata.invoicesScheduled, false);
+});
+
+test('credits above gross still reject and roll back a combined rate save', async () => {
+  reset();
+  await assertRejectedUnchanged({ tuitionPlanDraft: draft({ amountDollars: '254.00' }), tuitionCredits: [{ category: 'employee_discount', amountCents: 25401 }] }, 400, /cannot exceed/);
+});
+
+test('reducing a full discount restores positive family tuition eligibility', async () => {
+  reset();
+  fixture.state.children[0].customFields.tuitionNetAmountCents = 0;
+  fixture.state.children[0].customFields.tuitionAutobillEligible = false;
+  const response = await POST(request({ tuitionCredits: [{ category: 'employee_discount', amountCents: 12500 }] }));
+  assert.equal(response.status, 200);
+  assert.equal(fixture.state.children[0].customFields.tuitionNetAmountCents, 10000);
+  assert.equal(fixture.state.children[0].customFields.tuitionAutobillEligible, true);
+});

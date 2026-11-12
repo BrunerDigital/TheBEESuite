@@ -5,6 +5,8 @@ import { NextRequest } from "next/server";
 process.env.CRON_SECRET = "test-cron-secret";
 
 let cadence = "weekly";
+let testCredits = [];
+let testAdditionalCharges = [];
 let startsPeriod = "2026-W41";
 let pauseAfterPreflight = false;
 let centerFields = { tuitionBillingEnabled: true };
@@ -20,6 +22,8 @@ const childFields = () => ({
   tuitionBillingEnabled: true,
   tuitionPlanId: "plan-1",
   tuitionPlanAmountCents: 10000,
+  tuitionCredits: testCredits,
+  tuitionAdditionalCharges: testAdditionalCharges,
   tuitionBillingCadence: cadence,
   tuitionBillingInvoiceDelayWeeks: invoiceDelayWeeks,
   ...(startsPeriod ? { tuitionBillingStartsPeriod: startsPeriod } : {}),
@@ -186,4 +190,37 @@ test("default biweekly invoice timing remains one week ahead of coverage", async
   assert.equal(invoiceMetadata.coverageStartsPeriod, "2026-W42");
   assert.equal(invoiceDueDate.toISOString(), "2026-10-08T12:00:00.000Z");
   assert.equal(invoiceMetadata.tuitionBillingInvoiceDelayWeeks, undefined);
+});
+
+
+test("full discounts skip recurring charges without configuration failures across cadences", async () => {
+  for (const cycle of ["weekly", "biweekly", "four_week", "monthly"]) {
+    cadence = cycle;
+    startsPeriod = cycle === "monthly" ? "2026-10" : "2026-W41";
+    invoiceDelayWeeks = 0;
+    testAdditionalCharges = [{ description: "Additional care", amountCents: 2500 }];
+    testCredits = [{ category: "employee_discount", amountCents: 12500 }];
+    centerFields = { tuitionBillingEnabled: true }; pauseAfterPreflight = false;
+    transactions = 0; invoices = 0; locks = [];
+    const result = await run();
+    assert.equal(result.body.configurationFailed, 0, JSON.stringify(result.body));
+    assert.equal(result.body.created, 0);
+    assert.equal(result.body.dueChildren, 0);
+    assert.equal(transactions, 0);
+    assert.equal(invoices, 0);
+  }
+  testCredits = []; testAdditionalCharges = [];
+});
+
+test("over-discounted tuition remains blocked with a configuration failure", async () => {
+  cadence = "weekly"; startsPeriod = "2026-W41"; invoiceDelayWeeks = 0;
+  centerFields = { tuitionBillingEnabled: true }; pauseAfterPreflight = false;
+  testCredits = [{ category: "employee_discount", amountCents: 10001 }];
+  transactions = 0; invoices = 0;
+  const result = await run();
+  assert.equal(result.body.configurationFailed, 1);
+  assert.equal(result.body.created, 0);
+  assert.equal(transactions, 0);
+  assert.equal(invoices, 0);
+  testCredits = [];
 });

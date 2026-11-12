@@ -29,8 +29,8 @@ async function main() {
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address(); assert.ok(address && typeof address !== "string");
   const base = "http://127.0.0.1:" + address.port;
-  await withFixtureBrowser(server, () => chromium.launch({ headless: true }), async browser => {
-    for (const scenario of ["saved", "assignment-failed", "voucher", "save-assignment-button", "custom-label", "renamed-rate", "new-biweekly", "new-four-week", "unrelated-rate-draft", "existing-rate", "disabled", "cancelled"]) {
+  await withFixtureBrowser(server, () => chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }), async browser => {
+    for (const scenario of ["full-discount", "saved", "assignment-failed", "voucher", "save-assignment-button", "custom-label", "renamed-rate", "new-biweekly", "new-four-week", "unrelated-rate-draft", "existing-rate", "disabled", "cancelled"]) {
       const page = await browser.newPage();
       const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
       const dialogs: string[] = [];
@@ -62,6 +62,12 @@ async function main() {
         await page.getByRole("option", { name: /Fake alternate/ }).click();
         await page.locator("#billing-rate-family-amount").fill("220");
       } else await page.locator("#billing-rate-family-amount").fill("200");
+      if (scenario === "full-discount") {
+        await page.locator("summary").filter({ hasText: "Recurring invoice credits" }).click();
+        await page.locator("#billing-tuition-credit-employee_discount").fill("200");
+        await page.getByText("Fully discounted; no recurring family charge", { exact: true }).waitFor();
+        assert.equal(await page.getByRole("button", { name: "Save Rate & Child Tuition", exact: true }).isDisabled(), false);
+      }
       if (scenario === "custom-label") await page.locator("#billing-assignment-description").fill("Custom child invoice label");
       if (scenario === "renamed-rate") await page.locator("#billing-rate-name").fill("Fake renamed rate");
       if (newChild) {
@@ -105,6 +111,7 @@ async function main() {
         const assignment = writes[0];
         assert.equal(assignment.path, "/api/billing/tuition-assignments");
         assert.equal(assignment.body.childId, "fake-child-1");
+        if (scenario === "full-discount") assert.deepEqual(assignment.body.tuitionCredits, [{ category: "employee_discount", amountCents: 20000 }]);
         assert.equal(assignment.body.tuitionPlanId, undefined);
         const rateDraft = assignment.body.tuitionPlanDraft as Record<string, unknown> | undefined;
         assert.ok(rateDraft);

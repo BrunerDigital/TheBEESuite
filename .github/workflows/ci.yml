@@ -31,11 +31,12 @@ jobs:
       - name: Verify cron and migration manifests
         run: npm run ops:check
 
-      - name: Verify billing drafts, documents and offline payment recovery
+      - name: Verify billing drafts, tuition saves and offline payment recovery
         env:
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
         run: |
           google-chrome --version
           node --import tsx --test tests/billing-check-draft.browser.ts tests/offline-payment-recovery.browser.ts
+          node --import tsx scripts/qa-tuition-save.ts
 
 # manual trigger for required validate status

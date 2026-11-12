@@ -427,6 +427,7 @@
     "normalizeRecurringBillingPeriod",
     "normalizeTuitionInvoiceDelayWeeks",
     "normalizeWeeklyBillingPeriod",
+    "parentTuitionCadenceChangesDisabled",
     "parseCurrencyCents",
     "recurringDueDateForPeriod",
     "schoolTuitionBillingAllowed",

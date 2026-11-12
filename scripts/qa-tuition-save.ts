@@ -51,6 +51,8 @@ async function main() {
       });
       const newChild = scenario.startsWith("new-");
       await page.goto(base + (newChild ? "?new-child" : ""));
+      await page.getByRole("tab", { name: "Tuition & Fees", exact: true }).click();
+      await page.locator("summary").filter({ hasText: "School tuition rates" }).click();
       if (scenario === "voucher") {
         await page.locator("#billing-rate-funding").click();
         await page.getByRole("option", { name: /No family charge/ }).click();

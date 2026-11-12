@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../src/lib/prisma";
 import { evaluateDatabaseSecurityPosture, type DatabaseSecurityPosture } from "../src/lib/security-readiness";
 
@@ -51,10 +52,11 @@ async function main() {
     `,
   ]);
 
+  // Prisma's implicit _LeadTags relation and _prisma_migrations metadata
+  // tables are present in the public schema alongside the generated models.
+  const schemaTableCount = Object.keys(Prisma.ModelName).length + 2;
   const posture: DatabaseSecurityPosture = {
-    // 102 Prisma models plus Prisma's implicit _LeadTags relation table and
-    // _prisma_migrations metadata table are present in the public schema.
-    expectedPublicTableCount: Number(process.env.EXPECTED_PUBLIC_TABLE_COUNT ?? "104"),
+    expectedPublicTableCount: Number(process.env.EXPECTED_PUBLIC_TABLE_COUNT ?? schemaTableCount),
     publicTableCount: Number(counts[0]?.public_table_count ?? 0),
     rlsEnabledCount: Number(counts[0]?.rls_enabled_count ?? 0),
     tablesWithoutRls: noRls.map((row) => row.name),

@@ -1,5 +1,12 @@
 # Current BEE Suite completion status
 
+## November 12, 2026 release and operations check
+
+- **Web release.** Full recurring tuition discounts skip charge creation, and the Parent Portal respects the school’s billing-cycle policy. Both canonical web domains served these fixes and reported a connected database. [Discount fix](https://github.com/BrunerDigital/TheBEESuite/pull/527) · [School-managed tuition cycles](https://github.com/BrunerDigital/TheBEESuite/pull/528) · [Production deployments](https://vercel.com/brunerdigital/the-bee-suite/deployments).
+- **Database audit.** The audit now derives its expected public-table count from the generated Prisma models and the two existing auxiliary tables. The read-only production run found all 107 public tables with row-level security enabled and no findings.
+- **School readiness.** A fresh setup, parent-invitation, kiosk and billing audit covered 44 active schools. The school-level worklist records the exact evidence each owner needs to review before expanding rollout. Use the [pilot readiness script](../scripts/pilot-readiness-check.ts) to refresh the worklist and the [remaining tasks](REMAINING_TASKS.md) for acceptance criteria.
+- **Browser and iOS verification.** Public smoke and isolated Director browser checks passed. The reserved Teacher reviewer passed desktop and mobile browser checks, including role isolation and session revocation. The reserved Parent browser check requires a current credential. Both unsigned iOS jobs passed at the verified web baseline. Signed distribution and authenticated physical-device acceptance are open. [iOS verification](https://github.com/BrunerDigital/TheBEESuite/actions/runs/43290434209) · [Physical-device evidence packet](MOBILE_APP_PHYSICAL_DEVICE_EVIDENCE_PACKET.md).
+
 ## November 11, 2026 release reconciliation
 
 At the start of this pass, both production domains served GitHub main at `94c088a0`. The public smoke suite passed and `/api/health` reported a connected database. Use the [GitHub main history](https://github.com/BrunerDigital/TheBEESuite/commits/main/) and [Vercel deployment history](https://vercel.com/brunerdigital/the-bee-suite/deployments) for the latest source and alias assignment.

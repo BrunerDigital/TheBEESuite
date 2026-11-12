@@ -377,6 +377,7 @@ type Props = {
   checkoutReadiness?: StripeCheckoutReadiness;
   paymentsReadOnly?: boolean;
   appReviewMode?: boolean;
+  tuitionCadenceManagedBySchool?: boolean;
   paymentTransitionActive?: boolean;
   paymentMethodReauthorizationRequired?: boolean;
   paymentMethodReauthorizationPreservesAutopay?: boolean;
@@ -718,6 +719,7 @@ function ParentPortalWorkspaceView({
   checkoutReadiness = fallbackCheckoutReadiness,
   paymentsReadOnly = false,
   appReviewMode = false,
+  tuitionCadenceManagedBySchool = false,
   paymentTransitionActive = false,
   paymentMethodReauthorizationRequired = false,
   paymentMethodReauthorizationPreservesAutopay = false,
@@ -3191,7 +3193,15 @@ function ParentPortalWorkspaceView({
                 </AlertDescription>
               </Alert>
             ) : null}
-            {!appReviewMode && family.children.some(
+            {!appReviewMode && tuitionCadenceManagedBySchool ? (
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="font-medium">Tuition billing cycle</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your school sets the billing cycle. Pay tuition in advance by the due date on your invoice.
+                </p>
+              </div>
+            ) : null}
+            {!appReviewMode && !tuitionCadenceManagedBySchool && family.children.some(
               (child) =>
                 child.tuitionAssignment?.enabled &&
                 child.tuitionAssignment.cadence !== "monthly" &&

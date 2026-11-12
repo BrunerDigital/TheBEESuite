@@ -55,6 +55,36 @@ test("zero-dollar, disabled and missing tuition stay visible even without a bill
   assert.equal(tuitionScheduleCells(byId.get("missing")!)[6], "Not assigned");
 });
 
+test("full recurring discounts keep zero tuition visible in reports and exports for every cadence", () => {
+  const rows = buildTuitionScheduleRows(["weekly", "biweekly", "four_week", "monthly"].map(cadence => child(cadence, {
+    tuitionBillingCadence: cadence, tuitionNetAmountCents: 0,
+    tuitionAdditionalCharges: [{ description: "Extended care", amountCents: 2000 }],
+    tuitionCredits: [{ category: "employee_discount", amountCents: 14000 }],
+  })), centers, now);
+  assert.equal(rows.length, 4);
+  for (const row of rows) {
+    assert.equal(row.status, "$0 family tuition");
+    assert.equal(row.rateCents, 0);
+    assert.equal(row.invoiceCents, 0);
+    assert.equal(tuitionScheduleCells(row)[6], "$0.00");
+  }
+  const report = rowsForReportKind({ generatedAt: now.toISOString(), range: { startDate: now.toISOString(), endDate: now.toISOString() }, scope: { centerIds: ["school-a"], centerLabels: ["School A"] }, tuitionSchedule: rows } as AnalyticsReportData, "tuition_schedule");
+  assert.match(reportRowsToCsv(report), /\$0\.00/);
+  assert.doesNotMatch(reportRowsToCsv(report), /Needs review/);
+  assert.match(reportRowsToPdf(report).toString(), /\$0\.00/);
+});
+
+test("excess credits and a zero total without matching credits remain report exceptions", () => {
+  const rows = buildTuitionScheduleRows([
+    child("excess", { tuitionCredits: [{ category: "employee_discount", amountCents: 12001 }] }),
+    child("inconsistent-zero", { tuitionNetAmountCents: 0 }),
+  ], centers, now);
+  for (const row of rows) {
+    assert.equal(row.status, "Needs review");
+    assert.equal(row.invoiceCents, null);
+  }
+});
+
 test("roster snapshot excludes withdrawn, pending and future-start children independently of activity dates", () => {
   const rows = buildTuitionScheduleRows([
     child("current"), { ...child("withdrawn"), enrollmentStatus: "withdrawn" },

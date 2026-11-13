@@ -278,13 +278,16 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     };
   }
 
+  const cursorInvoiceId = input.invoiceId || input.invoiceIds?.length ? null : input.cursorInvoiceId;
+  // The anchor can leave the open-invoice filter when it is paid. Exclude its
+  // ID explicitly so pagination never discards the first remaining invoice.
+  if (cursorInvoiceId) invoiceWhere.id = { not: cursorInvoiceId };
+
   const invoiceCandidates = await prisma.invoice.findMany({
     where: invoiceWhere,
     orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
     take: limit + 1,
-    ...(input.cursorInvoiceId && !input.invoiceId && !input.invoiceIds?.length
-      ? { cursor: { id: input.cursorInvoiceId }, skip: 1 }
-      : {}),
+    ...(cursorInvoiceId ? { cursor: { id: cursorInvoiceId } } : {}),
     include: {
       items: { select: { description: true } },
       billingAccount: {

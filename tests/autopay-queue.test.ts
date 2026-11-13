@@ -146,6 +146,17 @@ test("scheduled autopay uses a stable total invoice order for cursor pagination"
   assert.match(processing, /orderBy: \[\{ dueDate: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\]/);
 });
 
+test("autopay page excludes the anchor by ID when paying it removed it from the open-invoice filter", () => {
+  const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
+  const query = processing.slice(
+    processing.indexOf("const invoiceCandidates = await"),
+    processing.indexOf("const hasMore = invoiceCandidates"),
+  );
+  assert.match(processing, /if \(cursorInvoiceId\) invoiceWhere\.id = \{ not: cursorInvoiceId \}/);
+  assert.match(query, /cursor: \{ id: cursorInvoiceId \}/);
+  assert.doesNotMatch(query, /\bskip:/);
+});
+
 test("scheduled autopay blocks later family invoices after finding a prior failed attempt", () => {
   const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
   assert.match(

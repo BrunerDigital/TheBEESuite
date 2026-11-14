@@ -152,7 +152,11 @@ export async function sendInquiryNotificationEmail(
   const publicLocationId = notificationValue(payload.publicLocationId) || notificationValue(payload.resolvedLocationId);
   const city = notificationValue(payload.city) || notificationValue(payload.resolvedCity);
   const state = notificationValue(payload.state) || notificationValue(payload.resolvedState);
-  const subject = `New ${brand} Inquiry - ${payload.program} - ${locationLabel}`;
+  // Keep unrelated inquiries out of the same mailbox conversation without
+  // exposing parent/child details. Retries retain the same opaque reference.
+  const leadId = notificationValue(payload.leadId);
+  const inquiryReference = /^[a-z0-9_-]{8,64}$/i.test(leadId) ? ` [Inquiry ${leadId}]` : "";
+  const subject = `New ${brand} Inquiry - ${payload.program} - ${locationLabel}${inquiryReference}`;
   const lines = [
     `Parent: ${payload.parentName}`,
     `Email: ${payload.email}`,

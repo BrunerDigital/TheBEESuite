@@ -18,7 +18,7 @@ test("fixed-center notifications use the school name and resolved metadata witho
   const before = structuredClone(payload);
   const result = await fixture.send(payload, ["school@example.invalid"]);
   const message = fixture.sent[0];
-  assert.equal(message.subject, "New Example Learning Center Inquiry - Daycare - Example Learning Center - Centennial");
+  assert.equal(message.subject, "New Example Learning Center Inquiry - Daycare - Example Learning Center - Centennial [Inquiry lead_fixture]");
   assert.match(message.text, /Public Location ID: Example Learning Center - CO \| Centennial/);
   assert.match(message.text, /City\/State: Centennial, CO/);
   assert.match(message.text, /Location ID: center_fixture/);
@@ -37,7 +37,7 @@ test("notifications retain submitted public metadata when present and prefer the
   await fixture.send({ ...base, locationName: "Outdated label", resolvedCenterName: "Verified school",
     publicLocationId: "public-submitted", resolvedLocationId: "public-resolved",
     city: "Submitted City", state: "FL", resolvedCity: "Resolved City", resolvedState: "CO" }, ["school@example.invalid"]);
-  assert.equal(fixture.sent[0].subject, "New Example Learning Center Inquiry - Daycare - Verified school");
+  assert.equal(fixture.sent[0].subject, "New Example Learning Center Inquiry - Daycare - Verified school [Inquiry lead_fixture]");
   assert.match(fixture.sent[0].text, /Public Location ID: public-submitted/);
   assert.match(fixture.sent[0].text, /City\/State: Submitted City, FL/);
 });
@@ -46,7 +46,7 @@ test("legacy payloads use readable names and mark genuinely missing metadata exp
   const fixture = notificationFixture();
   await fixture.send({ ...base, locationName: " Legacy school ", publicLocationId: "  ", city: "", state: "" }, ["school@example.invalid"]);
   const message = fixture.sent[0];
-  assert.equal(message.subject, "New Example Learning Center Inquiry - Daycare - Legacy school");
+  assert.equal(message.subject, "New Example Learning Center Inquiry - Daycare - Legacy school [Inquiry lead_fixture]");
   assert.match(message.text, /Public Location ID: Not provided/);
   assert.match(message.text, /City\/State: Not provided/);
   assert.doesNotMatch(message.text, /undefined|City\/State: ,/);
@@ -55,10 +55,10 @@ test("legacy payloads use readable names and mark genuinely missing metadata exp
 test("identifier fallbacks and partial geography remain useful without stray commas", async () => {
   const fixture = notificationFixture();
   await fixture.send({ ...base, state: "CO" }, ["school@example.invalid"]);
-  assert.match(fixture.sent[0].subject, / - center_fixture$/);
+  assert.match(fixture.sent[0].subject, / - center_fixture \[Inquiry lead_fixture\]$/);
   assert.match(fixture.sent[0].text, /City\/State: CO\n/);
   await fixture.send({ ...base, locationId: "", city: "Centennial" }, ["school@example.invalid"]);
-  assert.match(fixture.sent[1].subject, / - center_fixture$/);
+  assert.match(fixture.sent[1].subject, / - center_fixture \[Inquiry lead_fixture\]$/);
   assert.match(fixture.sent[1].text, /City\/State: Centennial\n/);
 });
 

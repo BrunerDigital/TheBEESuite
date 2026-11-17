@@ -323,7 +323,7 @@ test("stale Checkout completion cannot overwrite a newer recoverable failure", a
 test("parent ledger query includes every provisional ACH processing state", async () => {
   const page = await readFile("src/app/[slug]/page.tsx", "utf8");
   const source = await readFile("src/lib/parent-payment-history.ts", "utf8");
-  assert.match(page, /import \{ parentPaymentHistoryWhere \} from "@\/lib\/parent-payment-history"/);
+  assert.match(page, /import \{[^}]*\bparentPaymentHistoryWhere\b[^}]*\} from "@\/lib\/parent-payment-history"/);
   assert.match(page, /payments: \{\s*where: parentPaymentHistoryWhere,/);
   assert.match(source, /provider: "stripe",\s*status: "DRAFT",\s*OR:/);
   for (const status of [

@@ -25,11 +25,41 @@ export const parentPaymentHistoryWhere = {
   ],
 } satisfies Prisma.PaymentWhereInput;
 
+export type ParentPaidInvoiceReference = {
+  number: string;
+  dueDate: Date | string;
+  childName: string | null;
+};
+
+function recordFields(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+export function parentPaidInvoiceReferences(
+  paymentId: string,
+  invoices: ReadonlyArray<Pick<ParentPaidInvoiceReference, "number" | "dueDate"> & {
+    status: string;
+    customFields: unknown;
+  }>,
+  childNames: ReadonlyMap<string, string>,
+): ParentPaidInvoiceReference[] {
+  return invoices.flatMap((invoice) => {
+    const fields = recordFields(invoice.customFields);
+    if (invoice.status !== "PAID" || fields.paymentId !== paymentId) return [];
+    const childId = typeof fields.childId === "string" ? fields.childId.trim() : "";
+    return [{
+      number: invoice.number,
+      dueDate: invoice.dueDate,
+      childName: childNames.get(childId) ?? null,
+    }];
+  });
+}
+
 /** Presentation only. Keep the original payment distinct from money later refunded. */
 export function paymentRefundDetails(payment: { status: string; customFields?: unknown }) {
-  const fields = payment.customFields && typeof payment.customFields === "object" && !Array.isArray(payment.customFields)
-    ? payment.customFields as Record<string, unknown>
-    : {};
+  const fields = recordFields(payment.customFields);
   const amount = fields.stripeAmountRefundedCents;
   const refundedCents = typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0 ? amount : null;
   if (payment.status === "REFUNDED") return { label: "Refunded", refundedCents };

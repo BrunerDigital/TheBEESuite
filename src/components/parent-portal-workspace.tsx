@@ -19,7 +19,7 @@ import type { RecordPagination } from "@/lib/record-pagination";
 import { remainingParentIncidentCount } from "@/lib/parent-attention";
 import { canCompactParentAccount } from "@/lib/parent-home-account";
 import { parentFamilyPaymentPanelVisible } from "@/lib/parent-family-payment-panel";
-import { paymentRefundDetails } from "@/lib/parent-payment-history";
+import { paymentRefundDetails, type ParentPaidInvoiceReference } from "@/lib/parent-payment-history";
 import { parentActivePaymentSummary, parentPaymentStatusMessage, parentPaymentStatusTitle, type ParentAccountPaymentBlocker, type ParentPendingPayment } from "@/lib/parent-payment-status";
 import { activeItemScrollDelta } from "@/lib/horizontal-active-item";
 import { revealFocusedPortalControl, scheduleFocusedPortalControlReveal } from "@/lib/focused-portal-control";
@@ -161,6 +161,8 @@ type Payment = {
   centerTimeZone?: string | null;
   status: string;
   provider: string;
+  isAutopay?: boolean;
+  paidInvoiceReferences?: ParentPaidInvoiceReference[];
   paidAt: string | Date | null;
   externalIdPlaceholder?: string | null;
   invoiceNumber?: string | null;
@@ -581,12 +583,26 @@ function paymentListLabel(payment: Payment, timeZone: string) {
   return displayTokenLabel(payment.status);
 }
 
-function paymentProviderLabel(provider: string) {
-  if (provider === "stripe") return "Online payment";
-  if (provider === "stripe_terminal") return "In-person card payment";
-  if (provider === "manual_check") return "Check payment";
-  if (provider === "manual_cash") return "Cash payment";
+function paymentProviderLabel(payment: Payment) {
+  if (payment.provider === "stripe") return payment.isAutopay ? "Autopay" : "Online payment";
+  if (payment.provider === "stripe_terminal") return "In-person card payment";
+  if (payment.provider === "manual_check") return "Check payment";
+  if (payment.provider === "manual_cash") return "Cash payment";
   return "Other payment";
+}
+
+function PaidInvoiceReferences({ references }: { references?: ParentPaidInvoiceReference[] }) {
+  if (!references?.length) return null;
+  return (
+    <ul role="list" aria-label="Paid invoices" className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+      {references.map((invoice) => (
+        <li key={invoice.number} className="wrap-break-word">
+          {invoice.childName ? `${invoice.childName} · ` : ""}
+          {invoice.number} · Due {formatInvoiceDueDate(invoice.dueDate)}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function formatFileSize(bytes: number) {
@@ -1671,7 +1687,7 @@ function ParentPortalWorkspaceView({
     if (
       action === "enable_autopay" &&
       !window.confirm(
-        "Enable autopay? Open invoices are processed on or after their due date. Account credit is applied first, and the selected saved method pays any remaining balance. Weekly tuition invoices are created separately.",
+        "Enable autopay?\n\nAutopay uses account credit first, then charges your saved payment method for eligible invoices. Overdue invoices can be collected on the next daily run. New invoices are eligible on their due date. Each child's invoice can appear as a separate charge.",
       )
     )
       return;
@@ -3323,8 +3339,9 @@ function ParentPortalWorkspaceView({
                         <div key={payment.id} className="grid min-w-0 gap-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto]">
                           <div>
                             <span className="text-muted-foreground">
-                              {paymentProviderLabel(payment.provider)} · {paymentListLabel(payment, timeZone)}
+                              {paymentProviderLabel(payment)} · {paymentListLabel(payment, timeZone)}
                             </span>
+                            {completed && !refund ? <PaidInvoiceReferences references={payment.paidInvoiceReferences} /> : null}
                             {completed && family ? (
                               <div className="mt-2">
                                 <PaymentReceiptPrintButton
@@ -3455,9 +3472,10 @@ function ParentPortalWorkspaceView({
                     >
                       <div>
                         <span className="text-muted-foreground">
-                          {paymentProviderLabel(payment.provider)} ·{" "}
+                          {paymentProviderLabel(payment)} ·{" "}
                           {paymentListLabel(payment, timeZone)}
                         </span>
+                        {completed && !refund ? <PaidInvoiceReferences references={payment.paidInvoiceReferences} /> : null}
                         {completed && family ? (
                           <div className="mt-2">
                             <PaymentReceiptPrintButton
@@ -3594,7 +3612,7 @@ function ParentPortalWorkspaceView({
                       <p className="text-xs text-muted-foreground">
                         {parentBalanceReviewRequired
                           ? "Enter the family portion you want to pay."
-                          : advancePayment ? "Enter the amount to pay ahead. Excess is held as household credit." : "Enter a custom amount to split the balance across payment methods, or leave blank to pay the full balance."}
+                          : advancePayment ? "Enter the amount to pay ahead. Excess is held as household credit." : "Enter a custom amount to split the balance across payment methods, or leave it blank to pay the full balance. Family balance payments go to the oldest open invoices first."}
                       </p>
                       {accountPaymentAmountInvalid ? (
                         <p className="text-xs text-destructive">

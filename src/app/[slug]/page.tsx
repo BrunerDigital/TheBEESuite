@@ -156,7 +156,7 @@ import {
   jsonRecord,
 } from "@/lib/billing-guardrails";
 import { parentPaymentStatus } from "@/lib/parent-payment-status";
-import { parentPaymentHistoryWhere } from "@/lib/parent-payment-history";
+import { parentPaidInvoiceReferences, parentPaymentHistoryWhere } from "@/lib/parent-payment-history";
 import { directorPaymentProgress } from "@/lib/director-payment-progress";
 import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
 import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
@@ -2985,10 +2985,10 @@ async function renderLivePage(
     const parentPaymentInvoices = parentPaymentInvoiceIds.length && billingAccount
       ? await prisma.invoice.findMany({
           where: { id: { in: parentPaymentInvoiceIds }, billingAccountId: billingAccount.id },
-          select: { id: true, number: true },
+          select: { id: true, number: true, dueDate: true, status: true, customFields: true },
         })
       : [];
-    const parentPaymentInvoiceNumberById = new Map(parentPaymentInvoices.map((invoice) => [invoice.id, invoice.number]));
+    const parentPaymentInvoiceById = new Map(parentPaymentInvoices.map((invoice) => [invoice.id, invoice]));
     const parentPaymentCenterIds = [...new Set(
       (billingAccount?.payments ?? [])
         .map((payment) => stringField(recordFromJson(payment.customFields).centerId))
@@ -3017,15 +3017,20 @@ async function renderLivePage(
       const paymentCenterId = stringField(fields.centerId) || resolvedParentCenterId;
       const paymentCenter = (paymentCenterId ? parentPaymentCenterById.get(paymentCenterId) : null)
         ?? (paymentCenterId === familyCenter?.id ? familyCenter : null);
-      const invoiceNumbers = paymentAppliedInvoiceIds(fields)
-        .map((invoiceId) => parentPaymentInvoiceNumberById.get(invoiceId))
-        .filter((number): number is string => Boolean(number));
+      const linkedInvoices = paymentAppliedInvoiceIds(fields)
+        .map((invoiceId) => parentPaymentInvoiceById.get(invoiceId))
+        .filter((invoice) => invoice !== undefined);
+      const invoiceNumbers = linkedInvoices.map((invoice) => invoice.number);
       const checkoutTotalCents = numberField(fields.checkoutTotalCents);
       const processingRecoveryCents = checkoutTotalCents === null
         ? 0
         : Math.max(0, checkoutTotalCents - payment.amountCents);
       return {
         ...payment,
+        isAutopay: fields.collectionMode === "autopay",
+        paidInvoiceReferences: payment.status === PaymentStatus.PAID
+          ? parentPaidInvoiceReferences(payment.id, linkedInvoices, invoiceChildNames)
+          : [],
         amountCents: checkoutTotalCents ?? payment.amountCents,
         principalAmountCents: payment.amountCents,
         processingRecoveryCents,

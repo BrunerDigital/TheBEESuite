@@ -11,6 +11,7 @@ import {
   markRegistrationPaymentChecklistPaid,
   parsePacketContactLines,
   registrationGuardianIsBillingContact,
+  registrationPacketSubmissionFields,
   registrationReviewFromData,
   registrationReviewTransitionError,
   registrationSubmissionSummary,
@@ -33,6 +34,7 @@ test("registration approval refuses duplicate or post-approval review writes", (
   assert.equal(registrationReviewTransitionError("rejected", "APPROVED"), null);
   assert.equal(registrationReviewTransitionError("submitted", "APPROVED"), null);
 });
+import { usesFloridaRegistrationPacket } from "../src/lib/registration-handoff";
 import { INTERNAL_SIGNATURE_PENDING_KEY } from "../src/lib/signature-capture";
 
 test("registration packet schema includes final operational sections without tenant-specific branding", () => {
@@ -50,6 +52,40 @@ test("registration packet schema includes final operational sections without ten
     "food_media_uniforms",
     "financial_handbook_acknowledgments",
   ]);
+});
+
+test("a Texas school packet excludes Florida-only fields throughout intake and review", () => {
+  assert.equal(usesFloridaRegistrationPacket("TX"), false);
+  assert.equal(usesFloridaRegistrationPacket(null), false);
+  assert.equal(usesFloridaRegistrationPacket(" FL "), true);
+  assert.equal(usesFloridaRegistrationPacket("Florida"), true);
+
+  const packet = {
+    centerId: "texas-school",
+    primaryGuardianName: "Jane Bee",
+    elc4cExpirationDate: "2027-08-01",
+    floridaKnowYourChildcareAcknowledgment: true,
+    floridaDistractedAdultAcknowledgment: true,
+    dcfInspectionAccessAcknowledgment: true,
+    physicalImmunizationThirtyDayAcknowledgment: true,
+    emergencyMedicalPermission: true,
+  } as RegistrationPacketPayload;
+  const floridaKeys = ["elc4cExpirationDate", "floridaKnowYourChildcareAcknowledgment",
+    "floridaDistractedAdultAcknowledgment", "dcfInspectionAccessAcknowledgment",
+    "physicalImmunizationThirtyDayAcknowledgment"];
+  const schoolSchema = kidCityRegistrationPacketSchema(false);
+  const schoolFields = schoolSchema.sections.flatMap(({ fields }) => fields.map(({ key }) => key));
+  const submitted = registrationPacketSubmissionFields(packet, false);
+  for (const key of floridaKeys) {
+    assert.equal(schoolFields.some(field => field === key), false);
+    assert.equal(Object.hasOwn(submitted, key), false);
+  }
+  assert.equal(submitted.emergencyMedicalPermission, true);
+  assert.deepEqual(registrationPacketSubmissionFields(packet, true), packet);
+  const schoolPreview = buildRegistrationReviewPreview({ ...packet, registrationPacketScope: "school" });
+  assert.equal(schoolPreview.sections.some(({ label }) => label.includes("Florida")), false);
+  const legacyPreview = buildRegistrationReviewPreview(packet);
+  assert.equal(legacyPreview.sections.some(({ label }) => label.includes("Florida")), true);
 });
 
 test("registration document requests include base signatures and conditional restricted uploads", () => {

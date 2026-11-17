@@ -37,6 +37,11 @@ export function resolveRegistrationHandoffCenter(
   return matches.length === 1 ? matches[0].id : "";
 }
 
+export function usesFloridaRegistrationPacket(state: string | null | undefined) {
+  const normalized = normalizedSelector(state);
+  return normalized === "fl" || normalized === "florida";
+}
+
 export function registrationLeadLookupWhere(centerId: string, email: string) {
   return {
     centerId: centerId.trim(),

@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DocumentStatus, EnrollmentStage, UserRole } from "@prisma/client";
+import { DocumentStatus, EnrollmentStage, UserRole, type Prisma } from "@prisma/client";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { prisma } from "@/lib/prisma";
-import { registrationLeadLookupWhere } from "@/lib/registration-handoff";
+import { registrationLeadLookupWhere, usesFloridaRegistrationPacket } from "@/lib/registration-handoff";
 import {
   cleanText,
   kidCityRegistrationPacketSchema,
   normalizeEmailText,
   normalizeScheduleDays,
+  registrationPacketSubmissionFields,
   type RegistrationPacketPayload,
 } from "@/lib/registration-packet";
 
@@ -261,8 +262,8 @@ function validationErrors(payload: RegistrationPayload) {
   return errors;
 }
 
-function existingCustomFields(value: unknown) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+function existingCustomFields(value: Prisma.JsonValue | undefined): Prisma.JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function addDays(days: number) {
@@ -304,6 +305,8 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Selected school is not available for online registration." }, { status: 404 });
     }
 
+    const floridaPacket = usesFloridaRegistrationPacket(center.state);
+    const registrationPacketScope = floridaPacket ? "florida" : "school";
     const [parentFirstName, parentLastName] = splitName(payload.primaryGuardianName);
     const existingLead = await prisma.lead.findFirst({
       where: registrationLeadLookupWhere(center.id, payload.primaryGuardianEmail),
@@ -332,6 +335,7 @@ async function POSTHandler(request: NextRequest) {
         ...existingCustomFields(existingLead?.customFields),
         intakeType: "online_registration",
         registrationStatus: "submitted",
+        registrationPacketScope,
         schoolName: center.name,
         crmLocationId: center.crmLocationId,
         childPreferredName: payload.childPreferredName,
@@ -384,7 +388,7 @@ async function POSTHandler(request: NextRequest) {
         healthPolicyAcknowledgment: payload.healthPolicyAcknowledgment,
         pageUrl: payload.pageUrl,
         submittedAt: new Date().toISOString(),
-        kidCityFloridaMarch2026Packet: {
+        [floridaPacket ? "kidCityFloridaMarch2026Packet" : "onlineRegistrationPacket"]: {
           childAddress: payload.childAddress,
           siblingNamesAges: payload.siblingNamesAges,
           childProfile: {
@@ -410,15 +414,17 @@ async function POSTHandler(request: NextRequest) {
             insurancePolicyNumber: payload.insurancePolicyNumber,
             immunizationExpirationDate: payload.immunizationExpirationDate,
             physicalExpirationDate: payload.physicalExpirationDate,
-            elc4cExpirationDate: payload.elc4cExpirationDate,
+            ...(floridaPacket ? { elc4cExpirationDate: payload.elc4cExpirationDate } : {}),
           },
           permissions: {
             photoVideoReleaseChoice: payload.photoVideoReleaseChoice,
             firstAidEmergencyConsent: payload.firstAidEmergencyConsent,
-            floridaKnowYourChildcareAcknowledgment: payload.floridaKnowYourChildcareAcknowledgment,
-            floridaDistractedAdultAcknowledgment: payload.floridaDistractedAdultAcknowledgment,
-            dcfInspectionAccessAcknowledgment: payload.dcfInspectionAccessAcknowledgment,
-            physicalImmunizationThirtyDayAcknowledgment: payload.physicalImmunizationThirtyDayAcknowledgment,
+            ...(floridaPacket ? {
+              floridaKnowYourChildcareAcknowledgment: payload.floridaKnowYourChildcareAcknowledgment,
+              floridaDistractedAdultAcknowledgment: payload.floridaDistractedAdultAcknowledgment,
+              dcfInspectionAccessAcknowledgment: payload.dcfInspectionAccessAcknowledgment,
+              physicalImmunizationThirtyDayAcknowledgment: payload.physicalImmunizationThirtyDayAcknowledgment,
+            } : {}),
             nutritionPolicyAcknowledgment: payload.nutritionPolicyAcknowledgment,
             foodActivityPermission: payload.foodActivityPermission,
             foodActivityAllergyChoice: payload.foodActivityAllergyChoice,
@@ -471,10 +477,17 @@ async function POSTHandler(request: NextRequest) {
           select: { id: true, stage: true },
         });
 
+    const formId = floridaPacket ? "online-registration-packet" : "online-registration-school-packet";
+    const formFields = {
+      name: floridaPacket ? "Online Registration Packet" : "Online Registration Information",
+      type: "online_registration",
+      schema: kidCityRegistrationPacketSchema(floridaPacket),
+      status: "active",
+    };
     const form = await prisma.form.upsert({
-      where: { id: "online-registration-packet" },
-      update: { name: "Online Registration Packet", type: "online_registration", schema: kidCityRegistrationPacketSchema(), status: "active" },
-      create: { id: "online-registration-packet", name: "Online Registration Packet", type: "online_registration", schema: kidCityRegistrationPacketSchema(), status: "active" },
+      where: { id: formId },
+      update: formFields,
+      create: { id: formId, ...formFields },
     });
 
     const submission = await prisma.formSubmission.create({
@@ -484,7 +497,8 @@ async function POSTHandler(request: NextRequest) {
         signaturePlaceholder: true,
         submittedAt: new Date(),
         data: {
-          ...payload,
+          ...registrationPacketSubmissionFields(payload, floridaPacket),
+          registrationPacketScope,
           centerName: center.name,
           crmLocationId: center.crmLocationId,
           city: center.city,

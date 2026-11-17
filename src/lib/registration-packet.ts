@@ -443,13 +443,36 @@ export const kidCityRegistrationPacketSections: PacketSection[] = [
   },
 ];
 
-export function kidCityRegistrationPacketSchema() {
+const floridaRegistrationFields: ReadonlySet<keyof RegistrationPacketPayload> = new Set([
+  "elc4cExpirationDate",
+  "floridaKnowYourChildcareAcknowledgment",
+  "floridaDistractedAdultAcknowledgment",
+  "dcfInspectionAccessAcknowledgment",
+  "physicalImmunizationThirtyDayAcknowledgment",
+]);
+
+function registrationPacketSections(florida: boolean) {
+  return florida ? kidCityRegistrationPacketSections : kidCityRegistrationPacketSections.map((section) => ({
+    ...section,
+    label: section.id === "permissions" ? "Release permissions and safety consents" : section.label,
+    fields: section.fields.filter(({ key }) => !floridaRegistrationFields.has(key)),
+  }));
+}
+
+export function kidCityRegistrationPacketSchema(florida = true) {
   return {
     version: 3,
     source: "public_online_registration",
-    title: "Online Registration Packet - Florida March 2026",
-    sections: kidCityRegistrationPacketSections,
+    title: florida ? "Online Registration Packet - Florida March 2026" : "Online Registration Information",
+    sections: registrationPacketSections(florida),
   };
+}
+
+export function registrationPacketSubmissionFields(packet: RegistrationPacketPayload, florida: boolean) {
+  if (florida) return packet;
+  const fields: Partial<RegistrationPacketPayload> = { ...packet };
+  for (const key of floridaRegistrationFields) delete fields[key];
+  return fields;
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {
@@ -551,7 +574,7 @@ function registrationPreviewValue(key: keyof RegistrationPacketPayload, value: u
 
 export function buildRegistrationReviewPreview(data: unknown): RegistrationReviewPreview {
   const record = asRecord(data);
-  const sections = kidCityRegistrationPacketSections
+  const sections = registrationPacketSections(record.registrationPacketScope !== "school")
     .map((section) => ({
       id: section.id,
       label: section.label,

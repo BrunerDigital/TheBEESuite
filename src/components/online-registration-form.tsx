@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { usesFloridaRegistrationPacket } from "@/lib/registration-handoff";
 
 type CenterOption = {
   id: string;
@@ -467,7 +468,10 @@ export function OnlineRegistrationForm({
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<SubmitResult | null>(null);
   const resultSummaryRef = useRef<HTMLDivElement | null>(null);
+  const [selectedCenterId, setSelectedCenterId] = useState(initialCenterId);
   const lockedCenter = centers.find((center) => center.id === initialCenterId);
+  const selectedCenter = lockedCenter ?? centers.find((center) => center.id === selectedCenterId);
+  const floridaPacket = usesFloridaRegistrationPacket(selectedCenter?.state);
 
   const groupedCenters = useMemo(() => {
     const groups = new Map<string, CenterOption[]>();
@@ -508,6 +512,7 @@ export function OnlineRegistrationForm({
           return;
         }
         formElement.reset();
+        setSelectedCenterId(initialCenterId);
         setResult(json);
       } catch {
         setResult({ error: "We could not reach the registration service. Your information remains in the form; check your connection and try again." });
@@ -584,7 +589,7 @@ export function OnlineRegistrationForm({
                 </p>
               </>
             ) : (
-              <Select name="centerId" defaultValue={initialCenterId} required>
+              <Select<string> name="centerId" value={selectedCenterId} onValueChange={(value) => setSelectedCenterId(value ?? "")} required>
                 <SelectTrigger id="centerId" className={registrationSelectTriggerClassName}>
                   <SelectValue placeholder="Choose a school" />
                 </SelectTrigger>
@@ -743,7 +748,7 @@ export function OnlineRegistrationForm({
           <TextField id="immunizationStatus" label="Immunization status" />
           <TextField id="immunizationExpirationDate" label="Immunization expiration date" type="date" />
           <TextField id="physicalExpirationDate" label="Physical expiration date" type="date" />
-          <TextField id="elc4cExpirationDate" label="4C / ELC expiration date" type="date" />
+          {floridaPacket ? <TextField id="elc4cExpirationDate" label="4C / ELC expiration date" type="date" /> : null}
           <TextAreaField id="restrictedPickups" label="Restricted pickup people" placeholder="Names and restrictions the director must review." />
           <TextAreaField id="custodyNotes" label="Custody or restricted pickup notes" placeholder="Visible only to authorized staff after review." />
         </CardContent>
@@ -766,10 +771,18 @@ export function OnlineRegistrationForm({
           <CheckboxCard name="firstAidEmergencyConsent" required>
             {`I give consent for ${brandName} staff to provide first aid and, if necessary, transport my child for emergency care.`}
           </CheckboxCard>
-          <CheckboxCard name="floridaKnowYourChildcareAcknowledgment" required>I have received, read, and understand the Know Your Childcare Facility information.</CheckboxCard>
-          <CheckboxCard name="floridaDistractedAdultAcknowledgment" required>I have received, read, and understand the Distracted Adult Flyer.</CheckboxCard>
-          <CheckboxCard name="dcfInspectionAccessAcknowledgment" required>I understand DCF licensing authority may access, photograph, record, and copy child care records for inspections.</CheckboxCard>
-          <CheckboxCard name="physicalImmunizationThirtyDayAcknowledgment" required>I understand current physical and immunization records are required within 30 days of enrollment.</CheckboxCard>
+          {floridaPacket ? (
+            <>
+              <CheckboxCard name="floridaKnowYourChildcareAcknowledgment" required>I have received, read, and understand the Know Your Childcare Facility information.</CheckboxCard>
+              <CheckboxCard name="floridaDistractedAdultAcknowledgment" required>I have received, read, and understand the Distracted Adult Flyer.</CheckboxCard>
+              <CheckboxCard name="dcfInspectionAccessAcknowledgment" required>I understand DCF licensing authority may access, photograph, record, and copy child care records for inspections.</CheckboxCard>
+              <CheckboxCard name="physicalImmunizationThirtyDayAcknowledgment" required>I understand current physical and immunization records are required within 30 days of enrollment.</CheckboxCard>
+            </>
+          ) : selectedCenter ? (
+            <p className="text-sm text-muted-foreground md:col-span-2">
+              The school will provide any additional state-specific enrollment paperwork.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

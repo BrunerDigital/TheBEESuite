@@ -1,5 +1,11 @@
 # Current BEE Suite completion status
 
+## November 17, 2026 release and operations check
+
+- **Next.js patch.** The 16.4.6 dependency update is Ready in production at `5c69779b`. GitHub CI and CodeQL passed for the merged commit. The apex, www, and beta endpoints returned healthy responses with a connected database. Parent, teacher, director, support, resources, and registration pages returned HTTP 200. [PR #533](https://github.com/BrunerDigital/TheBEESuite/pull/533) · [Production deployment](https://vercel.com/brunerdigital/the-bee-suite/4gvQQfs6fqWuAjjsUZmbnov5L2RE).
+- **School readiness.** A read-only inventory on November 17 found 44 active schools and 174 blocked school/module combinations. A scheduled autopay request at 10:30 a.m. Eastern returned HTTP 200. Family settlement and school launch remain subject to the current records and owner review.
+- **Registration packet.** The public form uses the school’s saved state to show Florida-specific fields only at Florida locations. Other locations can receive the common registration information and provide their own state-specific forms. Existing submissions continue to use their saved review data.
+
 ## November 12, 2026 release and operations check
 
 - **Web release.** Full recurring tuition discounts skip charge creation, and the Parent Portal respects the school’s billing-cycle policy. Both canonical web domains served these fixes and reported a connected database. [Discount fix](https://github.com/BrunerDigital/TheBEESuite/pull/527) · [School-managed tuition cycles](https://github.com/BrunerDigital/TheBEESuite/pull/528) · [Production deployments](https://vercel.com/brunerdigital/the-bee-suite/deployments).

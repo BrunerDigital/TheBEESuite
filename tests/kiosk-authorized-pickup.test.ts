@@ -65,7 +65,10 @@ function harness(kind: "lookup" | "check", entries: ReturnType<typeof fixture>[]
     if (name === "@/lib/prisma") return { prisma: db };
     if (name === "@/lib/rate-limit") return { requestIp: () => "192.0.2.1", checkPersistentRateLimit: async () => ({ ok: true }), retryAfterSeconds: () => 60 };
     if (name === "@/lib/audit") return { writeSystemAuditLog: async (data: Row) => { audits.push(data); } };
-    if (name === "@/lib/daily-report-email") return { sendCheckoutDailyReportEmail: async (data: Row) => { emails.push(data); return { attempted: false }; } };
+    if (name === "@/lib/daily-report-email") return { sendCheckoutDailyReportEmail: async (data: Row) => {
+      emails.push(data);
+      return { attempted: true, recipients: ["fictional-guardian@example.test"], requestedRecipients: ["fictional-guardian@example.test"] };
+    } };
     if (name === "@/lib/request-response-logging") return { withApiLogging: (_method: string, handler: unknown) => handler };
     throw new Error(`Unexpected external dependency: ${name}`);
   };
@@ -141,6 +144,8 @@ for (const type of ["check_in", "check_out"] as const) test(`pickup ${type} writ
   const entry = fixture(t), h = harness("check", [entry], { checkedIn: type === "check_out" });
   const response = await h.request({ type, childIds: ["child-b"] });
   assert.equal(response.status, 201);
+  assert.equal(Object.hasOwn(response.body, "dailyReportEmails"), false);
+  assert.equal(JSON.stringify(response.body).includes("fictional-guardian@example.test"), false);
   assert.deepEqual((response.body.children as Array<Row>).map((child) => child.id), ["child-b"]);
   assert.equal(h.logs.length, 1); assert.equal(h.attendanceWrites.length, 1);
   assert.equal(h.logs[0].guardianId, null);
@@ -155,4 +160,9 @@ for (const type of ["check_in", "check_out"] as const) test(`pickup ${type} writ
   assert.equal((h.audits[0].metadata as Row).pickupId, entry.id);
   assert.equal((h.audits[0].metadata as Row).guardianId, null);
   assert.deepEqual(h.emails.map((email) => email.childId), type === "check_out" ? ["child-b"] : []);
+  if (type === "check_out") {
+    const summaries = (h.audits[0].metadata as Row).dailyReportEmails as Array<Row>;
+    assert.deepEqual(summaries[0].recipients, ["fictional-guardian@example.test"]);
+    assert.deepEqual(summaries[0].requestedRecipients, ["fictional-guardian@example.test"]);
+  }
 });

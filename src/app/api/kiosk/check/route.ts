@@ -328,7 +328,7 @@ async function POSTHandler(request: NextRequest) {
     pickupAuthorizationWarning,
     ...pickupMetadata,
     children: allowedChildren.map((child) => ({ id: child.id, fullName: child.fullName })),
-    dailyReportEmails,
+    ...(pickup ? {} : { dailyReportEmails }),
     logs,
   }, { status: 201 });
 }

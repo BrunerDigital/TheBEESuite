@@ -6,6 +6,7 @@ import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { buildKioskTuitionBalanceSummary, buildKioskTuitionBalanceWarning } from "@/lib/kiosk-billing-reminders";
+import { findAuthorizedPickupKioskActors } from "@/lib/kiosk-authorized-pickup";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -150,9 +151,15 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const verificationMethod = qrToken ? "qr" : "pin";
-  const guardian = qrToken
+  const matchedGuardian = qrToken
     ? await findGuardianByQrToken(centerId, qrToken)
     : await findGuardianByPin(centerId, pin);
+  const pickups = qrToken ? [] : await findAuthorizedPickupKioskActors(prisma, centerId, pin);
+  if (pickups.length > 1 || (matchedGuardian && pickups.length)) {
+    return NextResponse.json({ ok: false, error: "PIN matches more than one authorized adult. Please ask the front desk for help." }, { status: 409 });
+  }
+  const pickup = pickups[0] ?? null;
+  const guardian = matchedGuardian ?? pickup;
   if (!guardian) {
     return NextResponse.json(
       { ok: false, error: verificationMethod === "qr" ? "QR code was not recognized for this school." : "PIN was not recognized for this school." },
@@ -181,7 +188,10 @@ async function POSTHandler(request: NextRequest) {
     paymentUrl: "/parent-portal#billing",
   });
   const warnings = [
-    ...(guardian.family.custodyNotes
+    ...(pickup ? [{ type: "protected_pickup_note", message: guardian.family.custodyNotes
+      ? "Please show picture identification to the front desk before the child is released. A protected pickup note is also on file for staff review."
+      : "Please show picture identification to the front desk before the child is released." }] : []),
+    ...(!pickup && guardian.family.custodyNotes
       ? [{
           type: "protected_pickup_note",
           message: "A protected pickup note is on file. Please ask the front desk to verify before checkout.",
@@ -195,7 +205,7 @@ async function POSTHandler(request: NextRequest) {
     center: { id: center.id, name: center.name, crmLocationId: center.crmLocationId },
     guardian: { id: guardian.id, fullName: guardian.fullName, relation: guardian.relation },
     family: { id: guardian.family.id, name: guardian.family.name },
-    billing: billingSummary,
+    ...(pickup ? { actorType: "authorized_pickup", pickupId: pickup.id, requirePictureId: true } : { billing: billingSummary }),
     verification: { method: verificationMethod },
     warnings,
     children: visibleChildren.map((child) => {

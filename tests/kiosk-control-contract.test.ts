@@ -49,7 +49,7 @@ test("privacy and family actions expose no idle no-op controls", () => {
 
 test("PIN and QR kiosk confirmation is reported separately from signature capture", () => {
   assert.match(kioskCheckRouteSource, /signaturePlaceholder: false/);
-  assert.match(kioskCheckRouteSource, /pickupName: null/);
+  assert.match(kioskCheckRouteSource, /pickupName: pickup \? pickup\.fullName : null/);
   assert.match(kioskCheckRouteSource, /credentialConfirmationMethod/);
   assert.match(kioskCheckRouteSource, /credentialHolderName: guardian\.fullName/);
   assert.doesNotMatch(kioskSource, /signatureAccepted/);

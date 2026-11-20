@@ -7,6 +7,7 @@ import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 import { sendCheckoutDailyReportEmail } from "@/lib/daily-report-email";
+import { findAuthorizedPickupKioskActors } from "@/lib/kiosk-authorized-pickup";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -125,9 +126,15 @@ async function POSTHandler(request: NextRequest) {
 
   const verificationMethod = qrToken ? "qr" : "pin";
   const credentialConfirmationMethod = verificationMethod === "qr" ? "qr_verified" : "pin_verified";
-  const guardian = qrToken
+  const matchedGuardian = qrToken
     ? await findGuardianByQrToken(centerId, qrToken, childIds)
     : await findGuardianByPin(centerId, pin, childIds);
+  const pickups = qrToken ? [] : await findAuthorizedPickupKioskActors(prisma, centerId, pin);
+  if (pickups.length > 1 || (matchedGuardian && pickups.length)) {
+    return NextResponse.json({ ok: false, error: "PIN matches more than one authorized adult. Please ask the front desk for help." }, { status: 409 });
+  }
+  const pickup = pickups[0] ?? null;
+  const guardian = matchedGuardian ?? pickup;
   if (!guardian) {
     return NextResponse.json(
       { ok: false, error: verificationMethod === "qr" ? "QR code was not recognized for this school." : "PIN was not recognized for this school." },
@@ -135,7 +142,8 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const allowedChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId);
+  const scopedChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId);
+  const allowedChildren = scopedChildren.filter((child) => childIds.includes(child.id));
   if (!allowedChildren.length) {
     return NextResponse.json({ ok: false, error: "No selected children are linked to this guardian at this school." }, { status: 403 });
   }
@@ -155,7 +163,8 @@ async function POSTHandler(request: NextRequest) {
   const timeZone = serviceDay.timeZone;
   const latePickupCutoff = readLatePickupCutoff(center.customFields);
   const latePickup = type === "check_out" && isLatePickup(occurredAt, timeZone, latePickupCutoff);
-  const pickupAuthorizationWarning = Boolean(guardian.family.custodyNotes);
+  const pickupAuthorizationWarning = Boolean(guardian.family.custodyNotes) || Boolean(pickup);
+  const pickupMetadata = pickup ? { actorType: "authorized_pickup", pickupId: pickup.id, requirePictureId: true } : {};
   const latestLogs = await prisma.checkInOutLog.findMany({
     where: {
       childId: { in: allowedChildren.map((child) => child.id) },
@@ -195,6 +204,7 @@ async function POSTHandler(request: NextRequest) {
           verificationMethod,
           latePickup,
           pickupAuthorizationWarning,
+          ...pickupMetadata,
           timeZone,
         },
       };
@@ -218,10 +228,10 @@ async function POSTHandler(request: NextRequest) {
           childId: child.id,
           centerId,
           classroomId: child.classroom?.id ?? null,
-          guardianId: guardian.id,
+          guardianId: pickup ? null : guardian.id,
           type,
           occurredAt,
-          pickupName: null,
+          pickupName: pickup ? pickup.fullName : null,
           signaturePlaceholder: false,
           verificationStatus: verificationMethod === "qr" ? "qr_verified" : "pin_verified",
           pinVerified: verificationMethod === "pin",
@@ -238,6 +248,7 @@ async function POSTHandler(request: NextRequest) {
             latePickup,
             latePickupCutoff,
             pickupAuthorizationWarning,
+            ...pickupMetadata,
             timeZone,
           },
         },
@@ -291,7 +302,8 @@ async function POSTHandler(request: NextRequest) {
     resource: "CheckInOutLog",
     resourceId: logs[0]?.id ?? null,
     metadata: {
-      guardianId: guardian.id,
+      guardianId: pickup ? null : guardian.id,
+      ...pickupMetadata,
       familyId: guardian.family.id,
       childIds: allowedChildren.map((child) => child.id),
       count: logs.length,
@@ -314,6 +326,7 @@ async function POSTHandler(request: NextRequest) {
     occurredAt,
     latePickup,
     pickupAuthorizationWarning,
+    ...pickupMetadata,
     children: allowedChildren.map((child) => ({ id: child.id, fullName: child.fullName })),
     dailyReportEmails,
     logs,

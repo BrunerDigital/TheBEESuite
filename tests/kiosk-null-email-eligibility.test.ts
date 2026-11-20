@@ -8,6 +8,7 @@ import * as attendance from "../src/lib/attendance-state";
 import * as enrollment from "../src/lib/enrollment-status";
 import * as kiosk from "../src/lib/kiosk";
 import * as billingReminders from "../src/lib/kiosk-billing-reminders";
+import * as authorizedPickup from "../src/lib/kiosk-authorized-pickup";
 
 type RecordValue = Record<string, unknown>;
 type RouteKind = "lookup" | "check";
@@ -109,6 +110,7 @@ function harness(t: TestContext, kind: RouteKind, options: { email?: string | nu
   // No Prisma client is imported. Every route dependency capable of live I/O is
   // replaced; the transaction callback is NEVER invoked and no attendance exists.
   const prisma = {
+    authorizedPickup: { findMany: async () => [] },
     guardian: { findMany: selectGuardians, findFirst: async (query: unknown) => (await selectGuardians(query))[0] ?? null },
     center: { findFirst: async (query: unknown) => {
       const where = record(record(query).where);
@@ -129,6 +131,7 @@ function harness(t: TestContext, kind: RouteKind, options: { email?: string | nu
     if (name === "@/lib/attendance-state") return attendance;
     if (name === "@/lib/enrollment-status") return enrollment;
     if (name === "@/lib/kiosk") return kiosk;
+    if (name === "@/lib/kiosk-authorized-pickup") return authorizedPickup;
     if (name === "@/lib/kiosk-billing-reminders") return billingReminders;
     if (name === "@/lib/prisma") return { prisma };
     if (name === "@/lib/rate-limit") return {

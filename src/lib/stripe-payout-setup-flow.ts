@@ -1,5 +1,6 @@
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
+import { stripePayoutBankIsUsable } from "@/lib/stripe-payout-bank";
 
 export const CORPORATE_STRIPE_PORTFOLIO_EMAIL = "corpschools@kidcityusa.com";
 export const CORPORATE_STRIPE_PORTFOLIO_PATH = "/stripe-reauthorization/corporate";
@@ -20,7 +21,14 @@ export function stripePayoutSetupIsComplete(customFields: unknown) {
   if (migration.targetAccountId && !migration.cutoverAt) {
     return migration.status === "ready_for_cutover";
   }
-  return stripeConnectReadinessFromFields(customFields).status === "ready";
+  const fields = customFields && typeof customFields === "object" && !Array.isArray(customFields)
+    ? customFields as Record<string, unknown> : {};
+  return stripeConnectReadinessFromFields(customFields).status === "ready"
+    && stripePayoutBankIsUsable({
+      last4: typeof fields.stripePayoutBankLast4 === "string" ? fields.stripePayoutBankLast4 : null,
+      defaultForCurrency: fields.stripePayoutBankDefaultConfirmed === true,
+      status: typeof fields.stripePayoutBankStatus === "string" ? fields.stripePayoutBankStatus : null,
+    });
 }
 
 export function stripePayoutSetupFlowForCenters(

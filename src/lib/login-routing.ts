@@ -135,6 +135,18 @@ export function loginHrefForNextPath(value: unknown, role?: string | null) {
   return `${entryPath}?next=${encodeURIComponent(nextPath)}`;
 }
 
+export function loginHrefForPortal(portal: LoginPortal, requestedNext?: unknown) {
+  const entryPaths: Record<LoginPortal, string> = {
+    general: GENERAL_LOGIN_ENTRY_PATH,
+    parents: PARENT_LOGIN_ENTRY_PATH,
+    teachers: TEACHER_LOGIN_ENTRY_PATH,
+    directors: DIRECTOR_LOGIN_ENTRY_PATH,
+    executives: EXECUTIVE_LOGIN_ENTRY_PATH,
+  };
+  const nextPath = safeLoginNextPath(requestedNext, defaultNextPathForLoginPortal(portal));
+  return `${entryPaths[portal]}?next=${encodeURIComponent(nextPath)}`;
+}
+
 export function normalizeLoginPortal(value: unknown): LoginPortal {
   const portal = typeof value === "string" ? value.trim().toLowerCase() : "";
   return portal === "parents" || portal === "teachers" || portal === "directors" || portal === "executives"

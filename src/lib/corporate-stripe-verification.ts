@@ -1,4 +1,5 @@
 import { UserRole } from "@prisma/client";
+import { stripePayoutBankIsUsable } from "@/lib/stripe-payout-bank";
 import { canAccessCenter, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
@@ -115,6 +116,7 @@ export function corporateStripePayoutBankIsConfirmed(banks: Array<{
   currency: string | null;
   defaultForCurrency: boolean;
   last4: string | null;
+  status?: string | null;
 }>) {
   return Boolean(corporateStripeConfirmedPayoutBank(banks));
 }
@@ -123,6 +125,7 @@ export function corporateStripeConfirmedPayoutBank<T extends {
   currency: string | null;
   defaultForCurrency: boolean;
   last4: string | null;
+  status?: string | null;
 }>(banks: T[]) {
-  return banks.find((bank) => bank.currency === "usd" && bank.defaultForCurrency && Boolean(bank.last4)) ?? null;
+  return banks.find((bank) => bank.currency === "usd" && stripePayoutBankIsUsable(bank)) ?? null;
 }

@@ -143,6 +143,7 @@
     "calculateFteCount",
     "calculateScheduledDaysFte",
     "defaultFteWeekEnd",
+    "enrollmentStartsBeforeFteWeekEnd",
     "fteExternalEscalationWindow",
     "fteReminderCoverageWhere",
     "getFteDueState",

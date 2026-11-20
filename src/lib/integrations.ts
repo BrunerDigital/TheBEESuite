@@ -1,4 +1,5 @@
 import { linkCheckoutIsUnsafe } from "./link-checkout-policy";
+import { stripePayoutBankIsUsable } from "@/lib/stripe-payout-bank";
 import { INSTANT_BANK_CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/parent-payment-errors";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { checkoutFailureDiagnostics } from "@/lib/checkout-failure-diagnostics";
@@ -3065,9 +3066,9 @@ export async function listStripeConnectedAccountPayoutBanks({
     }))
     .filter((bank) => bank.id.startsWith("ba_"));
   const defaultBank =
-    banks.find((bank) => bank.defaultForCurrency && bank.currency === "usd") ??
-    banks.find((bank) => bank.defaultForCurrency) ??
-    (banks.length === 1 ? banks[0] : null);
+    banks.find((bank) => stripePayoutBankIsUsable(bank) && bank.currency === "usd") ??
+    banks.find((bank) => stripePayoutBankIsUsable(bank)) ??
+    null;
 
   return {
     ok: true,

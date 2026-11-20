@@ -7,6 +7,9 @@
     "node": "24.x"
   },
   "overrides": {
+    "@prisma/config": {
+      "effect": "3.22.1"
+    },
     "deepmerge-ts": "8.0.1",
     "esbuild": "^0.28.1",
     "postcss": "^8.5.18",

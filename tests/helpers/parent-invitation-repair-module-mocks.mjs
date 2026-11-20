@@ -12,6 +12,7 @@ function reset() {
 }
 reset();
 const db = {
+  authorizedPickup: { findMany: async () => [] },
   guardian: {
     findUnique: async () => state.guardian,
     findFirst: async ({ where }) => where.id === state.guardian.id && where.userId === state.guardian.userId && where.familyId === state.guardian.familyId ? state.guardian : null,

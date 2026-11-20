@@ -81,6 +81,12 @@ export function defaultFteWeekEnd(weekStart: Date) {
   return end;
 }
 
+export function enrollmentStartsBeforeFteWeekEnd(startDate: Date | null, weekEndExclusive: Date) {
+  // Keep existing weekly schedule weights for midweek starters; future starts
+  // belong to preregistration until their reporting week begins.
+  return startDate === null || startDate.getTime() < weekEndExclusive.getTime();
+}
+
 export function fteReminderCoverageWhere(reminderWeekStart: Date) {
   return {
     OR: [

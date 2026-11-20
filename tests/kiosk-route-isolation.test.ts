@@ -41,6 +41,7 @@ function kioskRequest(path: string, body: Record<string, unknown>) {
 }
 
 function mockRateLimit(t: TestContext) {
+  mockPrismaMethod(t, prisma.authorizedPickup, "findMany", async () => []);
   const resetAt = new Date(Date.now() + 60_000);
   mockPrismaMethod(t, prisma.rateLimitBucket, "updateMany", async () => ({ count: 1 }));
   mockPrismaMethod(t, prisma.rateLimitBucket, "findUniqueOrThrow", async () => ({ count: 1, resetAt }));

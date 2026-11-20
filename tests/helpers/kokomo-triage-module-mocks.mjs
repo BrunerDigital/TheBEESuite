@@ -7,6 +7,7 @@ const center = { id: 'school-test', name: 'Test school', organizationId: 'org-te
 const guardian = { id: 'guardian-test', familyId: 'family-test', fullName: 'Synthetic Parent', email: 'synthetic@example.com', phone: '5551234567', userId: null, checkInPinHash: null, customFields: {}, family: { id: 'family-test', centerId: center.id, children: [{ id: 'child-test', fullName: 'Synthetic Child', enrollmentStatus: 'enrolled' }] } };
 const write = async () => { state.writes++; throw new Error('Unexpected write in diagnostic replay'); };
 const db = {
+  authorizedPickup: { findMany: async () => [] },
   guardian: { findUnique: async () => guardian, findMany: async (args) => args.where.checkInPinHash ? [] : [guardian], update: write },
   center: { findUnique: async () => center, findFirst: async () => center, findMany: async () => [{ id: center.id }] },
   user: { findUnique: async () => null, findFirst: async () => null, create: write, update: write },

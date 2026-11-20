@@ -118,7 +118,7 @@ import {
 } from "@/lib/enrollment-status";
 import { billingFamilyAccountCategory } from "@/lib/prospective-family-billing";
 import { SCHOOL_DASHBOARD_LIST_LIMIT } from "@/lib/dashboard-query-limits";
-import { getFteDueState, isExecutiveFteManager, startOfFteWeek } from "@/lib/fte-report-guardrails";
+import { enrollmentStartsBeforeFteWeekEnd, getFteDueState, isExecutiveFteManager, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { resolveFteReportSelection, writableFteCenterIds } from "@/lib/fte-report-selection";
 import { invoiceFteWeekWeight } from "@/lib/fte-billing-period";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
@@ -829,7 +829,7 @@ async function buildFtePrefills(
     const row = byCenter.get(centerId);
     if (!row) continue;
     const isActive = activeEnrollmentStatus(child.enrollmentStatus);
-    if (isActive) {
+    if (isActive && enrollmentStartsBeforeFteWeekEnd(child.startDate, weekEndExclusive)) {
       row.enrolledCount += 1;
       row[fteAgeBucket({ ageGroup: child.ageGroup, classroomName: child.classroom?.name, classroomAgeGroup: child.classroom?.ageGroup })] += 1;
       const scheduledDays = fteScheduledDaysPerWeek({ schedule: child.schedule, customFields: child.customFields });

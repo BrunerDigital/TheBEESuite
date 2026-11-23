@@ -34,12 +34,12 @@ jobs:
       - name: Verify cron and migration manifests
         run: npm run ops:check
 
-      - name: Verify billing drafts, documents and offline payment recovery
+      - name: Verify billing interactions and public registration privacy
         env:
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
         run: |
           google-chrome --version
-          node --import tsx --test tests/billing-check-draft.browser.ts tests/offline-payment-recovery.browser.ts
+          node --import tsx --test tests/billing-check-draft.browser.ts tests/offline-payment-recovery.browser.ts tests/public-registration-privacy.browser.ts
 
   tuition-browser:
     runs-on: ubuntu-latest

@@ -14,7 +14,7 @@ test("handles malformed schemas and empty field labels", () => {
 });
 
 test("the persisted online registration packet reports its configured section fields", () => {
-  assert.equal(formSchemaSummary(kidCityRegistrationPacketSchema()), "152 fields: School, Program / age group, Requested schedule, +149 more");
+  assert.equal(formSchemaSummary(kidCityRegistrationPacketSchema()), "148 fields: School, Program / age group, Requested schedule, +145 more");
 });
 test("combines section and top-level fields while ignoring malformed sections and metadata", () => {
   assert.equal(formSchemaSummary({ fields: ["Consent"], sections: [null, [], { fields: false }, { label: "Metadata only" }, { fields: [{ label: "Child name" }, { key: "guardian_email" }] }] }), "3 fields: Consent, Child name, guardian email");

@@ -177,8 +177,6 @@ function collectForm(form: HTMLFormElement) {
     primaryGuardianHomePhone: value("primaryGuardianHomePhone"),
     primaryGuardianWorkPhone: value("primaryGuardianWorkPhone"),
     primaryGuardianCellPhoneCarrier: value("primaryGuardianCellPhoneCarrier"),
-    primaryGuardianDriverLicense: value("primaryGuardianDriverLicense"),
-    primaryGuardianSocialSecurityNumber: value("primaryGuardianSocialSecurityNumber"),
     secondaryGuardianName: value("secondaryGuardianName"),
     secondaryGuardianEmail: value("secondaryGuardianEmail"),
     secondaryGuardianPhone: value("secondaryGuardianPhone"),
@@ -188,8 +186,6 @@ function collectForm(form: HTMLFormElement) {
     secondaryGuardianHomePhone: value("secondaryGuardianHomePhone"),
     secondaryGuardianWorkPhone: value("secondaryGuardianWorkPhone"),
     secondaryGuardianCellPhoneCarrier: value("secondaryGuardianCellPhoneCarrier"),
-    secondaryGuardianDriverLicense: value("secondaryGuardianDriverLicense"),
-    secondaryGuardianSocialSecurityNumber: value("secondaryGuardianSocialSecurityNumber"),
     billingContactName: value("billingContactName"),
     billingContactEmail: value("billingContactEmail"),
     billingContactPhone: value("billingContactPhone"),
@@ -645,8 +641,6 @@ export function OnlineRegistrationForm({
           <TextField id="primaryGuardianAddress" label="Primary address" autoComplete="street-address" className="md:col-span-2" />
           <TextField id="primaryGuardianRelation" label="Primary relationship to child" />
           <TextField id="primaryGuardianEmployer" label="Primary place of employment" />
-          <TextField id="primaryGuardianDriverLicense" label="Primary driver's license" maxLength={32} />
-          <TextField id="primaryGuardianSocialSecurityNumber" label="Primary social security number if required" type="password" inputMode="numeric" maxLength={11} pattern="[0-9 -]{4,11}" />
 
           <div className="md:col-span-2 border-t border-border pt-4" />
           <TextField id="secondaryGuardianName" label="Secondary guardian name" autoComplete="section-secondary name" />
@@ -658,8 +652,6 @@ export function OnlineRegistrationForm({
           <TextField id="secondaryGuardianAddress" label="Secondary address" autoComplete="section-secondary street-address" className="md:col-span-2" />
           <TextField id="secondaryGuardianRelation" label="Secondary relationship" />
           <TextField id="secondaryGuardianEmployer" label="Secondary place of employment" />
-          <TextField id="secondaryGuardianDriverLicense" label="Secondary driver's license" maxLength={32} />
-          <TextField id="secondaryGuardianSocialSecurityNumber" label="Secondary social security number if required" type="password" inputMode="numeric" maxLength={11} pattern="[0-9 -]{4,11}" />
 
           <div className="md:col-span-2 border-t border-border pt-4" />
           <TextField id="billingContactName" label="Billing contact name" autoComplete="section-billing name" />

@@ -11,13 +11,13 @@ import {
   normalizeEmailText,
   normalizeScheduleDays,
   registrationPacketSubmissionFields,
-  type RegistrationPacketPayload,
+  type PublicRegistrationPacketPayload,
 } from "@/lib/registration-packet";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
-type RegistrationPayload = RegistrationPacketPayload;
+type RegistrationPayload = PublicRegistrationPacketPayload;
 
 const rateLimit = new Map<string, { count: number; resetAt: number }>();
 
@@ -61,8 +61,6 @@ function readPayload(body: Record<string, unknown>): RegistrationPayload {
     primaryGuardianHomePhone: clean(body.primaryGuardianHomePhone),
     primaryGuardianWorkPhone: clean(body.primaryGuardianWorkPhone),
     primaryGuardianCellPhoneCarrier: clean(body.primaryGuardianCellPhoneCarrier),
-    primaryGuardianDriverLicense: clean(body.primaryGuardianDriverLicense),
-    primaryGuardianSocialSecurityNumber: clean(body.primaryGuardianSocialSecurityNumber),
     secondaryGuardianName: clean(body.secondaryGuardianName),
     secondaryGuardianEmail: normalizeEmailText(body.secondaryGuardianEmail),
     secondaryGuardianPhone: clean(body.secondaryGuardianPhone),
@@ -72,8 +70,6 @@ function readPayload(body: Record<string, unknown>): RegistrationPayload {
     secondaryGuardianHomePhone: clean(body.secondaryGuardianHomePhone),
     secondaryGuardianWorkPhone: clean(body.secondaryGuardianWorkPhone),
     secondaryGuardianCellPhoneCarrier: clean(body.secondaryGuardianCellPhoneCarrier),
-    secondaryGuardianDriverLicense: clean(body.secondaryGuardianDriverLicense),
-    secondaryGuardianSocialSecurityNumber: clean(body.secondaryGuardianSocialSecurityNumber),
     billingContactName: clean(body.billingContactName),
     billingContactEmail: normalizeEmailText(body.billingContactEmail),
     billingContactPhone: clean(body.billingContactPhone),
@@ -259,6 +255,9 @@ function validationErrors(payload: RegistrationPayload) {
   if (!payload.authorizedPickups) errors.authorizedPickups = "At least one authorized pickup is required.";
   if (!payload.policyAcknowledgment) errors.policyAcknowledgment = "Policy acknowledgment is required.";
   if (!payload.signatureName) errors.signatureName = "Typed signature is required.";
+  if (payload.mealApplicationLastFourSsn && !/^\d{4}$/.test(payload.mealApplicationLastFourSsn)) {
+    errors.mealApplicationLastFourSsn = "Enter only the last four digits for the optional meal application.";
+  }
   return errors;
 }
 
@@ -637,4 +636,4 @@ async function POSTHandler(request: NextRequest) {
   }
 }
 
-export const POST = withApiLogging("POST", POSTHandler);
+export const POST = withApiLogging("POST", POSTHandler, { omitRequestBody: true });

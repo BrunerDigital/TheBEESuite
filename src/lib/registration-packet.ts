@@ -443,6 +443,17 @@ export const kidCityRegistrationPacketSections: PacketSection[] = [
   },
 ];
 
+const generalGuardianIdentifierFields = [
+  "primaryGuardianDriverLicense",
+  "primaryGuardianSocialSecurityNumber",
+  "secondaryGuardianDriverLicense",
+  "secondaryGuardianSocialSecurityNumber",
+] as const;
+
+export type PublicRegistrationPacketPayload = Omit<RegistrationPacketPayload, typeof generalGuardianIdentifierFields[number]>;
+
+const generalGuardianIdentifierFieldSet: ReadonlySet<keyof RegistrationPacketPayload> = new Set(generalGuardianIdentifierFields);
+
 const floridaRegistrationFields: ReadonlySet<keyof RegistrationPacketPayload> = new Set([
   "elc4cExpirationDate",
   "floridaKnowYourChildcareAcknowledgment",
@@ -464,14 +475,18 @@ export function kidCityRegistrationPacketSchema(florida = true) {
     version: 3,
     source: "public_online_registration",
     title: florida ? "Online Registration Packet - Florida March 2026" : "Online Registration Information",
-    sections: registrationPacketSections(florida),
+    sections: registrationPacketSections(florida).map(section => ({
+      ...section,
+      fields: section.fields.filter(({ key }) => !generalGuardianIdentifierFieldSet.has(key)),
+    })),
   };
 }
 
-export function registrationPacketSubmissionFields(packet: RegistrationPacketPayload, florida: boolean) {
-  if (florida) return packet;
+export function registrationPacketSubmissionFields(packet: PublicRegistrationPacketPayload, florida: boolean) {
   const fields: Partial<RegistrationPacketPayload> = { ...packet };
-  for (const key of floridaRegistrationFields) delete fields[key];
+  // Also discard these keys from older callers; historical packet readers remain unchanged.
+  for (const key of generalGuardianIdentifierFields) delete fields[key];
+  if (!florida) for (const key of floridaRegistrationFields) delete fields[key];
   return fields;
 }
 

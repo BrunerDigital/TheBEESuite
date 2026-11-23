@@ -138,7 +138,7 @@ test("registration retains input on network failure and links server errors to f
   assert.match(registration, /catch \{[\s\S]*Your information remains in the form/);
   assert.match(registration, /autoComplete=\{autoComplete \?\? "off"\}/);
   assert.match(registration, /primaryGuardianEmail[^\n]*autoComplete="email"/);
-  assert.match(registration, /primaryGuardianSocialSecurityNumber[^\n]*type="password"[^\n]*maxLength=\{11\}/);
+  assert.match(registration, /mealApplicationLastFourSsn[^\n]*type="password"[^\n]*maxLength=\{4\}/);
 });
 
 test("public resources expose every guide through a categorized keyboard-friendly index", () => {

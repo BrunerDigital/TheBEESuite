@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { stripePayoutBankIsUsable } from "@/lib/stripe-payout-bank";
 import { Prisma } from "@prisma/client";
 import { canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
 import {
@@ -123,7 +124,7 @@ async function POSTHandler(request: NextRequest) {
   if (readiness.status !== "ready") {
     return NextResponse.json({ ok: false, error: readiness.blockingReason || "Stripe setup is not ready." }, { status: 409 });
   }
-  if (!payoutBanks.ok || !payoutBanks.defaultBank?.last4 || payoutBanks.defaultBank.defaultForCurrency !== true) {
+  if (!payoutBanks.ok || !payoutBanks.defaultBank?.last4 || !stripePayoutBankIsUsable(payoutBanks.defaultBank)) {
     return NextResponse.json(
       { ok: false, error: payoutBanks.error || "Confirm this school's default payout bank before activation." },
       { status: 409 },

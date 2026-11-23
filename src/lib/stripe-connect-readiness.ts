@@ -205,6 +205,7 @@ export function stripeConnectCustomFieldPatch(readiness: StripeConnectReadiness)
     stripeDetailsSubmitted: readiness.detailsSubmitted,
     stripePayoutRequirementFields: readiness.requirementFields,
     stripeCurrentlyDueRequirementFields: readiness.requirementFields,
+    stripeRequirementFields: readiness.requirementFields,
     stripePendingVerificationFields: readiness.pendingVerificationFields,
     stripeMerchantCapabilityStatus: readiness.merchantCapabilityStatus,
     stripeMerchantPayoutCapabilityStatus: readiness.merchantPayoutCapabilityStatus,

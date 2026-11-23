@@ -17,7 +17,8 @@ import {
 } from "@/lib/payment-disclosures";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { maskStripeAccountId, readStripeConnectMigration } from "@/lib/stripe-connect-migration";
-import { stripeMigrationPaymentStatus, stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
+import { stripeMigrationPaymentStatus, stripeSchoolReadinessFlowFromFields, type StripeSchoolReadinessFlow } from "@/lib/stripe-school-readiness-flow";
+import { stripeConnectPanelCenterAfterResponse } from "@/lib/stripe-connect-panel-state";
 import { stripeReauthorizationHref } from "@/lib/stripe-payout-setup-flow";
 import {
   normalizeStripeConnectSetupInput,
@@ -36,6 +37,7 @@ export type StripeConnectCenter = {
   postalCode: string | null;
   customFields: unknown;
   stripeReauthorizationAvailable?: boolean;
+  payoutFlow?: StripeSchoolReadinessFlow;
 };
 
 type StripeConnectPanelProps = {
@@ -110,7 +112,7 @@ export function StripeConnectPanel({
   const stats = useMemo(() => {
     const ready = paymentsConfigured
       ? localCenters.filter((center) => (
-          stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name }).stage === "ready"
+          (center.payoutFlow ?? stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name })).stage === "ready"
         )).length
       : 0;
     const started = localCenters.filter((center) => maskedAccount(center) !== "Not connected").length;
@@ -279,8 +281,17 @@ export function StripeConnectPanel({
       if (!response.ok || !json.ok) {
         throw new Error(json.error || "Parent payments could not be activated.");
       }
-      await syncStatus(center.id);
-      setMessage(`Parent tuition payments are live for ${center.name}. No invoice or charge was created by this activation.`);
+      if (json.centerId !== center.id) {
+        throw new Error("Payment activation returned the wrong school. Refresh and try again.");
+      }
+      setLocalCenters((current) => current.map((item) => item.id === center.id
+        ? stripeConnectPanelCenterAfterResponse(item, json) : item));
+      const latestFlow = await syncStatus(center.id);
+      if (latestFlow?.canAcceptParentPayments) {
+        setMessage(`Parent tuition payments are live for ${center.name}. No invoice or charge was created by this activation.`);
+      } else {
+        setMessage((current) => `Activation was saved for ${center.name}. ${latestFlow?.explanation || current || "Select Check to confirm the latest payout status."}`);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Parent payments could not be activated.");
     } finally {
@@ -292,42 +303,21 @@ export function StripeConnectPanel({
     setBusyCenterId(centerId);
     setMessage(null);
     try {
-      const response = await fetch(`/api/billing/connect/status?centerId=${encodeURIComponent(centerId)}`);
+      const response = await fetch(`/api/billing/connect/status?centerId=${encodeURIComponent(centerId)}`, { cache: "no-store" });
       const json = await response.json();
+      if (json.centerId && json.centerId !== centerId) {
+        throw new Error("Payout status returned the wrong school. Refresh and try again.");
+      }
+      if (json.payoutBankError) {
+        setLocalCenters((current) => current.map((center) => center.id === centerId
+          ? stripeConnectPanelCenterAfterResponse(center, { centerId, payoutBankError: json.payoutBankError }) : center));
+      }
       if (!response.ok || !json.ok) {
         throw new Error(json.error || "Payout status could not be checked.");
       }
-      if (json.account) {
-        setLocalCenters((current) => current.map((center) => {
-          if (center.id !== centerId) return center;
-          const custom = fields(center.customFields);
-          const readiness = fields(json.readiness);
-          return {
-            ...center,
-            customFields: {
-              ...custom,
-              stripeConnectAccountId: json.account.id,
-              stripeChargesEnabled: json.account.chargesEnabled,
-              stripePayoutsEnabled: json.account.payoutsEnabled,
-              stripeDetailsSubmitted: json.account.detailsSubmitted,
-              stripeMerchantCapabilityStatus: json.account.merchantCapabilityStatus,
-              stripeMerchantPayoutCapabilityStatus: json.account.merchantPayoutCapabilityStatus,
-              stripePayoutRequirementFields: json.account.requirementFields,
-              stripeCurrentlyDueRequirementFields: json.account.requirementFields,
-              stripePendingVerificationFields: json.account.pendingVerificationFields,
-              stripePayoutStatus: text(readiness.status) || json.status,
-              stripeConnectLastSyncedAt: new Date().toISOString(),
-              stripePayoutBankName: json.payoutBank?.bankName ?? null,
-              stripePayoutBankLast4: json.payoutBank?.last4 ?? null,
-              stripePayoutBankStatus: json.payoutBank?.status ?? null,
-              stripePayoutBankCurrency: json.payoutBank?.currency ?? null,
-              stripePayoutBankDefaultConfirmed: json.payoutBank?.defaultForCurrency === true,
-              stripePayoutBankCount: json.payoutBankCount ?? 0,
-              stripePayoutBankLastSyncedAt: new Date().toISOString(),
-            },
-          };
-        }));
-      }
+      if (json.centerId !== centerId) throw new Error("Payout status did not identify the selected school. Refresh and try again.");
+      setLocalCenters((current) => current.map((center) => center.id === centerId
+        ? stripeConnectPanelCenterAfterResponse(center, json) : center));
       setMessage(
         json.payoutBankError
           ? `Payout status updated, but the bank destination could not be confirmed: ${json.payoutBankError}`
@@ -335,8 +325,10 @@ export function StripeConnectPanel({
             ? `Payout status updated. ${json.payoutBank.bankName || "Bank account"} ending ${json.payoutBank.last4} is selected for this school.`
             : "Payout status updated. Choose and confirm a payout bank for this school.",
       );
+      return json.flow as StripeSchoolReadinessFlow;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Payout status could not be checked.");
+      return null;
     } finally {
       setBusyCenterId(null);
     }
@@ -356,6 +348,7 @@ export function StripeConnectPanel({
       not_started: "Start payout setup before refreshing an onboarding link.",
       payout_link_failed: "Payout details could not be opened. Try again from the school payout account table.",
       refresh_failed: "The processor could not refresh the onboarding link. Try again from the payout account table.",
+      connection_changed: "This school's payout connection changed while the link was opening. Check the school status, then open a fresh setup link.",
       stripe_missing: "Payment processor keys are missing, so payout onboarding links cannot be generated yet.",
     };
     if (stripeConnectStatus && messages[stripeConnectStatus]) {
@@ -574,22 +567,22 @@ export function StripeConnectPanel({
         </Dialog>
 
         <details className="rounded-xl border" open={localCenters.length <= 1 ? true : undefined}>
-          <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">School payout directory · {localCenters.length} schools</summary>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>School</TableHead>
-              <TableHead>Location ID</TableHead>
-              <TableHead>Payout contact</TableHead>
-              <TableHead>Payout destination</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Requirements</TableHead>
-              <TableHead className="text-right">Action</TableHead>
+          <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">School payout directory · {localCenters.length} {localCenters.length === 1 ? "school" : "schools"}</summary>
+        <Table role="table" aria-label="School payout accounts" className="max-sm:block">
+          <TableHeader role="rowgroup" className="max-sm:sr-only">
+            <TableRow role="row">
+              <TableHead scope="col">School</TableHead>
+              <TableHead scope="col">Location ID</TableHead>
+              <TableHead scope="col">Payout contact</TableHead>
+              <TableHead scope="col">Payout destination</TableHead>
+              <TableHead scope="col">Status</TableHead>
+              <TableHead scope="col">Requirements</TableHead>
+              <TableHead scope="col" className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody role="rowgroup" className="max-sm:block">
             {localCenters.map((center) => {
-              const flow = stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name });
+              const flow = center.payoutFlow ?? stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name });
               const readiness = flow.connect;
               const hasAccount = maskedAccount(center) !== "Not connected";
               const migration = readStripeConnectMigration(center.customFields);
@@ -608,11 +601,18 @@ export function StripeConnectPanel({
                 ? "Parent payments are currently unavailable. Check the Stripe and webhook configuration."
                 : flow.explanation);
               return (
-                <TableRow key={center.id}>
-                  <TableCell className="font-medium">{center.name}</TableCell>
-                  <TableCell>{center.crmLocationId ?? "Not mapped"}</TableCell>
-                  <TableCell>{center.email ?? "Add school email"}</TableCell>
-                  <TableCell className="max-w-48 whitespace-normal">
+                <TableRow key={center.id} role="row" className="max-sm:grid max-sm:gap-3 max-sm:p-4">
+                  <TableCell role="cell" className="font-medium max-sm:block max-sm:p-0">{center.name}</TableCell>
+                  <TableCell role="cell" className="max-sm:block max-sm:p-0">
+                    <span aria-hidden="true" className="mb-1 block text-xs font-medium text-muted-foreground sm:hidden">Location ID</span>
+                    {center.crmLocationId ?? "Not mapped"}
+                  </TableCell>
+                  <TableCell role="cell" className="max-sm:block max-sm:break-all max-sm:p-0">
+                    <span aria-hidden="true" className="mb-1 block text-xs font-medium text-muted-foreground sm:hidden">Payout contact</span>
+                    {center.email ?? "Add school email"}
+                  </TableCell>
+                  <TableCell role="cell" className="max-w-48 whitespace-normal max-sm:block max-sm:max-w-none max-sm:p-0">
+                    <span aria-hidden="true" className="mb-1 block text-xs font-medium text-muted-foreground sm:hidden">Payout destination</span>
                     <div className="text-xs font-medium">{payoutBankLabel(center)}</div>
                     {hasAccount ? <div className="mt-1 text-[11px] text-muted-foreground">{maskedAccount(center)}</div> : null}
                     {migrationInProgress ? (
@@ -621,8 +621,12 @@ export function StripeConnectPanel({
                       </div>
                     ) : null}
                   </TableCell>
-                  <TableCell><Badge variant={statusVariant(status)}>{status}</Badge></TableCell>
-                  <TableCell className="max-w-xs whitespace-normal text-xs text-muted-foreground">
+                  <TableCell role="cell" className="max-sm:block max-sm:p-0">
+                    <span aria-hidden="true" className="mb-1 block text-xs font-medium text-muted-foreground sm:hidden">Status</span>
+                    <Badge variant={statusVariant(status)}>{status}</Badge>
+                  </TableCell>
+                  <TableCell role="cell" className="max-w-xs whitespace-normal text-xs text-muted-foreground max-sm:block max-sm:max-w-none max-sm:p-0">
+                    <span aria-hidden="true" className="mb-1 block text-xs font-medium text-muted-foreground sm:hidden">Requirements</span>
                     {explanation}
                     {readiness.requirementFields.length
                       ? ` (${readiness.requirementFields.length} item${readiness.requirementFields.length === 1 ? "" : "s"} needed)`
@@ -630,8 +634,8 @@ export function StripeConnectPanel({
                         ? ` (${readiness.pendingVerificationFields.length} item${readiness.pendingVerificationFields.length === 1 ? "" : "s"} under review)`
                         : ""}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap justify-end gap-2">
+                  <TableCell role="cell" className="max-sm:block max-sm:p-0">
+                    <div className="flex flex-wrap justify-end gap-2 max-sm:justify-start">
                       {migrationInProgress && center.stripeReauthorizationAvailable !== false ? (
                         <Button
                           type="button"

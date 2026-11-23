@@ -1051,6 +1051,7 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent, matchedTen
   }
 
   const centers = await prisma.center.findMany({
+    ...(matchedTenantId ? { where: { organization: { tenantId: matchedTenantId } } } : {}),
     select: {
       id: true,
       crmLocationId: true,
@@ -1058,17 +1059,26 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent, matchedTen
       organization: { select: { tenantId: true } },
     },
   });
-  const matchedCenters = centers.filter((center) => readStripeConnectedAccountId(center.customFields) === accountId);
+  const candidates = centers.filter((center) => readStripeConnectedAccountId(center.customFields) === accountId
+    && (!matchedTenantId || center.organization.tenantId === matchedTenantId));
+  const tenantId = matchedTenantId || candidates[0]?.organization.tenantId || null;
+  const matchedCenters = candidates.filter((center) => center.organization.tenantId === tenantId);
   if (!matchedCenters.length) {
     return NextResponse.json({ ok: true, ignored: true, reason: "No center matched the connected account." });
   }
 
-  const tenantId = matchedTenantId || matchedCenters[0]?.organization.tenantId || null;
   const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId });
+  let updatedCenters = 0;
   try {
     await runStripeWebhookTransaction(async (tx) => {
+      updatedCenters = 0;
       await recordStripeWebhookEvent(tx, event);
-      for (const center of matchedCenters) {
+      for (const matchedCenter of matchedCenters) {
+        const center = await tx.center.findUnique({
+          where: { id: matchedCenter.id },
+          select: { id: true, crmLocationId: true, customFields: true, organization: { select: { tenantId: true } } },
+        });
+        if (!center || center.organization.tenantId !== tenantId || readStripeConnectedAccountId(center.customFields) !== accountId) continue;
         const existingFields = jsonObject(center.customFields);
         const readiness = retrieved.ok && retrieved.account ? stripeConnectReadinessFromSnapshot(retrieved.account) : null;
         const nextFields = readiness
@@ -1085,10 +1095,19 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent, matchedTen
               stripeConnectLastSyncedAt: new Date().toISOString(),
             };
 
-        await tx.center.update({
-          where: { id: center.id },
+        const updated = await tx.center.updateMany({
+          where: {
+            id: center.id,
+            customFields: center.customFields === null
+              ? { equals: Prisma.DbNull }
+              : { equals: center.customFields as Prisma.InputJsonValue },
+          },
           data: { customFields: nextFields },
         });
+        if (updated.count !== 1) {
+          throw Object.assign(new Error("The school's Stripe connection changed during webhook synchronization."), { code: "P2034" });
+        }
+        updatedCenters += 1;
 
         await tx.auditLog.create({
           data: {
@@ -1115,7 +1134,7 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent, matchedTen
     throw error;
   }
 
-  return NextResponse.json({ ok: true, updatedCenters: matchedCenters.length });
+  return NextResponse.json({ ok: true, updatedCenters });
 }
 
 async function handlePayoutCreated(

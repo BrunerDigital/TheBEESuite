@@ -39,7 +39,7 @@ test("native Payments stays inside BEE Suite and read-only while changing school
   const address = server.address(); assert.ok(address && typeof address !== "string");
   const base = `http://127.0.0.1:${address.port}`, output = join(tmpdir(), "bee-owner-payments-readonly-qa-20261123");
   await mkdir(output, { recursive: true });
-  await withFixtureBrowser(server, () => chromium.launch({ headless: true }), async browser => {
+  await withFixtureBrowser(server, () => chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL || undefined }), async browser => {
     for (const viewport of [{ width: 1365, height: 900 }, { width: 390, height: 844 }]) await t.test(`${viewport.width}: selection, balances, payout/deposit distinction and no writes`, async () => {
       const page = await browser.newPage({ viewport }); const unexpected: string[] = [], errors: string[] = [];
       page.on("pageerror", e => errors.push(e.message));

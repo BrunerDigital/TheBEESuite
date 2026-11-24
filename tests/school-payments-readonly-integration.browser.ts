@@ -39,7 +39,7 @@ test("selected-school GET navigation reauthorizes synthetic reads, preserves ref
   const address = server.address(); assert.ok(address && typeof address !== "string");
   const base = `http://127.0.0.1:${address.port}`, output = join(tmpdir(), "bee-payments-integration-qa-20261123");
   await mkdir(output, { recursive: true });
-  await withFixtureBrowser(server, () => chromium.launch({ headless: true }), async browser => {
+  await withFixtureBrowser(server, () => chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL || undefined }), async browser => {
     for (const width of [1365, 390]) await t.test(`${width}: navigation, dates, coverage and forbidden school`, async () => {
       const page = await browser.newPage({ viewport: { width, height: 900 } }), unexpected: string[] = [], errors: string[] = [];
       page.on("pageerror", e => errors.push(e.message));

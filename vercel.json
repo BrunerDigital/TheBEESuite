@@ -1,5 +1,6 @@
 {
   "framework": "nextjs",
+  "git": {"deploymentEnabled": {"ci/payments-readonly-20261124": false}},
   "regions": ["sfo1"],
   "installCommand": "npm ci",
   "buildCommand": "npm run vercel-build",

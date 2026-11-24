@@ -41,6 +41,12 @@ jobs:
           google-chrome --version
           node --import tsx --test tests/billing-check-draft.browser.ts tests/offline-payment-recovery.browser.ts tests/public-registration-privacy.browser.ts
 
+      - name: Verify read-only school Payments in Chromium
+        if: github.head_ref == 'ci/payments-readonly-20261124'
+        run: |
+          node node_modules/playwright/cli.js install --with-deps chromium
+          node --import tsx --test tests/school-payments-readonly.browser.ts tests/school-payments-readonly-integration.browser.ts
+
   tuition-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 10

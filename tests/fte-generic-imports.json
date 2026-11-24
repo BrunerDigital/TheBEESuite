@@ -1474,6 +1474,9 @@
     "AGENCY_REGISTER_LIMIT",
     "agencyServiceRegister"
   ],
+  "@/components/school-payments-readonly-entry": [
+    "SchoolPaymentsReadonlyEntry"
+  ],
   "@/lib/public-inquiry-restoration": [
     "isLeesSummitInquiryIdentifier",
     "isRestoredPublicInquiryCenter",

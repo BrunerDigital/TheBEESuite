@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromFields, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
+import { verifyStripeConnectAccountBinding } from "@/lib/stripe-connect-setup";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -78,15 +79,28 @@ async function GETHandler(request: NextRequest) {
       { status: retrieved.configured ? 502 : 503 },
     );
   }
+  const binding = verifyStripeConnectAccountBinding(accountId, retrieved.account.id);
+  if (!binding.ok) {
+    return NextResponse.json({ ok: false, error: binding.error }, { status: 409, headers: { "Cache-Control": "no-store" } });
+  }
 
   const readiness = stripeConnectReadinessFromSnapshot(retrieved.account);
   const payoutBanks = await listStripeConnectedAccountPayoutBanks({
     accountId,
     tenantId: user.tenantId,
-  });
+  }).catch(() => null);
+  if (!payoutBanks?.ok) {
+    const error = payoutBanks?.error || "The school's payout bank could not be verified. Try checking Stripe status again.";
+    return NextResponse.json({
+      ok: false,
+      configured: payoutBanks?.configured ?? true,
+      centerId: center.id,
+      error,
+      payoutBankError: error,
+    }, { status: payoutBanks?.configured === false ? 503 : 502, headers: { "Cache-Control": "no-store" } });
+  }
   const payoutBank = payoutBanks.defaultBank;
-  const payoutBankPatch = payoutBanks.ok
-    ? {
+  const payoutBankPatch = {
         stripePayoutBankName: payoutBank?.bankName || null,
         stripePayoutBankLast4: payoutBank?.last4 || null,
         stripePayoutBankStatus: payoutBank?.status || null,
@@ -94,8 +108,7 @@ async function GETHandler(request: NextRequest) {
         stripePayoutBankDefaultConfirmed: payoutBank?.defaultForCurrency === true,
         stripePayoutBankCount: payoutBanks.banks.length,
         stripePayoutBankLastSyncedAt: new Date().toISOString(),
-      }
-    : {};
+      };
 
   const syncedFields: Prisma.JsonObject = {
     ...existingFields,
@@ -161,7 +174,7 @@ async function GETHandler(request: NextRequest) {
       defaultForCurrency: payoutBank.defaultForCurrency,
     } : null,
     payoutBankCount: payoutBanks.banks.length,
-    payoutBankError: payoutBanks.ok ? null : payoutBanks.error || "Payout bank could not be confirmed.",
+    payoutBankError: null,
     flow,
   }, { headers: { "Cache-Control": "no-store" } });
 }

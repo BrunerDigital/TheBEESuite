@@ -1,4 +1,5 @@
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { stripePayoutBankIsUsable } from "@/lib/stripe-payout-bank";
 import {
   stripeConnectReadinessFromFields,
   type StripeConnectReadiness,
@@ -43,9 +44,11 @@ export function stripeSchoolReadinessFlowFromFields(input: {
 }): StripeSchoolReadinessFlow {
   const custom = fields(input.customFields);
   const connect = stripeConnectReadinessFromFields(custom);
-  const payoutBankConfirmed = Boolean(
-    clean(custom.stripePayoutBankLast4) && custom.stripePayoutBankDefaultConfirmed === true,
-  );
+  const payoutBankConfirmed = stripePayoutBankIsUsable({
+    last4: clean(custom.stripePayoutBankLast4),
+    defaultForCurrency: custom.stripePayoutBankDefaultConfirmed === true,
+    status: clean(custom.stripePayoutBankStatus),
+  });
   const billingApproved = stripeSchoolBillingApproval({
     customFields: custom,
     centerName: input.centerName,

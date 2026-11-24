@@ -134,6 +134,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
+  let accountId = readStripeConnectedAccountId(existingFields);
   const now = new Date().toISOString();
   let currentFields: Prisma.JsonObject = {
     ...existingFields,
@@ -141,13 +142,14 @@ async function POSTHandler(request: NextRequest) {
     stripeConnectSetupUpdatedAt: now,
     stripeConnectSetupVersion: "2026-06-dashboard-v1",
     stripeFundsFlow: "connected_account_direct_charge_application_fee",
-    stripePayoutCollectionMode: "stripe_automatic",
-    stripePayoutSchedulePreference: "fastest_available",
+    ...(!accountId ? {
+      stripePayoutCollectionMode: "stripe_automatic",
+      stripePayoutSchedulePreference: "fastest_available",
+    } : {}),
     stripeSoftwarePaymentPreference: clean(existingFields.stripeSoftwarePaymentPreference) || "payout_bank",
     stripeSoftwarePaymentStatus: clean(existingFields.stripeSoftwareDefaultPaymentMethodId) ? "ready" : "authorization_required",
   };
   const profileFields = currentFields;
-  let accountId = readStripeConnectedAccountId(existingFields);
   let createdAccount = false;
 
   const profileSaved = await prisma.center.updateMany({
@@ -308,24 +310,28 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
-  const payoutSchedule = await setStripeConnectedAccountDailyPayouts({ accountId, tenantId: user.tenantId });
-  const beforeScheduleFields = currentFields;
-  currentFields = {
-    ...currentFields,
-    stripeConnectAccountId: accountId,
-    stripePayoutScheduleInterval: payoutSchedule.ok ? "daily" : "default",
-    stripePayoutDelayPolicy: payoutSchedule.ok ? "lowest_available" : "unchanged",
-    stripePayoutScheduleStatus: payoutSchedule.ok ? "daily_automatic_configured" : "schedule_update_failed",
-    stripePayoutScheduleLastSyncedAt: new Date().toISOString(),
-    ...(payoutSchedule.ok
-      ? { stripePayoutScheduleLastError: null }
-      : { stripePayoutScheduleLastError: clean(payoutSchedule.error).slice(0, 240) || "Daily automatic payout schedule could not be configured." }),
-  };
-  if (!await updateCenterCustomFieldsIfCurrent(center.id, beforeScheduleFields, currentFields)) {
-    return NextResponse.json(
-      { ok: false, error: "This school's Stripe connection changed while payout scheduling was saved. Refresh and try again." },
-      { status: 409 },
-    );
+  // Existing accounts keep their payout cadence, holds and settlement-delay
+  // overrides. Daily initialization belongs only to account creation.
+  if (createdAccount) {
+    const payoutSchedule = await setStripeConnectedAccountDailyPayouts({ accountId, tenantId: user.tenantId });
+    const beforeScheduleFields = currentFields;
+    currentFields = {
+      ...currentFields,
+      stripeConnectAccountId: accountId,
+      stripePayoutScheduleInterval: payoutSchedule.ok ? "daily" : "default",
+      stripePayoutDelayPolicy: payoutSchedule.ok ? "lowest_available" : "unchanged",
+      stripePayoutScheduleStatus: payoutSchedule.ok ? "daily_automatic_configured" : "schedule_update_failed",
+      stripePayoutScheduleLastSyncedAt: new Date().toISOString(),
+      ...(payoutSchedule.ok
+        ? { stripePayoutScheduleLastError: null }
+        : { stripePayoutScheduleLastError: clean(payoutSchedule.error).slice(0, 240) || "Daily automatic payout schedule could not be configured." }),
+    };
+    if (!await updateCenterCustomFieldsIfCurrent(center.id, beforeScheduleFields, currentFields)) {
+      return NextResponse.json(
+        { ok: false, error: "This school's Stripe connection changed while payout scheduling was saved. Refresh and try again." },
+        { status: 409 },
+      );
+    }
   }
 
   const baseUrl = requestBaseUrl(request);

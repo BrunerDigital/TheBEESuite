@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { loginHrefForPortal, type LoginPortal } from "../src/lib/login-routing";
 
 const login = readFileSync("src/components/login-form.tsx", "utf8");
 const forgotPassword = readFileSync("src/components/forgot-password-form.tsx", "utf8");
@@ -11,8 +12,12 @@ const parentWorkspace = readFileSync("src/components/parent-portal-workspace.tsx
 const previewQa = readFileSync("scripts/qa-device-preview.ts", "utf8");
 
 test("general sign-in routes every supported role family to an actionable portal", () => {
-  for (const href of ["/executives", "/directors", "/teachers", "/parents"]) {
-    assert.match(login, new RegExp(`href: ["']${href}["']`));
+  for (const portal of ["executives", "directors", "teachers", "parents"] satisfies LoginPortal[]) {
+    assert.match(login, new RegExp(`portal: ["']${portal}["']`));
+    const destination = "/billing-settings#payout-setup";
+    const url = new URL(loginHrefForPortal(portal, destination), "https://thebeesuite.io");
+    assert.equal(url.pathname, `/${portal}`);
+    assert.equal(url.searchParams.get("next"), destination);
   }
   for (const role of [
     "Platform owners",

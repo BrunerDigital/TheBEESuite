@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const tools = [
   ["School setup", "Review your school profile, classrooms, staff, tuition, and launch checklist.", "/billing-settings?view=setup"],
-  ["Stripe billing and payouts", "Complete secure Stripe onboarding, verification, and payout bank setup; check billing readiness.", "/billing-settings"],
+  ["Stripe billing and payouts", "Complete secure Stripe onboarding, verification, and payout bank setup; check billing readiness.", "/billing-settings#payout-setup"],
   ["Families and children", "Add or review families, children, guardians, enrollment, and balances.", "/family-detail"],
   ["School workspace", "Use the daily operations and management tools available to your director.", "/dashboard"],
   ["Import school data", "Upload and preview your family data, review errors and duplicates, then approve the import for this school.", "/data-readiness"],

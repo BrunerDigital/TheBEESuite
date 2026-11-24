@@ -17,6 +17,7 @@ import type { LoginMfaFactor } from "@/lib/mfa-login";
 import { buildLoginRequest } from "@/lib/login-request";
 import {
   defaultNextPathForLoginPortal,
+  loginHrefForPortal,
   normalizeLoginPortal,
   safeLoginNextPath,
   type LoginPortal,
@@ -102,10 +103,10 @@ const loginCopy: Record<LoginPortal, {
 };
 
 const rolePortalLinks = [
-  { href: "/executives", title: "Company and regional", roles: "Platform owners, brand admins, regional managers, and read-only auditors" },
-  { href: "/directors", title: "School leadership and billing", roles: "Directors, assistant directors, and billing administrators" },
-  { href: "/teachers", title: "Teachers", roles: "Classroom staff and daily care workflows" },
-  { href: "/parents", title: "Families and pickup", roles: "Parents, guardians, and authorized pickup users" },
+  { portal: "executives", title: "Company and regional", roles: "Platform owners, brand admins, regional managers, and read-only auditors" },
+  { portal: "directors", title: "School leadership and billing", roles: "Directors, assistant directors, and billing administrators" },
+  { portal: "teachers", title: "Teachers", roles: "Classroom staff and daily care workflows" },
+  { portal: "parents", title: "Families and pickup", roles: "Parents, guardians, and authorized pickup users" },
 ] as const;
 
 export function LoginForm({ portal: portalInput = "general", defaultNextPath }: LoginFormProps = {}) {
@@ -212,8 +213,8 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
               <nav aria-label="Choose a role-specific sign-in page" className="order-2 mt-5 grid gap-2 sm:order-1 sm:mt-0 sm:mb-5 sm:grid-cols-2">
                 {rolePortalLinks.map((item) => (
                   <Link
-                    key={item.href}
-                    href={item.href}
+                    key={item.portal}
+                    href={loginHrefForPortal(item.portal, searchParams.get("next"))}
                     prefetch={false}
                     className="group flex min-h-20 items-start justify-between gap-3 rounded-lg border bg-slate-50 p-3 text-left transition-colors motion-reduce:transition-none hover:border-amber-400 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                   >

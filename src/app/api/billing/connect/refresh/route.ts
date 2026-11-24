@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { createStripeAccountLink, readStripeConnectedAccountId } from "@/lib/integrations";
+import { createStripeAccountLink, readStripeConnectedAccountId, retrieveStripeConnectedAccount } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
+import { verifyStripeConnectAccountBinding } from "@/lib/stripe-connect-setup";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -62,13 +64,30 @@ async function GETHandler(request: NextRequest) {
     return NextResponse.redirect(settingsUrl(baseUrl, center.id, "not_started"));
   }
 
+  const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId: user.tenantId }).catch(() => null);
+  const binding = verifyStripeConnectAccountBinding(accountId, retrieved?.account?.id);
+  if (!retrieved?.ok || !retrieved.account || !binding.ok) {
+    return NextResponse.redirect(settingsUrl(baseUrl, center.id, "refresh_failed"));
+  }
+
   const returnUrl = `${baseUrl}/billing-settings?stripeConnect=return&center=${encodeURIComponent(center.id)}`;
   const refreshUrl = `${baseUrl}/api/billing/connect/refresh?centerId=${encodeURIComponent(center.id)}`;
-  const link = await createStripeAccountLink({ accountId, refreshUrl, returnUrl, tenantId: user.tenantId });
+  const link = await createStripeAccountLink({ accountId, refreshUrl, returnUrl, tenantId: user.tenantId }).catch(() => ({
+    ok: false,
+    configured: true,
+    error: "Payout account link refresh could not reach Stripe. Try again from payout settings.",
+    url: undefined,
+  }));
+  const currentFields = {
+    id: center.id,
+    customFields: center.customFields === null
+      ? { equals: Prisma.DbNull }
+      : { equals: center.customFields as Prisma.InputJsonValue },
+  };
 
   if (!link.ok || !link.url) {
-    await prisma.center.update({
-      where: { id: center.id },
+    const updated = await prisma.center.updateMany({
+      where: currentFields,
       data: {
         customFields: {
           ...jsonObject(center.customFields),
@@ -78,11 +97,14 @@ async function GETHandler(request: NextRequest) {
         },
       },
     });
+    if (updated.count !== 1) {
+      return NextResponse.redirect(settingsUrl(baseUrl, center.id, "connection_changed"));
+    }
     return NextResponse.redirect(settingsUrl(baseUrl, center.id, link.configured ? "refresh_failed" : "stripe_missing"));
   }
 
-  await prisma.center.update({
-    where: { id: center.id },
+  const updated = await prisma.center.updateMany({
+    where: currentFields,
     data: {
       customFields: {
         ...jsonObject(center.customFields),
@@ -91,6 +113,9 @@ async function GETHandler(request: NextRequest) {
       },
     },
   });
+  if (updated.count !== 1) {
+    return NextResponse.redirect(settingsUrl(baseUrl, center.id, "connection_changed"));
+  }
 
   await writeAuditLog(user, {
     centerId: center.id,
@@ -103,7 +128,9 @@ async function GETHandler(request: NextRequest) {
     },
   });
 
-  return NextResponse.redirect(link.url);
+  return NextResponse.redirect(link.url, {
+    headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Vary: "Cookie" },
+  });
 }
 
 export const GET = withApiLogging("GET", GETHandler);

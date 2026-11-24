@@ -20,6 +20,10 @@ test("Stripe reconciliation readers scope read-only requests to the connected ac
     const payouts = await listStripePayouts(range);
     assert.equal(balance.transactions[0]?.netCents, 970);
     assert.equal(payouts.payouts[0]?.status, "paid");
+    // Legacy reconciliation returns the rows directly. Keep its JSON shape unchanged.
+    assert.equal("currency" in balance.transactions[0]!, false);
+    assert.equal("readEvidenceComplete" in payouts.payouts[0]!, false);
+    assert.equal("pageComplete" in balance || "pageComplete" in payouts, false);
     assert.equal(requests.length, 2);
     assert.ok(requests.every((request) => request.method === "GET"));
     assert.ok(requests.every((request) => request.account === "acct_school"));
@@ -28,6 +32,23 @@ test("Stripe reconciliation readers scope read-only requests to the connected ac
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test("read adapters preserve currency and require explicit pagination exhaustion; malformed monetary evidence cannot become a zero payout", async () => {
+  const originalFetch = global.fetch;
+  const fixture = { data: [{ id: "po_fixture_bad", currency: "usd", status: "paid", created: 1_774_252_800 }], has_more: undefined as boolean | undefined };
+  global.fetch = (async () => new Response(JSON.stringify(fixture), { status: 200 })) as typeof fetch;
+  try {
+    const range = { connectedAccountId: "acct_fixture_school", createdGte: new Date("2026-03-20"), createdLte: new Date("2026-03-22"), credentials: { STRIPE_SECRET_KEY: "sk_test_synthetic" }, includeReadEvidence: true };
+    const unknown = await listStripePayouts(range);
+    assert.equal(unknown.pageComplete, false); assert.equal(unknown.payouts[0].currency, "usd"); assert.equal(unknown.payouts[0].readEvidenceComplete, false);
+    fixture.has_more = true; assert.equal((await listStripePayouts(range)).pageComplete, false);
+    fixture.has_more = false; assert.equal((await listStripePayouts(range)).pageComplete, true);
+    const malformed = { ...fixture, data: undefined };
+    global.fetch = (async () => new Response(JSON.stringify(malformed), { status: 200 })) as typeof fetch;
+    const invalid = await listStripePayouts(range);
+    assert.equal(invalid.ok, false); assert.notEqual(invalid.pageComplete, true);
+  } finally { global.fetch = originalFetch; }
 });
 
 test("Stripe reconciliation readers fail closed without a connected account", async () => {

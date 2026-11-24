@@ -56,7 +56,10 @@ test("selected-school GET navigation reauthorizes synthetic reads, preserves ref
       assert.equal(await page.getByRole("button").count(), 1); assert.equal(await page.locator("iframe,a").count(), 0);
       assert.equal(await page.locator("form").getAttribute("method"), "get");
       await page.screenshot({ path: join(output, `payments-integration-alpha-${width}.png`), fullPage: true });
-      await page.getByLabel("School", { exact: true }).selectOption("school_b");
+      const schoolSelect = page.locator('form select[name="center"]');
+      assert.equal(await schoolSelect.count(), 1);
+      await schoolSelect.selectOption("school_b");
+      assert.equal(await schoolSelect.inputValue(), "school_b");
       await page.getByRole("button", { name: "View school", exact: true }).click();
       await page.waitForURL(/center=school_b/); await page.getByRole("heading", { name: "Fixture School Beta", exact: true }).waitFor();
       assert.equal(await page.getByRole("heading", { name: "Fixture School Alpha", exact: true }).count(), 0);

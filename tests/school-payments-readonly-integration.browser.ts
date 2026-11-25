@@ -21,8 +21,12 @@ test("selected-school GET navigation reauthorizes synthetic reads, preserves ref
     loadAuthority: async (_u: unknown, id: string) => paymentsAuthority(id), read: async (a: ReturnType<typeof paymentsAuthority>) => {
       reads.push(a.scope.centerId); const f = paymentsProviderFixture(a.scope.centerId), row = paymentsLocalRow(`fixture_${a.scope.centerId}`, a.scope.centerId);
       row.paidAt = new Date("2026-10-01T00:00:00Z"); row.ledgerEntries.push({ id: "fixture_refund", type: "refund", amountCents: 3000, createdAt: new Date("2026-11-20T00:00:00Z") });
+      const undated = paymentsLocalRow(`fixture_undated_${a.scope.centerId}`, a.scope.centerId);
+      undated.status = "DRAFT"; undated.paidAt = null; undated.ledgerEntries = [];
+      undated.customFields = { ...undated.customFields as object, stripeCheckoutSessionStatus: "expired" };
+      const current = paymentsLocalRow(`fixture_current_${a.scope.centerId}`, a.scope.centerId);
       const page = await f.providers.payouts(); page.hasMore = true;
-      return readSchoolPaymentsSnapshot(a, schoolPaymentsWindow("2026-11-17", "2026-11-23"), { ...f.providers, local: async () => [row], payouts: async () => page });
+      return readSchoolPaymentsSnapshot(a, schoolPaymentsWindow("2026-11-17", "2026-11-23"), { ...f.providers, local: async () => [row, undated, current], payouts: async () => page });
     } };
   const server = createServer(async (request, response) => {
     if (request.method !== "GET") { response.writeHead(405); response.end(); return; }
@@ -32,7 +36,7 @@ test("selected-school GET navigation reauthorizes synthetic reads, preserves ref
     if (url.pathname === "/favicon.ico") { response.writeHead(204); response.end(); return; }
     const r = await readSchoolPaymentsPage({ enabled: true, centerId: url.searchParams.get("center") || undefined }, deps);
     if (r.status !== "ready") { response.writeHead(403); response.end("School payment information unavailable"); return; }
-    response.setHeader("Content-Type", "text/html");
+    response.setHeader("Content-Type", "text/html; charset=utf-8");
     response.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script>const FIXTURE_PAYMENTS_PAGE=${JSON.stringify({ view: r.view, schools: r.schools }).replaceAll("<", "\\u003c")}</script><script src="/fixture.js"></script></body></html>`);
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -51,18 +55,20 @@ test("selected-school GET navigation reauthorizes synthetic reads, preserves ref
       await page.goto(base); await page.getByRole("heading", { name: "Fixture School Alpha", exact: true }).waitFor();
       await page.getByText(/Not comparable: collection dates/).waitFor();
       await page.getByText(/Original collection: 2026-10-01. Ledger recorded: 2026-11-20/).waitFor();
+      await page.getByRole("region", { name: "Payment status", exact: true }).getByText("Original collection: 2026-10-01 (UTC) · Outside selected window.", { exact: true }).waitFor();
+      await page.getByRole("region", { name: "Payment status", exact: true }).getByText("No collection date recorded · Undated payment or checkout state.", { exact: true }).waitFor();
+      await page.getByRole("region", { name: "Payment status", exact: true }).getByText("Original collection: 2026-11-20 (UTC) · Within selected window.", { exact: true }).waitFor();
       await page.getByText(/More processor pages are available/).waitFor();
       await page.getByText("Bank posting: Unconfirmed", { exact: true }).waitFor();
+      await page.getByText("Payout …1234 · Current account …ol_a", { exact: true }).waitFor();
       assert.equal(await page.getByRole("button").count(), 1); assert.equal(await page.locator("iframe,a").count(), 0);
       assert.equal(await page.locator("form").getAttribute("method"), "get");
       await page.screenshot({ path: join(output, `payments-integration-alpha-${width}.png`), fullPage: true });
-      const schoolSelect = page.locator('form select[name="center"]');
-      assert.equal(await schoolSelect.count(), 1);
-      await schoolSelect.selectOption("school_b");
-      assert.equal(await schoolSelect.inputValue(), "school_b");
+      await page.getByLabel("School", { exact: true }).selectOption("school_b");
       await page.getByRole("button", { name: "View school", exact: true }).click();
       await page.waitForURL(/center=school_b/); await page.getByRole("heading", { name: "Fixture School Beta", exact: true }).waitFor();
       assert.equal(await page.getByRole("heading", { name: "Fixture School Alpha", exact: true }).count(), 0);
+      assert.equal(await page.getByLabel("School", { exact: true }).inputValue(), "school_b");
       assert.ok(reads.includes("school_b")); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       await page.screenshot({ path: join(output, `payments-integration-beta-${width}.png`), fullPage: true });
       const count = reads.length, denied = await page.goto(`${base}/?center=foreign_school`); assert.equal(denied?.status(), 403); assert.equal(reads.length, count);

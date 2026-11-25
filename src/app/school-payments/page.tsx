@@ -21,9 +21,9 @@ export default async function SchoolPaymentsPage({ searchParams }: { searchParam
   if (result.status !== "ready") return <main className="p-6"><h1>Payments</h1><p role="status">School payment information is unavailable.</p></main>;
   return <AppShell currentUser={result.user}><SchoolPaymentsReadonly key={result.view.centerId} schools={[result.view]} schoolNavigation={
     <form action="/school-payments" method="get" className="flex flex-wrap items-end gap-2">
-      <label className="block text-sm font-medium">School<select name="center" defaultValue={result.view.centerId} className="block rounded-lg border bg-background p-2">
+      <div><label htmlFor="school-payments-center" className="block text-sm font-medium">School</label><select id="school-payments-center" name="center" defaultValue={result.view.centerId} className="block rounded-lg border bg-background p-2">
         {result.schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-      </select></label>
+      </select></div>
       <label className="text-sm">From (UTC)<input type="date" name="start" defaultValue={window.start.toISOString().slice(0, 10)} className="block rounded-lg border p-2" /></label>
       <label className="text-sm">Through (UTC)<input type="date" name="end" defaultValue={window.end.toISOString().slice(0, 10)} className="block rounded-lg border p-2" /></label>
       <button type="submit" className="rounded-lg border px-4 py-2">View school</button>

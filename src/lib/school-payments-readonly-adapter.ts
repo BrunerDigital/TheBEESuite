@@ -7,8 +7,13 @@ export const SCHOOL_PAYMENT_LOCAL_LIMIT = 500;
 export const SCHOOL_PAYMENT_LEDGER_LIMIT = 100;
 export type SchoolPaymentsWindow = { start: Date; end: Date };
 export function schoolPaymentsWindow(start?: string, end?: string, now = new Date()): SchoolPaymentsWindow {
-  const finish = end ? new Date(`${end}T23:59:59.999Z`) : now;
-  const begin = start ? new Date(`${start}T00:00:00.000Z`) : new Date(finish.getTime() - 7 * 86_400_000);
+  const finish = end ? new Date(`${end}T23:59:59.999Z`) : new Date(now);
+  if (!end) finish.setUTCHours(23, 59, 59, 999);
+  const begin = start ? new Date(`${start}T00:00:00.000Z`) : new Date(finish);
+  if (!start) {
+    begin.setUTCDate(begin.getUTCDate() - 6);
+    begin.setUTCHours(0, 0, 0, 0);
+  }
   if ((start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) || (end && !/^\d{4}-\d{2}-\d{2}$/.test(end))
     || !Number.isFinite(begin.getTime()) || !Number.isFinite(finish.getTime()) || begin > finish
     || finish.getTime() - begin.getTime() > 31 * 86_400_000

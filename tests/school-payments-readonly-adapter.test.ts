@@ -5,6 +5,19 @@ import { buildSchoolPaymentsReadView } from "../src/lib/school-payments-readonly
 import { paymentsAuthority, paymentsLocalRow, paymentsProviderFixture } from "./helpers/school-payments-integration-fixtures";
 
 const window = schoolPaymentsWindow("2026-11-17", "2026-11-23");
+test("default date inputs preserve seven whole UTC days when submitted unchanged", () => {
+  const now = new Date("2026-11-24T15:42:13.456Z"), originalNow = now.toISOString();
+  const defaults = schoolPaymentsWindow(undefined, undefined, now);
+  assert.equal(defaults.start.toISOString(), "2026-11-18T00:00:00.000Z");
+  assert.equal(defaults.end.toISOString(), "2026-11-24T23:59:59.999Z");
+  assert.equal(now.toISOString(), originalNow, "Date bounds must not mutate the caller's clock");
+  assert.deepEqual(schoolPaymentsWindow(defaults.start.toISOString().slice(0, 10), defaults.end.toISOString().slice(0, 10)), defaults);
+  assert.deepEqual(schoolPaymentsWindow(undefined, "2026-11-24", now), defaults);
+  assert.deepEqual(schoolPaymentsWindow("2026-11-18", undefined, now), defaults);
+  const leap = schoolPaymentsWindow(undefined, undefined, new Date("2028-03-01T00:00:00Z"));
+  assert.equal(leap.start.toISOString(), "2028-02-24T00:00:00.000Z");
+  assert.equal(leap.end.toISOString(), "2028-03-01T23:59:59.999Z");
+});
 test("local query uses the server-authorized school, 501 sentinel, and includes earlier payments refunded in this window", () => {
   const q = schoolPaymentsLocalQuery("fixture_school", window);
   assert.equal(q.take, 501); assert.equal(q.select.ledgerEntries.take, 101);

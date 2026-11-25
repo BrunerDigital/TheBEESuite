@@ -213,6 +213,8 @@ export type StripePayoutBankSnapshot = {
 
 export type StripeBalanceTransactionSnapshot = {
   id: string;
+  currency?: string;
+  readEvidenceComplete?: boolean;
   type: string;
   amountCents: number;
   feeCents: number;
@@ -224,6 +226,8 @@ export type StripeBalanceTransactionSnapshot = {
 
 export type StripePayoutSnapshot = {
   id: string;
+  currency?: string;
+  readEvidenceComplete?: boolean;
   amountCents: number;
   status: string;
   createdAt: string | null;
@@ -3200,7 +3204,8 @@ export async function listStripeBalanceTransactions(input: {
   limit?: number;
   tenantId?: string | null;
   credentials?: Record<string, string>;
-}): Promise<IntegrationSendResult & { transactions: StripeBalanceTransactionSnapshot[]; hasMore: boolean }> {
+  includeReadEvidence?: boolean;
+}): Promise<IntegrationSendResult & { transactions: StripeBalanceTransactionSnapshot[]; hasMore: boolean; pageComplete?: boolean }> {
   const apiKey = await getStripeSecretKey(input);
   if (!apiKey) return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured.", transactions: [], hasMore: false };
   if (!clean(input.connectedAccountId).startsWith("acct_")) {
@@ -3224,6 +3229,11 @@ export async function listStripeBalanceTransactions(input: {
     return {
       id: clean(row.id),
       type: clean(row.type),
+      ...(input.includeReadEvidence === true ? {
+        currency: clean(row.currency),
+        readEvidenceComplete: /^txn_[A-Za-z0-9_]+$/.test(clean(row.id)) && Boolean(clean(row.type))
+          && Number.isSafeInteger(row.amount) && Number.isSafeInteger(row.fee) && Number.isSafeInteger(row.net),
+      } : {}),
       amountCents: typeof row.amount === "number" ? row.amount : 0,
       feeCents: typeof row.fee === "number" ? row.fee : 0,
       netCents: typeof row.net === "number" ? row.net : 0,
@@ -3232,7 +3242,10 @@ export async function listStripeBalanceTransactions(input: {
       availableOn: stripeReconciliationTimestamp(row.available_on),
     };
   });
-  return { ok: true, configured: true, provider: "stripe", transactions, hasMore: json.has_more === true };
+  return { ok: true, configured: true, provider: "stripe", transactions, hasMore: json.has_more === true,
+    ...(input.includeReadEvidence === true ? {
+      pageComplete: Array.isArray(json.data) && json.has_more === false && transactions.length <= Math.min(Math.max(input.limit || 100, 1), 100),
+    } : {}) };
 }
 
 export async function listStripePayouts(input: {
@@ -3242,7 +3255,8 @@ export async function listStripePayouts(input: {
   limit?: number;
   tenantId?: string | null;
   credentials?: Record<string, string>;
-}): Promise<IntegrationSendResult & { payouts: StripePayoutSnapshot[]; hasMore: boolean }> {
+  includeReadEvidence?: boolean;
+}): Promise<IntegrationSendResult & { payouts: StripePayoutSnapshot[]; hasMore: boolean; pageComplete?: boolean }> {
   const apiKey = await getStripeSecretKey(input);
   if (!apiKey) return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured.", payouts: [], hasMore: false };
   if (!clean(input.connectedAccountId).startsWith("acct_")) {
@@ -3265,6 +3279,10 @@ export async function listStripePayouts(input: {
     const row = asRecord(item);
     return {
       id: clean(row.id),
+      ...(input.includeReadEvidence === true ? {
+        currency: clean(row.currency),
+        readEvidenceComplete: /^po_[A-Za-z0-9_]+$/.test(clean(row.id)) && Number.isSafeInteger(row.amount),
+      } : {}),
       amountCents: typeof row.amount === "number" ? row.amount : 0,
       status: clean(row.status),
       createdAt: stripeReconciliationTimestamp(row.created),
@@ -3272,7 +3290,10 @@ export async function listStripePayouts(input: {
       failureCode: clean(row.failure_code) || null,
     };
   });
-  return { ok: true, configured: true, provider: "stripe", payouts, hasMore: json.has_more === true };
+  return { ok: true, configured: true, provider: "stripe", payouts, hasMore: json.has_more === true,
+    ...(input.includeReadEvidence === true ? {
+      pageComplete: Array.isArray(json.data) && json.has_more === false && payouts.length <= Math.min(Math.max(input.limit || 100, 1), 100),
+    } : {}) };
 }
 
 async function retrieveLegacyStripeConnectedAccount(

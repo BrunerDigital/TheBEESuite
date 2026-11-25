@@ -11,6 +11,7 @@ import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from
 import { isFteOnlyUser } from "@/lib/application-access";
 import { FteOnlyShell } from "@/components/fte-only-shell";
 import { AppShell } from "@/components/app-shell";
+import { SchoolPaymentsReadonlyEntry } from "@/components/school-payments-readonly-entry";
 import { AppReviewScopeBlocked } from "@/components/app-review-scope-blocked";
 import { ConsolidatedWorkspaceNav } from "@/components/consolidated-workspace-nav";
 import { ClassroomPresencePanel } from "@/components/classroom-presence-panel";
@@ -7436,6 +7437,7 @@ export async function renderAuthenticatedModulePage(
   if (livePage) {
     if (isFteOnlyUser(user)) return <FteOnlyShell currentUser={user}>{livePage}</FteOnlyShell>;
     return <AppShell currentUser={user}>
+      {effectiveSlug === "payments" || slug === "billing-settings" ? <SchoolPaymentsReadonlyEntry user={user} centerId={typeof resolvedSearchParams.center === "string" ? resolvedSearchParams.center : undefined} /> : null}
       {slug === "crm-leads" ? <ConsolidatedWorkspaceNav workspace="enrollment" activeView={enrollmentView} /> : null}
       {slug === "campaigns" ? <ConsolidatedWorkspaceNav workspace="growth" activeView={growthView} /> : null}
       {slug === "classroom-dashboard" ? <ConsolidatedWorkspaceNav workspace="operations" activeView={operationsView} allowedViews={allowedViews([["enrollment", "analytics"], ["classrooms", "classroom-dashboard"], ["presence", "attendance"], ["move-ups", "classroom-dashboard"], ["attendance", "attendance"], ["reports", "daily-reports"], ["incidents", "incident-reports"]])} /> : null}

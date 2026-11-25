@@ -4881,6 +4881,9 @@ function ParentPortalWorkspaceView({
                   guidance. Call your school directly for urgent child, pickup,
                   medical, or custody concerns.
                 </p>
+                <ParentPortalDocumentLink href="/privacy" className="inline-flex min-h-11 items-center text-sm font-semibold text-foreground underline underline-offset-4">
+                  Privacy Policy
+                </ParentPortalDocumentLink>
               </div>
               <ParentPortalDocumentLink
                 href={previewHrefBase ?? "/support"}

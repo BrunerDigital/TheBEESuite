@@ -1839,6 +1839,9 @@ export function TeacherMobileWorkspace({
             </Button>
           </ClientAuthForm>
           )}
+          <Link href="/privacy" prefetch={false} className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-foreground underline underline-offset-4">
+            Privacy Policy
+          </Link>
       </CollapsibleCard>
       {!appReviewMode && !previewMode ? (
         <SetupChecklistPanel

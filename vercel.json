@@ -3,6 +3,11 @@
   "regions": ["sfo1"],
   "installCommand": "npm ci",
   "buildCommand": "npm run vercel-build",
+  "git": {
+    "deploymentEnabled": {
+      "ci/ios-privacy-links-20261125": false
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/school-import-cleanup",

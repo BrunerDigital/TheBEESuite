@@ -325,6 +325,11 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 </div>
               </div>
             )}
+            {portal === "parents" || portal === "teachers" ? (
+              <Link href="/privacy" prefetch={false} className="order-4 mt-3 inline-flex min-h-11 w-fit items-center text-sm font-semibold text-slate-700 underline underline-offset-4">
+                Privacy Policy
+              </Link>
+            ) : null}
           </CardContent>
         </Card>
       </section>
